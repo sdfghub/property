@@ -1,0 +1,514 @@
+// ---------- Datasource / Generator ----------
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Enums ----------
+enum GroupKind {
+  PHYSICAL
+  LOGICAL
+  ADHOC
+}
+
+enum SeriesScope {
+  UNIT
+  GROUP
+}
+
+enum SeriesOrigin {
+  METER
+  DECLARATION
+  ADMIN
+  DERIVED
+}
+
+enum AllocationMethod {
+  EQUAL
+  BY_SQM
+  BY_RESIDENTS
+  BY_CONSUMPTION
+  MIXED
+}
+
+enum ExpenseTargetType {
+  COMMUNITY
+  GROUP
+  EXPLICIT_SET
+  UNIT
+}
+
+enum DocSource {
+  MANUAL
+  OCR
+  IMPORT
+  API
+}
+
+enum SplitMethod {
+  EQUAL
+  DAYS
+  WEIGHTED_MANUAL
+  CUSTOM
+}
+
+enum EntityType {
+  COMMUNITY
+  PERIOD
+  UNIT
+  GROUP
+  BILLING_ENTITY
+  SERIES
+  EXPENSE
+  EXPENSE_TYPE
+  VENDOR
+  VENDOR_INVOICE
+  RULE
+  MEASURE_TYPE
+}
+
+enum NodeKind {
+  COMMUNITY
+  GROUP
+  UNIT
+  SET
+}
+
+// ---------- Core ----------
+model Community {
+  id       String @id
+  name     String
+  timezone String @default("Europe/Bucharest")
+
+  periods          Period[]
+  units            Unit[]
+  groups           UnitGroup[]
+  billingEntities  BillingEntity[]
+  rules            AllocationRule[]
+  expenseTypes     ExpenseType[]
+  periodMeasures   PeriodMeasure[]
+  expenses         Expense[]
+  bills            Bill[]
+  vendors          Vendor[]
+  invoices         VendorInvoice[]
+  externalRefs     ExternalRef[]
+  MeasureSeries    MeasureSeries[]
+  WeightVector     WeightVector[]
+  ExpenseTargetSet ExpenseTargetSet[]
+  AllocationLine   AllocationLine[]
+}
+
+model Period {
+  id          String   @id // e.g. "2025-11"
+  communityId String
+  startDate   DateTime
+  endDate     DateTime
+  seq         Int
+  timezone    String   @default("Europe/Bucharest")
+  isClosed    Boolean  @default(false)
+
+  community      Community        @relation(fields: [communityId], references: [id])
+  PeriodMeasure  PeriodMeasure[]
+  WeightVector   WeightVector[]
+  Expense        Expense[]
+  AllocationLine AllocationLine[]
+  Bill           Bill[]
+  InvoiceSplit   InvoiceSplit[]
+
+  @@unique([communityId, seq])
+  @@index([communityId, startDate, endDate])
+}
+
+// ---------- Topology ----------
+model Unit {
+  id          String @id @default(cuid())
+  communityId String
+  code        String
+  kind        String @default("RESIDENTIAL")
+
+  community           Community             @relation(fields: [communityId], references: [id])
+  UnitGroupMember     UnitGroupMember[]
+  BillingEntityMember BillingEntityMember[]
+  WeightItem          WeightItem[]
+  ExpenseTargetMember ExpenseTargetMember[]
+  AllocationLine      AllocationLine[]
+
+  @@unique([code, communityId]) // <- matches seed: code_communityId
+  @@index([communityId])
+}
+
+model UnitGroup {
+  id          String    @id @default(cuid())
+  communityId String
+  code        String
+  name        String
+  kind        GroupKind
+
+  community Community         @relation(fields: [communityId], references: [id])
+  members   UnitGroupMember[]
+
+  @@unique([code, communityId]) // <- matches seed
+  @@index([communityId, kind])
+}
+
+model UnitGroupMember {
+  id            String  @id @default(cuid())
+  groupId       String
+  unitId        String
+  // Period-bounded membership
+  startPeriodId String
+  endPeriodId   String?
+  // Denorm for constraints/perf
+  startSeq      Int
+  endSeq        Int?
+
+  group UnitGroup @relation(fields: [groupId], references: [id])
+  unit  Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([groupId, startSeq, endSeq])
+  @@index([unitId, startSeq, endSeq])
+}
+
+model BillingEntity {
+  id          String @id @default(cuid())
+  communityId String
+  code        String
+  name        String
+
+  community Community             @relation(fields: [communityId], references: [id])
+  members   BillingEntityMember[]
+  bills     Bill[]
+
+  @@unique([code, communityId]) // <- matches seed
+  @@index([communityId])
+}
+
+model BillingEntityMember {
+  id              String  @id @default(cuid())
+  billingEntityId String
+  unitId          String
+  startPeriodId   String
+  endPeriodId     String?
+  startSeq        Int
+  endSeq          Int?
+
+  billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
+  unit          Unit          @relation(fields: [unitId], references: [id])
+
+  @@index([billingEntityId, startSeq, endSeq])
+  @@index([unitId, startSeq, endSeq])
+}
+
+// ---------- Measurements ----------
+model MeasureType {
+  code   String          @id // e.g., "SQM", "RESIDENTS", "WATER_M3"
+  unit   String
+  series MeasureSeries[]
+}
+
+model MeasureSeries {
+  id          String       @id @default(cuid())
+  communityId String
+  scope       SeriesScope
+  scopeId     String
+  typeCode    String
+  origin      SeriesOrigin
+
+  community    Community            @relation(fields: [communityId], references: [id])
+  type         MeasureType          @relation(fields: [typeCode], references: [code])
+  samples      MeasureSample[]
+  periodValues MeasurePeriodValue[]
+
+  @@index([communityId, scope, scopeId, typeCode])
+}
+
+model MeasureSample {
+  id        String   @id @default(cuid())
+  seriesId  String
+  ts        DateTime
+  value     Decimal  @db.Decimal(18, 6)
+  estimated Boolean  @default(false)
+
+  series MeasureSeries @relation(fields: [seriesId], references: [id])
+
+  @@index([seriesId, ts])
+}
+
+model MeasurePeriodValue {
+  id            String  @id @default(cuid())
+  seriesId      String
+  startPeriodId String
+  endPeriodId   String?
+  startSeq      Int
+  endSeq        Int?
+  value         Decimal @db.Decimal(18, 6)
+
+  series MeasureSeries @relation(fields: [seriesId], references: [id])
+
+  @@index([seriesId, startSeq, endSeq])
+}
+
+// Unified period-aligned quantitative facts (meters + declaratives)
+model PeriodMeasure {
+  id          String       @id @default(cuid())
+  communityId String
+  periodId    String
+  scopeType   SeriesScope
+  scopeId     String
+  typeCode    String
+  origin      SeriesOrigin
+  value       Decimal      @db.Decimal(18, 6)
+  estimated   Boolean      @default(false)
+  provenance  Json?
+
+  community Community @relation(fields: [communityId], references: [id])
+  period    Period    @relation(fields: [periodId], references: [id])
+
+  @@unique([communityId, periodId, scopeType, scopeId, typeCode])
+  @@index([periodId, typeCode])
+}
+
+// ---------- Rules / Weighting ----------
+model AllocationRule {
+  id          String           @id @default(cuid())
+  communityId String
+  method      AllocationMethod
+  params      Json?
+
+  community    Community      @relation(fields: [communityId], references: [id])
+  vectors      WeightVector[]
+  expenseTypes ExpenseType[]
+}
+
+model WeightVector {
+  id          String            @id @default(cuid())
+  communityId String
+  periodId    String
+  ruleId      String
+  scopeType   ExpenseTargetType
+  scopeId     String
+
+  community Community      @relation(fields: [communityId], references: [id])
+  period    Period         @relation(fields: [periodId], references: [id])
+  rule      AllocationRule @relation(fields: [ruleId], references: [id])
+  items     WeightItem[]
+  Expense   Expense[]
+
+  @@unique([communityId, periodId, ruleId, scopeType, scopeId])
+}
+
+model WeightItem {
+  id       String  @id @default(cuid())
+  vectorId String
+  unitId   String
+  rawValue Decimal @db.Decimal(18, 6)
+  weight   Decimal @db.Decimal(18, 12)
+
+  vector WeightVector @relation(fields: [vectorId], references: [id])
+  unit   Unit         @relation(fields: [unitId], references: [id])
+
+  @@unique([vectorId, unitId])
+}
+
+// ---------- Expenses / Catalog ----------
+model ExpenseType {
+  id          String  @id @default(cuid())
+  communityId String
+  code        String
+  name        String
+  ruleId      String
+  params      Json?
+  currency    String?
+
+  community Community      @relation(fields: [communityId], references: [id])
+  rule      AllocationRule @relation(fields: [ruleId], references: [id])
+  Expense   Expense[]
+
+  @@unique([code, communityId]) // <- matches seed
+}
+
+model Expense {
+  id                String            @id @default(cuid())
+  communityId       String
+  periodId          String
+  description       String
+  allocatableAmount Decimal           @db.Decimal(18, 4) // per-period allocatable amount
+  currency          String            @default("RON")
+  targetType        ExpenseTargetType
+  targetId          String
+  expenseTypeId     String?
+  // audit link to upstream invoice split
+  invoiceId         String?
+  invoiceLineKey    String?
+  // weights linkage
+  weightVectorId    String?
+
+  community    Community        @relation(fields: [communityId], references: [id])
+  period       Period           @relation(fields: [periodId], references: [id])
+  expenseType  ExpenseType?     @relation(fields: [expenseTypeId], references: [id])
+  allocations  AllocationLine[]
+  weightVector WeightVector?    @relation(fields: [weightVectorId], references: [id])
+  BillLine     BillLine[]
+
+  @@index([communityId, periodId])
+  @@index([targetType, targetId])
+}
+
+model ExpenseTargetSet {
+  id          String  @id @default(cuid())
+  communityId String
+  name        String?
+
+  community Community             @relation(fields: [communityId], references: [id])
+  members   ExpenseTargetMember[]
+
+  @@index([communityId])
+}
+
+model ExpenseTargetMember {
+  id     String @id @default(cuid())
+  setId  String
+  unitId String
+
+  set  ExpenseTargetSet @relation(fields: [setId], references: [id])
+  unit Unit             @relation(fields: [unitId], references: [id])
+
+  @@unique([setId, unitId])
+}
+
+// ---------- Allocation (final amounts) ----------
+model AllocationLine {
+  id          String  @id @default(cuid())
+  communityId String
+  periodId    String
+  expenseId   String
+  unitId      String
+  amount      Decimal @db.Decimal(18, 4)
+
+  community Community @relation(fields: [communityId], references: [id])
+  period    Period    @relation(fields: [periodId], references: [id])
+  expense   Expense   @relation(fields: [expenseId], references: [id])
+  unit      Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([communityId, periodId])
+  @@index([expenseId])
+  @@index([unitId, periodId])
+}
+
+// ---------- Billing ----------
+model Bill {
+  id              String  @id @default(cuid())
+  communityId     String
+  periodId        String
+  billingEntityId String
+  totalAmount     Decimal @db.Decimal(18, 4)
+
+  community     Community     @relation(fields: [communityId], references: [id])
+  period        Period        @relation(fields: [periodId], references: [id])
+  billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
+  lines         BillLine[]
+
+  @@unique([communityId, periodId, billingEntityId])
+}
+
+model BillLine {
+  id        String  @id @default(cuid())
+  billId    String
+  expenseId String
+  amount    Decimal @db.Decimal(18, 4)
+  meta      Json?
+
+  bill    Bill    @relation(fields: [billId], references: [id])
+  expense Expense @relation(fields: [expenseId], references: [id])
+
+  @@index([billId])
+  @@index([expenseId])
+}
+
+// ---------- Vendors / Invoices / Splits / Docs ----------
+model Vendor {
+  id          String  @id @default(cuid())
+  communityId String
+  name        String
+  taxId       String?
+  iban        String?
+
+  community     Community       @relation(fields: [communityId], references: [id])
+  VendorInvoice VendorInvoice[]
+
+  @@unique([communityId, name])
+}
+
+model VendorInvoice {
+  id                   String    @id @default(cuid())
+  communityId          String
+  vendorId             String?
+  number               String?
+  issueDate            DateTime?
+  serviceStartPeriodId String?
+  serviceEndPeriodId   String?
+  currency             String    @default("RON")
+  net                  Decimal?  @db.Decimal(18, 4)
+  vat                  Decimal?  @db.Decimal(18, 4)
+  gross                Decimal?  @db.Decimal(18, 4)
+  source               DocSource @default(MANUAL)
+  hash                 String?
+  provenance           Json?
+
+  community Community          @relation(fields: [communityId], references: [id])
+  vendor    Vendor?            @relation(fields: [vendorId], references: [id])
+  docs      VendorInvoiceDoc[]
+  splits    InvoiceSplit[]
+
+  @@index([communityId, number])
+}
+
+model VendorInvoiceDoc {
+  id         String    @id @default(cuid())
+  invoiceId  String
+  url        String
+  mime       String?
+  bytes      Int?
+  sha256     String?
+  uploadedAt DateTime  @default(now())
+  source     DocSource @default(MANUAL)
+
+  invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
+}
+
+model InvoiceSplit {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  periodId    String
+  method      SplitMethod
+  share       Decimal     @db.Decimal(18, 8) // sum ≈ 1 per invoice
+  allocatable Decimal     @db.Decimal(18, 4) // per-period allocatable amount
+  provenance  Json?
+
+  invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
+  period  Period        @relation(fields: [periodId], references: [id])
+
+  @@unique([invoiceId, periodId])
+  @@index([periodId])
+}
+
+// ---------- External References (legacy IDs) ----------
+model ExternalRef {
+  id           String     @id @default(cuid())
+  communityId  String
+  entityType   EntityType
+  entityId     String
+  sourceSystem String
+  legacyId     String
+  validFrom    DateTime   @default(now())
+  validTo      DateTime?
+
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@unique([communityId, sourceSystem, legacyId])
+  @@index([entityType, entityId])
+}

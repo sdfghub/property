@@ -1,0 +1,26 @@
+{
+  "name": "property-expenses-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:db": "prisma migrate dev --name init",
+    "generate": "prisma generate",
+    "build": "tsc -p .",
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    "allocate": "ts-node --transpile-only src/cli/allocate.ts",
+    "serve": "node dist/server.js",
+    "prestart": "prisma generate && prisma migrate deploy",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "prisma": "^5.20.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
