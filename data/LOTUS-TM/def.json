@@ -1,0 +1,41 @@
+{
+  "id": "LOTUS-TM",
+  "name": "Lotus Residence",
+  "period": {
+    "code": "2025-09",
+    "start": "2025-09-01",
+    "end": "2025-09-30"
+  },
+  "allocationRules": [
+    {
+      "code": "BY_RESIDENTS",
+      "method": "BY_RESIDENTS",
+      "params": {}
+    },
+    {
+      "code": "BY_SQM",
+      "method": "BY_SQM",
+      "params": {}
+    }
+  ],
+  "expenseTypes": [
+    {
+      "code": "GARBAGE",
+      "name": "Garbage collection",
+      "ruleCode": "BY_RESIDENTS",
+      "currency": "RON"
+    },
+    {
+      "code": "LIVIU",
+      "name": "Liviu",
+      "ruleCode": "BY_SQM",
+      "currency": "RON"
+    },
+    {
+      "code": "CENZOR",
+      "name": "Cenzor",
+      "ruleCode": "BY_SQM",
+      "currency": "RON"
+    }
+  ]
+}

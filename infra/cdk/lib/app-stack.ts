@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib'
 import { Construct } from 'constructs'
-import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, Protocol } from 'aws-cdk-lib/aws-ecs'
-import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, Protocol, LogDrivers } from 'aws-cdk-lib/aws-ecs'
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
+import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Vpc, SecurityGroup, Peer, Port } from 'aws-cdk-lib/aws-ec2'
 import { Repository } from 'aws-cdk-lib/aws-ecr'
 import { DatabaseInstance } from 'aws-cdk-lib/aws-rds'
@@ -15,11 +15,13 @@ export class AppStack extends cdk.Stack {
     const cluster = new Cluster(this, 'Cluster', { vpc: props.vpc })
     const task = new FargateTaskDefinition(this, 'Task', { cpu: 256, memoryLimitMiB: 512 })
     const logGroup = new LogGroup(this, 'Logs', { retention: RetentionDays.ONE_WEEK })
+
     task.addContainer('Api', {
       image: ContainerImage.fromEcrRepository(Repository.fromRepositoryName(this, 'Repo', 'property-expenses-api'), 'latest'),
-      logging: { logGroup, streamPrefix: 'api' },
+      logging: LogDrivers.awsLogs({ logGroup, streamPrefix: 'api' }),
       environment: { PORT: '3000', NODE_ENV: 'production' }
     }).addPortMappings({ containerPort: 3000, protocol: Protocol.TCP })
+    
     const sg = new SecurityGroup(this, 'AlbSg', { vpc: props.vpc })
     sg.addIngressRule(Peer.anyIpv4(), Port.tcp(80))
     const alb = new ApplicationLoadBalancer(this, 'Alb', { vpc: props.vpc, internetFacing: true, securityGroup: sg })

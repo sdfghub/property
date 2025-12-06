@@ -1,0 +1,15 @@
+{
+    "communityId": "LOTUS-TM",
+    "periodCode": "2025-09",
+    "items": [
+      {
+        "description": "Cenzor September",
+        "expenseTypeCode": "CENZOR",
+        "amount": 300,
+        "currency": "RON",
+        "targetType": "GROUP",
+        "targetCode": "UNIT",
+        "weightSource": "SQM"
+      }
+    ]
+  }

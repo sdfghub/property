@@ -1,0 +1,15 @@
+{
+    "communityId": "LOTUS-TM",
+    "periodCode": "2025-09",
+    "items": [
+      {
+        "description": "Liviu September",
+        "expenseTypeCode": "LIVIU",
+        "amount": 5014.54,
+        "currency": "RON",
+        "targetType": "GROUP",
+        "targetCode": "UNIT",
+        "weightSource": "SQM"
+      }
+    ]
+  }

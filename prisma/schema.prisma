@@ -1,4 +1,3 @@
-// ---------- Datasource / Generator ----------
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -8,7 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ---------- Enums ----------
 enum GroupKind {
   PHYSICAL
   LOGICAL
@@ -78,11 +76,11 @@ enum NodeKind {
   SET
 }
 
-// ---------- Core ----------
 model Community {
-  id       String @id
-  name     String
-  timezone String @default("Europe/Bucharest")
+  id       String @id @map("id")
+  code     String 
+  name     String @map("name")
+  timezone String @default("Europe/Bucharest") @map("timezone")
 
   periods          Period[]
   units            Unit[]
@@ -100,16 +98,28 @@ model Community {
   WeightVector     WeightVector[]
   ExpenseTargetSet ExpenseTargetSet[]
   AllocationLine   AllocationLine[]
+
+  @@map("community")
+}
+
+enum PeriodStatus {
+  DRAFT
+  OPEN
+  PREPARED
+  CLOSED
 }
 
 model Period {
-  id          String   @id // e.g. "2025-11"
-  communityId String
-  startDate   DateTime
-  endDate     DateTime
-  seq         Int
-  timezone    String   @default("Europe/Bucharest")
-  isClosed    Boolean  @default(false)
+  id          String       @id @default(cuid()) @map("id")
+  communityId String       @map("community_id")
+  code        String       @map("code")
+  startDate   DateTime     @map("start_date")
+  endDate     DateTime     @map("end_date")
+  seq         Int          @map("seq")
+  timezone    String       @default("Europe/Bucharest") @map("timezone")
+  status      PeriodStatus @default(OPEN)
+  preparedAt  DateTime?    @map("prepared_at")
+  closedAt    DateTime?    @map("closed_at")
 
   community      Community        @relation(fields: [communityId], references: [id])
   PeriodMeasure  PeriodMeasure[]
@@ -119,16 +129,17 @@ model Period {
   Bill           Bill[]
   InvoiceSplit   InvoiceSplit[]
 
+  @@unique([communityId, code])
   @@unique([communityId, seq])
   @@index([communityId, startDate, endDate])
+  @@map("period")
 }
 
-// ---------- Topology ----------
 model Unit {
-  id          String @id @default(cuid())
-  communityId String
-  code        String
-  kind        String @default("RESIDENTIAL")
+  id          String @id @default(cuid()) @map("id")
+  communityId String @map("community_id")
+  code        String @map("code")
+  kind        String @default("RESIDENTIAL") @map("kind")
 
   community           Community             @relation(fields: [communityId], references: [id])
   UnitGroupMember     UnitGroupMember[]
@@ -137,86 +148,90 @@ model Unit {
   ExpenseTargetMember ExpenseTargetMember[]
   AllocationLine      AllocationLine[]
 
-  @@unique([code, communityId]) // <- matches seed: code_communityId
+  @@unique([code, communityId])
   @@index([communityId])
+  @@map("unit")
 }
 
 model UnitGroup {
-  id          String    @id @default(cuid())
-  communityId String
-  code        String
-  name        String
-  kind        GroupKind
+  id          String    @id @default(cuid()) @map("id")
+  communityId String    @map("community_id")
+  code        String    @map("code")
+  name        String    @map("name")
+  kind        GroupKind @map("kind")
 
   community Community         @relation(fields: [communityId], references: [id])
   members   UnitGroupMember[]
 
-  @@unique([code, communityId]) // <- matches seed
+  @@unique([code, communityId])
   @@index([communityId, kind])
+  @@map("unit_group")
 }
 
 model UnitGroupMember {
-  id            String  @id @default(cuid())
-  groupId       String
-  unitId        String
-  // Period-bounded membership
-  startPeriodId String
-  endPeriodId   String?
-  // Denorm for constraints/perf
-  startSeq      Int
-  endSeq        Int?
+  id            String  @id @default(cuid()) @map("id")
+  groupId       String  @map("group_id")
+  unitId        String  @map("unit_id")
+  startPeriodId String  @map("start_period_id")
+  endPeriodId   String? @map("end_period_id")
+  startSeq      Int     @map("start_seq")
+  endSeq        Int?    @map("end_seq")
 
   group UnitGroup @relation(fields: [groupId], references: [id])
   unit  Unit      @relation(fields: [unitId], references: [id])
 
   @@index([groupId, startSeq, endSeq])
   @@index([unitId, startSeq, endSeq])
+  @@map("unit_group_member")
 }
 
 model BillingEntity {
-  id          String @id @default(cuid())
-  communityId String
-  code        String
-  name        String
+  id          String @id @default(cuid()) @map("id")
+  communityId String @map("community_id")
+  code        String @map("code")
+  name        String @map("name")
 
   community Community             @relation(fields: [communityId], references: [id])
   members   BillingEntityMember[]
   bills     Bill[]
 
-  @@unique([code, communityId]) // <- matches seed
+  @@unique([code, communityId])
   @@index([communityId])
+  @@map("billing_entity")
 }
 
 model BillingEntityMember {
-  id              String  @id @default(cuid())
-  billingEntityId String
-  unitId          String
-  startPeriodId   String
-  endPeriodId     String?
-  startSeq        Int
-  endSeq          Int?
+  id              String  @id @default(cuid()) @map("id")
+  billingEntityId String  @map("billing_entity_id")
+  unitId          String  @map("unit_id")
+  startPeriodId   String  @map("start_period_id")
+  endPeriodId     String? @map("end_period_id")
+  startSeq        Int     @map("start_seq")
+  endSeq          Int?    @map("end_seq")
 
   billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
   unit          Unit          @relation(fields: [unitId], references: [id])
 
   @@index([billingEntityId, startSeq, endSeq])
   @@index([unitId, startSeq, endSeq])
+  @@map("billing_entity_member")
 }
 
-// ---------- Measurements ----------
 model MeasureType {
-  code   String          @id // e.g., "SQM", "RESIDENTS", "WATER_M3"
-  unit   String
+  code   String          @id @map("code")
+  unit   String          @map("unit")
   series MeasureSeries[]
+
+  @@map("measure_type")
 }
 
 model MeasureSeries {
-  id          String       @id @default(cuid())
-  communityId String
-  scope       SeriesScope
-  scopeId     String
-  typeCode    String
-  origin      SeriesOrigin
+  id          String       @id @default(cuid()) @map("id")
+  communityId String       @map("community_id")
+  scope       SeriesScope  @map("scope")
+  scopeId     String       @map("scope_id")
+  typeCode    String       @map("type_code")
+  origin      SeriesOrigin @map("origin")
 
   community    Community            @relation(fields: [communityId], references: [id])
   type         MeasureType          @relation(fields: [typeCode], references: [code])
@@ -224,188 +239,197 @@ model MeasureSeries {
   periodValues MeasurePeriodValue[]
 
   @@index([communityId, scope, scopeId, typeCode])
+  @@map("measure_series")
 }
 
 model MeasureSample {
-  id        String   @id @default(cuid())
-  seriesId  String
-  ts        DateTime
-  value     Decimal  @db.Decimal(18, 6)
-  estimated Boolean  @default(false)
+  id        String   @id @default(cuid()) @map("id")
+  seriesId  String   @map("series_id")
+  ts        DateTime @map("ts")
+  value     Decimal  @map("value") @db.Decimal(18, 6)
+  estimated Boolean  @default(false) @map("estimated")
 
   series MeasureSeries @relation(fields: [seriesId], references: [id])
 
   @@index([seriesId, ts])
+  @@map("measure_sample")
 }
 
 model MeasurePeriodValue {
-  id            String  @id @default(cuid())
-  seriesId      String
-  startPeriodId String
-  endPeriodId   String?
-  startSeq      Int
-  endSeq        Int?
-  value         Decimal @db.Decimal(18, 6)
+  id            String  @id @default(cuid()) @map("id")
+  seriesId      String  @map("series_id")
+  startPeriodId String  @map("start_period_id")
+  endPeriodId   String? @map("end_period_id")
+  startSeq      Int     @map("start_seq")
+  endSeq        Int?    @map("end_seq")
+  value         Decimal @map("value") @db.Decimal(18, 6)
 
   series MeasureSeries @relation(fields: [seriesId], references: [id])
 
   @@index([seriesId, startSeq, endSeq])
+  @@map("measure_period_value")
 }
 
-// Unified period-aligned quantitative facts (meters + declaratives)
 model PeriodMeasure {
-  id          String       @id @default(cuid())
-  communityId String
-  periodId    String
-  scopeType   SeriesScope
-  scopeId     String
-  typeCode    String
-  origin      SeriesOrigin
-  value       Decimal      @db.Decimal(18, 6)
-  estimated   Boolean      @default(false)
-  provenance  Json?
+  id          String       @id @default(cuid()) @map("id")
+  communityId String       @map("community_id")
+  periodId    String       @map("period_id")
+  scopeType   SeriesScope  @map("scope_type")
+  scopeId     String       @map("scope_id")
+  typeCode    String       @map("type_code")
+  origin      SeriesOrigin @map("origin")
+  value       Decimal      @map("value") @db.Decimal(18, 6)
+  estimated   Boolean      @default(false) @map("estimated")
+  provenance  Json?        @map("provenance")
 
   community Community @relation(fields: [communityId], references: [id])
   period    Period    @relation(fields: [periodId], references: [id])
 
   @@unique([communityId, periodId, scopeType, scopeId, typeCode])
   @@index([periodId, typeCode])
+  @@map("period_measure")
 }
 
-// ---------- Rules / Weighting ----------
 model AllocationRule {
-  id          String           @id @default(cuid())
-  communityId String
-  method      AllocationMethod
-  params      Json?
+  id          String           @id @default(cuid()) @map("id")
+  communityId String           @map("community_id")
+  method      AllocationMethod @map("method")
+  params      Json?            @map("params")
 
   community    Community      @relation(fields: [communityId], references: [id])
   vectors      WeightVector[]
   expenseTypes ExpenseType[]
+
+  @@map("allocation_rule")
 }
 
 model WeightVector {
-  id          String            @id @default(cuid())
-  communityId String
-  periodId    String
-  ruleId      String
-  scopeType   ExpenseTargetType
-  scopeId     String
+  id          String            @id @default(cuid()) @map("id")
+  communityId String            @map("community_id")
+  periodId    String            @map("period_id")
+  ruleId      String            @map("rule_id")
+  scopeType   ExpenseTargetType @map("scope_type")
+  scopeId     String            @map("scope_id")
+
+  expenseId String?  @unique @map("expense_id")
+  expense   Expense? @relation("ExpenseVector", fields: [expenseId], references: [id])
 
   community Community      @relation(fields: [communityId], references: [id])
   period    Period         @relation(fields: [periodId], references: [id])
   rule      AllocationRule @relation(fields: [ruleId], references: [id])
   items     WeightItem[]
-  Expense   Expense[]
 
-  @@unique([communityId, periodId, ruleId, scopeType, scopeId])
+  @@unique([communityId, periodId, ruleId, scopeType, scopeId, expenseId])
+  @@map("weight_vector")
 }
 
 model WeightItem {
-  id       String  @id @default(cuid())
-  vectorId String
-  unitId   String
-  rawValue Decimal @db.Decimal(18, 6)
-  weight   Decimal @db.Decimal(18, 12)
+  id       String  @id @default(cuid()) @map("id")
+  vectorId String  @map("vector_id")
+  unitId   String  @map("unit_id")
+  rawValue Decimal @map("raw_value") @db.Decimal(18, 6)
+  weight   Decimal @map("weight") @db.Decimal(18, 12)
 
   vector WeightVector @relation(fields: [vectorId], references: [id])
   unit   Unit         @relation(fields: [unitId], references: [id])
 
   @@unique([vectorId, unitId])
+  @@map("weight_item")
 }
 
-// ---------- Expenses / Catalog ----------
 model ExpenseType {
-  id          String  @id @default(cuid())
-  communityId String
-  code        String
-  name        String
-  ruleId      String
-  params      Json?
-  currency    String?
+  id          String  @id @default(cuid()) @map("id")
+  communityId String  @map("community_id")
+  code        String  @map("code")
+  name        String  @map("name")
+  ruleId      String  @map("rule_id")
+  params      Json?   @map("params")
+  currency    String? @map("currency")
 
   community Community      @relation(fields: [communityId], references: [id])
   rule      AllocationRule @relation(fields: [ruleId], references: [id])
   Expense   Expense[]
 
-  @@unique([code, communityId]) // <- matches seed
+  @@unique([code, communityId])
+  @@map("expense_type")
 }
 
 model Expense {
-  id                String            @id @default(cuid())
-  communityId       String
-  periodId          String
-  description       String
-  allocatableAmount Decimal           @db.Decimal(18, 4) // per-period allocatable amount
-  currency          String            @default("RON")
-  targetType        ExpenseTargetType
-  targetId          String
-  expenseTypeId     String?
-  // audit link to upstream invoice split
-  invoiceId         String?
-  invoiceLineKey    String?
-  // weights linkage
-  weightVectorId    String?
+  id                String            @id @default(cuid()) @map("id")
+  communityId       String            @map("community_id")
+  periodId          String            @map("period_id")
+  description       String            @map("description")
+  allocatableAmount Decimal           @map("allocatable_amount") @db.Decimal(18, 4)
+  currency          String            @default("RON") @map("currency")
+  targetType        ExpenseTargetType @map("target_type")
+  targetId          String            @map("target_id")
+  expenseTypeId     String?           @map("expense_type_id")
+  invoiceId         String?           @map("invoice_id")
+  invoiceLineKey    String?           @map("invoice_line_key")
+  weightVectorId    String?           @map("weight_vector_id")
 
   community    Community        @relation(fields: [communityId], references: [id])
   period       Period           @relation(fields: [periodId], references: [id])
   expenseType  ExpenseType?     @relation(fields: [expenseTypeId], references: [id])
   allocations  AllocationLine[]
-  weightVector WeightVector?    @relation(fields: [weightVectorId], references: [id])
+  weightVector WeightVector?    @relation("ExpenseVector")
   BillLine     BillLine[]
 
   @@index([communityId, periodId])
   @@index([targetType, targetId])
+  @@map("expense")
 }
 
 model ExpenseTargetSet {
-  id          String  @id @default(cuid())
-  communityId String
-  name        String?
+  id          String  @id @default(cuid()) @map("id")
+  communityId String  @map("community_id")
+  name        String? @map("name")
 
   community Community             @relation(fields: [communityId], references: [id])
   members   ExpenseTargetMember[]
 
   @@index([communityId])
+  @@map("expense_target_set")
 }
 
 model ExpenseTargetMember {
-  id     String @id @default(cuid())
-  setId  String
-  unitId String
+  id     String @id @default(cuid()) @map("id")
+  setId  String @map("set_id")
+  unitId String @map("unit_id")
 
   set  ExpenseTargetSet @relation(fields: [setId], references: [id])
   unit Unit             @relation(fields: [unitId], references: [id])
 
   @@unique([setId, unitId])
+  @@map("expense_target_member")
 }
 
-// ---------- Allocation (final amounts) ----------
 model AllocationLine {
-  id          String  @id @default(cuid())
-  communityId String
-  periodId    String
-  expenseId   String
-  unitId      String
-  amount      Decimal @db.Decimal(18, 4)
+  id          String  @id @default(cuid()) @map("id")
+  communityId String  @map("community_id")
+  periodId    String  @map("period_id")
+  expenseId   String  @map("expense_id")
+  unitId      String  @map("unit_id")
+  amount      Decimal @map("amount") @db.Decimal(18, 4)
 
   community Community @relation(fields: [communityId], references: [id])
   period    Period    @relation(fields: [periodId], references: [id])
   expense   Expense   @relation(fields: [expenseId], references: [id])
   unit      Unit      @relation(fields: [unitId], references: [id])
 
+  @@unique([expenseId, unitId])
   @@index([communityId, periodId])
   @@index([expenseId])
   @@index([unitId, periodId])
+  @@map("allocation_line")
 }
 
-// ---------- Billing ----------
 model Bill {
-  id              String  @id @default(cuid())
-  communityId     String
-  periodId        String
-  billingEntityId String
-  totalAmount     Decimal @db.Decimal(18, 4)
+  id              String  @id @default(cuid()) @map("id")
+  communityId     String  @map("community_id")
+  periodId        String  @map("period_id")
+  billingEntityId String  @map("billing_entity_id")
+  totalAmount     Decimal @map("total_amount") @db.Decimal(18, 4)
 
   community     Community     @relation(fields: [communityId], references: [id])
   period        Period        @relation(fields: [periodId], references: [id])
@@ -413,51 +437,53 @@ model Bill {
   lines         BillLine[]
 
   @@unique([communityId, periodId, billingEntityId])
+  @@map("bill")
 }
 
 model BillLine {
-  id        String  @id @default(cuid())
-  billId    String
-  expenseId String
-  amount    Decimal @db.Decimal(18, 4)
-  meta      Json?
+  id        String  @id @default(cuid()) @map("id")
+  billId    String  @map("bill_id")
+  expenseId String  @map("expense_id")
+  amount    Decimal @map("amount") @db.Decimal(18, 4)
+  meta      Json?   @map("meta")
 
   bill    Bill    @relation(fields: [billId], references: [id])
   expense Expense @relation(fields: [expenseId], references: [id])
 
   @@index([billId])
   @@index([expenseId])
+  @@map("bill_line")
 }
 
-// ---------- Vendors / Invoices / Splits / Docs ----------
 model Vendor {
-  id          String  @id @default(cuid())
-  communityId String
-  name        String
-  taxId       String?
-  iban        String?
+  id          String  @id @default(cuid()) @map("id")
+  communityId String  @map("community_id")
+  name        String  @map("name")
+  taxId       String? @map("tax_id")
+  iban        String? @map("iban")
 
   community     Community       @relation(fields: [communityId], references: [id])
   VendorInvoice VendorInvoice[]
 
   @@unique([communityId, name])
+  @@map("vendor")
 }
 
 model VendorInvoice {
-  id                   String    @id @default(cuid())
-  communityId          String
-  vendorId             String?
-  number               String?
-  issueDate            DateTime?
-  serviceStartPeriodId String?
-  serviceEndPeriodId   String?
-  currency             String    @default("RON")
-  net                  Decimal?  @db.Decimal(18, 4)
-  vat                  Decimal?  @db.Decimal(18, 4)
-  gross                Decimal?  @db.Decimal(18, 4)
-  source               DocSource @default(MANUAL)
-  hash                 String?
-  provenance           Json?
+  id                   String    @id @default(cuid()) @map("id")
+  communityId          String    @map("community_id")
+  vendorId             String?   @map("vendor_id")
+  number               String?   @map("number")
+  issueDate            DateTime? @map("issue_date")
+  serviceStartPeriodId String?   @map("service_start_period_id")
+  serviceEndPeriodId   String?   @map("service_end_period_id")
+  currency             String    @default("RON") @map("currency")
+  net                  Decimal?  @map("net") @db.Decimal(18, 4)
+  vat                  Decimal?  @map("vat") @db.Decimal(18, 4)
+  gross                Decimal?  @map("gross") @db.Decimal(18, 4)
+  source               DocSource @default(MANUAL) @map("source")
+  hash                 String?   @map("hash")
+  provenance           Json?     @map("provenance")
 
   community Community          @relation(fields: [communityId], references: [id])
   vendor    Vendor?            @relation(fields: [vendorId], references: [id])
@@ -465,50 +491,189 @@ model VendorInvoice {
   splits    InvoiceSplit[]
 
   @@index([communityId, number])
+  @@map("vendor_invoice")
 }
 
 model VendorInvoiceDoc {
-  id         String    @id @default(cuid())
-  invoiceId  String
-  url        String
-  mime       String?
-  bytes      Int?
-  sha256     String?
-  uploadedAt DateTime  @default(now())
-  source     DocSource @default(MANUAL)
+  id         String    @id @default(cuid()) @map("id")
+  invoiceId  String    @map("invoice_id")
+  url        String    @map("url")
+  mime       String?   @map("mime")
+  bytes      Int?      @map("bytes")
+  sha256     String?   @map("sha256")
+  uploadedAt DateTime  @default(now()) @map("uploaded_at")
+  source     DocSource @default(MANUAL) @map("source")
 
   invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("vendor_invoice_doc")
 }
 
 model InvoiceSplit {
-  id          String      @id @default(cuid())
-  invoiceId   String
-  periodId    String
-  method      SplitMethod
-  share       Decimal     @db.Decimal(18, 8) // sum ≈ 1 per invoice
-  allocatable Decimal     @db.Decimal(18, 4) // per-period allocatable amount
-  provenance  Json?
+  id          String      @id @default(cuid()) @map("id")
+  invoiceId   String      @map("invoice_id")
+  periodId    String      @map("period_id")
+  method      SplitMethod @map("method")
+  share       Decimal     @map("share") @db.Decimal(18, 8)
+  allocatable Decimal     @map("allocatable") @db.Decimal(18, 4)
+  provenance  Json?       @map("provenance")
 
   invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
   period  Period        @relation(fields: [periodId], references: [id])
 
   @@unique([invoiceId, periodId])
   @@index([periodId])
+  @@map("invoice_split")
 }
 
-// ---------- External References (legacy IDs) ----------
 model ExternalRef {
-  id           String     @id @default(cuid())
-  communityId  String
-  entityType   EntityType
-  entityId     String
-  sourceSystem String
-  legacyId     String
-  validFrom    DateTime   @default(now())
-  validTo      DateTime?
+  id           String     @id @default(cuid()) @map("id")
+  communityId  String     @map("community_id")
+  entityType   EntityType @map("entity_type")
+  entityId     String     @map("entity_id")
+  sourceSystem String     @map("source_system")
+  legacyId     String     @map("legacy_id")
+  validFrom    DateTime   @default(now()) @map("valid_from")
+  validTo      DateTime?  @map("valid_to")
 
   community Community @relation(fields: [communityId], references: [id])
 
   @@unique([communityId, sourceSystem, legacyId])
   @@index([entityType, entityId])
+  @@map("external_ref")
+}
+
+// ---------- Opening balance per BE & period ----------
+model BeOpeningBalance {
+  id              String   @id @default(cuid()) @map("id")
+  communityId     String   @map("community_id")
+  periodId        String   @map("period_id")
+  billingEntityId String   @map("billing_entity_id")
+  amount          Decimal  @default(0) @map("amount")
+  currency        String   @default("RON") @map("currency")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([communityId, periodId, billingEntityId])
+  @@map("be_opening_balance")
+}
+
+// ---------- Ledger (charges, payments, adjustments) ----------
+model BeLedgerEntry {
+  id              String   @id @default(cuid()) @map("id")
+  communityId     String   @map("community_id")
+  periodId        String   @map("period_id")
+  billingEntityId String   @map("billing_entity_id")
+  kind            String   @map("kind") // 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT'
+  amount          Decimal  @default(0) @map("amount")
+  currency        String   @default("RON") @map("currency")
+  refType         String?  @map("ref_type") // 'CLOSE_PREP' | 'CLOSE_FINAL' | ...
+  refId           String?  @map("ref_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([communityId, periodId, billingEntityId, refType, refId])
+  @@index([communityId, periodId, billingEntityId])
+  @@map("be_ledger_entry")
+}
+
+// ---------- Statement (snapshot at close/prepare) ----------
+model BeStatement {
+  id              String  @id @default(cuid()) @map("id")
+  communityId     String  @map("community_id")
+  periodId        String  @map("period_id")
+  billingEntityId String  @map("billing_entity_id")
+  currency        String  @default("RON") @map("currency")
+  dueStart        Decimal @default(0) @map("due_start")
+  charges         Decimal @default(0) @map("charges")
+  payments        Decimal @default(0) @map("payments")
+  adjustments     Decimal @default(0) @map("adjustments")
+  dueEnd          Decimal @default(0) @map("due_end")
+
+  @@unique([communityId, periodId, billingEntityId])
+  @@map("be_statement")
+}
+
+model User {
+  id            String           @id @default(cuid())
+  email         String           @unique
+  name          String?
+  createdAt     DateTime         @default(now()) @map("created_at")
+  tokenVersion  Int              @default(0) @map("token_version")
+  roles         RoleAssignment[]
+  invites       Invite[]
+  loginTokens   LoginToken[]
+  refreshTokens RefreshToken[]
+
+  @@map("user")
+}
+
+enum Role {
+  SYSTEM_ADMIN
+  COMMUNITY_ADMIN
+  CENSOR
+  BILLING_ENTITY_USER
+}
+
+enum ScopeType {
+  SYSTEM
+  COMMUNITY
+  BILLING_ENTITY
+}
+
+model RoleAssignment {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  role      Role
+  scopeType ScopeType @map("scope_type")
+  scopeId   String?
+  createAt  DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, role, scopeType, scopeId])
+  @@map("role_assignment")
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  email      String
+  role       Role
+  userId     String?   @map("user_id")
+  scopeType  ScopeType @map("scope_type")
+  scopeId    String?   @map("scope_id")
+  invitedBy  String    @map("invited_by")
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@map("invite")
+}
+
+model LoginToken {
+  id        String    @id @default(cuid())
+  email     String
+  token     String    @unique
+  usedAt    DateTime? @map("used_at")
+  expiresAt DateTime?  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User?     @relation(fields: [userId], references: [id])
+  userId    String?   @map("user_id")
+
+  @@map("login_token")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  jti       String    @unique
+  tokenHash String    @unique @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ip        String?
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("refresh_token")
 }

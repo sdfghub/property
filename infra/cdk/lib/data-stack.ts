@@ -13,7 +13,7 @@ export class DataStack extends cdk.Stack {
     sg.addIngressRule(Peer.anyIpv4(), Port.tcp(5432))
     this.db = new DatabaseInstance(this, 'Postgres', {
       vpc: props.vpc,
-      engine: DatabaseInstanceEngine.postgres({ version: PostgresEngineVersion.V16 }),
+      engine: DatabaseInstanceEngine.postgres({ version: PostgresEngineVersion.VER_16 }),
       instanceType: InstanceType.of(InstanceClass.T4G, InstanceSize.MICRO),
       vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
       allocatedStorage: 20,
