@@ -3,11 +3,14 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core'
 import { Module, ValidationPipe } from '@nestjs/common'
 import { BillingModule } from './modules/billing/billing.module'
-import { PrismaService } from './modules/billing/prisma.service'
-import { UserModule } from './modules/user/user.module';
-import { InviteModule } from './modules/invite/invite.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { MailModule } from './modules/mail/mail.module';
+import { PrismaService } from './modules/user/prisma.service'
+import { UserModule } from './modules/user/user.module'
+import { InviteModule } from './modules/invite/invite.module'
+import { AuthModule } from './modules/auth/auth.module'
+import { MailModule } from './modules/mail/mail.module'
+import { CommunityModule } from './modules/community/community.module'
+import { PeriodModule } from './modules/period/period.module'
+import { BeFinancialsModule } from './modules/be-financials/be-financials.module'
 
 @Module({
   imports: [
@@ -15,13 +18,23 @@ import { MailModule } from './modules/mail/mail.module';
     UserModule,
     InviteModule,
     AuthModule,
-    MailModule
+    MailModule,
+    CommunityModule,
+    PeriodModule,
+    BeFinancialsModule,
   ]
 })
 class AppModule {}
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: true })
+  const app = await NestFactory.create(AppModule)
+
+  console.log(process.env.APP_ORIGIN?.split(',').map(s => s.trim()) || '*')
+
+  app.enableCors({
+    origin: process.env.APP_ORIGIN?.split(',').map(s => s.trim()) || '*',
+    credentials: true,
+  })
 
   // Global config
   app.setGlobalPrefix('api')

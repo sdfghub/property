@@ -1,0 +1,90 @@
+{
+  "communityId": "LOTUS-TM",
+  "periodCode": "2025-09",
+  "items": [
+    {
+      "description": "Gas September",
+      "expenseTypeCode": "GAS",
+      "amount": 7138.33,
+      "currency": "RON"
+    },
+    {
+      "description": "Electricity September",
+      "expenseTypeCode": "ELECTRICITY",
+      "amount": 4362.85,
+      "currency": "RON"
+    },
+    {
+      "description": "Water September",
+      "expenseTypeCode": "WATER",
+      "amount": 4464.31,
+      "currency": "RON"
+    },
+    {
+      "description": "Rain September",
+      "expenseTypeCode": "RAIN_WATER",
+      "amount": 117.43,
+      "currency": "RON"
+    },
+    {
+      "description": "Garbage September",
+      "expenseTypeCode": "GARBAGE",
+      "amount": 1017.84,
+      "currency": "RON"
+    },
+    {
+      "description": "Elevator maintenance September",
+      "expenseTypeCode": "ELEVATOR",
+      "amount": 2939.92,
+      "currency": "RON"
+    },
+    {
+      "description": "Liviu Transport September",
+      "expenseTypeCode": "LIVIU-TRANSPORT",
+      "amount": 220,
+      "currency": "RON"
+    },
+    {
+      "description": "Liviu September",
+      "expenseTypeCode": "LIVIU",
+      "amount": 4638.5,
+      "currency": "RON"
+    },
+    {
+      "description": "Cenzor September",
+      "expenseTypeCode": "CENZOR",
+      "amount": 299,
+      "currency": "RON"
+    },
+    {
+      "description": "RCS/RDS September",
+      "expenseTypeCode": "RCSRDS",
+      "amount": 127.29,
+      "currency": "RON"
+    },
+    {
+      "description": "Administration September",
+      "expenseTypeCode": "ADMIN",
+      "amount": 2396.94,
+      "currency": "RON"
+    },
+    {
+      "description": "Bank September",
+      "expenseTypeCode": "BANK",
+      "amount": 78.23,
+      "currency": "RON"
+    },
+    {
+      "description": "Vodafone September",
+      "expenseTypeCode": "VODAFONE",
+      "amount": 102.19,
+      "currency": "RON"
+    },
+    {
+      "description": "Mentenanta CCTV September",
+      "expenseTypeCode": "CCTV-MAINTENANCE",
+      "amount": 340,
+      "currency": "RON"
+    }  
+  ]
+}

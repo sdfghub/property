@@ -14,10 +14,12 @@ export type ExpenseImportPlan = {
   items: Array<{
     description: string
     expenseTypeCode: string
-    amount: number
-    currency: string
-    targetType?: ExpenseCsvRow['targetType']
-    targetCode?: string
-    weightSource?: ExpenseCsvRow['weightSource']
+  amount: number
+  currency: string
+  targetType?: ExpenseCsvRow['targetType']
+  targetCode?: string
+  weightSource?: ExpenseCsvRow['weightSource']
+  splits?: any
+  allocationParams?: any
   }>
 }

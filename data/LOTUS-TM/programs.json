@@ -1,0 +1,80 @@
+[
+  {
+    "code": "MAINTENANCE_FUND",
+    "name": "Fond mentenanta",
+    "description": "Fond pt mentenante cf Adunare Generala",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "totalTarget": 50000,
+    "startPeriodCode": "2025-09",
+    "targets": [
+      { "offset": 0, "amount": 7419.06 },
+      { "offset": 1, "amount": 7419.06 },
+      { "offset": 2, "amount": 7419.06 },
+      { "offset": 3, "amount": 7419.06 },
+      { "offset": 4, "amount": 7419.06 },
+      { "offset": 5, "amount": 7419.06 },
+      { "offset": 6, "amount": 5485.64 }
+    ],
+    "defaultBucket": "PROGRAM:MAINTENANCE",
+    "allocation": {
+      "method": "BY_SQM"
+    }
+  },
+  {
+    "code": "HOUSEHOLD_FUND",
+    "name": "FOND GOSPODARESC",
+    "description": "FOND GOSPODARESC",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "totalTarget": 20000,
+    "startPeriodCode": "2025-09",
+    "targets": [
+      { "offset": 0, "amount": 850 },
+      { "offset": 1, "amount": 850 },
+      { "offset": 2, "amount": 850 },
+      { "offset": 3, "amount": 850 },
+      { "offset": 4, "amount": 850 },
+      { "offset": 5, "amount": 850 },
+      { "offset": 6, "amount": 850 },
+      { "offset": 7, "amount": 850 },
+      { "offset": 8, "amount": 850 },
+      { "offset": 9, "amount": 850 },
+      { "offset": 10, "amount": 850 },
+      { "offset": 11, "amount": 850 },
+      { "offset": 12, "amount": 850 },
+      { "offset": 13, "amount": 850 },
+      { "offset": 14, "amount": 850 },
+      { "offset": 15, "amount": 850 },
+      { "offset": 16, "amount": 850 },
+      { "offset": 17, "amount": 850 },
+      { "offset": 18, "amount": 850 },
+      { "offset": 19, "amount": 850 },
+      { "offset": 20, "amount": 850 },
+      { "offset": 21, "amount": 850 },
+      { "offset": 22, "amount": 850 },
+      { "offset": 23, "amount": 450 }
+    ],
+    "defaultBucket": "PROGRAM:HOUSEHOLD",
+    "allocation": {
+      "method": "BY_SQM"
+    }
+  },
+  {
+    "code": "REPAIRS",
+    "name": "Fond de reparatii",
+    "description": "Fond de reparatii",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "totalTarget": 18349.39,
+    "startPeriodCode": "2025-09",
+    "targetPlan": {
+      "periodCount": 1,
+      "perPeriodAmount": 18349.39
+    },
+    "defaultBucket": "PROJECT:REPAIRS",
+    "allocation": {
+      "method": "BY_SQM"
+    }
+  }
+]

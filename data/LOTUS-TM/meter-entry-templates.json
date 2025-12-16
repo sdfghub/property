@@ -1,0 +1,67 @@
+[
+  {
+    "code": "GAS-READINGS",
+    "name": "Citiri gaz asociatie",
+    "template": {
+      "title": "Citiri gaz asociatie",
+      "items": [
+        { "key": "gas_total", "label": "Gaz asociatie", "kind": "meter", "meterId": "METER-GAS-TOTAL" },
+        { "key": "gas_hot_water", "label": "Gaz apa calda", "kind": "meter", "meterId": "METER-GAS-HOTWATER" }
+      ]
+    },
+    "order": 1
+  },
+  {
+    "code": "ELECTRICITY-READINGS",
+    "name": "Citiri curent asociatie",
+    "template": {
+      "title": "Citiri curent asociatie",
+      "items": [
+        { "key": "elec_total", "label": "Curent asociatie", "kind": "meter", "meterId": "ELEC-TOTAL" },
+        { "key": "elec_staircase_a", "label": "Curent scara A", "kind": "meter", "meterId": "ELEC-STAIRCASE-A" },
+        { "key": "elec_staircase_b", "label": "Curent scara B", "kind": "meter", "meterId": "ELEC-STAIRCASE-B" },
+        { "key": "elec_staircase_c", "label": "Curent scara C", "kind": "meter", "meterId": "ELEC-STAIRCASE-C" },
+        { "key": "elec_parking", "label": "Curent parcare subterana", "kind": "meter", "meterId": "ELEC-PARKING" },
+        { "key": "elec_hw_pump", "label": "Curent pompe apa calda", "kind": "meter", "meterId": "ELEC-HW-PUMP" },
+        { "key": "elec_boiler", "label": "Curent centrala", "kind": "meter", "meterId": "ELEC-BOILER" },
+        { "key": "elec_hydro", "label": "Curent hidrofor", "kind": "meter", "meterId": "ELEC-HYDRO" },
+        { "key": "elec_chiller", "label": "Curent chiller", "kind": "meter", "meterId": "ELEC-CHILLER" },
+        { "key": "elec_other", "label": "Altele", "kind": "meter", "meterId": "ELEC-SHIT" }
+      ]
+    },
+    "order": 2
+  },
+  {
+    "code": "UNIT-HOT-WATER-READINGS",
+    "name": "Citiri apă caldă apartamente",
+    "template": {
+      "title": "Citiri apă caldă apartamente",
+      "items": [
+        { "key": "hotwater_type", "kind": "meter", "typeCode": "HOT_WATER" }
+      ]
+    },
+    "order": 3
+  },
+  {
+    "code": "UNIT-COLD-WATER-READINGS",
+    "name": "Citiri apă rece apartamente",
+    "template": {
+      "title": "Citiri apă rece apartamente",
+      "items": [
+        { "key": "coldwater_type", "kind": "meter", "typeCode": "WATER_COLD" }
+      ]
+    },
+    "order": 4
+  },
+  {
+    "code": "UNIT-HEAT-READINGS",
+    "name": "Citiri caldura apartamente",
+    "template": {
+      "title": "Citiri caldura apartamente",
+      "items": [
+        { "key": "heating_type", "kind": "meter", "typeCode": "HEATING" }
+      ]
+    },
+    "order": 5
+  }
+]

@@ -1,20 +1,31 @@
 import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
-async function ensurePeriod(communityId: string, code: string, start: string, end: string, seq: number) {
-  const existing = await prisma.period.findUnique({ where: { communityId_code: { communityId, code } } })
-  if (existing) return existing
-  return prisma.period.create({ data: { communityId, code, startDate: new Date(start), endDate: new Date(end), seq } })
+async function ensureRootUser() {
+  const email = process.env.ROOT_EMAIL || 'bogdan.boji@gmail.com'
+  // Passwords are not used in auth (magic links only); value is informational.
+  const passwordNote = process.env.ROOT_PASSWORD || '123456'
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { name: 'Root Admin' },
+    create: { email, name: 'Root Admin' },
+  })
+
+  const existingRole = await prisma.roleAssignment.findFirst({
+    where: { userId: user.id, role: 'SYSTEM_ADMIN', scopeType: 'SYSTEM', scopeId: null },
+  })
+  if (!existingRole) {
+    await prisma.roleAssignment.create({
+      data: { userId: user.id, role: 'SYSTEM_ADMIN', scopeType: 'SYSTEM', scopeId: null },
+    })
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`[seed] Root user ensured: ${email} (password hint: ${passwordNote})`)
 }
 
 async function main() {
-  const community = await prisma.community.upsert({
-    where: { id: 'COMM-1' },
-    update: {},
-    create: { id: 'COMM-1', name: 'Sample Community' }
-  })
-
-  const p11 = await ensurePeriod(community.id, '2025-11', '2025-11-01', '2025-12-01', 2)
-  console.log('Seed OK. Period:', p11.code, 'id:', p11.id)
+  await ensureRootUser()
+  // Add your own communities/periods via import scripts or custom seed logic.
 }
 main().finally(()=>prisma.$disconnect())

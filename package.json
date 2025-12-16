@@ -14,8 +14,17 @@
     "import": "ts-node --transpile-only scripts/import-community.ts",
     "start": "node dist/server.js",
     "import:community": "ts-node --transpile-only src/scripts/import-community.ts",
+    "import:bill-templates": "ts-node --transpile-only src/scripts/import-bill-templates.ts",
     "import:expense": "ts-node --transpile-only src/scripts/import-expense.ts",
-    "add:expense": "ts-node src/scripts/add-expense.ts"
+    "import:programs": "ts-node --transpile-only src/scripts/import-programs.ts",
+    "add:expense": "ts-node src/scripts/add-expense.ts",
+    "import:meters": "ts-node --transpile-only src/scripts/import-meters.ts",
+    "import:meter-templates": "ts-node --transpile-only src/scripts/import-meter-templates.ts",
+    "db:flush": "ts-node --transpile-only src/scripts/flush-db.ts",
+    "close:period": "ts-node --transpile-only src/scripts/close-period.ts",
+    "add:payment": "ts-node --transpile-only src/scripts/add-payment.ts",
+    "import:opening": "ts-node --transpile-only src/scripts/import-opening-balances.ts",
+    "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

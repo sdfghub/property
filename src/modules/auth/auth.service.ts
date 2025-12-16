@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common'
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../user/prisma.service'
 import { randomBytes, createHash } from 'crypto'
@@ -10,6 +10,7 @@ function sha256(raw: string){ return createHash('sha256').update(raw).digest('he
 
 @Injectable()
 export class AuthService{
+  private readonly logger = new Logger(AuthService.name)
   constructor(private readonly prisma:PrismaService, private readonly jwt:JwtService, private readonly mail: MailService){}
 
   async requestMagicLink(email:string){
@@ -19,40 +20,31 @@ export class AuthService{
     const urlBase=process.env.APP_PUBLIC_URL||'http://localhost:3000'
     const link=`${urlBase}/magic?token=${token}`
     await this.mail.send(email, 'Your sign-in link', `<p>Click to sign in: <a href="${link}">${link}</a></p>`)
+    this.logger.log(`Magic link requested for ${email} exp=${expiresAt.toISOString()}`)
     return {ok:true}
   }
 
   async consumeMagicToken(token:string, userAgent?:string, ip?:string){
+    this.logger.log(`consumeMagicToken token=${token?.slice(0,8)}... ua=${userAgent ?? '-'} ip=${ip ?? '-'}`)
     const rec=await this.prisma.loginToken.findUnique({where:{token}})
-    if(!rec || rec.usedAt || rec.expiresAt == null || rec.expiresAt?.getTime() < Date.now()) throw new UnauthorizedException('Invalid/expired token')
+    if(!rec){ 
+      this.logger.warn(`magic token not found`)
+      throw new UnauthorizedException('Invalid/expired token')
+    }
+    if(rec.usedAt){ 
+      this.logger.warn(`magic token already used`)
+      throw new UnauthorizedException('Invalid/expired token')
+    }
+    if(rec.expiresAt == null || rec.expiresAt?.getTime() < Date.now()){
+      this.logger.warn(`magic token expired at=${rec.expiresAt}`)
+      throw new UnauthorizedException('Invalid/expired token')
+    }
 
     const user=await this.prisma.user.upsert({ where:{email:rec.email}, update:{}, create:{email:rec.email} })
     await this.prisma.loginToken.update({where:{id:rec.id}, data:{usedAt:new Date()} })
 
-    const roles=await this.prisma.roleAssignment.findMany({ where:{userId:user.id} })
-    const payload={ sub:user.id, email:user.email, roles:roles.map(r=>({role:r.role, scopeType:r.scopeType, scopeId:r.scopeId} as RoleAssignment)), token_version: user.tokenVersion   }
-    const accessToken=await this.jwt.signAsync(payload)
-
-    // issue refresh token (with jti)
-    const jti = randomBytes(16).toString('hex')
-    const refreshSecret=process.env.JWT_REFRESH_SECRET||'dev_refresh_secret'
-    const refreshTtl=process.env.JWT_REFRESH_TTL||'30d'
-    const refreshToken=await this.jwt.signAsync({ sub:user.id, typ:'refresh', jti }, { secret:refreshSecret, expiresIn:refreshTtl })
-
-    // store hashed refresh token
-    const decoded:any = await this.jwt.verifyAsync(refreshToken, { secret: refreshSecret })
-    await this.prisma.refreshToken.create({
-      data:{
-        userId: user.id,
-        jti,
-        tokenHash: sha256(refreshToken),
-        userAgent: userAgent || null,
-        ip: ip || null,
-        expiresAt: new Date(decoded.exp * 1000)
-      }
-    })
-
-    return { accessToken, refreshToken, user:{id:user.id,email:user.email} }
+    this.logger.log(`Magic token consumed for ${user.email} (${user.id}) ua=${userAgent ?? '-'} ip=${ip ?? '-'}`)
+    return this.issueTokensForUser(user, userAgent, ip)
   }
 
   async refresh(refreshToken:string){
@@ -68,6 +60,7 @@ export class AuthService{
     const roles=await this.prisma.roleAssignment.findMany({ where:{userId:user.id} })
     const payload={ sub:user.id, email:user.email, roles:roles.map(r=>({role:r.role, scopeType:r.scopeType, scopeId:r.scopeId})), token_version: user.tokenVersion }
     const accessToken=await this.jwt.signAsync(payload)
+    this.logger.log(`Access token refreshed for user ${user.id}`)
     return { accessToken }
   }
 
@@ -77,6 +70,7 @@ export class AuthService{
     try {
       const decoded:any = await this.jwt.verifyAsync(currentRefreshToken,{secret})
       await this.prisma.refreshToken.update({ where:{ jti: decoded.jti }, data:{ revokedAt: new Date() } })
+      this.logger.log(`Refresh token revoked jti=${decoded.jti}`)
     } catch { /* ignore */ }
     return { ok:true }
   }
@@ -86,6 +80,43 @@ export class AuthService{
     await this.prisma.user.update({ where:{ id:userId }, data:{ tokenVersion: { increment: 1 } } })
     // revoke all refresh tokens
     await this.prisma.refreshToken.updateMany({ where:{ userId: userId, revokedAt: null }, data:{ revokedAt: new Date() } })
+    this.logger.warn(`All sessions revoked for user ${userId}`)
     return { ok:true }
+  }
+
+  async issueTokensForUser(user: { id: string; email: string; tokenVersion?: number }, userAgent?: string, ip?: string) {
+    const roles = await this.prisma.roleAssignment.findMany({ where: { userId: user.id } })
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      roles: roles.map(
+        (r) => ({ role: r.role, scopeType: r.scopeType, scopeId: r.scopeId } as RoleAssignment),
+      ),
+      token_version: user.tokenVersion,
+    }
+    const accessToken = await this.jwt.signAsync(payload)
+
+    const jti = randomBytes(16).toString('hex')
+    const refreshSecret = process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret'
+    const refreshTtl = process.env.JWT_REFRESH_TTL || '30d'
+    const refreshToken = await this.jwt.signAsync(
+      { sub: user.id, typ: 'refresh', jti },
+      { secret: refreshSecret, expiresIn: refreshTtl },
+    )
+
+    const decoded: any = await this.jwt.verifyAsync(refreshToken, { secret: refreshSecret })
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        jti,
+      tokenHash: sha256(refreshToken),
+      userAgent: userAgent || null,
+      ip: ip || null,
+      expiresAt: new Date(decoded.exp * 1000),
+    },
+    })
+
+    this.logger.log(`Tokens issued for ${user.email} roles=${roles.map(r=>`${r.role}@${r.scopeType}:${r.scopeId??'-'}`).join(',')}`)
+    return { accessToken, refreshToken, user: { id: user.id, email: user.email } }
   }
 }

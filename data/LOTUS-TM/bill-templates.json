@@ -1,0 +1,105 @@
+[
+  {
+    "code": "WATER-BILL",
+    "name": "Factură apă",
+    "template": {
+      "title": "Aquatim",
+      "items": [
+        { "key": "meterTotal", "label": "Consum de apa", "kind": "meter", "meterId": "METER-WATER-TOTAL" },
+        { "key": "water", "label": "Cost total apa + canal", "kind": "expense", "expenseTypeCode": "WATER" },
+        { "key": "rain", "label": "Cost apa meteorica", "kind": "expense", "expenseTypeCode": "RAIN_WATER" }
+      ]
+    },
+    "order": 1
+  },  
+  {
+    "code": "GAS-BILL",
+    "name": "Factură gaz",
+    "template": {
+      "title": "Eon",
+      "items": [
+        { "key": "gas", "label": "Cost gaz", "kind": "expense", "expenseTypeCode": "GAS" }
+      ]
+    },
+    "order": 2
+  },  
+  {
+    "code": "ADMIN-BILL",
+    "name": "Factură Administrare",
+    "template": {
+      "title": "Imo smth",
+      "items": [
+        { "key": "admin", "label": "Servicii administrare", "kind": "expense", "expenseTypeCode": "ADMIN" }
+      ]
+    },
+    "order": 3
+  },  
+  {
+    "code": "CENZOR-BILL",
+    "name": "Cheltuieli cenzorat",
+    "template": {
+      "title": "Cost cenzori",
+      "items": [
+        { "key": "cenzor", "label": "Servicii cenzorat", "kind": "expense", "expenseTypeCode": "CENZOR" }
+      ]
+    },
+    "order": 4
+  },  
+  {
+    "code": "LIVIU-BILL",
+    "name": "Ingrijitor cladire",
+    "template": {
+      "title": "Cost ingrijitor",
+      "items": [
+        { "key": "liviu-cost", "label": "Indemnizatie", "kind": "expense", "expenseTypeCode": "LIVIU" },
+        { "key": "liviu-transport", "label": "Decont abonament transport", "kind": "expense", "expenseTypeCode": "LIVIU-TRANSPORT" }
+      ]
+    },
+    "order": 5
+  },  
+  {
+    "code": "BANK-BILL",
+    "name": "Costuri bancare",
+    "template": {
+      "title": "Costuri bancare",
+      "items": [
+        { "key": "bank-commission", "label": "Comisionane bancare", "kind": "expense", "expenseTypeCode": "BANK" }
+      ]
+    },
+    "order": 6
+  },  
+  {
+    "code": "COMM-BILL",
+    "name": "Comunicare",
+    "template": {
+      "title": "Comunicare",
+      "items": [
+        { "key": "comm-vodafone", "label": "Abonament Vodafone interfon", "kind": "expense", "expenseTypeCode": "VODAFONE" },
+        { "key": "comm-rcsrds", "label": "Abonament RCS/RDS lift", "kind": "expense", "expenseTypeCode": "RCSRDS" }
+      ]
+    },
+    "order": 7
+  },  
+  {
+    "code": "GARBAGE-BILL",
+    "name": "Salubritate",
+    "template": {
+      "title": "Salubritate",
+      "items": [
+        { "key": "garbage", "label": "Servicii RETIM", "kind": "expense", "expenseTypeCode": "GARBAGE" }
+      ]
+    },
+    "order": 8
+  },  
+  {
+    "code": "SECURITY-BILL",
+    "name": "Securitate",
+    "template": {
+      "title": "Securitate",
+      "items": [
+        { "key": "cctv", "label": "Mentenanta sistem CCTV", "kind": "expense", "expenseTypeCode": "CCTV-MAINTENANCE" }
+      ]
+    },
+    "order": 8
+  }
+]

@@ -15,6 +15,10 @@ export async function applyExpensePlan(plan: ExpenseImportPlan) {
   if (!period) throw new Error(`Period ${periodCode} not found in ${communityId}`)
 
   for (const e of plan.items) {
+    // If the expense uses split tree, let the service handle it; skip legacy path.
+    if (e.splits && Array.isArray(e.splits) && e.splits.length) {
+      continue
+    }
     // Resolve type and defaults
     const type = await prisma.expenseType.findUnique({ where: { code_communityId: { code: e.expenseTypeCode, communityId } } })
     if (!type) throw new Error(`ExpenseType ${e.expenseTypeCode} not found`)
@@ -56,20 +60,42 @@ export async function applyExpensePlan(plan: ExpenseImportPlan) {
 
     // All writes in one serializable transaction
     await prisma.$transaction(async (tx) => {
-      // 1) expense
-      const expense = await tx.expense.create({
-        data: {
-          communityId, periodId: period.id, description: e.description,
-          allocatableAmount: e.amount, currency: e.currency,
-          targetType: 'GROUP', targetId: group.id, expenseTypeId: type.id
-        }
+      // 1) expense (idempotent: reuse existing expenseType per period)
+      const existing = await tx.expense.findFirst({
+        where: { communityId, periodId: period.id, expenseTypeId: type.id },
+        select: { id: true },
       })
+      let expenseId = existing?.id
+
+      if (expenseId) {
+        // Clean existing allocations/vectors for a full recompute
+        await tx.allocationLine.deleteMany({ where: { expenseId } })
+        const vectors = await tx.weightVector.findMany({ where: { expenseId }, select: { id: true } })
+        if (vectors.length) {
+          await tx.weightItem.deleteMany({ where: { vectorId: { in: vectors.map((v) => v.id) } } })
+          await tx.weightVector.deleteMany({ where: { id: { in: vectors.map((v) => v.id) } } })
+        }
+        await tx.expense.update({
+          where: { id: expenseId },
+          data: { description: e.description, allocatableAmount: e.amount, currency: e.currency },
+        })
+      } else {
+        const expense = await tx.expense.create({
+          data: {
+            communityId, periodId: period.id, description: e.description,
+            allocatableAmount: e.amount, currency: e.currency,
+            targetType: 'GROUP', targetId: group.id, expenseTypeId: type.id
+          },
+          select: { id: true }
+        })
+        expenseId = expense.id
+      }
 
       // 2) per-expense vector
       const vector = await tx.weightVector.create({
         data: {
           communityId, periodId: period.id, ruleId: type.ruleId!,
-          scopeType: 'GROUP', scopeId: group.id, expenseId: expense.id
+          scopeType: 'GROUP', scopeId: group.id, expenseId
         }
       })
 
@@ -84,7 +110,7 @@ export async function applyExpensePlan(plan: ExpenseImportPlan) {
       // 4) allocation lines (idempotent if unique(expenseId,unitId))
       await tx.allocationLine.createMany({
         data: unitIds.map(u => ({
-          communityId, periodId: period.id, expenseId: expense.id, unitId: u,
+          communityId, periodId: period.id, expenseId, unitId: u,
           amount: e.amount * (weights.get(u) ?? 0)
         })),
         skipDuplicates: true

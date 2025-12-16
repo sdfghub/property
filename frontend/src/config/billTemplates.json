@@ -1,0 +1,10 @@
+{
+  "water": {
+    "title": "Water bill (manual entry)",
+    "items": [
+      { "key": "meterTotal", "label": "METER-WATER-TOTAL", "kind": "meter", "meterId": "METER-WATER-TOTAL" },
+      { "key": "water", "label": "Water expense", "kind": "expense", "expenseTypeCode": "WATER" },
+      { "key": "rain", "label": "Rain water expense", "kind": "expense", "expenseTypeCode": "RAIN_WATER" }
+    ]
+  }
+}
