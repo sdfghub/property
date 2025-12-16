@@ -4,7 +4,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 enum GroupKind {
@@ -16,6 +17,7 @@ enum GroupKind {
 enum SeriesScope {
   UNIT
   GROUP
+  COMMUNITY
 }
 
 enum SeriesOrigin {
@@ -78,26 +80,30 @@ enum NodeKind {
 
 model Community {
   id       String @id @map("id")
-  code     String 
+  code     String
   name     String @map("name")
   timezone String @default("Europe/Bucharest") @map("timezone")
 
-  periods          Period[]
-  units            Unit[]
-  groups           UnitGroup[]
-  billingEntities  BillingEntity[]
-  rules            AllocationRule[]
-  expenseTypes     ExpenseType[]
-  periodMeasures   PeriodMeasure[]
-  expenses         Expense[]
-  bills            Bill[]
-  vendors          Vendor[]
-  invoices         VendorInvoice[]
-  externalRefs     ExternalRef[]
-  MeasureSeries    MeasureSeries[]
-  WeightVector     WeightVector[]
-  ExpenseTargetSet ExpenseTargetSet[]
-  AllocationLine   AllocationLine[]
+  periods              Period[]
+  units                Unit[]
+  groups               UnitGroup[]
+  billingEntities      BillingEntity[]
+  rules                AllocationRule[]
+  expenseTypes         ExpenseType[]
+  periodMeasures       PeriodMeasure[]
+  expenses             Expense[]
+  bills                Bill[]
+  vendors              Vendor[]
+  invoices             VendorInvoice[]
+  externalRefs         ExternalRef[]
+  MeasureSeries        MeasureSeries[]
+  WeightVector         WeightVector[]
+  ExpenseTargetSet     ExpenseTargetSet[]
+  AllocationLine       AllocationLine[]
+  AllocationLog        AllocationLog[]
+  ExpenseSplit         ExpenseSplit[]
+  AllocationLineDetail AllocationLineDetail[]
+  AggregationRule      AggregationRule[]
 
   @@map("community")
 }
@@ -121,13 +127,16 @@ model Period {
   preparedAt  DateTime?    @map("prepared_at")
   closedAt    DateTime?    @map("closed_at")
 
-  community      Community        @relation(fields: [communityId], references: [id])
-  PeriodMeasure  PeriodMeasure[]
-  WeightVector   WeightVector[]
-  Expense        Expense[]
-  AllocationLine AllocationLine[]
-  Bill           Bill[]
-  InvoiceSplit   InvoiceSplit[]
+  community            Community              @relation(fields: [communityId], references: [id])
+  PeriodMeasure        PeriodMeasure[]
+  WeightVector         WeightVector[]
+  Expense              Expense[]
+  AllocationLine       AllocationLine[]
+  Bill                 Bill[]
+  InvoiceSplit         InvoiceSplit[]
+  AllocationLog        AllocationLog[]
+  ExpenseSplit         ExpenseSplit[]
+  AllocationLineDetail AllocationLineDetail[]
 
   @@unique([communityId, code])
   @@unique([communityId, seq])
@@ -141,12 +150,13 @@ model Unit {
   code        String @map("code")
   kind        String @default("RESIDENTIAL") @map("kind")
 
-  community           Community             @relation(fields: [communityId], references: [id])
-  UnitGroupMember     UnitGroupMember[]
-  BillingEntityMember BillingEntityMember[]
-  WeightItem          WeightItem[]
-  ExpenseTargetMember ExpenseTargetMember[]
-  AllocationLine      AllocationLine[]
+  community            Community              @relation(fields: [communityId], references: [id])
+  UnitGroupMember      UnitGroupMember[]
+  BillingEntityMember  BillingEntityMember[]
+  WeightItem           WeightItem[]
+  ExpenseTargetMember  ExpenseTargetMember[]
+  AllocationLine       AllocationLine[]
+  AllocationLineDetail AllocationLineDetail[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -368,16 +378,36 @@ model Expense {
   invoiceLineKey    String?           @map("invoice_line_key")
   weightVectorId    String?           @map("weight_vector_id")
 
-  community    Community        @relation(fields: [communityId], references: [id])
-  period       Period           @relation(fields: [periodId], references: [id])
-  expenseType  ExpenseType?     @relation(fields: [expenseTypeId], references: [id])
-  allocations  AllocationLine[]
-  weightVector WeightVector?    @relation("ExpenseVector")
-  BillLine     BillLine[]
+  community            Community              @relation(fields: [communityId], references: [id])
+  period               Period                 @relation(fields: [periodId], references: [id])
+  expenseType          ExpenseType?           @relation(fields: [expenseTypeId], references: [id])
+  allocations          AllocationLine[]
+  weightVector         WeightVector?          @relation("ExpenseVector")
+  AllocationLog        AllocationLog[]
+  BillLine             BillLine[]
+  ExpenseSplit         ExpenseSplit[]
+  AllocationLineDetail AllocationLineDetail[]
 
   @@index([communityId, periodId])
   @@index([targetType, targetId])
   @@map("expense")
+}
+
+model AllocationLog {
+  id          String   @id @default(cuid()) @map("id")
+  communityId String   @map("community_id")
+  periodId    String   @map("period_id")
+  expenseId   String   @map("expense_id")
+  message     String   @map("message")
+  details     Json?    @map("details")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  community Community @relation(fields: [communityId], references: [id])
+  period    Period    @relation(fields: [periodId], references: [id])
+  expense   Expense   @relation(fields: [expenseId], references: [id])
+
+  @@index([expenseId])
+  @@map("allocation_log")
 }
 
 model ExpenseTargetSet {
@@ -405,23 +435,104 @@ model ExpenseTargetMember {
 }
 
 model AllocationLine {
-  id          String  @id @default(cuid()) @map("id")
-  communityId String  @map("community_id")
-  periodId    String  @map("period_id")
-  expenseId   String  @map("expense_id")
-  unitId      String  @map("unit_id")
-  amount      Decimal @map("amount") @db.Decimal(18, 4)
+  id             String  @id @default(cuid()) @map("id")
+  communityId    String  @map("community_id")
+  periodId       String  @map("period_id")
+  expenseId      String  @map("expense_id")
+  unitId         String  @map("unit_id")
+  expenseSplitId String? @map("expense_split_id")
+  amount         Decimal @map("amount") @db.Decimal(18, 4)
 
-  community Community @relation(fields: [communityId], references: [id])
-  period    Period    @relation(fields: [periodId], references: [id])
-  expense   Expense   @relation(fields: [expenseId], references: [id])
-  unit      Unit      @relation(fields: [unitId], references: [id])
+  community    Community     @relation(fields: [communityId], references: [id])
+  period       Period        @relation(fields: [periodId], references: [id])
+  expense      Expense       @relation(fields: [expenseId], references: [id])
+  unit         Unit          @relation(fields: [unitId], references: [id])
+  expenseSplit ExpenseSplit? @relation(fields: [expenseSplitId], references: [id])
 
   @@unique([expenseId, unitId])
   @@index([communityId, periodId])
   @@index([expenseId])
   @@index([unitId, periodId])
   @@map("allocation_line")
+}
+
+model AllocationLineDetail {
+  id             String  @id @default(cuid()) @map("id")
+  communityId    String  @map("community_id")
+  periodId       String  @map("period_id")
+  expenseId      String  @map("expense_id")
+  unitId         String  @map("unit_id")
+  expenseSplitId String? @map("expense_split_id")
+  amount         Decimal @map("amount") @db.Decimal(18, 4)
+  meta           Json?   @map("meta")
+
+  community    Community     @relation(fields: [communityId], references: [id])
+  period       Period        @relation(fields: [periodId], references: [id])
+  expense      Expense       @relation(fields: [expenseId], references: [id])
+  unit         Unit          @relation(fields: [unitId], references: [id])
+  expenseSplit ExpenseSplit? @relation(fields: [expenseSplitId], references: [id])
+
+  @@unique([expenseId, unitId, expenseSplitId])
+  @@index([communityId, periodId])
+  @@index([expenseId])
+  @@index([unitId, periodId])
+  @@map("allocation_line_detail")
+}
+
+model AggregationRule {
+  id           String  @id @default(cuid()) @map("id")
+  communityId  String  @map("community_id")
+  targetType   String  @map("target_type")
+  unitTypes    Json    @map("unit_types")
+  residualType String? @map("residual_type")
+  totalType    String? @map("total_type")
+
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@unique([communityId, targetType])
+  @@index([communityId])
+  @@map("aggregation_rule")
+}
+
+model ExpenseSplit {
+  id            String   @id @default(cuid()) @map("id")
+  communityId   String   @map("community_id")
+  periodId      String   @map("period_id")
+  expenseId     String   @map("expense_id")
+  parentSplitId String?  @map("parent_split_id")
+  share         Decimal? @map("share") @db.Decimal(18, 6)
+  amount        Decimal  @map("amount") @db.Decimal(18, 4)
+  basisType     String?  @map("basis_type")
+  basisCode     String?  @map("basis_code")
+  meta          Json?    @map("meta")
+
+  community            Community              @relation(fields: [communityId], references: [id])
+  period               Period                 @relation(fields: [periodId], references: [id])
+  expense              Expense                @relation(fields: [expenseId], references: [id])
+  parent               ExpenseSplit?          @relation("SplitParent", fields: [parentSplitId], references: [id])
+  children             ExpenseSplit[]         @relation("SplitParent")
+  allocations          AllocationLine[]
+  AllocationLineDetail AllocationLineDetail[]
+
+  @@index([expenseId])
+  @@index([parentSplitId])
+  @@map("expense_split")
+}
+
+model Meter {
+  meterId     String    @id @map("meter_id")
+  scopeType   String    @map("scope_type")
+  scopeCode   String    @map("scope_code")
+  typeCode    String    @map("type_code")
+  origin      String    @default("METER") @map("origin")
+  installedAt DateTime? @map("installed_at")
+  retiredAt   DateTime? @map("retired_at")
+  multiplier  Decimal?  @map("multiplier") @db.Decimal(18, 6)
+  notes       String?   @map("notes")
+
+  @@index([scopeCode])
+  @@index([typeCode])
+  @@map("meter")
 }
 
 model Bill {
@@ -654,7 +765,7 @@ model LoginToken {
   email     String
   token     String    @unique
   usedAt    DateTime? @map("used_at")
-  expiresAt DateTime?  @map("expires_at")
+  expiresAt DateTime? @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
   user      User?     @relation(fields: [userId], references: [id])
   userId    String?   @map("user_id")
