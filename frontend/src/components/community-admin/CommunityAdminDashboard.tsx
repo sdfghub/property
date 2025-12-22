@@ -2,6 +2,7 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import type { Community } from '../../api/types'
+import { API_BASE } from '../../api/client'
 import { CommunityUsersPanel } from '../CommunityUsersPanel'
 import { CommunityExpensesPanel } from '../CommunityExpensesPanel'
 import { CommunityMetersPanel } from '../CommunityMetersPanel'
@@ -114,10 +115,9 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
 
   const fetchPayments = React.useCallback(() => {
     if (!communityCode) return Promise.resolve()
-    const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://localhost:3000/api'
     setPaymentsLoading(true)
     setPaymentsError(null)
-    return fetch(`${apiBase}/communities/${communityCode}/payments`)
+    return fetch(`${API_BASE}/communities/${communityCode}/payments`)
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text())
         return res.json()
@@ -230,8 +230,7 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
     setConfigError(null)
     setProgramError(null)
     setPaymentsError(null)
-    const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://localhost:3000/api'
-    fetch(`${apiBase}/community-config/${communityCode}`)
+    fetch(`${API_BASE}/community-config/${communityCode}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text())
         return res.json()
@@ -239,7 +238,7 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
       .then(setConfigJson)
       .catch((err) => setConfigError(err?.message || 'Failed to load config'))
 
-    fetch(`${apiBase}/community-programs/${communityCode}`)
+    fetch(`${API_BASE}/community-programs/${communityCode}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text())
         return res.json()
@@ -263,8 +262,7 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
     if (!communityCode) return
     if (activeTab !== 'meters' && activeTab !== 'config') return
     if (metersConfig && (metersConfig as any).__communityCode === communityCode) return
-    const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://localhost:3000/api'
-    fetch(`${apiBase}/community-config/${communityCode}/meters`)
+    fetch(`${API_BASE}/community-config/${communityCode}/meters`)
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text())
         return res.json()

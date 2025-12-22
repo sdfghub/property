@@ -12,11 +12,11 @@ type ApiClientConfig = {
   onUnauthorized?: () => void
 }
 
-// Base URL used by the API client; defaults to local Nest API.
-// Vite env overrides via VITE_API_BASE_URL. Trailing slash is trimmed.
+// Base URL used by the API client; defaults to same-origin /api.
+// Vite env overrides via VITE_API_BASE or VITE_API_BASE_URL. Trailing slash is trimmed.
 export const API_BASE =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'http://localhost:3000/api'
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE || import.meta.env?.VITE_API_BASE_URL)) ||
+  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:3000/api')
 
 export type ApiClient = {
   get: <T>(path: string) => Promise<T>
