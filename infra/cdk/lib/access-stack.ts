@@ -9,6 +9,8 @@ import {
   SecurityGroup,
   Vpc,
   SubnetType,
+  Peer,
+  Port,
 } from 'aws-cdk-lib/aws-ec2'
 import { ManagedPolicy, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam'
 
@@ -26,9 +28,12 @@ export class AccessStack extends cdk.Stack {
       managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')],
     })
 
+    props.bastionSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(443))
+
     const bastion = new Instance(this, 'Bastion', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: SubnetType.PUBLIC },
+      associatePublicIpAddress: true,
       instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.MICRO),
       machineImage: MachineImage.latestAmazonLinux2023(),
       securityGroup: props.bastionSecurityGroup,
