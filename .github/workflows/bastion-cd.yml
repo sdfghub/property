@@ -1,11 +1,12 @@
-name: infra-cd
+name: bastion-cd
 on:
   workflow_dispatch:
   push:
     branches: ['master']
     paths:
-      - 'infra/cdk/**'
-      - '.github/workflows/infra-cd.yml'
+      - 'infra/cdk/lib/access-stack.ts'
+      - 'infra/cdk/bin/app.ts'
+      - '.github/workflows/bastion-cd.yml'
 env:
   AWS_REGION: eu-central-1
 jobs:
@@ -26,7 +27,7 @@ jobs:
           cd infra/cdk
           npm ci
           npm run build
-      - name: Deploy stacks
+      - name: Deploy access stack
         run: |
           cd infra/cdk
-          npx cdk deploy PropertyExpenses-Network PropertyExpenses-Data --require-approval never
+          npx cdk deploy PropertyExpenses-Access --require-approval never
