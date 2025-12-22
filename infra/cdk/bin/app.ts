@@ -11,6 +11,10 @@ const app = new cdk.App()
 const env = { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION }
 const network = new NetworkStack(app, 'PropertyExpenses-Network', { env })
 const data = new DataStack(app, 'PropertyExpenses-Data', { env, vpc: network.vpc })
-new AccessStack(app, 'PropertyExpenses-Access', { env, vpc: network.vpc, dbSecurityGroup: data.dbSecurityGroup })
+new AccessStack(app, 'PropertyExpenses-Access', {
+  env,
+  vpc: network.vpc,
+  bastionSecurityGroup: data.bastionSecurityGroup,
+})
 new AppStack(app, 'PropertyExpenses-App', { env, vpc: network.vpc, db: data.db })
 new FrontendStack(app, 'PropertyExpenses-Frontend', { env })
