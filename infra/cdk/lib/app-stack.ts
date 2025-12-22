@@ -3,12 +3,16 @@ import { Construct } from 'constructs'
 import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, Protocol, LogDrivers, Secret } from 'aws-cdk-lib/aws-ecs'
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
 import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
-import { Vpc, SecurityGroup, Peer, Port, SubnetType } from 'aws-cdk-lib/aws-ec2'
+import { Vpc, SecurityGroup, Peer, Port, SubnetType, CfnSecurityGroupIngress } from 'aws-cdk-lib/aws-ec2'
 import { Repository } from 'aws-cdk-lib/aws-ecr'
 import { DatabaseInstance } from 'aws-cdk-lib/aws-rds'
 import { StringParameter } from 'aws-cdk-lib/aws-ssm'
 
-interface Props extends cdk.StackProps { vpc: Vpc; db: DatabaseInstance }
+interface Props extends cdk.StackProps {
+  vpc: Vpc
+  db: DatabaseInstance
+  dbSecurityGroup: SecurityGroup
+}
 
 export class AppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: Props) {
@@ -33,7 +37,13 @@ export class AppStack extends cdk.Stack {
     albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80))
     const serviceSg = new SecurityGroup(this, 'ServiceSg', { vpc: props.vpc })
     serviceSg.addIngressRule(albSg, Port.tcp(3000))
-    props.db.connections.allowDefaultPortFrom(serviceSg)
+    new CfnSecurityGroupIngress(this, 'ServiceDbIngress', {
+      groupId: props.dbSecurityGroup.securityGroupId,
+      ipProtocol: 'tcp',
+      fromPort: 5432,
+      toPort: 5432,
+      sourceSecurityGroupId: serviceSg.securityGroupId,
+    })
 
     const alb = new ApplicationLoadBalancer(this, 'Alb', { vpc: props.vpc, internetFacing: true, securityGroup: albSg })
     const listener = alb.addListener('Http', { port: 80, protocol: ApplicationProtocol.HTTP })

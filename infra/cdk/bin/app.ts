@@ -16,5 +16,10 @@ new AccessStack(app, 'PropertyExpenses-Access', {
   vpc: network.vpc,
   bastionSecurityGroup: data.bastionSecurityGroup,
 })
-new AppStack(app, 'PropertyExpenses-App', { env, vpc: network.vpc, db: data.db })
+new AppStack(app, 'PropertyExpenses-App', {
+  env,
+  vpc: network.vpc,
+  db: data.db,
+  dbSecurityGroup: data.dbSecurityGroup,
+})
 new FrontendStack(app, 'PropertyExpenses-Frontend', { env })
