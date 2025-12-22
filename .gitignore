@@ -40,8 +40,9 @@ docker-compose*.yaml
 *.tar
 
 # GitHub artifacts
-.github/
+.github/*
 !.github/workflows/
+!.github/workflows/**
 
 # CDK / Cloud
 infra/cdk/cdk.out/

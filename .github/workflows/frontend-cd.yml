@@ -1,0 +1,37 @@
+name: frontend-cd
+on:
+  push:
+    branches: ['master']
+    tags: ['v*.*.*']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-cd.yml'
+env:
+  AWS_REGION: eu-central-1
+  STACK_NAME: PropertyExpenses-Frontend
+  VITE_API_BASE: ${{ secrets.FRONTEND_API_BASE }}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Sync to S3 + invalidate CloudFront
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
+          DIST_ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
+          aws s3 sync frontend/dist s3://$BUCKET --delete
+          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
