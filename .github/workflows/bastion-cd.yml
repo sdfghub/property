@@ -1,12 +1,6 @@
 name: bastion-cd
 on:
   workflow_dispatch:
-  push:
-    branches: ['master']
-    paths:
-      - 'infra/cdk/lib/access-stack.ts'
-      - 'infra/cdk/bin/app.ts'
-      - '.github/workflows/bastion-cd.yml'
 env:
   AWS_REGION: eu-central-1
 jobs:

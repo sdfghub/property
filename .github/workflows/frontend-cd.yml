@@ -1,11 +1,6 @@
 name: frontend-cd
 on:
-  push:
-    branches: ['master']
-    tags: ['v*.*.*']
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-cd.yml'
+  workflow_dispatch:
 env:
   AWS_REGION: eu-central-1
   STACK_NAME: PropertyExpenses-Frontend

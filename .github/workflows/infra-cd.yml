@@ -1,11 +1,6 @@
 name: infra-cd
 on:
   workflow_dispatch:
-  push:
-    branches: ['master']
-    paths:
-      - 'infra/cdk/**'
-      - '.github/workflows/infra-cd.yml'
 env:
   AWS_REGION: eu-central-1
 jobs:

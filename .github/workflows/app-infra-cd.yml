@@ -1,12 +1,6 @@
 name: app-infra-cd
 on:
   workflow_dispatch:
-  push:
-    branches: ['master']
-    paths:
-      - 'infra/cdk/lib/app-stack.ts'
-      - 'infra/cdk/bin/app.ts'
-      - '.github/workflows/app-infra-cd.yml'
 env:
   AWS_REGION: eu-central-1
 jobs:

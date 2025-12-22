@@ -22,7 +22,10 @@ export class AccessStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props)
 
-    const bastionSg = new SecurityGroup(this, 'BastionSg', { vpc: props.vpc })
+    const bastionSg = new SecurityGroup(this, 'BastionSg', {
+      vpc: props.vpc,
+      allowAllOutbound: false,
+    })
     bastionSg.addEgressRule(props.dbSecurityGroup, Port.tcp(5432))
     props.dbSecurityGroup.addIngressRule(bastionSg, Port.tcp(5432))
 
@@ -34,7 +37,7 @@ export class AccessStack extends cdk.Stack {
     const bastion = new Instance(this, 'Bastion', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: SubnetType.PUBLIC },
-      instanceType: InstanceType.of(InstanceClass.T4G, InstanceSize.NANO),
+      instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.NANO),
       machineImage: MachineImage.latestAmazonLinux2023(),
       securityGroup: bastionSg,
       role: bastionRole,

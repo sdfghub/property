@@ -1,8 +1,6 @@
 name: cd
 on:
-  push:
-    branches: ['master']
-    tags: ['v*.*.*']
+  workflow_dispatch:
 env:
   AWS_REGION: eu-central-1
   ECR_REPO: property-expenses-api
