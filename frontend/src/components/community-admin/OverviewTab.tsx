@@ -1,6 +1,9 @@
 import React from 'react'
+import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
-import { BeFinancialsPanel } from '../be/BeFinancialsPanel'
+import { BillingEntitiesPeriodView } from './BillingEntitiesPeriodView'
+import { BillTemplatesHost } from '../bills/BillTemplatesHost'
+import { MeterTemplatesHost } from '../meters/MeterTemplatesHost'
 
 type EditablePeriod = {
   period?: { code: string; status: string }
@@ -15,6 +18,7 @@ type Props = {
   onGoPeriod: () => void
   onGoMeters?: () => void
   onGoBills?: () => void
+  onAddInvoice?: () => void
   onPrepare?: () => void
   onClose?: () => void
   busy?: 'prepare' | 'close' | 'reopen' | 'create' | null
@@ -24,11 +28,15 @@ type Props = {
   summaryLoading?: boolean
   lastClosed?: { code: string; closedAt?: string } | null
   onReopen?: () => void
+  onReopenPrepared?: () => void
   onCreatePeriod?: () => void
   onGoStatements?: () => void
+  lastClosedSummary?: any | null
+  communityId?: string
 }
 
 export function OverviewTab({
+  communityId,
   editablePeriod,
   onGoPeriod,
   onGoMeters,
@@ -42,12 +50,110 @@ export function OverviewTab({
   summaryLoading,
   lastClosed,
   onReopen,
+  onReopenPrepared,
   onCreatePeriod,
   onGoStatements,
+  lastClosedSummary,
+  onAddInvoice,
+  programs = [],
+  invoices = [],
+  invoicesLoading,
+  invoicesError,
+  onReloadInvoices,
+  onLinkInvoice,
 }: Props) {
+  const { api } = useAuth()
   const { t } = useI18n()
-  const [drillBeId, setDrillBeId] = React.useState<string | null>(null)
-  const [drillPeriod, setDrillPeriod] = React.useState<string | null>(null)
+  const [linkInvoiceId, setLinkInvoiceId] = React.useState('')
+  const [linkProgramId, setLinkProgramId] = React.useState('')
+  const [linkAmount, setLinkAmount] = React.useState('')
+  const [linkPortionKey, setLinkPortionKey] = React.useState('')
+  const [linkBusy, setLinkBusy] = React.useState(false)
+  const [showInvoiceForm, setShowInvoiceForm] = React.useState(false)
+  const [showNewInvoice, setShowNewInvoice] = React.useState(false)
+  const [newInv, setNewInv] = React.useState({
+    vendorName: '',
+    number: '',
+    gross: '',
+    currency: 'RON',
+    issueDate: '',
+  })
+  const [showCustomForm, setShowCustomForm] = React.useState(false)
+  const [customDesc, setCustomDesc] = React.useState('')
+  const [customAmount, setCustomAmount] = React.useState('')
+  const [customCurrency, setCustomCurrency] = React.useState('RON')
+  const [customBusy, setCustomBusy] = React.useState(false)
+  const [customMsg, setCustomMsg] = React.useState<string | null>(null)
+  const [customTypeId, setCustomTypeId] = React.useState<string | null>(null)
+  const [customAllocationMethod, setCustomAllocationMethod] = React.useState<string | null>(null)
+  const [customAllocationParams, setCustomAllocationParams] = React.useState('')
+  const [expenseTypes, setExpenseTypes] = React.useState<any[]>([])
+  const [typesLoading, setTypesLoading] = React.useState(false)
+  const [showMeterTemplates, setShowMeterTemplates] = React.useState(false)
+  const [showBillTemplates, setShowBillTemplates] = React.useState(false)
+  const [periodExpenses, setPeriodExpenses] = React.useState<any[]>([])
+  const [expensesLoading, setExpensesLoading] = React.useState(false)
+  const [expensesError, setExpensesError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!communityId || !editablePeriod?.period?.code || !showCustomForm) return
+    setTypesLoading(true)
+    api
+      .get<any[]>(`/communities/${communityId}/periods/${editablePeriod.period.code}/expense-types`)
+      .then((rows: any) => {
+        const list = Array.isArray(rows)
+          ? rows
+          : Array.isArray(rows?.items)
+          ? rows.items
+          : Array.isArray(rows?.types)
+          ? rows.types
+          : []
+        setExpenseTypes(list || [])
+      })
+      .catch((err: any) => {
+        console.error('load expense types', err)
+        setExpenseTypes([])
+      })
+      .finally(() => setTypesLoading(false))
+  }, [api, communityId, editablePeriod?.period?.code, showCustomForm])
+
+  React.useEffect(() => {
+    if (!communityId || !editablePeriod?.period?.code) return
+    setExpensesLoading(true)
+    setExpensesError(null)
+    api
+      .get<{ items: any[] }>(`/communities/${communityId}/periods/${editablePeriod.period.code}/expenses`)
+      .then((res) => setPeriodExpenses(Array.isArray(res?.items) ? res.items : []))
+      .catch((err: any) => {
+        setPeriodExpenses([])
+        setExpensesError(err?.message || 'Failed to load expenses')
+      })
+      .finally(() => setExpensesLoading(false))
+  }, [api, communityId, editablePeriod?.period?.code, showCustomForm])
+
+  const canLink =
+    !!onLinkInvoice &&
+    !!linkInvoiceId &&
+    !!linkProgramId &&
+    editablePeriod?.period?.status === 'OPEN'
+
+  const handleLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canLink || !onLinkInvoice) return
+    setLinkBusy(true)
+    try {
+      await onLinkInvoice(
+        linkInvoiceId,
+        linkProgramId,
+        linkAmount ? Number(linkAmount) : null,
+        linkPortionKey || null,
+      )
+      setLinkAmount('')
+      setLinkPortionKey('')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
   return (
     <div className="grid three">
       <div className="card soft">
@@ -56,39 +162,422 @@ export function OverviewTab({
           <div className="stack" style={{ gap: 6, marginTop: 6 }}>
             <div className="row" style={{ gap: 8, alignItems: 'center' }}>
               <h4 style={{ margin: 0 }}>{editablePeriod.period.code}</h4>
-              <span className="badge secondary">{editablePeriod.period.status}</span>
+              <span className="badge secondary">{t(editablePeriod.period.status)}</span>
             </div>
             {/* <div className="muted">{t('card.period.subtitle')}</div>*/}
+            {editablePeriod.period.status === 'OPEN' && (
+              <div className="stack" style={{ gap: 6 }}>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    className="btn secondary small"
+                    type="button"
+                    onClick={() => {
+                      setShowCustomForm(false)
+                      setShowMeterTemplates(false)
+                      setShowBillTemplates(false)
+                      setShowInvoiceForm((v) => !v)
+                    }}
+                  >
+                    {showInvoiceForm
+                      ? t('payments.hideForm', 'Hide invoice form')
+                      : t('card.period.addInvoice', 'Add invoice & link to program')}
+                  </button>
+                  <button
+                    className="btn secondary small"
+                    type="button"
+                    onClick={() => {
+                      setShowInvoiceForm(false)
+                      setShowMeterTemplates(false)
+                      setShowBillTemplates(false)
+                      setShowCustomForm((v) => !v)
+                    }}
+                  >
+                    {t('card.period.addCustomExpense', 'Add custom expense')}
+                  </button>
+                  <button
+                    className="btn secondary small"
+                    type="button"
+                    onClick={() => {
+                      setShowInvoiceForm(false)
+                      setShowCustomForm(false)
+                      setShowBillTemplates(false)
+                      setShowMeterTemplates((v) => !v)
+                    }}
+                    style={{
+                      background: showMeterTemplates ? 'rgba(43,212,213,0.15)' : undefined,
+                      borderColor: showMeterTemplates ? 'rgba(43,212,213,0.5)' : undefined,
+                    }}
+                  >
+                    {t('card.period.metersStatus', {
+                      closed: editablePeriod.meters?.closed ?? 0,
+                      total: editablePeriod.meters?.total ?? 0,
+                    })}
+                  </button>
+                  <button
+                    className="btn secondary small"
+                    type="button"
+                    onClick={() => {
+                      setShowInvoiceForm(false)
+                      setShowCustomForm(false)
+                      setShowMeterTemplates(false)
+                      setShowBillTemplates((v) => !v)
+                    }}
+                    style={{
+                      background: showBillTemplates ? 'rgba(43,212,213,0.15)' : undefined,
+                      borderColor: showBillTemplates ? 'rgba(43,212,213,0.5)' : undefined,
+                    }}
+                  >
+                    {t('card.period.billsStatus', {
+                      closed: editablePeriod.bills?.closed ?? 0,
+                      total: editablePeriod.bills?.total ?? 0,
+                    })}
+                  </button>
+                  {onReloadInvoices && showInvoiceForm && (
+                    <button className="btn ghost small" type="button" onClick={onReloadInvoices} disabled={!!invoicesLoading}>
+                      {t('payments.reload', 'Reload')}
+                    </button>
+                  )}
+                  {showInvoiceForm && invoicesLoading && <span className="muted">{t('communities.loading', 'Loading...')}</span>}
+                  {showInvoiceForm && invoicesError && <span className="badge negative">{invoicesError}</span>}
+                </div>
+            {showInvoiceForm && (
+              <div className="stack" style={{ gap: 6 }}>
+                    <form className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }} onSubmit={handleLink}>
+                      <button
+                        className="btn ghost small"
+                        type="button"
+                        onClick={() => setShowNewInvoice((v) => !v)}
+                        style={{ marginLeft: 4 }}
+                      >
+                        {showNewInvoice ? t('payments.hideForm', 'Hide invoice form') : t('payments.add', 'Add invoice')}
+                      </button>
+                    {showNewInvoice && (
+                      <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <input
+                          className="input"
+                          style={{ width: 160 }}
+                          placeholder={t('payments.vendor', 'Vendor')}
+                          value={newInv.vendorName}
+                          onChange={(e) => setNewInv((s) => ({ ...s, vendorName: e.target.value }))}
+                          required
+                        />
+                        <input
+                          className="input"
+                          style={{ width: 120 }}
+                          placeholder={t('payments.number', 'Number')}
+                          value={newInv.number}
+                          onChange={(e) => setNewInv((s) => ({ ...s, number: e.target.value }))}
+                          required
+                        />
+                        <input
+                          className="input"
+                          style={{ width: 100 }}
+                          type="number"
+                          step="0.01"
+                          placeholder={t('payments.amount', 'Amount')}
+                          value={newInv.gross}
+                          onChange={(e) => setNewInv((s) => ({ ...s, gross: e.target.value }))}
+                        />
+                        <input
+                          className="input"
+                          style={{ width: 80 }}
+                          placeholder={t('payments.currency', 'Currency')}
+                          value={newInv.currency}
+                          onChange={(e) => setNewInv((s) => ({ ...s, currency: e.target.value }))}
+                        />
+                        <input
+                          className="input"
+                          style={{ width: 140 }}
+                          type="date"
+                          value={newInv.issueDate}
+                          onChange={(e) => setNewInv((s) => ({ ...s, issueDate: e.target.value }))}
+                        />
+                        <button
+                          className="btn secondary small"
+                          type="button"
+                          disabled={linkBusy || !newInv.vendorName || !newInv.number}
+                          onClick={async () => {
+                            if (!newInv.vendorName || !newInv.number) return
+                            setLinkBusy(true)
+                            try {
+                              const createdId = await onLinkInvoice?.('__create__', '', undefined, undefined, newInv)
+                              if (createdId) {
+                                setLinkInvoiceId(createdId)
+                              }
+                              setNewInv({ vendorName: '', number: '', gross: '', currency: 'RON', issueDate: '' })
+                              setShowNewInvoice(false)
+                            } finally {
+                              setLinkBusy(false)
+                            }
+                          }}
+                        >
+                          {linkBusy ? t('common.loading') || 'Working…' : t('payments.save', 'Save invoice')}
+                        </button>
+                      </div>
+                    )}
+                     <br></br>
+                      <div>Selecteaza factura existenta</div>
+                      <select
+                        className="input"
+                        style={{ minWidth: 180 }}
+                        value={linkInvoiceId}
+                        onChange={(e) => setLinkInvoiceId(e.target.value)}
+                      >
+                        <option value="">{t('payments.selectInvoice', 'Select invoice')}</option>
+                        {(invoices || []).map((inv: any) => (
+                          <option key={inv.id} value={inv.id}>
+                            {inv.vendorName || inv.number || inv.id}
+                          </option>
+                        ))}
+                      </select>
+                      Selecteaza programul din care s-a efectuat plata
+                      <select
+                        className="input"
+                        style={{ minWidth: 180 }}
+                        value={linkProgramId}
+                        onChange={(e) => setLinkProgramId(e.target.value)}
+                      >
+                        <option value="">{t('programs.select', 'Select program')}</option>
+                        {programs.map((p: any) => (
+                          <option key={p.id || p.code} value={p.id}>
+                            {p.name || p.code}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input"
+                        style={{ width: 100 }}
+                        type="number"
+                        step="0.01"
+                        placeholder={t('payments.amount', 'Amount')}
+                        value={linkAmount}
+                        onChange={(e) => setLinkAmount(e.target.value)}
+                      />
+                      <input
+                        className="input"
+                        style={{ width: 120 }}
+                        placeholder={t('programs.portionKey', 'Portion key')}
+                        value={linkPortionKey}
+                        onChange={(e) => setLinkPortionKey(e.target.value)}
+                      />
+                      <button className="btn primary small" type="submit" disabled={!canLink || linkBusy}>
+                        {linkBusy ? t('common.loading') || 'Working…' : t('programs.linkInvoice', 'Link invoice')}
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            )}
+            {editablePeriod.period.status === 'OPEN' && showMeterTemplates && communityId && editablePeriod.period.code && (
+              <div className="stack" style={{ marginTop: 8 }}>
+                <MeterTemplatesHost
+                  communityId={communityId}
+                  periodCode={editablePeriod.period.code}
+                  canEdit
+                  onStatusChange={() => {
+                    // refresh badges if needed by caller
+                  }}
+                />
+              </div>
+            )}
+            {editablePeriod.period.status === 'OPEN' && showBillTemplates && communityId && editablePeriod.period.code && (
+              <div className="stack" style={{ marginTop: 8 }}>
+                <BillTemplatesHost
+                  communityId={communityId}
+                  periodCode={editablePeriod.period.code}
+                  canEdit
+                  onStatusChange={() => {
+                    // refresh badges if needed by caller
+                  }}
+                />
+              </div>
+            )}
+            {editablePeriod.period.status === 'OPEN' && showCustomForm && (
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="muted">{t('card.period.addCustomExpense', 'Add custom expense')}</div>
+                <form
+                  className="grid two"
+                  style={{ gap: 10, alignItems: 'center' }}
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    if (!communityId || !editablePeriod.period?.code) return
+                    if (!customTypeId) {
+                      setCustomMsg(t('exp.typeRequired', 'Select an expense type to continue'))
+                      return
+                    }
+                    setCustomBusy(true)
+                    setCustomMsg(null)
+                    try {
+                      await api.post(`/communities/${communityId}/periods/${editablePeriod.period.code}/expenses`, {
+                        description: customDesc,
+                        amount: Number(customAmount),
+                        currency: customCurrency || 'RON',
+                        expenseTypeId: customTypeId || undefined,
+                        allocationMethod: customAllocationMethod || undefined,
+                        allocationParams: customAllocationParams ? JSON.parse(customAllocationParams) : undefined,
+                      })
+                      setCustomDesc('')
+                      setCustomAmount('')
+                      setCustomTypeId(null)
+                      setCustomAllocationMethod(null)
+                      setCustomAllocationParams('')
+                      setCustomMsg(t('exp.added', 'Custom expense added'))
+                    } catch (err: any) {
+                      setCustomMsg(err?.message || 'Failed to add expense')
+                    } finally {
+                      setCustomBusy(false)
+                    }
+                  }}
+                >
+                  <div className="stack">
+                    <label className="label">
+                      <span>{t('exp.desc', 'Description')}</span>
+                    </label>
+                    <input
+                      className="input"
+                      value={customDesc}
+                      onChange={(e) => setCustomDesc(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="stack">
+                    <label className="label">
+                      <span>{t('exp.amount', 'Amount')}</span>
+                    </label>
+                    <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                      <input
+                        className="input"
+                        style={{ width: 110 }}
+                        type="number"
+                        step="0.01"
+                        placeholder={t('exp.amount', 'Amount')}
+                        value={customAmount}
+                        onChange={(e) => setCustomAmount(e.target.value)}
+                        required
+                      />
+                      <input
+                        className="input"
+                        style={{ width: 80 }}
+                        placeholder={t('payments.currency', 'Currency')}
+                        value={customCurrency}
+                        onChange={(e) => setCustomCurrency(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="stack">
+                    <label className="label">
+                      <span>{t('exp.type', 'Expense type')}</span>
+                      {typesLoading && <span className="muted" style={{ marginLeft: 6 }}>{t('common.loading')}</span>}
+                    </label>
+                    <select
+                      className="input"
+                      value={customTypeId || ''}
+                      onChange={(e) => setCustomTypeId(e.target.value || null)}
+                      disabled={typesLoading}
+                    >
+                      <option value="">{t('exp.customType', 'Custom type')}</option>
+                      {expenseTypes.map((et) => (
+                        <option key={et.id} value={et.id}>
+                          {et.code} — {et.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="stack">
+                    <label className="label">
+                      <span>{t('exp.customAlloc', 'Custom allocation')}</span>
+                    </label>
+                    <div className="stack" style={{ gap: 6 }}>
+                      <select
+                        className="input"
+                        value={customAllocationMethod || ''}
+                        onChange={(e) => setCustomAllocationMethod(e.target.value || null)}
+                      >
+                        <option value="">{t('exp.customAlloc', 'Custom allocation')}</option>
+                        <option value="EQUAL">EQUAL</option>
+                        <option value="BY_SQM">BY_SQM</option>
+                        <option value="BY_RESIDENTS">BY_RESIDENTS</option>
+                        <option value="BY_CONSUMPTION">BY_CONSUMPTION</option>
+                        <option value="MIXED">MIXED</option>
+                      </select>
+                      <textarea
+                        className="input"
+                        rows={2}
+                        placeholder={t('exp.customParams', 'Allocation params (JSON)')}
+                        value={customAllocationParams}
+                        onChange={(e) => setCustomAllocationParams(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button
+                      className="btn primary small"
+                      type="submit"
+                      disabled={customBusy || !customDesc || !customAmount || !customTypeId}
+                    >
+                      {customBusy ? t('common.loading') || 'Working…' : t('exp.add', 'Add')}
+                    </button>
+                    <button className="btn ghost small" type="button" onClick={() => setShowCustomForm(false)}>
+                      {t('payments.hideForm', 'Hide')}
+                    </button>
+                  </div>
+                  <div className="stack" style={{ gap: 4 }}>
+                    {expensesLoading && <span className="muted">{t('communities.loading', 'Loading...')}</span>}
+                    {expensesError && <span className="badge negative">{expensesError}</span>}
+                  </div>
+                </form>
+                {customMsg && <div className="badge">{customMsg}</div>}
+              </div>
+            )}
+            {!expensesLoading && (periodExpenses || []).length > 0 && (
+              <div className="stack" style={{ gap: 4 }}>
+                <div className="muted" style={{ fontSize: 12 }}>{t('exp.customList', 'Custom expenses entered')}</div>
+                <ul className="muted" style={{ margin: 0, paddingLeft: 16 }}>
+                  {(periodExpenses || []).map((e) => (
+                    <li key={e.id}>
+                      {e.description || e.id} — {e.allocatableAmount ?? e.amount ?? e.value ?? ''} {e.currency || 'RON'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(invoices || []).length > 0 && (
+              <div className="stack" style={{ gap: 4 }}>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {t('payments.currentInvoices', 'Invoices for this period')}
+                </div>
+                <ul className="muted" style={{ margin: 0, paddingLeft: 16 }}>
+                  {invoices.map((inv: any) => (
+                    <li key={inv.id}>
+                      {(inv.vendor?.name || inv.vendorName || inv.number || inv.id) as string}{' '}
+                      {inv.gross ? `— ${inv.gross} ${inv.currency || ''}` : ''}
+                      {inv.status ? ` (${inv.status})` : ''}
+                      {inv.programInvoices?.length
+                        ? ` · ${t('programs.label', 'Programs')}: ${inv.programInvoices
+                            .map((pl: any) => pl.program?.name || pl.program?.code || pl.programId)
+                            .join(', ')}`
+                        : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-              {onGoMeters ? (
-                <button className="btn tertiary" type="button" onClick={onGoMeters}>
-                  {t('card.period.metersStatus', {
-                    closed: editablePeriod.meters?.closed ?? 0,
-                    total: editablePeriod.meters?.total ?? 0,
-                  })}
-                </button>
-              ) : (
-                <div className="badge">
-                  {t('card.period.metersStatus', {
-                    closed: editablePeriod.meters?.closed ?? 0,
-                    total: editablePeriod.meters?.total ?? 0,
-                  })}
-                </div>
-              )}
-              {onGoBills ? (
-                <button className="btn tertiary" type="button" onClick={onGoBills}>
-                  {t('card.period.billsStatus', {
-                    closed: editablePeriod.bills?.closed ?? 0,
-                    total: editablePeriod.bills?.total ?? 0,
-                  })}
-                </button>
-              ) : (
-                <div className="badge">
-                  {t('card.period.billsStatus', {
-                    closed: editablePeriod.bills?.closed ?? 0,
-                    total: editablePeriod.bills?.total ?? 0,
-                  })}
-                </div>
+              {editablePeriod.period?.status !== 'OPEN' && (
+                <>
+                  <div className="badge">
+                    {t('card.period.metersStatus', {
+                      closed: editablePeriod.meters?.closed ?? 0,
+                      total: editablePeriod.meters?.total ?? 0,
+                    })}
+                  </div>
+                  <div className="badge">
+                    {t('card.period.billsStatus', {
+                      closed: editablePeriod.bills?.closed ?? 0,
+                      total: editablePeriod.bills?.total ?? 0,
+                    })}
+                  </div>
+                </>
               )}
               {/*!editablePeriod.canClose && (
                 <div className="badge warn">
@@ -99,7 +588,8 @@ export function OverviewTab({
                 </div>
               )*/}
             </div>
-            {(editablePeriod.canClose || editablePeriod.canPrepare) && (
+            <hr/>
+            {(editablePeriod.canClose || editablePeriod.canPrepare || editablePeriod.period?.status === 'PREPARED') && (
               <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 {editablePeriod.canPrepare && onPrepare && (
                   <button className="btn primary small" type="button" onClick={onPrepare} disabled={busy === 'prepare'}>
@@ -116,121 +606,21 @@ export function OverviewTab({
                     {busy === 'prepare' ? t('common.loading') || 'Working…' : t('card.period.recompute') || 'Rerun allocations'}
                   </button>
                 )}
+                {editablePeriod.period?.status === 'PREPARED' && onReopenPrepared && (
+                  <button className="btn tertiary small" type="button" onClick={onReopenPrepared} disabled={busy === 'reopen'}>
+                    {busy === 'reopen' ? t('common.loading') || 'Working…' : t('card.period.reopen') || 'Reopen period'}
+                  </button>
+                )}
               </div>
             )}
             {summaryLoading && <div className="muted">{t('common.loading') || 'Loading…'}</div>}
             {summaryError && <div className="badge negative">{summaryError}</div>}
-            {summary && (
+            {summary && editablePeriod.period?.status === 'PREPARED' && (
               <div className="stack" style={{ gap: 8, marginTop: 8 }}>
-                {/*<div className="muted" style={{ fontWeight: 600 }}>{t('statements.heading')}</div>
-                {summary.statements?.length ? (
-                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    {summary.statements.map((s: any) => (
-                      <div key={s.currency} className="badge tertiary">
-                        {s.currency}: {Number(s.balance).toFixed(2)} (ch {Number(s.charges).toFixed(2)} / pay {Number(s.payments).toFixed(2)})
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="muted">{t('statements.subtitle')}</div>
-                )}*/}
-                <div className="muted" style={{ fontWeight: 600 }}>{t('card.period.expenses')}</div>
-                {summary.allocations?.length ? (
-                  <div className="stack" style={{ gap: 4 }}>
-                    {summary.allocations.map((row: any) => (
-                      <div key={row.expense_type} className="row" style={{ justifyContent: 'space-between', fontSize: 13 }}>
-                        <span>{row.expense_type}</span>
-                        <span>
-                          {Number(row.allocated).toFixed(2)} / {Number(row.expected).toFixed(2)}{' '}
-                          <span style={{ color: Math.abs(Number(row.delta)) < 0.01 ? '#7bd88a' : '#ffae42' }}>
-                            ({Number(row.delta).toFixed(2)})
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="muted">{t('card.period.noActive')}</div>
-                )}
-                {summary.beBuckets?.length ? (
-                  <div className="stack" style={{ gap: 4 }}>
-                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div className="muted" style={{ fontWeight: 600 }}>{t('card.period.buckets') || 'Buckets by member'}</div>
-                      {onGoStatements && (
-                        <button className="btn tertiary small" type="button" onClick={onGoStatements}>
-                          {t('tab.statements') || 'Statements'}
-                        </button>
-                      )}
-                    </div>
-                    <div className="card soft" style={{ overflowX: 'auto' }}>
-                      <table className="table" style={{ width: '100%', fontSize: 13 }}>
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: 'left' }}>{t('billing.beLabel') || 'Member'}</th>
-                            {Array.from(new Set(summary.beBuckets.map((b: any) => b.bucket))).map((b: string) => (
-                              <th key={b} style={{ textAlign: 'right' }}>{b}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Array.from(
-                            summary.beBuckets.reduce((map: Map<string, any[]>, row: any) => {
-                              const arr = map.get(row.beCode) ?? []
-                              arr.push(row)
-                              map.set(row.beCode, arr)
-                              return map
-                            }, new Map<string, any[]>()),
-                          ).map(([beCode, rows]: [string, any[]]) => {
-                            const beId = rows[0]?.beId || (rows[0] as any)?.beid || (rows[0] as any)?.be_id || null
-                            const bucketKeys = Array.from(new Set(summary.beBuckets.map((b: any) => b.bucket)))
-                            return (
-                              <React.Fragment key={beCode}>
-                                <tr>
-                                  <td>{rows[0]?.beName || beCode}</td>
-                                  {bucketKeys.map((bucket: string) => {
-                                    const hit = rows.find((r: any) => r.bucket === bucket)
-                                    return (
-                                      <td key={`${beCode}:${bucket}`} style={{ textAlign: 'right' }}>
-                                        {hit ? (
-                                          bucket === 'ALLOCATED_EXPENSE' ? (
-                                            <button
-                                              className="btn ghost"
-                                              type="button"
-                                              onClick={() => {
-                                                setDrillBeId(beId)
-                                                setDrillPeriod(summary?.period?.code || null)
-                                              }}
-                                            >
-                                              {Number(hit.amount).toFixed(2)}
-                                            </button>
-                                          ) : (
-                                            Number(hit.amount).toFixed(2)
-                                          )
-                                        ) : (
-                                          '–'
-                                        )}
-                                      </td>
-                                    )
-                                  })}
-                                </tr>
-                                {drillBeId === beId && drillPeriod === summary?.period?.code && (
-                                  <tr>
-                                    <td colSpan={1 + bucketKeys.length}>
-                                      <BeFinancialsPanel key={`${beId}:${drillPeriod}`} beId={beId} periodCode={drillPeriod!} />
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : null}
+                {summary.beBuckets?.length ? <BillingEntitiesPeriodView summary={summary} /> : null}
               </div>
             )}
-      </div>
+          </div>
         ) : (
           <p className="muted" style={{ marginTop: 6 }}>
             {t('card.period.noActive')}{' '}
@@ -281,11 +671,18 @@ export function OverviewTab({
                 {busy === 'reopen' ? t('common.loading') || 'Working…' : t('card.period.reopen') || 'Reopen period'}
               </button>
             )}
+            {lastClosedSummary && lastClosedSummary.beBuckets?.length ? (
+              <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+                <div className="muted">{t('card.period.lastClosedSummary', 'Summary')}</div>
+                <BillingEntitiesPeriodView summary={lastClosedSummary} />
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="muted" style={{ marginTop: 6 }}>{t('card.period.noClosed') || 'No closed periods'}</div>
         )}
       </div>
+      {/*
       <div className="card soft">
         <div className="muted">{t('card.financials.label')}</div>
         <h3>{t('card.financials.title')}</h3>
@@ -312,6 +709,7 @@ export function OverviewTab({
           </button>
         </div>
       </div>
+      */}
     </div>
   )
 }

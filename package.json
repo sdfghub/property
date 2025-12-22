@@ -24,7 +24,8 @@
     "close:period": "ts-node --transpile-only src/scripts/close-period.ts",
     "add:payment": "ts-node --transpile-only src/scripts/add-payment.ts",
     "import:opening": "ts-node --transpile-only src/scripts/import-opening-balances.ts",
-    "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts"
+    "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts",
+    "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

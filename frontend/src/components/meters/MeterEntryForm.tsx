@@ -68,7 +68,7 @@ export function MeterEntryForm({
               expanded.push({
                 ...it,
                 meterId: m.meterId,
-                label: it.label || m.meterId,
+                label: it.label || m.notes || m.meterId,
                 key: `${it.key}:${m.meterId}`,
                 value,
                 unitCode: m.unitCode || m.scopeCode,

@@ -1,7 +1,8 @@
 // src/modules/period/period.service.ts
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common'
+import { Injectable, BadRequestException, ConflictException, Logger } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AllocationService } from '../billing/allocation.service'
+import { PaymentService } from '../billing/payment.service'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 type CloseStage = 'CLOSE_PREP' | 'CLOSE_FINAL'
@@ -9,7 +10,12 @@ type TxOrClient = PrismaClient | Prisma.TransactionClient
 
 @Injectable()
 export class PeriodService {
-  constructor(private readonly prisma: PrismaService, private readonly allocationService: AllocationService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly allocationService: AllocationService,
+    private readonly paymentService: PaymentService,
+  ) {}
+  private readonly logger = new Logger(PeriodService.name)
 
   // --- Public API ---
   async listClosed(communityId: string) {
@@ -108,8 +114,11 @@ export class PeriodService {
       }
 
       // stage charges & statements
-      await this.postChargesForStage(this.prisma, communityId, period.id, 'CLOSE_PREP')
-      await this.computeStatements(this.prisma, communityId, period.id)
+      await this.postChargesForStage(tx, communityId, period.id, 'CLOSE_PREP')
+      await this.computeStatements(tx, communityId, period.id)
+      // reapply payments against freshly staged charges
+      this.log('[PAY] reapplying payments during prepare', { communityId, period: period.id })
+      await this.paymentService.reapplyForPeriod(tx, communityId, period.id)
 
       // move to PREPARED
       await tx.period.update({
@@ -268,7 +277,9 @@ export class PeriodService {
 
   async reopen(communityId: string, periodCode: string) {
     const period = await this.getPeriod(communityId, periodCode)
-    if (period.status !== 'CLOSED') throw new BadRequestException('Only CLOSED periods can be reopened')
+    if (period.status !== 'CLOSED' && period.status !== 'PREPARED') {
+      throw new BadRequestException('Only CLOSED or PREPARED periods can be reopened')
+    }
 
     // guard: no later CLOSED period exists
     const laterClosed = await this.prisma.period.count({
@@ -276,18 +287,28 @@ export class PeriodService {
     })
     if (laterClosed > 0) throw new ConflictException('Cannot reopen: a later period is CLOSED')
 
+    const refTypeToClean: CloseStage = period.status === 'CLOSED' ? 'CLOSE_FINAL' : 'CLOSE_PREP'
+
     return this.prisma.$transaction(async (tx) => {
-      // delete FINAL artifacts tied to this close
+      // delete artifacts tied to this stage
       const finalEntries = await tx.beLedgerEntry.findMany({
-        where: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id },
+        where: { communityId, periodId: period.id, refType: refTypeToClean, refId: period.id },
         select: { id: true },
       })
       if (finalEntries.length) {
+        const finalIds = finalEntries.map((e) => e.id)
+        // Remove payment applications that point to these charges before deleting the ledger rows.
+        const client: any = tx as any
+        if (client.paymentApplication?.deleteMany) {
+          await client.paymentApplication.deleteMany({
+            where: { chargeId: { in: finalIds } },
+          })
+        }
         await tx.beLedgerEntryDetail.deleteMany({
-          where: { ledgerEntryId: { in: finalEntries.map((e) => e.id) } },
+          where: { ledgerEntryId: { in: finalIds } },
         })
         await tx.beLedgerEntry.deleteMany({
-          where: { id: { in: finalEntries.map((e) => e.id) } },
+          where: { id: { in: finalIds } },
         })
       }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
@@ -297,7 +318,7 @@ export class PeriodService {
 
       await tx.period.update({
         where: { id: period.id },
-        data: { status: 'OPEN', closedAt: null },
+        data: { status: 'OPEN', closedAt: null, preparedAt: null },
       })
       return { ok: true }
     })
@@ -610,22 +631,10 @@ export class PeriodService {
           _sum: { amount: true },
           where: { communityId, periodId, billingEntityId: be.id, kind: 'CHARGE' },
         }),
-        // Payments may not exist in older schemas; guard to zero on absence.
-        (async () => {
-          const client: any = tx as any
-          if (!client.paymentApplication?.aggregate) return { _sum: { amount: 0 } }
-          try {
-            return await client.paymentApplication.aggregate({
-              _sum: { amount: true },
-              where: {
-                charge: { communityId, billingEntityId: be.id },
-                payment: { ts: { lte: cutoff } },
-              },
-            })
-          } catch {
-            return { _sum: { amount: 0 } }
-          }
-        })(),
+        tx.beLedgerEntry.aggregate({
+          _sum: { amount: true },
+          where: { communityId, periodId, billingEntityId: be.id, kind: 'PAYMENT' },
+        }),
         tx.beLedgerEntry.aggregate({
           _sum: { amount: true },
           where: { communityId, periodId, billingEntityId: be.id, kind: 'ADJUSTMENT' },
@@ -637,6 +646,8 @@ export class PeriodService {
       const payments = Number(paymentsAgg._sum.amount ?? 0)
       const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
       const dueEnd = dueStart + charges - payments + adjustments
+
+      await this.recomputeRunningDue(tx, communityId, periodId, be.id, dueStart)
 
       await tx.beStatement.upsert({
         where: {
@@ -667,5 +678,33 @@ export class PeriodService {
         },
       })
     }
+  }
+
+  private async recomputeRunningDue(
+    tx: TxOrClient,
+    communityId: string,
+    periodId: string,
+    beId: string,
+    openingDue: number,
+  ) {
+    const entries = await tx.beLedgerEntry.findMany({
+      where: { communityId, periodId, billingEntityId: beId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, amount: true, kind: true },
+    })
+
+    let running = openingDue
+    for (const entry of entries) {
+      const delta = entry.kind === 'PAYMENT' ? -Number(entry.amount) : Number(entry.amount)
+      running += delta
+      await tx.beLedgerEntry.update({
+        where: { id: entry.id },
+        data: { runningDue: running },
+      })
+    }
+  }
+
+  private log(message: string, meta?: any) {
+    this.logger.log(message + (meta ? ` ${JSON.stringify(meta)}` : ''))
   }
 }

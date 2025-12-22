@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common'
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { AllocationMethod } from '@prisma/client'
 import { PrismaService } from '../user/prisma.service'
 
@@ -6,7 +6,65 @@ type PeriodRef = { id: string; seq: number; code: string }
 
 @Injectable()
 export class AllocationService {
-  private readonly logger = new Logger('AllocationService')
+  private formatDisplay(meta: any, ctx?: { description?: string; amount?: number; meterLabels?: Map<string, string> }) {
+    const subject = meta?.splitNode?.name || meta?.splitNode?.id || ctx?.description || meta?.allocationMethod || 'allocation'
+    const method = meta?.allocation?.method || meta?.allocationMethod
+    const basis = meta?.allocation?.basis || meta?.basis
+    const weight = meta?.weightSource || meta?.allocation?.weightSource
+    const unitMeasure = meta?.unitMeasure
+    const totalMeasure = meta?.totalMeasure
+    const derived = meta?.splitNode?.derivedShare
+    const meterLookup = ctx?.meterLabels
+
+    const totalMeterLabel =
+      (derived?.totalMeterId && meterLookup?.get(derived.totalMeterId)) || derived?.totalMeterLabel || null
+    const partMeterLabel =
+      (derived?.partMeterId && meterLookup?.get(derived.partMeterId)) || derived?.partMeterLabel || null
+
+    let displayKey = 'alloc.leaf.generic'
+    if (weight === 'explicit') displayKey = 'alloc.leaf.explicit'
+    else if (weight === 'equal') displayKey = 'alloc.leaf.equal'
+    else if (typeof unitMeasure === 'number' && typeof totalMeasure === 'number') displayKey = 'alloc.leaf.measure'
+    if (derived?.meterType) displayKey = 'alloc.leaf.derived'
+
+    const displayParams: any = {
+      subject,
+      method,
+      basisType: basis?.type,
+      basisCode: basis?.code,
+      weightSource: weight,
+      unitMeasure,
+      totalMeasure,
+      meterType: derived?.meterType,
+      totalMeterId: totalMeterLabel || derived?.totalMeterId,
+      partMeterId: partMeterLabel || derived?.partMeterId,
+      totalMeterLabel,
+      partMeterLabel,
+      amount: ctx?.amount,
+      expenseDescription: ctx?.description,
+    }
+
+    const parts: string[] = []
+    if (method && basis?.type) {
+      parts.push(`${subject}: ${method} on ${basis.type}${basis.code ? `:${basis.code}` : ''}`)
+    } else if (method) {
+      parts.push(`${subject}: ${method}`)
+    } else {
+      parts.push(subject)
+    }
+    if (weight) parts.push(`weight source ${weight}`)
+    if (typeof unitMeasure === 'number' && typeof totalMeasure === 'number') {
+      parts.push(`measure ${unitMeasure}/${totalMeasure}`)
+    }
+    if (derived?.meterType) {
+      const tot = derived.totalMeterId ? `/${totalMeterLabel || derived.totalMeterId}` : ''
+      const part = derived.partMeterId ? ` part=${partMeterLabel || derived.partMeterId}` : ''
+      parts.push(`derived from ${derived.meterType}${tot}${part}`)
+    }
+    if (typeof ctx?.amount === 'number') parts.push(`amount ${ctx.amount}`)
+
+    return { display: parts.join('. '), displayKey, displayParams }
+  }
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -44,7 +102,7 @@ export class AllocationService {
     let expId: string
     if (existing) {
       expId = existing.id
-      await this.logAllocation(communityId, period.id, expId, 'Reusing existing expense; clearing previous allocations', undefined, input.description)
+      // previously logged; no console logging now
       const vectors = await this.prisma.weightVector.findMany({ where: { expenseId: expId }, select: { id: true } })
       if (vectors.length) {
         await this.prisma.weightItem.deleteMany({ where: { vectorId: { in: vectors.map((v) => v.id) } } })
@@ -80,6 +138,8 @@ export class AllocationService {
       expId = created.id
     }
 
+    const meterLabels = await this.getMeterLabelMap(communityId, period.id)
+
     let splitsToUse = input.splits
     if ((!splitsToUse || !splitsToUse.length) && input.expenseTypeId) {
       const et = await this.prisma.expenseType.findUnique({ where: { id: input.expenseTypeId }, select: { params: true } })
@@ -88,7 +148,6 @@ export class AllocationService {
     }
 
     if (splitsToUse && Array.isArray(splitsToUse) && splitsToUse.length) {
-      await this.logAllocation(communityId, period.id, expId, 'Processing split tree', undefined, input.description)
       const splitRepo = (this.prisma as any).expenseSplit
       const allocationLineRepo: any = (this.prisma as any).allocationLine
 
@@ -99,13 +158,11 @@ export class AllocationService {
         for (const s of siblings.filter((s) => s.derivedShare && s.derivedShare !== 'remainder')) {
           const d = s.derivedShare
           if (d.totalMeterId && d.partMeterId) {
-            this.logger.log(`[SPLIT] resolving derived share for node=${s.id || 'n/a'} total=${d.totalMeterId} part=${d.partMeterId}`)
             const total = await this.getMeterValue(d.totalMeterId, period.id, communityId)
             const part = await this.getMeterValue(d.partMeterId, period.id, communityId)
             if (total <= 0) throw new ForbiddenException(`Total meter ${d.totalMeterId} is zero`)
             s._resolvedShare = part / total
             derivedSum += s._resolvedShare
-            this.logger.log(`[SPLIT] derived share=${s._resolvedShare} from part=${part} / total=${total}`)
           } else {
             throw new ForbiddenException('Derived share missing meter definition')
           }
@@ -119,18 +176,12 @@ export class AllocationService {
           })
           derivedSum = siblings.reduce((acc: number, s: any) => (s._resolvedShare ? acc + s._resolvedShare : acc), 0)
           sum = derivedSum
-          this.logger.warn(`[SPLIT] shares exceeded 1; normalized with scale=${scale.toFixed(4)}`)
         }
         if (remainder.length > 1) throw new ForbiddenException('Only one remainder split allowed')
         const remaining = 1 - sum
         if (remaining < -1e-6) throw new ForbiddenException('No remaining share for remainder')
         explicit.forEach((s) => (s._resolvedShare = Number(s.share)))
         if (remainder.length === 1) remainder[0]._resolvedShare = remaining
-        this.logger.log(
-          `[SPLIT] resolved shares: explicit=${explicit.length} derived=${derivedSum.toFixed(
-            4,
-          )} remainder=${remaining.toFixed(4)} total=${sum.toFixed(4)}`,
-        )
       }
 
       const getUnitsForBasis = async (basis: any): Promise<Array<{ id: string; code: string }>> => {
@@ -177,10 +228,6 @@ export class AllocationService {
         const basis = (leaf.allocation as any)?.basis
         const units = await getUnitsForBasis(basis)
         if (!units.length) throw new ForbiddenException('No units in basis for allocation')
-        this.logger.log(
-          `[SPLIT] allocating leaf=${leaf.id || 'n/a'} method=${method} units=${units.length} amount=${amount}`,
-        )
-
         const perUnit: Record<string, { weight: number; amount: number }> = {}
         const weightsObj = alloc.weights || alloc.values
         const allocationLineRepo: any = (this.prisma as any).allocationLine
@@ -194,13 +241,19 @@ export class AllocationService {
             const weight = (Number(raw) || 0) / total
             const amt = amount * weight
             perUnit[unitCode] = { weight, amount: amt }
-            this.logger.log(`[SPLIT] explicit weight unit=${unitCode} weight=${weight.toFixed(6)} amount=${amt}`)
+            const display = this.formatDisplay(
+              { allocationMethod: method, basis, weight, weightSource: 'explicit', splitNode: leaf },
+              { description: input.description, amount: amt, meterLabels },
+            )
             const meta = {
               allocationMethod: method,
               basis: basis ?? null,
               weight,
               weightSource: 'explicit',
               splitNode: leaf,
+              display: display.display,
+              displayKey: display.displayKey,
+              displayParams: display.displayParams,
             }
             await allocationLineRepo.upsert({
               where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: splitId } },
@@ -244,13 +297,19 @@ export class AllocationService {
           const per = amount / units.length
           for (const u of units) {
             perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            this.logger.log(`[SPLIT] equal weight unit=${u.code} weight=${(1 / units.length).toFixed(6)} amount=${per}`)
+            const display = this.formatDisplay(
+              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal', splitNode: leaf },
+              { description: input.description, amount: per, meterLabels },
+            )
             const meta = {
               allocationMethod: method,
               basis: basis ?? null,
               weight: 1 / units.length,
               weightSource: 'equal',
               splitNode: leaf,
+              display: display.display,
+              displayKey: display.displayKey,
+              displayParams: display.displayParams,
             }
             await allocationLineRepo.upsert({
               where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: splitId } },
@@ -295,18 +354,25 @@ export class AllocationService {
           if (val === undefined || val === null) throw new ForbiddenException(`Missing measure ${typeCode} for unit ${u.code}`)
           return s + val
         }, 0)
-        if (total <= 0) {
-          this.logger.warn(`Total ${typeCode} is zero for allocation at split ${leaf.id || 'n/a'}; skipping branch`)
-          return
-        }
-        this.logger.log(`[SPLIT] measure-based allocation type=${typeCode} total=${total}`)
+        if (total <= 0) return
 
         for (const u of units) {
           const val = byUnit.get(u.id)!
           const weight = val / total
           const amt = amount * weight
           perUnit[u.code] = { weight, amount: amt }
-          this.logger.log(`[SPLIT] measure weight unit=${u.code} val=${val} weight=${weight.toFixed(6)} amount=${amt}`)
+          const display = this.formatDisplay(
+            {
+              allocationMethod: method,
+              basis,
+              weight,
+              weightSource: typeCode,
+              unitMeasure: val,
+              totalMeasure: total,
+              splitNode: leaf,
+            },
+            { description: input.description, amount: amt, meterLabels },
+          )
           const meta = {
             allocationMethod: method,
             basis: basis ?? null,
@@ -315,6 +381,9 @@ export class AllocationService {
             unitMeasure: val,
             totalMeasure: total,
             splitNode: leaf,
+            display: display.display,
+            displayKey: display.displayKey,
+            displayParams: display.displayParams,
           }
           await allocationLineRepo.upsert({
             where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: splitId } },
@@ -362,7 +431,17 @@ export class AllocationService {
               amount: splitAmount,
               basisType: ((node.allocation as any)?.basis ?? node.basis)?.type ?? null,
               basisCode: ((node.allocation as any)?.basis ?? node.basis)?.code ?? null,
-              meta: node,
+              meta: {
+                ...node,
+                display: this.formatDisplay(
+                  {
+                    allocationMethod: (node.allocation as any)?.method,
+                    basis: (node.allocation as any)?.basis ?? node.basis,
+                    splitNode: node,
+                  },
+                  { description: input.description, amount: splitAmount, meterLabels },
+                ),
+              },
             },
           })
           if (node.children && node.children.length) {
@@ -415,9 +494,21 @@ export class AllocationService {
           const amount = Number(entry.amount) || 0
           const weight = amount / total
           perUnit[unitCode] = { weight, amount }
+          const display = this.formatDisplay(
+            { allocationMethod: method, weight, weightSource: 'explicit' },
+            { description: input.description, amount, meterLabels },
+          )
+          const meta = {
+            allocationMethod: method,
+            weight,
+            weightSource: 'explicit',
+            display: display.display,
+            displayKey: display.displayKey,
+            displayParams: display.displayParams,
+          }
           await this.prisma.allocationLine.upsert({
             where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: null as any } },
-            update: { amount },
+            update: { amount, meta },
             create: {
               communityId,
               periodId: period.id,
@@ -425,6 +516,7 @@ export class AllocationService {
               unitId: unit.id,
               expenseSplitId: null,
               amount,
+              meta,
             },
           })
         }
@@ -461,9 +553,21 @@ export class AllocationService {
             const share = (Number(raw) || 0) / total
             const amount = Number(input.amount) * share
             perUnit[unitCode] = { weight: share, amount }
+          const display = this.formatDisplay(
+            { allocationMethod: method, weight: share, weightSource: 'explicit' },
+            { description: input.description, amount, meterLabels },
+          )
+          const meta = {
+            allocationMethod: method,
+            weight: share,
+            weightSource: 'explicit',
+            display: display.display,
+            displayKey: display.displayKey,
+            displayParams: display.displayParams,
+          }
             await this.prisma.allocationLine.upsert({
               where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: null as any } },
-              update: { amount },
+              update: { amount, meta },
               create: {
                 communityId,
                 periodId: period.id,
@@ -471,6 +575,7 @@ export class AllocationService {
                 unitId: unit.id,
                 expenseSplitId: null,
                 amount,
+                meta,
               },
             })
           }
@@ -515,9 +620,20 @@ export class AllocationService {
           const weight = val / total
           const amount = Number(input.amount) * weight
           perUnit[u.code] = { weight, amount }
+          const meta = {
+            allocationMethod: method,
+            weight,
+            weightSource: typeCode,
+            unitMeasure: val,
+            totalMeasure: total,
+            display: this.formatDisplay(
+              { allocationMethod: method, weight, weightSource: typeCode, unitMeasure: val, totalMeasure: total },
+              { description: input.description, amount, meterLabels },
+            ),
+          }
           await this.prisma.allocationLine.upsert({
             where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: null as any } },
-            update: { amount },
+            update: { amount, meta },
             create: {
               communityId,
               periodId: period.id,
@@ -525,6 +641,7 @@ export class AllocationService {
               unitId: u.id,
               expenseSplitId: null,
               amount,
+              meta,
             },
           })
         }
@@ -544,6 +661,34 @@ export class AllocationService {
     const out: Record<string, number> = {}
     for (const [k, v] of map.entries()) out[k] = v
     return out
+  }
+
+  private async getMeterLabelMap(communityId: string, periodId: string) {
+    const measures = await this.prisma.periodMeasure.findMany({
+      where: { communityId, periodId },
+      select: { meterId: true, provenance: true },
+    })
+    const map = new Map<string, string>()
+    measures.forEach((m) => {
+      if (!m.meterId) return
+      const prov: any = m.provenance
+      const label = prov?.itemLabel || prov?.templateName || prov?.templateCode
+      if (label) map.set(m.meterId, label)
+    })
+    // Fallback to meter name/notes as a friendly label if provenance was not captured
+    const meterRepo: any = (this.prisma as any).meter
+    if (meterRepo?.findMany) {
+      const meters = await meterRepo.findMany({
+        select: { meterId: true, name: true, notes: true },
+      })
+      meters.forEach((m: any) => {
+        if (!m?.meterId) return
+        if (map.has(m.meterId)) return
+        if (m.name) map.set(m.meterId, m.name)
+        else if (m.notes) map.set(m.meterId, m.notes)
+      })
+    }
+    return map
   }
 
   private async getMeterValue(meterId: string, periodId: string, communityId: string) {
@@ -627,17 +772,6 @@ export class AllocationService {
       name = exp?.description
     }
     const label = name ? `${name} (id=${expenseId})` : expenseId
-    this.logger.log(`[ALLOC] expense=${label} community=${communityId} period=${periodId} :: ${message} ${details ? JSON.stringify(details) : ''}`)
-    if (details?.perUnit && typeof details.perUnit === 'object') {
-      Object.entries(details.perUnit as Record<string, any>).forEach(([unitCode, vals]) => {
-        const label = expenseDesc ? `${expenseDesc} (id=${expenseId})` : expenseId
-        this.logger.log(
-          `[ALLOC-DETAIL] expense=${label} unit=${unitCode} amount=${vals?.amount ?? ''} weight=${vals?.weight ?? ''} meta=${JSON.stringify(
-            vals?.meta ?? {},
-          )}`,
-        )
-      })
-    }
     try {
       await (this.prisma as any).allocationLog.create({
         data: {
@@ -649,7 +783,7 @@ export class AllocationService {
         },
       })
     } catch (err) {
-      this.logger.warn(`Failed to persist allocation log: ${message} ${err}`)
+      // swallow logging issues
     }
   }
 }

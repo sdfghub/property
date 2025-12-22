@@ -170,15 +170,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
           <Section title={t('config.expenseSplits', 'Expense splits')} style={{ width: '100%', gridColumn: '1 / -1' }}>
             <ul className="muted">
               {expenseSplits.map((es: any, idx: number) => {
-                const lines = renderSplits(
-                  es.splits,
-                  allocationRules,
-                  config.splitNodeNames,
-                  0,
-                  t,
-                  measureTypes,
-                  meters,
-                )
+                const lines = Array.isArray(es.lines) ? es.lines : []
                 if (!lines.length) return null
                 const displayName = (
                   (es.splitName || '').trim() ||
@@ -202,7 +194,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                         </div>
                         {line.extra ? (
                           <div className="muted" style={{ marginLeft: 12 }}>
-                            {t('config.furtherAllocated', 'Further allocated')}: {line.extra}
+                            {line.extra}
                           </div>
                         ) : null}
                       </div>
@@ -226,7 +218,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                       {members.length > 1 ? (
                         <div>
                           {t('config.splitGroupComponents')}:{' '}
-                          {members.map((id: string) => lookupSplitName(id, allocationRules, config.splitNodeNames)).join(', ')}
+                          {members.map((id: string) => config.splitNodeNames?.[id] || id).join(', ')}
                         </div>
                       ) : null}
                     </li>
@@ -298,90 +290,6 @@ function groupSize(groupId: string, members: any[]) {
 function memberCount(groupId: string, members: any[]) {
   return members.filter((m) => m.splitGroupId === groupId).length
 }
-
-function lookupSplitName(id: string, allocationRules: any[], splitNodeNames?: Record<string, string>) {
-  if (splitNodeNames && splitNodeNames[id]) return splitNodeNames[id]
-  const rule = allocationRules.find((r: any) => r.code === id)
-  return rule?.name || id
-}
-
-type SplitLine = { text: string; depth: number; meta?: string | null; extra?: string | null }
-
-function renderSplits(
-  splits: any[],
-  allocationRules: any[],
-  splitNodeNames?: Record<string, string>,
-  depth = 0,
-  translate?: (k: string, fallback?: string) => string,
-  measureTypes?: Array<{ code: string; name?: string }>,
-  meters?: Array<{ meterId: string; typeCode: string }>,
-): SplitLine[] {
-  if (!Array.isArray(splits)) return []
-  const lines: SplitLine[] = []
-  const measureTypeNames = new Map<string, string>()
-  ;(measureTypes || []).forEach((mt) => {
-    if (mt.code) measureTypeNames.set(mt.code, mt.name || mt.code)
-  })
-  const meterTypeById = new Map<string, string>()
-  ;(meters || []).forEach((m) => {
-    if (m.meterId) meterTypeById.set(m.meterId, m.typeCode)
-  })
-  splits.forEach((s) => {
-    const label = lookupSplitName(s.id || '', allocationRules, splitNodeNames)
-    const share = typeof s.share === 'number' ? `${Math.round(s.share * 100)}%` : null
-    let derived: string | null = null
-    if (s.derivedShare === 'remainder') {
-      derived = translate ? translate('config.remainder', 'remainder') : 'remainder'
-    } else if (s.derivedShare && typeof s.derivedShare === 'object') {
-      const d = s.derivedShare as any
-      const typeLabelFromType = d.meterType ? measureTypeNames.get(d.meterType) || d.meterType : null
-      const typeLabelFromId = (id: string | undefined) => {
-        if (!id) return null
-        const t = meterTypeById.get(id)
-        return t ? measureTypeNames.get(t) || t : null
-      }
-      if (d.partMeterId && d.totalMeterId) {
-        const partName = typeLabelFromId(d.partMeterId) || d.partMeterId
-        const totalName = typeLabelFromId(d.totalMeterId) || d.totalMeterId
-        derived = `${translate ? translate('config.proportional', 'proportional') : 'proportional'} ${partName}/${totalName}`
-      } else if (d.meterType) {
-        derived = `${translate ? translate('config.proportional', 'proportional') : 'proportional'} ${typeLabelFromType}`
-      } else {
-        derived = 'derived'
-      }
-    }
-    const alloc = s.allocation || {}
-    const basis = alloc.basis
-    const basisText = basis
-      ? basis.type === 'GROUP'
-        ? `${basis.name || basis.code || ''}`.trim()
-        : basis.type === 'COMMUNITY'
-        ? translate
-          ? translate('config.everybody', 'everybody')
-          : 'everybody'
-        : basis.type || null
-      : null
-    const allocMethod = alloc.ruleCode || alloc.method
-    const weight = alloc.weightSource
-      ? `${measureTypeNames.get(alloc.weightSource) || alloc.weightSource}`
-      : null
-    const metaParts = [share === '100%' ? null : share, derived].filter(Boolean)
-    const meta = metaParts.length ? metaParts.join(' · ') : null
-    const allocMethodName = allocMethod ? (translate ? translate(`alloc.${allocMethod}`, allocMethod) : allocMethod) : null
-    const extraParts = [
-      basisText,
-      allocMethodName ? `${allocMethodName}` : null,
-      weight,
-    ].filter(Boolean)
-    const extra = extraParts.length ? extraParts.join(' ') : null
-    lines.push({ text: label, depth, meta, extra })
-    if (Array.isArray(s.children)) {
-      lines.push(...renderSplits(s.children, allocationRules, splitNodeNames, depth + 1, translate, measureTypes, meters))
-    }
-  })
-  return lines
-}
-
 function UnitSection({
   units,
   unitGroupMembers,

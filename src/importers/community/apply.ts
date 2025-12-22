@@ -121,13 +121,22 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
       for (const m of plan.meters) {
         await meterRepo.upsert({
           where: { meterId: m.meterId },
-          update: { scopeCode: m.scopeCode, scopeType: m.scopeType as any, typeCode: m.typeCode, origin: (m.origin as any) ?? 'METER' },
+          update: {
+            name: (m as any).name ?? null,
+            scopeCode: m.scopeCode,
+            scopeType: m.scopeType as any,
+            typeCode: m.typeCode,
+            origin: (m.origin as any) ?? 'METER',
+            notes: (m as any).notes ?? null,
+          },
           create: {
             meterId: m.meterId,
+            name: (m as any).name ?? null,
             scopeType: m.scopeType as any,
             scopeCode: m.scopeCode,
             typeCode: m.typeCode,
             origin: (m.origin as any) ?? 'METER',
+            notes: (m as any).notes ?? null,
           },
         })
         stats.meters += 1

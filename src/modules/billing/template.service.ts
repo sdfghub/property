@@ -289,13 +289,18 @@ export class TemplateService {
       const rawItems: any[] = Array.isArray((tpl as any).template?.items) ? (tpl as any).template.items : []
       const meters = meterRepo ? await meterRepo.findMany() : []
       const meterKeyMap = new Map<string, string>()
+      const meterItemLabel = new Map<string, string>()
       for (const item of rawItems) {
         if (item.kind === 'meter' && item.typeCode && !item.meterId) {
           meters
             .filter((mx: any) => mx.typeCode === item.typeCode)
-            .forEach((m: any) => meterKeyMap.set(`${item.key}:${m.meterId}`, m.meterId))
+            .forEach((m: any) => {
+              meterKeyMap.set(`${item.key}:${m.meterId}`, m.meterId)
+              meterItemLabel.set(`${item.key}:${m.meterId}`, item.label || item.name || item.title || item.key)
+            })
         } else if (item.kind === 'meter' && item.meterId) {
           meterKeyMap.set(item.key, item.meterId)
+          meterItemLabel.set(item.key, item.label || item.name || item.title || item.key)
         }
       }
       for (const [key, val] of Object.entries(payload.values)) {
@@ -307,6 +312,12 @@ export class TemplateService {
         if (!meter) continue
         const scopeType = meter.scopeType as any
         const scopeId = scopeType === 'COMMUNITY' ? communityId : unitIdByCode.get(meter.scopeCode) ?? meter.scopeCode
+        const provenance = {
+          templateCode,
+          templateName: (tpl as any)?.template?.name ?? templateCode,
+          itemKey: key,
+          itemLabel: meterItemLabel.get(key) ?? key,
+        }
         await pmRepo.upsert({
           where: {
             communityId_periodId_scopeType_scopeId_typeCode: {
@@ -317,7 +328,7 @@ export class TemplateService {
               typeCode: meter.typeCode,
             },
           },
-          update: { value: valueNum, origin: 'METER', estimated: false, meterId },
+          update: { value: valueNum, origin: 'METER', estimated: false, meterId, provenance },
           create: {
             communityId,
             periodId: period.id,
@@ -328,6 +339,7 @@ export class TemplateService {
             value: valueNum,
             estimated: false,
             meterId,
+            provenance,
           },
         })
       }

@@ -34,7 +34,12 @@ export class BeFinancialsController {
     @Param('beId') beId: string,
     @Param('periodCode') periodCode: string,
     @Param('splitGroupId') splitGroupId: string,
+    @Query('unitId') unitId?: string,
   ) {
+    if (unitId) {
+      // further drill to allocation lines for a specific unit within this split group
+      return this.svc.drillAllocations(beId, periodCode, unitId, splitGroupId)
+    }
     return this.svc.drillSplitGroupToUnit(beId, periodCode, splitGroupId)
   }
 
@@ -46,5 +51,20 @@ export class BeFinancialsController {
     @Param('splitGroupId') splitGroupId: string,
   ) {
     return this.svc.drillAllocations(beId, periodCode, unitId, splitGroupId)
+  }
+}
+
+@Controller('communities/:communityId/periods/:periodCode/allocations')
+export class CommunityAllocationsController {
+  constructor(private readonly svc: BeFinancialsService) {}
+
+  @Get('detail')
+  drillDetailByCommunity(
+    @Param('communityId') communityId: string,
+    @Param('periodCode') periodCode: string,
+    @Query('unitId') unitId: string,
+    @Query('splitGroupId') splitGroupId: string,
+  ) {
+    return this.svc.drillAllocationsByCommunity(communityId, periodCode, unitId, splitGroupId)
   }
 }

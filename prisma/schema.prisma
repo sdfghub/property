@@ -528,7 +528,8 @@ model Program {
   defaultBucket   String?  @map("default_bucket")
   allocation      Json?    @map("allocation")
 
-  community Community @relation(fields: [communityId], references: [id])
+  community       Community       @relation(fields: [communityId], references: [id])
+  programInvoices ProgramInvoice[]
 
   @@unique([communityId, code])
   @@index([communityId])
@@ -592,6 +593,7 @@ model ExpenseSplit {
 
 model Meter {
   meterId     String    @id @map("meter_id")
+  name        String?   @map("name")
   scopeType   String    @map("scope_type")
   scopeCode   String    @map("scope_code")
   typeCode    String    @map("type_code")
@@ -667,10 +669,11 @@ model VendorInvoice {
   hash                 String?   @map("hash")
   provenance           Json?     @map("provenance")
 
-  community Community          @relation(fields: [communityId], references: [id])
-  vendor    Vendor?            @relation(fields: [vendorId], references: [id])
-  docs      VendorInvoiceDoc[]
-  splits    InvoiceSplit[]
+  community       Community          @relation(fields: [communityId], references: [id])
+  vendor          Vendor?            @relation(fields: [vendorId], references: [id])
+  docs            VendorInvoiceDoc[]
+  splits          InvoiceSplit[]
+  programInvoices ProgramInvoice[]
 
   @@index([communityId, number])
   @@map("vendor_invoice")
@@ -706,6 +709,25 @@ model InvoiceSplit {
   @@unique([invoiceId, periodId])
   @@index([periodId])
   @@map("invoice_split")
+}
+
+// Program-funded invoices (program -> vendor invoice bridge)
+model ProgramInvoice {
+  id         String   @id @default(cuid()) @map("id")
+  programId  String   @map("program_id")
+  invoiceId  String   @map("invoice_id")
+  portionKey String?  @map("portion_key")
+  amount     Decimal? @map("amount") @db.Decimal(18, 4)
+  notes      Json?    @map("notes")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  program Program       @relation(fields: [programId], references: [id])
+  invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([programId, invoiceId, portionKey])
+  @@index([invoiceId])
+  @@index([programId])
+  @@map("program_invoice")
 }
 
 // --------- Bill templates (declarative UI mappings for bills per period) ---------
@@ -860,6 +882,7 @@ model BeLedgerEntry {
   billingEntityId String   @map("billing_entity_id")
   kind            String   @map("kind") // 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT'
   amount          Decimal  @default(0) @map("amount")
+  runningDue      Decimal? @map("running_due")
   currency        String   @default("RON") @map("currency")
   bucket          String   @default("ALLOCATED_EXPENSE") @map("bucket")
   refType         String?  @map("ref_type") // 'CLOSE_PREP' | 'CLOSE_FINAL' | ...

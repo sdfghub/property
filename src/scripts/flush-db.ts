@@ -6,6 +6,7 @@ const tables = [
   'bill_line',
   'bill',
   'invoice_split',
+  'program_invoice',
   'bill_template_instance',
   'bill_template',
   'template_attachment',

@@ -35,6 +35,8 @@ export function ProgramDetails({ program }: { program: Program }) {
     targets.length > 0 &&
     targets.every((t) => t.amount === targets[0].amount)
 
+  const [targetsCollapsed, setTargetsCollapsed] = React.useState(true)
+
   const planSummary =
     targetPlan && targetPlan.periodCount && targetPlan.perPeriodAmount
       ? `${targetPlan.periodCount} × ${targetPlan.perPeriodAmount} ${currency ?? 'RON'}`
@@ -61,14 +63,26 @@ export function ProgramDetails({ program }: { program: Program }) {
         {planSummary && <li>{t('programs.plan')}: {planSummary}</li>}
         {targets.length > 0 && !planSummary && !allEqual && (
           <li>
-            {t('programs.targets')}:
-            <ul style={{ marginTop: 4 }}>
-              {targets.map((tgt, idx) => (
-                <li key={`${code}-tgt-${idx}`}>
-                  {t('programs.offset')} {idx + 1} ({tgt.offset}): {tgt.amount} {currency ?? 'RON'}
-                </li>
-              ))}
-            </ul>
+            <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+              <span>{t('programs.targets')}:</span>
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={() => setTargetsCollapsed((v) => !v)}
+                style={{ padding: '4px 8px' }}
+              >
+                {targetsCollapsed ? t('programs.targets.show', 'Show') : t('programs.targets.hide', 'Hide')}
+              </button>
+            </div>
+            {!targetsCollapsed && (
+              <ul style={{ marginTop: 4 }}>
+                {targets.map((tgt, idx) => (
+                  <li key={`${code}-tgt-${idx}`}>
+                    {t('programs.offset')} {idx + 1} ({tgt.offset}): {tgt.amount} {currency ?? 'RON'}
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         )}
         {defaultBucket && <li>{t('programs.bucket')}: {defaultBucket}</li>}

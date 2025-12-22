@@ -109,12 +109,19 @@ a {
   border: none;
   cursor: pointer;
   font-weight: 600;
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 5px 9px;
+  font-size: 11px;
   color: #0c1b2c;
   background: linear-gradient(135deg, var(--accent), #0de0c0);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.2);
   transition: transform 120ms ease, box-shadow 120ms ease, background 200ms ease;
+}
+
+.btn.small {
+  padding: 4px 7px;
+  font-size: 10.5px;
+  border-radius: 7px;
 }
 
 .btn.secondary {
@@ -137,6 +144,21 @@ a {
   color: var(--text);
   outline: none;
   font-size: 15px;
+}
+
+select,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0f1d2d;
+  color: var(--text);
+}
+
+select option {
+  color: #0c1b2c;
+  background: #e7f1ff;
 }
 
 .label {

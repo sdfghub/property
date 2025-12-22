@@ -3,6 +3,74 @@ import { PrismaService } from '../user/prisma.service'
 import fs from 'fs'
 import path from 'path'
 
+type SplitLine = { text: string; depth: number; meta?: string | null; extra?: string | null }
+
+function renderSplitLines(
+  splits: any[],
+  allocationRules: any[],
+  splitNodeNames?: Record<string, string>,
+  meterNames?: Map<string, string>,
+  depth = 0,
+): SplitLine[] {
+  if (!Array.isArray(splits)) return []
+  const lines: SplitLine[] = []
+  const lookupName = (id: string) => {
+    if (splitNodeNames && splitNodeNames[id]) return splitNodeNames[id]
+    const rule = allocationRules.find((r: any) => r.code === id)
+    return rule?.name || rule?.code || id
+  }
+
+  const computeMeta = (s: any) => {
+    const share = typeof s.share === 'number' ? `${Math.round(s.share * 100)}%` : null
+    let derived: string | null = null
+    if (s.derivedShare === 'remainder') derived = 'remainder'
+    else if (s.derivedShare && typeof s.derivedShare === 'object') {
+      const d = s.derivedShare as any
+      const label = (id?: string) => (id ? meterNames?.get(id) || id : undefined)
+      if (d.partMeterId && d.totalMeterId) derived = `proportional ${label(d.partMeterId)}/${label(d.totalMeterId)}`
+      else if (d.meterType) derived = `proportional ${d.meterType}`
+      else derived = 'derived'
+    }
+
+    const alloc = s.allocation || {}
+    const basis = alloc.basis
+    const basisText = basis
+      ? basis.type === 'GROUP'
+        ? `${basis.name || basis.code || ''}`.trim()
+        : basis.type === 'COMMUNITY'
+        ? 'everybody'
+        : basis.type || null
+      : null
+    const allocMethod = alloc.ruleCode || alloc.method
+    const weight = alloc.weightSource ? `${alloc.weightSource}` : null
+
+    const splitMeta = [share === '100%' ? null : share, derived].filter(Boolean)
+    const allocText = [basisText, allocMethod, weight].filter(Boolean)
+
+    return {
+      splitMeta: splitMeta.length ? splitMeta.join(' · ') : null,
+      allocText: allocText.length ? allocText.join(' · ') : null,
+    }
+  }
+
+  splits.forEach((s) => {
+    const label = lookupName(s.id || '')
+    const { splitMeta, allocText } = computeMeta(s)
+
+    const children = Array.isArray(s.children) ? s.children : []
+    // Always render the split itself
+    lines.push({ text: label, depth, meta: splitMeta || null, extra: null })
+
+    if (children.length) {
+      lines.push(...renderSplitLines(children, allocationRules, splitNodeNames, meterNames, depth + 1))
+    } else if (allocText) {
+      // Leaf: render allocation as a child line
+      lines.push({ text: allocText, depth: depth + 1, meta: null, extra: null })
+    }
+  })
+  return lines
+}
+
 type Role = 'SYSTEM_ADMIN' | 'COMMUNITY_ADMIN' | 'CENSOR' | 'BILLING_ENTITY_USER'
 type ScopeType = 'SYSTEM' | 'COMMUNITY' | 'BILLING_ENTITY'
 
@@ -158,12 +226,12 @@ export class CommunityService {
       })
       const unitCodes = rawUnits.map((u: any) => u.code)
 
-      const results = await Promise.all([
-        Promise.resolve(rawUnits),
-        this.prisma.unitGroup.findMany({
-          where: { communityId: community.id },
-          select: { id: true, code: true, name: true },
-          orderBy: { code: 'asc' },
+    const results = await Promise.all([
+      Promise.resolve(rawUnits),
+      this.prisma.unitGroup.findMany({
+        where: { communityId: community.id },
+        select: { id: true, code: true, name: true },
+        orderBy: { code: 'asc' },
         }),
         this.prisma.unitGroupMember.findMany({
           where: { group: { communityId: community.id } },
@@ -221,6 +289,11 @@ export class CommunityService {
           where: { billingEntity: { communityId: community.id } },
           select: { unitId: true, billingEntityId: true },
         }),
+        this.prisma.meter.findMany({
+          where: { scopeCode: { in: [community.code, ...unitCodes] } },
+          select: { meterId: true, name: true, notes: true },
+          orderBy: { meterId: 'asc' },
+        }),
       ])
 
       const billingEntitiesRaw = results[8]
@@ -230,6 +303,7 @@ export class CommunityService {
       })
 
       const beMemberships = results[10] as Array<{ unitId: string; billingEntityId: string }>
+      const meters = results[11] as Array<{ meterId: string; name?: string | null; notes?: string | null }>
       const beByUnit = new Map<string, string[]>()
       const unitCodeById = new Map<string, string>()
       rawUnits.forEach((u: any) => unitCodeById.set(u.id, u.code))
@@ -270,6 +344,22 @@ export class CommunityService {
       }))
       const beRespPending = results[9] as any
 
+      const splitNodeNamesMap = (() => {
+        const splitNodes = new Map<string, string>()
+        expenseTypes.forEach((et) => {
+          const template = (et.params as any)?.splitTemplate
+          const collect = (arr: any[]) => {
+            arr?.forEach((s) => {
+              if (s?.id) splitNodes.set(s.id, s.name || s.id)
+              if (Array.isArray(s?.children)) collect(s.children)
+            })
+          }
+          if (Array.isArray(template)) collect(template)
+          if (Array.isArray(template?.splits)) collect(template.splits)
+        })
+        return splitNodes
+      })()
+
       return {
         community,
         units,
@@ -298,12 +388,21 @@ export class CommunityService {
           }
           hydrateBasis(splits)
 
+          const meterNameById = new Map<string, string>()
+          meters.forEach((m) => {
+            if (m.meterId) {
+              if (m.name) meterNameById.set(m.meterId, m.name)
+              else if (m.notes) meterNameById.set(m.meterId, m.notes)
+            }
+          })
+
           return {
             expenseTypeCode: (et as any).code ?? '',
             expenseTypeName: (et as any).name ?? (et as any).code ?? '',
             expenseName: (template as any)?.name || undefined,
             splitName: (template as any)?.name || undefined,
             splits,
+            lines: renderSplitLines(splits, allocationRules, Object.fromEntries(splitNodeNamesMap), meterNameById, 0),
           }
         }),
         splitGroups,
@@ -311,21 +410,7 @@ export class CommunityService {
         billingEntities,
         beResponsibles: beRespPending.responsibles,
         bePendingInvites: beRespPending.pendingInvites,
-        splitNodeNames: (() => {
-          const splitNodes = new Map<string, string>()
-          expenseTypes.forEach((et) => {
-            const template = (et.params as any)?.splitTemplate
-            const collect = (arr: any[]) => {
-              arr?.forEach((s) => {
-                if (s?.id) splitNodes.set(s.id, s.name || s.id)
-                if (Array.isArray(s?.children)) collect(s.children)
-              })
-            }
-            if (Array.isArray(template)) collect(template)
-            if (Array.isArray(template?.splits)) collect(template.splits)
-          })
-          return Object.fromEntries(splitNodes)
-        })(),
+        splitNodeNames: Object.fromEntries(splitNodeNamesMap),
       }
     }
 
@@ -362,15 +447,15 @@ export class CommunityService {
       where: { code: communityCode },
       select: { id: true, code: true },
     })
-    if (!community) return null
-    const unitCodes = await (this.prisma as any).unit.findMany({
-      where: { communityId: community.id },
-      select: { code: true },
-    })
-    const meters = await this.prisma.meter.findMany({
-      where: { scopeCode: { in: [community.code, ...unitCodes.map((u: any) => u.code)] } },
-      orderBy: { meterId: 'asc' },
-    })
+  if (!community) return null
+  const unitCodes = await (this.prisma as any).unit.findMany({
+    where: { communityId: community.id },
+    select: { code: true },
+  })
+  const meters = await this.prisma.meter.findMany({
+    where: { scopeCode: { in: [community.code, ...unitCodes.map((u: any) => u.code)] } },
+    orderBy: { meterId: 'asc' },
+  })
     const aggregationRules = await this.prisma.aggregationRule.findMany({
       where: { communityId: community.id },
       orderBy: { targetType: 'asc' },

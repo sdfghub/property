@@ -1,6 +1,7 @@
 import { PeriodService } from '../modules/period/period.service'
 import { PrismaService } from '../modules/user/prisma.service'
 import { AllocationService } from '../modules/billing/allocation.service'
+import { PaymentService } from '../modules/billing/payment.service'
 
 function usage(msg?: string): never {
   if (msg) console.error(`Error: ${msg}\n`)
@@ -27,7 +28,8 @@ async function main() {
   const prismaSvc = new PrismaService()
   await prismaSvc.$connect()
   const allocSvc = new AllocationService(prismaSvc as any)
-  const periodSvc = new PeriodService(prismaSvc as any, allocSvc as any)
+  const paySvc = new PaymentService(prismaSvc as any)
+  const periodSvc = new PeriodService(prismaSvc as any, allocSvc as any, paySvc as any)
 
   if (approve) {
     await periodSvc.approve(communityId, periodCode)

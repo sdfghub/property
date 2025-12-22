@@ -1,7 +1,7 @@
 // src/app.ts
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core'
-import { Module, ValidationPipe } from '@nestjs/common'
+import { Controller, Get, Module, ValidationPipe } from '@nestjs/common'
 import { BillingModule } from './modules/billing/billing.module'
 import { PrismaService } from './modules/user/prisma.service'
 import { UserModule } from './modules/user/user.module'
@@ -11,6 +11,15 @@ import { MailModule } from './modules/mail/mail.module'
 import { CommunityModule } from './modules/community/community.module'
 import { PeriodModule } from './modules/period/period.module'
 import { BeFinancialsModule } from './modules/be-financials/be-financials.module'
+import { ProgramModule } from './modules/program/program.module'
+
+@Controller()
+class HealthController {
+  @Get('healthz')
+  health() {
+    return { status: 'ok' }
+  }
+}
 
 @Module({
   imports: [
@@ -22,7 +31,9 @@ import { BeFinancialsModule } from './modules/be-financials/be-financials.module
     CommunityModule,
     PeriodModule,
     BeFinancialsModule,
-  ]
+    ProgramModule,
+  ],
+  controllers: [HealthController],
 })
 class AppModule {}
 

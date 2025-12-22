@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Flush DB, then import LOTUS-TM community, meters, and expenses.
-# Assumes npm scripts:
-#  - db:flush
-#  - import:community
-#  - import:meters
-#  - import:expense
+# Flush DB, then import LOTUS-TM community, templates, meters, expenses, and prepare period.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA="$ROOT/data/LOTUS-TM"
@@ -51,5 +46,11 @@ npm run import:meters -- "$DATA/meters-2025-09-electricity.csv" LOTUS-TM
 
 echo "💸 Importing expenses..."
 npm run import:expense -- "$DATA" 2025-09
+
+echo "🔒 Closing template instances..."
+npm run close:templates -- LOTUS-TM 2025-09
+
+#echo "📦 Preparing period 2025-09..."
+#npm run close:period -- LOTUS-TM 2025-09
 
 echo "✅ Done."

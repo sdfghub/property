@@ -13,5 +13,8 @@ export class NetworkStack extends cdk.Stack {
         { name: 'private', subnetType: SubnetType.PRIVATE_WITH_EGRESS }
       ]
     })
+    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+      value: this.vpc.privateSubnets.map((s) => s.subnetId).join(','),
+    })
   }
 }
