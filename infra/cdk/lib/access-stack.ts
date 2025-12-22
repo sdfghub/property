@@ -29,7 +29,7 @@ export class AccessStack extends cdk.Stack {
     const bastion = new Instance(this, 'Bastion', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: SubnetType.PUBLIC },
-      instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.NANO),
+      instanceType: InstanceType.of(InstanceClass.T3, InstanceSize.MICRO),
       machineImage: MachineImage.latestAmazonLinux2023(),
       securityGroup: props.bastionSecurityGroup,
       role: bastionRole,
