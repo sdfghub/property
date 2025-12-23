@@ -48,19 +48,18 @@ export class AppStack extends cdk.Stack {
 
     const alb = new ApplicationLoadBalancer(this, 'Alb', { vpc: props.vpc, internetFacing: true, securityGroup: albSg })
     const certArn = process.env.ALB_CERT_ARN || this.node.tryGetContext('albCertArn')
-    const listener = certArn
-      ? alb.addListener('Https', {
-          port: 443,
-          protocol: ApplicationProtocol.HTTPS,
-          certificates: [Certificate.fromCertificateArn(this, 'AlbCert', certArn)],
-        })
-      : alb.addListener('Http', { port: 80, protocol: ApplicationProtocol.HTTP })
+    const httpListener = alb.addListener('Http', {
+      port: 80,
+      protocol: ApplicationProtocol.HTTP,
+      defaultAction: certArn ? ListenerAction.redirect({ protocol: 'HTTPS', port: '443' }) : undefined,
+    })
+    let listener = httpListener
     if (certArn) {
       albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(443))
-      alb.addListener('HttpRedirect', {
-        port: 80,
-        protocol: ApplicationProtocol.HTTP,
-        defaultAction: ListenerAction.redirect({ protocol: 'HTTPS', port: '443' }),
+      listener = alb.addListener('Https', {
+        port: 443,
+        protocol: ApplicationProtocol.HTTPS,
+        certificates: [Certificate.fromCertificateArn(this, 'AlbCert', certArn)],
       })
     }
     const service = new FargateService(this, 'Service', {
