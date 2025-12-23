@@ -953,14 +953,39 @@ model User {
   id            String           @id @default(cuid())
   email         String           @unique
   name          String?
+  passwordHash  String?          @map("password_hash")
   createdAt     DateTime         @default(now()) @map("created_at")
   tokenVersion  Int              @default(0) @map("token_version")
   roles         RoleAssignment[]
   invites       Invite[]
   loginTokens   LoginToken[]
   refreshTokens RefreshToken[]
+  oauthAccounts UserOAuthAccount[]
 
   @@map("user")
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+  FACEBOOK
+  MICROSOFT
+}
+
+model UserOAuthAccount {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  provider       OAuthProvider
+  providerUserId String        @map("provider_user_id")
+  email          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerUserId])
+  @@unique([userId, provider])
+  @@index([email])
+  @@map("user_oauth_account")
 }
 
 enum Role {

@@ -4,7 +4,7 @@ set -euo pipefail
 STACK_ACCESS="PropertyExpenses-Access"
 STACK_DATA="PropertyExpenses-Data"
 DB_ID_DEFAULT="propertyexpenses-data-postgres9dc8bb04-djcwd45ecscr"
-LOCAL_PORT="${LOCAL_PORT:-5432}"
+LOCAL_PORT="${LOCAL_PORT:-3333}"
 REMOTE_PORT="${REMOTE_PORT:-5432}"
 DB_ID="${DB_ID:-$DB_ID_DEFAULT}"
 
