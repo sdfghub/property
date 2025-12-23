@@ -2,7 +2,8 @@ import * as cdk from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, Protocol, LogDrivers, Secret } from 'aws-cdk-lib/aws-ecs'
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
-import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import { Certificate } from 'aws-cdk-lib/aws-certificatemanager'
 import { Vpc, SecurityGroup, Peer, Port, SubnetType, CfnSecurityGroupIngress } from 'aws-cdk-lib/aws-ec2'
 import { Repository } from 'aws-cdk-lib/aws-ecr'
 import { DatabaseInstance } from 'aws-cdk-lib/aws-rds'
@@ -46,7 +47,22 @@ export class AppStack extends cdk.Stack {
     })
 
     const alb = new ApplicationLoadBalancer(this, 'Alb', { vpc: props.vpc, internetFacing: true, securityGroup: albSg })
-    const listener = alb.addListener('Http', { port: 80, protocol: ApplicationProtocol.HTTP })
+    const certArn = process.env.ALB_CERT_ARN || this.node.tryGetContext('albCertArn')
+    const listener = certArn
+      ? alb.addListener('Https', {
+          port: 443,
+          protocol: ApplicationProtocol.HTTPS,
+          certificates: [Certificate.fromCertificateArn(this, 'AlbCert', certArn)],
+        })
+      : alb.addListener('Http', { port: 80, protocol: ApplicationProtocol.HTTP })
+    if (certArn) {
+      albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(443))
+      alb.addListener('HttpRedirect', {
+        port: 80,
+        protocol: ApplicationProtocol.HTTP,
+        defaultAction: ListenerAction.redirect({ protocol: 'HTTPS', port: '443' }),
+      })
+    }
     const service = new FargateService(this, 'Service', {
       cluster,
       taskDefinition: task,
