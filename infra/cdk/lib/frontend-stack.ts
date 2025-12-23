@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3'
 import { AllowedMethods, CachedMethods, Distribution, OriginAccessIdentity, PriceClass } from 'aws-cdk-lib/aws-cloudfront'
+import { Certificate } from 'aws-cdk-lib/aws-certificatemanager'
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 export class FrontendStack extends cdk.Stack {
@@ -21,6 +22,15 @@ export class FrontendStack extends cdk.Stack {
     const oai = new OriginAccessIdentity(this, 'FrontendOai')
     this.bucket.grantRead(oai)
 
+    const certArn = process.env.FRONTEND_CERT_ARN || this.node.tryGetContext('frontendCertArn')
+    const domainValue = process.env.FRONTEND_DOMAIN || this.node.tryGetContext('frontendDomain')
+    const domainNames = domainValue
+      ? String(domainValue)
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : undefined
+
     this.distribution = new Distribution(this, 'FrontendDistribution', {
       defaultBehavior: {
         origin: new S3Origin(this.bucket, { originAccessIdentity: oai }),
@@ -33,6 +43,8 @@ export class FrontendStack extends cdk.Stack {
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
       priceClass: PriceClass.PRICE_CLASS_100,
+      certificate: certArn ? Certificate.fromCertificateArn(this, 'FrontendCert', certArn) : undefined,
+      domainNames,
     })
 
     new cdk.CfnOutput(this, 'FrontendBucketName', { value: this.bucket.bucketName })
