@@ -1,1 +1,7 @@
-{ "app": "node dist/bin/app.js", "context": { "@aws-cdk/core:newStyleStackSynthesis": true } }
+{
+  "app": "node dist/bin/app.js",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "albCertArn": "arn:aws:acm:eu-central-1:112543432453:certificate/9b7039fa-9aa6-4764-a23d-7f9486972977"
+  }
+}

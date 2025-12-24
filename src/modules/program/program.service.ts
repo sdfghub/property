@@ -1,5 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
+
+type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
+type ProgramDef = {
+  code: string
+  name: string
+  description?: string
+  status?: string
+  currency?: string
+  totalTarget?: number
+  startPeriodCode?: string
+  targets?: Array<{ offset: number; amount: number }>
+  targetPlan?: { periodCount: number; perPeriodAmount: number }
+  defaultBucket?: string
+  allocation?: any
+}
 
 @Injectable()
 export class ProgramService {
@@ -7,6 +22,13 @@ export class ProgramService {
 
   private programBucket(programId: string, defaultBucket?: string | null) {
     return defaultBucket || `PROGRAM:${programId}`
+  }
+
+  private ensureCommunityAdmin(roles: RoleAssignment[], communityId: string) {
+    const ok = roles.some(
+      (r) => r.role === 'COMMUNITY_ADMIN' && r.scopeType === 'COMMUNITY' && r.scopeId === communityId,
+    )
+    if (!ok) throw new ForbiddenException('Community admin required')
   }
 
   async listBalances(communityId: string) {
@@ -128,5 +150,69 @@ export class ProgramService {
       byRefType,
       recent,
     }
+  }
+
+  async importPrograms(communityId: string, roles: RoleAssignment[], body: ProgramDef[]) {
+    this.ensureCommunityAdmin(roles, communityId)
+    if (!Array.isArray(body)) throw new BadRequestException('Programs payload must be an array')
+
+    const imported: string[] = []
+    for (const proj of body) {
+      if (!proj?.code || !proj?.name) throw new BadRequestException('Program code and name are required')
+
+      let targets: Array<{ offset: number; amount: number }> | undefined
+      if (Array.isArray(proj.targets) && proj.targets.length) {
+        targets = proj.targets
+      } else if (proj.targetPlan) {
+        const pc = proj.targetPlan.periodCount
+        const ppa = proj.targetPlan.perPeriodAmount
+        if (pc && ppa && pc > 0 && ppa > 0) {
+          targets = Array.from({ length: pc }, (_, idx) => ({ offset: idx, amount: ppa }))
+        }
+      }
+
+      if (proj.totalTarget != null && targets?.length) {
+        const sum = targets.reduce((s, t) => s + Number(t.amount ?? 0), 0)
+        const delta = Math.abs(sum - Number(proj.totalTarget))
+        if (delta > 0.01) {
+          throw new BadRequestException(
+            `Program ${proj.code}: sum of targets (${sum}) differs from totalTarget (${proj.totalTarget})`,
+          )
+        }
+      }
+
+      await this.prisma.program.upsert({
+        where: { communityId_code: { communityId, code: proj.code } },
+        update: {
+          name: proj.name,
+          description: proj.description ?? null,
+          status: proj.status ?? 'PLANNED',
+          currency: proj.currency ?? 'RON',
+          totalTarget: proj.totalTarget ?? null,
+          startPeriodCode: proj.startPeriodCode ?? null,
+          targetPlan: proj.targetPlan ?? undefined,
+          targets: targets ?? undefined,
+          defaultBucket: proj.defaultBucket ?? null,
+          allocation: proj.allocation ?? null,
+        },
+        create: {
+          communityId,
+          code: proj.code,
+          name: proj.name,
+          description: proj.description ?? null,
+          status: proj.status ?? 'PLANNED',
+          currency: proj.currency ?? 'RON',
+          totalTarget: proj.totalTarget ?? null,
+          startPeriodCode: proj.startPeriodCode ?? null,
+          targetPlan: proj.targetPlan ?? undefined,
+          targets: targets ?? undefined,
+          defaultBucket: proj.defaultBucket ?? null,
+          allocation: proj.allocation ?? null,
+        },
+      })
+      imported.push(proj.code)
+    }
+
+    return { count: imported.length, codes: imported }
   }
 }

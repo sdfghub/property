@@ -7,6 +7,7 @@ type Props = {
   programs: any[]
   programError: string | null
   communityCode: string
+  onRefreshPrograms?: () => void | Promise<void>
 }
 
 type ProgramLedgerDigest = {
@@ -34,7 +35,7 @@ type ProgramLedgerDigest = {
   }>
 }
 
-export function ProgramsTab({ programs, programError, communityCode }: Props) {
+export function ProgramsTab({ programs, programError, communityCode, onRefreshPrograms }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [activeCode, setActiveCode] = React.useState<string | null>(
@@ -60,6 +61,10 @@ export function ProgramsTab({ programs, programError, communityCode }: Props) {
     currency: 'RON',
     issueDate: '',
   })
+  const [importFile, setImportFile] = React.useState<File | null>(null)
+  const [importLoading, setImportLoading] = React.useState(false)
+  const [importError, setImportError] = React.useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!activeCode && programs.length > 0) {
@@ -211,11 +216,67 @@ export function ProgramsTab({ programs, programError, communityCode }: Props) {
 
   const balance = ledger?.summary?.net ?? 0
 
+  const handleImportPrograms = async () => {
+    if (!communityCode) return
+    if (!importFile) {
+      setImportError(t('programs.import.noFile'))
+      setImportSuccess(null)
+      return
+    }
+    setImportLoading(true)
+    setImportError(null)
+    setImportSuccess(null)
+    try {
+      const raw = await importFile.text()
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) {
+        setImportError(t('programs.import.invalidShape'))
+        return
+      }
+      await api.post(`/communities/${communityCode}/programs/import`, parsed)
+      setImportFile(null)
+      setImportSuccess(t('programs.import.success'))
+      await onRefreshPrograms?.()
+    } catch (err: any) {
+      const message = err?.message || t('programs.import.error')
+      setImportError(message)
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
   return (
     <div className="stack">
       {/*<h4>{t('tab.programs')}</h4>
       <p className="muted">{t('programs.subtitle')}</p>*/}
       {programError && <div className="badge negative">{programError}</div>}
+      <div className="card soft">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div className="muted">{t('programs.import.title')}</div>
+            <div className="muted" style={{ fontSize: 12 }}>{t('programs.import.subtitle')}</div>
+          </div>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            {importError && <span className="badge negative">{importError}</span>}
+            {importSuccess && <span className="badge positive">{importSuccess}</span>}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+          <input
+            className="input"
+            type="file"
+            accept="application/json"
+            onChange={(e) => {
+              setImportFile(e.target.files?.[0] || null)
+              setImportError(null)
+              setImportSuccess(null)
+            }}
+          />
+          <button className="btn primary small" type="button" onClick={handleImportPrograms} disabled={importLoading}>
+            {importLoading ? t('programs.import.loading') : t('programs.import.button')}
+          </button>
+        </div>
+      </div>
       {!programError && programs.length > 0 ? (
         <div className="stack">
           <div className="row" style={{ flexWrap: 'wrap', gap: 8 }} role="tablist">

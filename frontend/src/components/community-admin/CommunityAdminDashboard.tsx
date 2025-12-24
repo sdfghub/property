@@ -127,6 +127,18 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
       .finally(() => setPaymentsLoading(false))
   }, [communityCode])
 
+  const refreshPrograms = React.useCallback(() => {
+    if (!communityCode) return Promise.resolve()
+    setProgramError(null)
+    return fetch(`${API_BASE}/community-programs/${communityCode}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text())
+        return res.json()
+      })
+      .then((rows) => setPrograms(Array.isArray(rows) ? rows : []))
+      .catch((err) => setProgramError(err?.message || 'Failed to load programs'))
+  }, [communityCode])
+
   const refreshEditable = React.useCallback(() => {
     if (!communityCode) return Promise.resolve()
     return api
@@ -237,20 +249,13 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
       })
       .then(setConfigJson)
       .catch((err) => setConfigError(err?.message || 'Failed to load config'))
-
-    fetch(`${API_BASE}/community-programs/${communityCode}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text())
-        return res.json()
-      })
-      .then((rows) => setPrograms(Array.isArray(rows) ? rows : []))
-      .catch((err) => setProgramError(err?.message || 'Failed to load programs'))
+    refreshPrograms()
 
     fetchPayments()
 
     refreshEditable()
     refreshClosed()
-  }, [communityCode, refreshEditable, refreshClosed, fetchPayments, loadOverviewInvoices])
+  }, [communityCode, refreshEditable, refreshClosed, fetchPayments, loadOverviewInvoices, refreshPrograms])
 
   React.useEffect(() => {
     const controller = new AbortController()
@@ -480,7 +485,12 @@ export function CommunityAdminDashboard({ forceCommunityId }: Props) {
           )}
 
           {activeTab === 'programs' && (
-            <ProgramsTab programs={programs} programError={programError} communityCode={communityCode} />
+            <ProgramsTab
+              programs={programs}
+              programError={programError}
+              communityCode={communityCode}
+              onRefreshPrograms={refreshPrograms}
+            />
           )}
           {activeTab === 'payments' && (
             <div className="card soft">
