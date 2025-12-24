@@ -7,6 +7,7 @@ import { I18nProvider, useI18n } from './i18n/useI18n'
 import { SystemAdminPanel } from './components/SystemAdminPanel'
 import { CommunityAdminDashboard } from './components/community-admin/CommunityAdminDashboard'
 import { BillingEntityResponsibleDashboard } from './components/BillingEntityResponsibleDashboard'
+import { API_BASE } from './api/client'
 import './styles/index.css'
 
 function LangSwitch() {
@@ -38,6 +39,29 @@ function AppShell() {
   const { user, status, logout, roles, activeRole, setActiveRole } = useAuth()
   const params = React.useMemo(() => new URLSearchParams(window.location.search), [])
   const devCommunity = params.get('community')
+  const uiVersion = (import.meta as any)?.env?.VITE_APP_VERSION as string | undefined
+  const [apiVersion, setApiVersion] = React.useState<string | null>(null)
+  const apiBase = React.useMemo(() => API_BASE.replace(/\/$/, ''), [])
+
+  React.useEffect(() => {
+    let active = true
+    async function loadVersion() {
+      try {
+        const res = await fetch(`${apiBase}/healthz`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (active && typeof data?.version === 'string' && data.version) {
+          setApiVersion(data.version)
+        }
+      } catch {
+        if (active) setApiVersion(null)
+      }
+    }
+    void loadVersion()
+    return () => {
+      active = false
+    }
+  }, [apiBase])
 
   return (
     <div className="app-shell">
@@ -58,7 +82,23 @@ function AppShell() {
         ) : (
           <div className="badge">{status === 'loading' ? t('status.connecting') : t('status.signedOut')}</div>
         )}
-        <LangSwitch />
+        <div className="stack" style={{ gap: 6, alignItems: 'flex-end' }}>
+          <LangSwitch />
+          {(uiVersion || apiVersion) && (
+            <div className="muted" style={{ fontSize: 12, textAlign: 'right' }}>
+              {uiVersion ? (
+                <div>
+                  {t('app.versionUi')}: {uiVersion}
+                </div>
+              ) : null}
+              {apiVersion ? (
+                <div>
+                  {t('app.versionApi')}: {apiVersion}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
 
       {devCommunity ? (

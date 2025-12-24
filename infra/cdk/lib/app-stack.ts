@@ -27,10 +27,15 @@ export class AppStack extends cdk.Stack {
       version: 1,
     })
 
+    const appVersion = process.env.APP_VERSION || this.node.tryGetContext('appVersion')
+    const environment: Record<string, string> = { PORT: '3000', NODE_ENV: 'production' }
+    if (appVersion) {
+      environment.APP_VERSION = appVersion
+    }
     task.addContainer('Api', {
       image: ContainerImage.fromEcrRepository(Repository.fromRepositoryName(this, 'Repo', 'property-expenses-api'), 'latest'),
       logging: LogDrivers.awsLogs({ logGroup, streamPrefix: 'api' }),
-      environment: { PORT: '3000', NODE_ENV: 'production' },
+      environment,
       secrets: { DATABASE_URL: Secret.fromSsmParameter(dbUrlParam) },
     }).addPortMappings({ containerPort: 3000, protocol: Protocol.TCP })
     

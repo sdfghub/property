@@ -18,6 +18,10 @@ import { ProgramModule } from './modules/program/program.module'
 class HealthController {
   @Get('healthz')
   health() {
+    const version = process.env.APP_VERSION
+    if (version) {
+      return { status: 'ok', version }
+    }
     return { status: 'ok' }
   }
 }

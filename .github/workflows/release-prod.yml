@@ -1,0 +1,107 @@
+name: release-prod
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g. v0.5.0)'
+        required: true
+      api_base:
+        description: 'Optional API base URL (e.g. https://api.maocup.eu/api)'
+        required: false
+      alb_cert_arn:
+        description: 'Optional ALB cert ARN for HTTPS'
+        required: false
+      deploy_frontend:
+        description: 'Deploy frontend assets'
+        required: false
+        default: 'true'
+env:
+  AWS_REGION: eu-central-1
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Tag release
+        run: |
+          git fetch --tags
+          if git show-ref --tags --verify --quiet "refs/tags/${{ inputs.version }}"; then
+            echo "Tag already exists: ${{ inputs.version }}"
+            exit 1
+          fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
+          git push origin "refs/tags/${{ inputs.version }}"
+      - name: Build and push API image
+        run: |
+          ./build-and-push.sh
+      - name: Build CDK
+        run: |
+          cd infra/cdk
+          npm ci
+          npm run build
+      - name: Deploy app stacks
+        env:
+          ALB_CERT_ARN_INPUT: ${{ inputs.alb_cert_arn }}
+          APP_VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          cd infra/cdk
+          if [ -n "$ALB_CERT_ARN_INPUT" ]; then
+            export ALB_CERT_ARN="$ALB_CERT_ARN_INPUT"
+          fi
+          if [ -n "$APP_VERSION_INPUT" ]; then
+            export APP_VERSION="$APP_VERSION_INPUT"
+          fi
+          npx cdk deploy PropertyExpenses-Network PropertyExpenses-Data PropertyExpenses-App --require-approval never
+      - name: Deploy frontend stack
+        run: |
+          cd infra/cdk
+          npx cdk deploy PropertyExpenses-Frontend --require-approval never
+      - name: Build frontend
+        if: ${{ inputs.deploy_frontend == 'true' }}
+        env:
+          API_BASE_INPUT: ${{ inputs.api_base }}
+          APP_STACK_NAME: PropertyExpenses-App
+          APP_VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          if [ -n "$APP_VERSION_INPUT" ]; then
+            echo "VITE_APP_VERSION=$APP_VERSION_INPUT" >> $GITHUB_ENV
+          fi
+          if [ -n "$API_BASE_INPUT" ]; then
+            echo "VITE_API_BASE=$API_BASE_INPUT" >> $GITHUB_ENV
+          else
+            ALB_DNS=$(aws cloudformation describe-stacks \
+              --stack-name "$APP_STACK_NAME" \
+              --query "Stacks[0].Outputs[?OutputKey=='AlbDns'].OutputValue" \
+              --output text)
+            if [ -n "${{ inputs.alb_cert_arn }}" ]; then
+              echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
+            else
+              echo "VITE_API_BASE=http://${ALB_DNS}/api" >> $GITHUB_ENV
+            fi
+          fi
+          cd frontend
+          npm ci
+          npm run build
+      - name: Upload frontend assets
+        if: ${{ inputs.deploy_frontend == 'true' }}
+        env:
+          STACK_NAME: PropertyExpenses-Frontend
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
+          DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" --output text)
+          aws s3 sync frontend/dist s3://$BUCKET --delete
+          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
