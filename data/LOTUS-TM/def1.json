@@ -1,0 +1,3486 @@
+{
+  "id": "LOTUS-TM-2",
+  "name": "Lotus Residence 2",
+  "period": {
+    "code": "2025-09",
+    "start": "2025-09-01",
+    "end": "2025-09-30"
+  },
+  "groups": [
+    {
+      "code": "UNIT",
+      "name": "Toate unitatile"
+    },
+    {
+      "code": "RESIDENTIAL",
+      "name": "Spatiu rezidential"
+    },
+    {
+      "code": "NON_SPA",
+      "name": "Fara SPA"
+    },
+    {
+      "code": "SAD",
+      "name": "Spatii cu alte destinatii"
+    },
+    {
+      "code": "SPA",
+      "name": "SPA"
+    },
+    {
+      "code": "PARKING",
+      "name": "Parcare"
+    },
+    {
+      "code": "UNDERGROUND_PARKING",
+      "name": "Parcare subterana"
+    },
+    {
+      "code": "WATER",
+      "name": "Beneficiari apa rece"
+    },
+    {
+      "code": "HEATING",
+      "name": "Beneficiari caldura"
+    },
+    {
+      "code": "HOT_WATER",
+      "name": "Beneficiari apa calda"
+    },
+    {
+      "code": "ELEVATOR",
+      "name": "Beneficiari lift"
+    },
+    {
+      "code": "NOT_PARKING",
+      "name": "Alte unitati decat parcari"
+    }
+  ],
+  "splitGroups": [
+    {
+      "code": "WASTE_WATER",
+      "name": "Apa dif",
+      "splitIds": [
+        "WATER_WASTE",
+        "ELEC-HYDRO-WATER-RESIDUAL"
+      ],
+      "order": 1
+    },
+    {
+      "code": "COLD_WATER",
+      "name": "Apa rece",
+      "splitIds": [
+        "ELEC-HYDRO-WATER",
+        "WATER_COLD"
+      ],
+      "order": 0
+    },
+    {
+      "code": "HOT_WATER",
+      "name": "Apa calda",
+      "splitIds": [
+        "ELEC-BOILER-HOT-WATER",
+        "ELEC-HW-PUMP",
+        "ELEC-HYDRO-WATER-HOT",
+        "GAS-HOTWATER",
+        "WATER_HOT"
+      ],
+      "order": 2
+    },
+    {
+      "code": "COMMON_ELECTRICITY",
+      "name": "Energie electrica spatiu comun",
+      "splitIds": [
+        "ELEC-STAIRCASE-A",
+        "ELEC-STAIRCASE-B",
+        "ELEC-STAIRCASE-C",
+        "ELEC-OTHER"
+      ],
+      "order": 6
+    },
+    {
+      "code": "CCTV",
+      "name": "CCTV",
+      "splitIds": [
+        "CCTV-MAINTENANCE-ALL"
+      ],
+      "order": 13
+    },
+    {
+      "code": "EON_WASTE",
+      "name": "Rata de conversie/randament cazane 30% F EON",
+      "splitIds": [
+        "GAS-WASTE"
+      ],
+      "order": 5
+    },
+    {
+      "code": "ADMIN",
+      "name": "Administrare",
+      "splitIds": [
+        "ADMIN-ALL"
+      ],
+      "order": 14
+    },
+    {
+      "code": "BANK",
+      "name": "Comision banca",
+      "splitIds": [
+        "BANK-ALL"
+      ],
+      "order": 15
+    },
+    {
+      "code": "CENZOR",
+      "name": "Cenzor",
+      "splitIds": [
+        "CENZOR-ALL"
+      ],
+      "order": 11
+    },
+    {
+      "code": "RAIN_WATER",
+      "name": "Apa meteorica",
+      "splitIds": [
+        "RAIN-WATER-ALL"
+      ],
+      "order": 3
+    },
+    {
+      "code": "RCSRDS",
+      "name": "Rcs/Rds",
+      "splitIds": [
+        "RCSRDS-ALL"
+      ],
+      "order": 12
+    },
+    {
+      "code": "VODAFONE",
+      "name": "Vodafone",
+      "splitIds": [
+        "VODAFONE-ALL"
+      ],
+      "order": 16
+    },
+    {
+      "code": "LIVIU",
+      "name": "Ingrijitor cladire",
+      "splitIds": [
+        "LIVIU-ALL",
+        "LIVIU-TRANSPORT-ALL"
+      ],
+      "order": 10
+    },
+    {
+      "code": "HEATING",
+      "name": "Caldura",
+      "splitIds": [
+        "ELEC-BOILER-HEATING",
+        "ELEC-HEAT-PUMP",
+        "GAS-HEATING"
+      ],
+      "order": 4
+    },
+    {
+      "code": "ELEVATOR",
+      "name": "Mentenanta lift",
+      "splitIds": [
+        "ELEVATOR-ALL"
+      ],
+      "order": 9
+    },
+    {
+      "code": "GARBAGE",
+      "name": "Salubritate",
+      "splitIds": [
+        "GARBAGE-ALL"
+      ],
+      "order": 8
+    },
+    {
+      "code": "ELECTRICITY_PARKING",
+      "name": "Energie electrica Garaj",
+      "splitIds": [
+        "ELEC-PARKING"
+      ],
+      "order": 7
+    }
+  ],
+  "aggregations": [
+    {
+      "targetType": "WATER_TOTAL",
+      "unitTypes": [
+        "WATER_COLD",
+        "HOT_WATER"
+      ],
+      "residualType": "WATER_RESIDUAL"
+    }
+  ],
+  "derivedMeters": [
+    {
+      "scopeType": "COMMUNITY",
+      "sourceType": "GAS",
+      "subtractTypes": [
+        "GAS_HOTWATER"
+      ],
+      "targetType": "GAS_HEATING",
+      "origin": "DERIVED"
+    }
+  ],
+  "allocationRules": [
+    {
+      "code": "BY_RESIDENTS",
+      "name": "Numar de locatari",
+      "method": "BY_RESIDENTS",
+      "params": {}
+    },
+    {
+      "code": "BY_SQM",
+      "name": "CPI",
+      "method": "BY_SQM",
+      "params": {}
+    },
+    {
+      "code": "BY_CONSUMPTION",
+      "name": "Consum",
+      "method": "BY_CONSUMPTION",
+      "params": {}
+    }
+  ],
+  "measureTypes": [
+    {
+      "code": "WATER_COLD",
+      "name": "Apa rece",
+      "unit": "m3"
+    },
+    {
+      "code": "WATER_TOTAL",
+      "name": "Apa total",
+      "unit": "m3"
+    },
+    {
+      "code": "WATER_RESIDUAL",
+      "name": "Apa diferente",
+      "unit": "m3"
+    },
+    {
+      "code": "HOT_WATER",
+      "name": "Apa calda",
+      "unit": "m3"
+    },
+    {
+      "code": "WATER",
+      "name": "Apa",
+      "unit": "m3"
+    },
+    {
+      "code": "ELECTRICITY",
+      "name": "Electricitate",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_TOTAL",
+      "name": "Electricitate total",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_STAIRS_A",
+      "name": "Electricitate casa scarii A",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_STAIRS_B",
+      "name": "Electricitate casa scarii B",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_STAIRS_C",
+      "name": "Electricitate casa scarii C",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_PARKING",
+      "name": "Electricitate parcare",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_HW_PUMP",
+      "name": "Electricitate pompa apa calda",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_HEAT_PUMP",
+      "name": "Electricitate pompa caldura",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_BOILER",
+      "name": "Electricitate centrala",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_CHILLER",
+      "name": "Electricitate chiller",
+      "unit": "kWh"
+    },
+    {
+      "code": "ELECTRICITY_HYDRO",
+      "name": "Electricitate hidrofor",
+      "unit": "kWh"
+    },
+    {
+      "code": "HEATING",
+      "name": "Caldura",
+      "unit": "kWh"
+    },
+    {
+      "code": "GAS",
+      "name": "Gaz",
+      "unit": "m3"
+    },
+    {
+      "code": "GAS_HOTWATER",
+      "name": "Gaz apa calda",
+      "unit": "m3"
+    },
+    {
+      "code": "GAS_HEATING",
+      "name": "Gaz caldura",
+      "unit": "m3"
+    }
+  ],
+  "meters": [
+    {
+      "name": "MTR-1-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "1",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-1-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-1-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "1",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-1-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-1-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "1",
+      "typeCode": "HEATING",
+      "meterId": "MTR-1-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-2-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "2",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-2-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-2-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "2",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-2-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-2-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "2",
+      "typeCode": "HEATING",
+      "meterId": "MTR-2-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-3-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "3",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-3-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-3-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "3",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-3-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-3-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "3",
+      "typeCode": "HEATING",
+      "meterId": "MTR-3-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-4-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "4",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-4-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-4-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "4",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-4-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-4-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "4",
+      "typeCode": "HEATING",
+      "meterId": "MTR-4-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-5-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "5",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-5-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-5-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "5",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-5-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-5-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "5",
+      "typeCode": "HEATING",
+      "meterId": "MTR-5-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-6-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "6",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-6-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-6-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "6",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-6-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-6-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "6",
+      "typeCode": "HEATING",
+      "meterId": "MTR-6-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-7-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "7",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-7-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-7-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "7",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-7-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-7-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "7",
+      "typeCode": "HEATING",
+      "meterId": "MTR-7-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-8-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "8",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-8-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-8-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "8",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-8-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-8-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "8",
+      "typeCode": "HEATING",
+      "meterId": "MTR-8-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-9-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "9",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-9-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-9-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "9",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-9-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-9-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "9",
+      "typeCode": "HEATING",
+      "meterId": "MTR-9-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-10-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "10",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-10-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-10-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "10",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-10-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-10-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "10",
+      "typeCode": "HEATING",
+      "meterId": "MTR-10-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-11-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "11",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-11-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-11-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "11",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-11-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-11-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "11",
+      "typeCode": "HEATING",
+      "meterId": "MTR-11-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-12-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "12",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-12-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-12-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "12",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-12-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-12-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "12",
+      "typeCode": "HEATING",
+      "meterId": "MTR-12-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-13-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "13",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-13-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-13-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "13",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-13-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-13-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "13",
+      "typeCode": "HEATING",
+      "meterId": "MTR-13-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-14-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "14",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-14-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-14-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "14",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-14-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-14-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "14",
+      "typeCode": "HEATING",
+      "meterId": "MTR-14-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-15-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "15",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-15-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-15-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "15",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-15-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-15-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "15",
+      "typeCode": "HEATING",
+      "meterId": "MTR-15-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-16-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "16",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-16-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-16-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "16",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-16-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-16-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "16",
+      "typeCode": "HEATING",
+      "meterId": "MTR-16-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-17-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "17",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-17-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-17-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "17",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-17-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-17-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "17",
+      "typeCode": "HEATING",
+      "meterId": "MTR-17-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-18-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "18",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-18-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-18-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "18",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-18-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-18-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "18",
+      "typeCode": "HEATING",
+      "meterId": "MTR-18-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-19-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "19",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-19-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-19-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "19",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-19-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-19-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "19",
+      "typeCode": "HEATING",
+      "meterId": "MTR-19-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-20-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "20",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-20-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-20-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "20",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-20-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-20-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "20",
+      "typeCode": "HEATING",
+      "meterId": "MTR-20-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-21-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "21",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-21-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-21-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "21",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-21-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-21-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "21",
+      "typeCode": "HEATING",
+      "meterId": "MTR-21-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-22-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "22",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-22-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-22-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "22",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-22-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-22-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "22",
+      "typeCode": "HEATING",
+      "meterId": "MTR-22-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-23-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "23",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-23-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-23-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "23",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-23-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-23-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "23",
+      "typeCode": "HEATING",
+      "meterId": "MTR-23-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-24-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "24",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-24-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-24-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "24",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-24-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-24-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "24",
+      "typeCode": "HEATING",
+      "meterId": "MTR-24-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-25-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "25",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-25-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-25-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "25",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-25-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-25-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "25",
+      "typeCode": "HEATING",
+      "meterId": "MTR-25-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-26-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "26",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-26-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-26-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "26",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-26-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-26-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "26",
+      "typeCode": "HEATING",
+      "meterId": "MTR-26-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-27-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "27",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-27-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-27-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "27",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-27-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-27-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "27",
+      "typeCode": "HEATING",
+      "meterId": "MTR-27-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-28-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "28",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-28-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-28-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "28",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-28-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-28-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "28",
+      "typeCode": "HEATING",
+      "meterId": "MTR-28-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-29-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "29",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-29-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-29-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "29",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-29-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-29-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "29",
+      "typeCode": "HEATING",
+      "meterId": "MTR-29-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-30-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "30",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-30-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-30-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "30",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-30-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-30-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "30",
+      "typeCode": "HEATING",
+      "meterId": "MTR-30-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-31-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "31",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-31-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-31-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "31",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-31-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-31-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "31",
+      "typeCode": "HEATING",
+      "meterId": "MTR-31-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-32-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "32",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-32-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-32-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "32",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-32-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-32-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "32",
+      "typeCode": "HEATING",
+      "meterId": "MTR-32-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-33-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "33",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-33-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-33-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "33",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-33-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-33-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "33",
+      "typeCode": "HEATING",
+      "meterId": "MTR-33-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-34-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "34",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-34-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-34-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "34",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-34-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-34-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "34",
+      "typeCode": "HEATING",
+      "meterId": "MTR-34-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-35-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "35",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-35-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-35-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "35",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-35-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-35-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "35",
+      "typeCode": "HEATING",
+      "meterId": "MTR-35-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-SAD 1 Part SPA-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "SAD 1 Part SPA",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-SAD 1 Part SPA-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-SAD 1 Part SPA-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "SAD 1 Part SPA",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-SAD 1 Part SPA-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-SAD 2 Sp com Et1-HW",
+      "scopeType": "UNIT",
+      "scopeCode": "SAD 2 Sp com Et1",
+      "typeCode": "HOT_WATER",
+      "meterId": "MTR-SAD 2 Sp com Et1-HW",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-SAD 2 Sp com Et1-WT",
+      "scopeType": "UNIT",
+      "scopeCode": "SAD 2 Sp com Et1",
+      "typeCode": "WATER_COLD",
+      "meterId": "MTR-SAD 2 Sp com Et1-WT",
+      "origin": "METER"
+    },
+    {
+      "name": "MTR-SAD 2 Sp com Et1-HT",
+      "scopeType": "UNIT",
+      "scopeCode": "SAD 2 Sp com Et1",
+      "typeCode": "HEATING",
+      "meterId": "MTR-SAD 2 Sp com Et1-HT",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor gaz total",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "GAS",
+      "meterId": "METER-GAS-TOTAL",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor gaz apa calda",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "GAS_HOTWATER",
+      "meterId": "METER-GAS-HOTWATER",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor gaz incalzire (calculat)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "GAS_HEATING",
+      "meterId": "METER-GAS-HEATING",
+      "origin": "DERIVED"
+    },
+    {
+      "name": "Contot apa calda (calculat)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "HOT_WATER",
+      "meterId": "METER-WATER-HOT",
+      "origin": "DERIVED"
+    },
+    {
+      "name": "Contor apa dif (calulat)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "WATER_RESIDUAL",
+      "meterId": "METER-WATER-RESIDUAL",
+      "origin": "DERIVED"
+    },
+    {
+      "name": "Contor total apa",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "WATER_TOTAL",
+      "meterId": "METER-WATER-TOTAL",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor total apa rece (calculat)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "WATER_COLD",
+      "meterId": "METER-WATER-COLD",
+      "origin": "DERIVED"
+    },
+    {
+      "name": "Contor electricitate total",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_TOTAL",
+      "meterId": "ELEC-TOTAL",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate scara A",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_STAIRS_A",
+      "meterId": "ELEC-STAIRCASE-A",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate scara B",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_STAIRS_B",
+      "meterId": "ELEC-STAIRCASE-B",
+      "origin": "METER"
+    },
+    {
+      "name": " Contor electricitate scara C",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_STAIRS_C",
+      "meterId": "ELEC-STAIRCASE-C",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate parcare subterana",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_PARKING",
+      "meterId": "ELEC-PARKING",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate pompe apa calda",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_HW_PUMP",
+      "meterId": "ELEC-HW-PUMP",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate pompae caldura",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_HEAT_PUMP",
+      "meterId": "ELEC-HEAT-PUMP",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate centrala",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_BOILER",
+      "meterId": "ELEC-BOILER",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor chiller",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_CHILLER",
+      "meterId": "ELEC-CHILLER",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor electricitate hidrofor",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELECTRICITY_HYDRO",
+      "meterId": "ELEC-HYDRO",
+      "origin": "METER"
+    },
+    {
+      "name": "Alte electricitate",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "LOTUS-TM",
+      "typeCode": "ELEC-SHIT",
+      "meterId": "ELEC-SHIT",
+      "origin": "METER"
+    }
+  ],
+  "structure": [
+    {
+      "code": "1",
+      "residents": 2,
+      "sqm": 1.54,
+      "billingEntity": "Ap 1",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 1
+    },
+    {
+      "code": "2",
+      "residents": 1,
+      "sqm": 1.48,
+      "billingEntity": "Ap 2",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 2
+    },
+    {
+      "code": "3",
+      "residents": 2,
+      "sqm": 0.99,
+      "billingEntity": "Ap 3",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 3
+    },
+    {
+      "code": "4",
+      "residents": 0,
+      "sqm": 1.63,
+      "billingEntity": "Ap 4",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 4
+    },
+    {
+      "code": "5",
+      "residents": 1,
+      "sqm": 1.65,
+      "billingEntity": "Ap 5",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 5
+    },
+    {
+      "code": "6",
+      "residents": 2,
+      "sqm": 0.85,
+      "billingEntity": "Ap 6",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 6
+    },
+    {
+      "code": "7",
+      "residents": 3,
+      "sqm": 1.32,
+      "billingEntity": "Ap 7",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 7
+    },
+    {
+      "code": "8",
+      "residents": 0,
+      "sqm": 0.87,
+      "billingEntity": "Ap 8",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 8
+    },
+    {
+      "code": "9",
+      "residents": 1,
+      "sqm": 1.38,
+      "billingEntity": "Ap 9",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 9
+    },
+    {
+      "code": "10",
+      "residents": 1,
+      "sqm": 1.34,
+      "billingEntity": "Ap 10",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 10
+    },
+    {
+      "code": "11",
+      "residents": 3,
+      "sqm": 0.97,
+      "billingEntity": "Ap 11",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 11
+    },
+    {
+      "code": "12",
+      "residents": 0,
+      "sqm": 1.18,
+      "billingEntity": "Ap 12",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 12
+    },
+    {
+      "code": "13",
+      "residents": 0,
+      "sqm": 1.46,
+      "billingEntity": "Ap 13",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 13
+    },
+    {
+      "code": "14",
+      "residents": 2,
+      "sqm": 1.08,
+      "billingEntity": "Ap 14",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 14
+    },
+    {
+      "code": "15",
+      "residents": 1,
+      "sqm": 0.95,
+      "billingEntity": "Ap 15",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 15
+    },
+    {
+      "code": "16",
+      "residents": 2,
+      "sqm": 1.1,
+      "billingEntity": "Ap 16",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 16
+    },
+    {
+      "code": "17",
+      "residents": 0,
+      "sqm": 1.01,
+      "billingEntity": "Ap 17",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 17
+    },
+    {
+      "code": "18",
+      "residents": 1,
+      "sqm": 1.33,
+      "billingEntity": "Ap 18",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 18
+    },
+    {
+      "code": "19",
+      "residents": 1,
+      "sqm": 1.43,
+      "billingEntity": "Ap 19",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 19
+    },
+    {
+      "code": "20",
+      "residents": 3,
+      "sqm": 1.95,
+      "billingEntity": "Ap 20",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 20
+    },
+    {
+      "code": "21",
+      "residents": 1,
+      "sqm": 1.45,
+      "billingEntity": "Ap 21",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 21
+    },
+    {
+      "code": "22",
+      "residents": 1,
+      "sqm": 1,
+      "billingEntity": "Ap 22",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 22
+    },
+    {
+      "code": "23",
+      "residents": 3,
+      "sqm": 1.47,
+      "billingEntity": "Ap 23",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 23
+    },
+    {
+      "code": "24",
+      "residents": 0,
+      "sqm": 1.63,
+      "billingEntity": "Ap 24",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 24
+    },
+    {
+      "code": "25",
+      "residents": 1,
+      "sqm": 0.99,
+      "billingEntity": "Ap 25",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 25
+    },
+    {
+      "code": "26",
+      "residents": 1,
+      "sqm": 1.19,
+      "billingEntity": "Ap 26",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 26
+    },
+    {
+      "code": "27",
+      "residents": 0,
+      "sqm": 1.04,
+      "billingEntity": "Ap 27",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 27
+    },
+    {
+      "code": "28",
+      "residents": 1,
+      "sqm": 1.34,
+      "billingEntity": "Ap 28",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 28
+    },
+    {
+      "code": "29",
+      "residents": 1,
+      "sqm": 1.44,
+      "billingEntity": "Ap 29",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 29
+    },
+    {
+      "code": "30",
+      "residents": 4,
+      "sqm": 2.1,
+      "billingEntity": "Ap 30",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 30
+    },
+    {
+      "code": "31",
+      "residents": 3,
+      "sqm": 2.31,
+      "billingEntity": "Ap 31",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 31
+    },
+    {
+      "code": "32",
+      "residents": 1,
+      "sqm": 2.43,
+      "billingEntity": "Ap 32",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 32
+    },
+    {
+      "code": "33",
+      "residents": 0,
+      "sqm": 2.72,
+      "billingEntity": "Ap 33",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 33
+    },
+    {
+      "code": "34",
+      "residents": 0,
+      "sqm": 1.59,
+      "billingEntity": "Ap 34",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 34
+    },
+    {
+      "code": "35",
+      "residents": 1,
+      "sqm": 2.58,
+      "billingEntity": "Ap 35",
+      "groupCodes": [
+        "UNIT",
+        "RESIDENTIAL",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 35
+    },
+    {
+      "code": "SAD 1 Part SPA",
+      "residents": 0,
+      "sqm": 15.4,
+      "billingEntity": "SPA",
+      "groupCodes": [
+        "UNIT",
+        "SAD",
+        "SPA",
+        "WATER",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 36
+    },
+    {
+      "code": "SAD 2 Sp com Et1",
+      "residents": 4,
+      "sqm": 6.83,
+      "billingEntity": "Spatiu birouri",
+      "groupCodes": [
+        "UNIT",
+        "SAD",
+        "NON_SPA",
+        "WATER",
+        "HEATING",
+        "HOT_WATER",
+        "ELEVATOR",
+        "NOT_PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 37
+    },
+    {
+      "code": "P1",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 15",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 38
+    },
+    {
+      "code": "P2",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 18",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 39
+    },
+    {
+      "code": "P3",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 25",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 40
+    },
+    {
+      "code": "P4",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 25",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 41
+    },
+    {
+      "code": "P5",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 12",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 42
+    },
+    {
+      "code": "P6",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 22",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 43
+    },
+    {
+      "code": "P7",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 32",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 44
+    },
+    {
+      "code": "P8",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 32",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 45
+    },
+    {
+      "code": "P9",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 6",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 46
+    },
+    {
+      "code": "P10",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 10",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 47
+    },
+    {
+      "code": "P11",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 11",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 48
+    },
+    {
+      "code": "P12",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 20",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 49
+    },
+    {
+      "code": "P13",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 20",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 50
+    },
+    {
+      "code": "P14",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 9",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 51
+    },
+    {
+      "code": "P15",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 9",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 52
+    },
+    {
+      "code": "P16",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 30",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 53
+    },
+    {
+      "code": "P17",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 30",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 54
+    },
+    {
+      "code": "P18",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 3",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 55
+    },
+    {
+      "code": "P19",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 28",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 56
+    },
+    {
+      "code": "P20",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 35",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 57
+    },
+    {
+      "code": "P21",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 35",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 58
+    },
+    {
+      "code": "P22",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 35",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 59
+    },
+    {
+      "code": "P23",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 35",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 60
+    },
+    {
+      "code": "P24",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Spatiu birouri",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 61
+    },
+    {
+      "code": "P25",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Spatiu birouri",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 62
+    },
+    {
+      "code": "P26",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 16",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 63
+    },
+    {
+      "code": "P27",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 16",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 64
+    },
+    {
+      "code": "P28",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 33",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 65
+    },
+    {
+      "code": "P29",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 34",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 66
+    },
+    {
+      "code": "P30",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 4",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 67
+    },
+    {
+      "code": "P31",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 27",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 68
+    },
+    {
+      "code": "P32",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 17",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 69
+    },
+    {
+      "code": "P33",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 26",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 70
+    },
+    {
+      "code": "P34",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 23",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 71
+    },
+    {
+      "code": "P35",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 5",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 72
+    },
+    {
+      "code": "P36",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 29",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 73
+    },
+    {
+      "code": "P37",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 31",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 74
+    },
+    {
+      "code": "P38",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 24",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 75
+    },
+    {
+      "code": "P39",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 21",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 76
+    },
+    {
+      "code": "P40",
+      "residents": 0,
+      "sqm": 0.485,
+      "billingEntity": "Ap 14",
+      "groupCodes": [
+        "UNIT",
+        "PARKING",
+        "UNDERGROUND_PARKING",
+        "ELEVATOR"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 77
+    },
+    {
+      "code": "Parcare Spa",
+      "residents": 0,
+      "sqm": 7.19,
+      "billingEntity": "SPA",
+      "groupCodes": [
+        "UNIT",
+        "PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 78
+    },
+    {
+      "code": "Parcare Spatiu de birouri",
+      "residents": 0,
+      "sqm": 0.68,
+      "billingEntity": "Spatiu birouri",
+      "groupCodes": [
+        "UNIT",
+        "PARKING"
+      ],
+      "startPeriod": "2025-09",
+      "endPeriod": null,
+      "order": 79
+    }
+  ],
+  "billingEntities": [
+    {
+      "code": "Ap 1",
+      "name": "Ap 1",
+      "order": 1
+    },
+    {
+      "code": "Ap 2",
+      "name": "Ap 2",
+      "order": 2
+    },
+    {
+      "code": "Ap 3",
+      "name": "Ap 3",
+      "order": 3
+    },
+    {
+      "code": "Ap 4",
+      "name": "Ap 4",
+      "order": 4
+    },
+    {
+      "code": "Ap 5",
+      "name": "Ap 5",
+      "order": 5
+    },
+    {
+      "code": "Ap 6",
+      "name": "Ap 6",
+      "order": 6
+    },
+    {
+      "code": "Ap 7",
+      "name": "Ap 7",
+      "order": 7
+    },
+    {
+      "code": "Ap 8",
+      "name": "Ap 8",
+      "order": 8
+    },
+    {
+      "code": "Ap 9",
+      "name": "Ap 9",
+      "order": 9
+    },
+    {
+      "code": "Ap 10",
+      "name": "Ap 10",
+      "order": 10
+    },
+    {
+      "code": "Ap 11",
+      "name": "Ap 11",
+      "order": 11
+    },
+    {
+      "code": "Ap 12",
+      "name": "Ap 12",
+      "order": 12
+    },
+    {
+      "code": "Ap 13",
+      "name": "Ap 13",
+      "order": 13
+    },
+    {
+      "code": "Ap 14",
+      "name": "Ap 14",
+      "order": 14
+    },
+    {
+      "code": "Ap 15",
+      "name": "Ap 15",
+      "order": 15
+    },
+    {
+      "code": "Ap 16",
+      "name": "Ap 16",
+      "order": 16
+    },
+    {
+      "code": "Ap 17",
+      "name": "Ap 17",
+      "order": 17
+    },
+    {
+      "code": "Ap 18",
+      "name": "Ap 18",
+      "order": 18
+    },
+    {
+      "code": "Ap 19",
+      "name": "Ap 19",
+      "order": 19
+    },
+    {
+      "code": "Ap 20",
+      "name": "Ap 20",
+      "order": 20
+    },
+    {
+      "code": "Ap 21",
+      "name": "Ap 21",
+      "order": 21
+    },
+    {
+      "code": "Ap 22",
+      "name": "Ap 22",
+      "order": 22
+    },
+    {
+      "code": "Ap 23",
+      "name": "Ap 23",
+      "order": 23
+    },
+    {
+      "code": "Ap 24",
+      "name": "Ap 24",
+      "order": 24
+    },
+    {
+      "code": "Ap 25",
+      "name": "Ap 25",
+      "order": 25
+    },
+    {
+      "code": "Ap 26",
+      "name": "Ap 26",
+      "order": 26
+    },
+    {
+      "code": "Ap 27",
+      "name": "Ap 27",
+      "order": 27
+    },
+    {
+      "code": "Ap 28",
+      "name": "Ap 28",
+      "order": 28
+    },
+    {
+      "code": "Ap 29",
+      "name": "Ap 29",
+      "order": 29
+    },
+    {
+      "code": "Ap 30",
+      "name": "Ap 30",
+      "order": 30
+    },
+    {
+      "code": "Ap 31",
+      "name": "Ap 31",
+      "order": 31
+    },
+    {
+      "code": "Ap 32",
+      "name": "Ap 32",
+      "order": 32
+    },
+    {
+      "code": "Ap 33",
+      "name": "Ap 33",
+      "order": 33
+    },
+    {
+      "code": "Ap 34",
+      "name": "Ap 34",
+      "order": 34
+    },
+    {
+      "code": "Ap 35",
+      "name": "Ap 35",
+      "order": 35
+    },
+    {
+      "code": "SPA",
+      "name": "SPA",
+      "order": 36
+    },
+    {
+      "code": "Spatiu birouri",
+      "name": "Spatiu birouri",
+      "order": 37
+    }
+  ],
+  "expenseSplits": [
+    {
+      "id": "EXP-CCTV-MAINTENANCE",
+      "expenseTypeCode": "CCTV-MAINTENANCE",
+      "splits": [
+        {
+          "id": "CCTV-MAINTENANCE-ALL",
+          "share": 1,
+          "allocation": {
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Mentenanta CCTV"
+        }
+      ],
+      "name": "Mentenanta CCTV"
+    },
+    {
+      "id": "EXP-GARBAGE",
+      "expenseTypeCode": "GARBAGE",
+      "splits": [
+        {
+          "id": "GARBAGE-ALL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "RESIDENTIAL"
+            },
+            "method": "BY_RESIDENTS",
+            "weightSource": "RESIDENTS"
+          },
+          "name": "Gunoi"
+        }
+      ],
+      "name": "Gunoi"
+    },
+    {
+      "id": "EXP-ELEVATOR",
+      "expenseTypeCode": "ELEVATOR",
+      "splits": [
+        {
+          "id": "ELEVATOR-ALL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "ELEVATOR"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Mentenanta lift"
+        }
+      ],
+      "name": "Mentenanta lift"
+    },
+    {
+      "id": "EXP-RCSRDS",
+      "expenseTypeCode": "RCSRDS",
+      "splits": [
+        {
+          "id": "RCSRDS-ALL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "NON_SPA"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Rcs/Rds"
+        }
+      ],
+      "name": "Rcs/Rds"
+    },
+    {
+      "id": "EXP-VODAFONE",
+      "expenseTypeCode": "VODAFONE",
+      "splits": [
+        {
+          "id": "VODAFONE-ALL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "NON_SPA"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Vodafone"
+        }
+      ],
+      "name": "Vodafone"
+    },
+    {
+      "id": "EXP-LIVIU",
+      "expenseTypeCode": "LIVIU",
+      "splits": [
+        {
+          "id": "LIVIU-ALL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "NOT_PARKING"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Indemnizatie ingrijitor"
+        }
+      ],
+      "name": "Indemnizatie ingrijitor"
+    },
+    {
+      "id": "EXP-LIVIU-TRANSPORT",
+      "expenseTypeCode": "LIVIU-TRANSPORT",
+      "splits": [
+        {
+          "id": "LIVIU-TRANSPORT-ALL",
+          "share": 1,
+          "allocation": {
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Decont transport ingrijitor"
+        }
+      ],
+      "name": "Decont transport ingrijitor"
+    },
+    {
+      "id": "EXP-CENZOR",
+      "expenseTypeCode": "CENZOR",
+      "splits": [
+        {
+          "id": "CENZOR-ALL",
+          "share": 1,
+          "allocation": {
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Cenzor"
+        }
+      ],
+      "name": "Cenzor"
+    },
+    {
+      "id": "EXP-ADMIN",
+      "expenseTypeCode": "ADMIN",
+      "splits": [
+        {
+          "id": "ADMIN-ALL",
+          "share": 1,
+          "allocation": {
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Administrare"
+        }
+      ],
+      "name": "Administrare"
+    },
+    {
+      "id": "EXP-BANK",
+      "expenseTypeCode": "BANK",
+      "splits": [
+        {
+          "id": "BANK-ALL",
+          "share": 1,
+          "allocation": {
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Comision banca"
+        }
+      ],
+      "name": "Comision banca"
+    },
+    {
+      "id": "EXP-GAS",
+      "name": "Gaz",
+      "description": "Gas invoice",
+      "expenseTypeCode": "GAS",
+      "currency": "RON",
+      "amount": 10000,
+      "splits": [
+        {
+          "id": "GAS-WASTE",
+          "name": "Gaz risipa",
+          "share": 0.3,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "HOT_WATER"
+            },
+            "method": "BY_SQM",
+            "weightSource": "SQM"
+          }
+        },
+        {
+          "id": "GAS-USAGE",
+          "name": "Gaz util",
+          "share": 0.7,
+          "children": [
+            {
+              "id": "GAS-HOTWATER",
+              "name": "Gaz apa calda",
+              "derivedShare": {
+                "meterType": "GAS",
+                "totalMeterId": "METER-GAS-TOTAL",
+                "partMeterId": "METER-GAS-HOTWATER"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "HOT_WATER"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "HOT_WATER"
+              }
+            },
+            {
+              "id": "GAS-HEATING",
+              "name": "Gaz incalzire",
+              "derivedShare": "remainder",
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "HEATING"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "HEATING"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EXP-WATER",
+      "name": "Apa",
+      "expenseTypeCode": "WATER",
+      "splits": [
+        {
+          "id": "WATER_COLD",
+          "name": "Apa rece",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "METER-WATER-TOTAL",
+            "partMeterId": "METER-WATER-COLD"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "WATER"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "WATER_HOT",
+          "name": "Apa rece pentru apa calda",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "METER-WATER-TOTAL",
+            "partMeterId": "METER-WATER-HOT"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "HOT_WATER"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "HOT_WATER"
+          }
+        },
+        {
+          "id": "WATER_WASTE",
+          "name": "Diferente citire apa",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "METER-WATER-TOTAL",
+            "partMeterId": "METER-WATER-RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "WATER"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EXP-RAIN-WATER",
+      "name": "Apa meteorica",
+      "expenseTypeCode": "RAIN_WATER",
+      "splits": [
+        {
+          "id": "RAIN-WATER-ALL",
+          "name": "Apa meteorica",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "WATER"
+            },
+            "ruleCode": "BY_SQM"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EXP-ELECTRICITY",
+      "name": "Electricitate",
+      "expenseTypeCode": "ELECTRICITY",
+      "splits": [
+        {
+          "id": "ELEC-STAIRCASE-A",
+          "name": "Curent casa scarii A",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-STAIRCASE-A"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        },
+        {
+          "id": "ELEC-STAIRCASE-B",
+          "name": "Curent casa scarii B",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-STAIRCASE-B"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        },
+        {
+          "id": "ELEC-STAIRCASE-C",
+          "name": "Curent casa scarii C",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-STAIRCASE-C"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        },
+        {
+          "id": "ELEC-PARKING",
+          "name": "Curent parcare subterana",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-PARKING"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "UNDERGROUND_PARKING"
+            },
+            "ruleCode": "BY_SQM"
+          }
+        },
+        {
+          "id": "ELEC-HW-PUMP",
+          "name": "Curent pompe apa calda",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-HW-PUMP"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "HOT_WATER"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "HOT_WATER"
+          }
+        },
+        {
+          "id": "ELEC-HEAT-PUMP",
+          "name": "Curent pompe incalzire",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-HEAT-PUMP"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "HEATING"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "HEATING"
+          }
+        },
+        {
+          "id": "ELEC-BOILER",
+          "name": "Curent centrala electricity",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-BOILER"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            }
+          },
+          "children": [
+            {
+              "id": "ELEC-BOILER-HOT-WATER",
+              "name": "Curent centrala apa calda",
+              "derivedShare": {
+                "meterType": "GAS",
+                "totalMeterId": "METER-GAS-TOTAL",
+                "partMeterId": "METER-GAS-HOTWATER"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "HOT_WATER"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "HOT_WATER"
+              }
+            },
+            {
+              "id": "ELEC-BOILER-HEATING",
+              "name": "Curent centrala incalzire",
+              "derivedShare": {
+                "meterType": "GAS",
+                "totalMeterId": "METER-GAS-TOTAL",
+                "partMeterId": "METER-GAS-HEATING"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "HEATING"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "HEATING"
+              }
+            }
+          ]
+        },
+        {
+          "id": "ELEC-HYDRO",
+          "name": "Curent hidrofor",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-HYDRO"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            }
+          },
+          "children": [
+            {
+              "id": "ELEC-HYDRO-WATER",
+              "derivedShare": {
+                "meterType": "WATER",
+                "totalMeterId": "METER-WATER-TOTAL",
+                "partMeterId": "METER-WATER-COLD"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "WATER"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "WATER_COLD"
+              },
+              "name": "Curent hidrofor apa rece"
+            },
+            {
+              "id": "ELEC-HYDRO-WATER-HOT",
+              "derivedShare": {
+                "meterType": "WATER",
+                "totalMeterId": "METER-WATER-TOTAL",
+                "partMeterId": "METER-WATER-HOT"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "HOT_WATER"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "HOT_WATER"
+              },
+              "name": "Curent hidrofor apa calda"
+            },
+            {
+              "id": "ELEC-HYDRO-WATER-RESIDUAL",
+              "derivedShare": {
+                "meterType": "WATER",
+                "totalMeterId": "METER-WATER-TOTAL",
+                "partMeterId": "METER-WATER-RESIDUAL"
+              },
+              "allocation": {
+                "basis": {
+                  "type": "GROUP",
+                  "code": "WATER"
+                },
+                "method": "BY_CONSUMPTION",
+                "weightSource": "WATER_COLD"
+              },
+              "name": "Curent hidrofor apa dif"
+            }
+          ]
+        },
+        {
+          "id": "ELEC-CHILLER",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-CHILLER"
+          },
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Curent chiller"
+        },
+        {
+          "id": "ELEC-SHIT",
+          "derivedShare": {
+            "meterType": "ELECTRICITY",
+            "totalMeterId": "ELEC-TOTAL",
+            "partMeterId": "ELEC-SHIT"
+          },
+          "allocation": {
+            "basis": {
+              "type": "UNIT",
+              "code": "23"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Curent chiller"
+        },
+        {
+          "id": "ELEC-OTHER",
+          "derivedShare": "remainder",
+          "allocation": {
+            "basis": {
+              "type": "COMMUNITY"
+            },
+            "ruleCode": "BY_SQM"
+          },
+          "name": "Curent altele"
+        }
+      ]
+    }
+  ],
+  "buckets": [
+    {
+      "code": "ALLOCATED_EXPENSE",
+      "name": "Allocated expenses",
+      "expenseTypeCodes": [
+        "GAS",
+        "ELECTRICITY",
+        "WATER",
+        "GARBAGE",
+        "RAIN_WATER"
+      ],
+      "priority": 1
+    },
+    {
+      "code": "COMMON_ELECTRICITY",
+      "name": "Common electricity",
+      "splitGroupCodes": [
+        "ELEC_HYDRO_TOTAL"
+      ],
+      "priority": 2
+    }
+  ]
+}

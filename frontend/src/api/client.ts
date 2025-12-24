@@ -40,11 +40,11 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   // Called automatically from `request` when we hit a 401 once.
   async function refreshAccessToken(): Promise<string | null> {
     const { refreshToken } = config.getTokens()
-    if (!refreshToken) return null
     const res = await fetch(urlFor('/auth/refresh'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      credentials: 'include',
+      headers: refreshToken ? { 'Content-Type': 'application/json' } : undefined,
+      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     })
     if (!res.ok) {
       config.onUnauthorized?.()

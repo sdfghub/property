@@ -21,9 +21,11 @@ type AuthContextValue = {
   activeRole?: RoleAssignment | null
   status: AuthStatus
   api: ApiClient
-  requestMagicLink: (email: string) => Promise<void>
-  consumeMagicToken: (token: string) => Promise<void>
-  consumeInviteToken: (token: string, name?: string) => Promise<void>
+  loginWithPassword: (payload: { email: string; password: string; inviteToken?: string | null }) => Promise<void>
+  registerWithPassword: (payload: { email: string; password: string; name?: string; inviteToken?: string | null }) => Promise<void>
+  oauthLogin: (payload: { provider: string; providerUserId: string; email?: string; name?: string; inviteToken?: string | null }) => Promise<void>
+  getInviteSummary: (token: string) => Promise<any>
+  refreshSession: () => Promise<void>
   logout: () => Promise<void>
   error: string | null
   setActiveRole: (role: RoleAssignment) => void
@@ -65,7 +67,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const rolesFromToken = decodeRoles(auth.accessToken)
     if (rolesFromToken.length && JSON.stringify(rolesFromToken) !== JSON.stringify(auth.roles)) {
-      setAuth((prev) => ({ ...prev, roles: rolesFromToken, activeRole: prev.activeRole ?? rolesFromToken[0] }))
+      setAuth((prev) => {
+        const matchesActive = rolesFromToken.find(
+          (r) => r.role === prev.activeRole?.role && r.scopeType === prev.activeRole?.scopeType && r.scopeId === prev.activeRole?.scopeId,
+        )
+        return {
+          ...prev,
+          roles: rolesFromToken,
+          activeRole: matchesActive ?? rolesFromToken[0],
+        }
+      })
     }
   }, [auth.accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,59 +105,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [auth.accessToken, auth.refreshToken, clearAuth, setTokensWithRoles],
   )
 
-  // Request a magic link; backend will email/print the link.
-  async function requestMagicLink(email: string) {
-    setError(null)
-    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/auth/request-link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(text || 'Could not request link')
-    }
-  }
-
-  // Consume a magic token (via query param or paste box) and store tokens.
-  async function consumeMagicToken(token: string) {
+  async function loginWithPassword(payload: { email: string; password: string; inviteToken?: string | null }) {
     setStatus('loading')
     setError(null)
-    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/auth/consume-link`, {
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        inviteToken: payload.inviteToken ?? undefined,
+      }),
     })
     if (!res.ok) {
       const text = await res.text()
       setStatus(auth.accessToken ? 'ready' : 'idle')
-      setError(text || 'Unable to sign in with token')
-      throw new Error(text || 'Unable to sign in with token')
+      setError(text || 'Unable to sign in')
+      throw new Error(text || 'Unable to sign in')
     }
     const data = await res.json()
     setTokensWithRoles({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken })
     setStatus('ready')
   }
 
-  // Accept an invite token and attach optional display name.
-  async function consumeInviteToken(token: string, name?: string) {
+  async function registerWithPassword(payload: { email: string; password: string; name?: string; inviteToken?: string | null }) {
     setStatus('loading')
     setError(null)
-    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/invites/accept`, {
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, name }),
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        name: payload.name,
+        inviteToken: payload.inviteToken ?? undefined,
+      }),
     })
     if (!res.ok) {
       const text = await res.text()
       setStatus(auth.accessToken ? 'ready' : 'idle')
-      setError(text || 'Unable to accept invite')
-      throw new Error(text || 'Unable to accept invite')
+      setError(text || 'Unable to create account')
+      throw new Error(text || 'Unable to create account')
     }
     const data = await res.json()
     setTokensWithRoles({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken })
     setStatus('ready')
   }
+
+  async function oauthLogin(payload: { provider: string; providerUserId: string; email?: string; name?: string; inviteToken?: string | null }) {
+    setStatus('loading')
+    setError(null)
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/auth/oauth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: payload.provider,
+        providerUserId: payload.providerUserId,
+        email: payload.email,
+        name: payload.name,
+        inviteToken: payload.inviteToken ?? undefined,
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      setStatus(auth.accessToken ? 'ready' : 'idle')
+      setError(text || 'Unable to sign in')
+      throw new Error(text || 'Unable to sign in')
+    }
+    const data = await res.json()
+    setTokensWithRoles({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken })
+    setStatus('ready')
+  }
+
+  async function getInviteSummary(token: string) {
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/invites/${encodeURIComponent(token)}`)
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || 'Unable to load invite')
+    }
+    return res.json()
+  }
+
+  async function refreshSession() {
+    const refreshed = await api.refreshAccessToken()
+    if (!refreshed) {
+      throw new Error('Unable to refresh session')
+    }
+  }
+
+  const refreshOnce = React.useRef(false)
+  React.useEffect(() => {
+    if (refreshOnce.current) return
+    if (!auth.accessToken && !auth.refreshToken) return
+    refreshOnce.current = true
+    refreshSession().catch(() => clearAuth())
+  }, [auth.accessToken, auth.refreshToken, clearAuth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear local state and notify backend to revoke refresh token.
   async function logout() {
@@ -174,9 +227,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     activeRole: auth.activeRole,
     status,
     api,
-    requestMagicLink,
-    consumeMagicToken,
-    consumeInviteToken,
+    loginWithPassword,
+    registerWithPassword,
+    oauthLogin,
+    getInviteSummary,
+    refreshSession,
     logout,
     error,
     setActiveRole,

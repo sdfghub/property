@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards, Delete, Param } from '@nestjs/common'
+import { Controller, Get, Req, UseGuards, Delete, Param, Post, Body } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { CommunityService } from './community.service'
@@ -15,6 +15,12 @@ export class CommunityController {
     // Support either req.user.id or req.user.sub (depending on your JWT)
     const userId: string = req.user?.id ?? req.user?.sub
     return this.svc.listForUser(userId, q)
+  }
+
+  @Scopes({ role: 'SYSTEM_ADMIN', scopeType: 'SYSTEM' })
+  @Post()
+  async create(@Body() body: any) {
+    return this.svc.createCommunity(body)
   }
 
   @Scopes({ role: 'SYSTEM_ADMIN', scopeType: 'SYSTEM' })

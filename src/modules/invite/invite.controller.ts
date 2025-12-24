@@ -1,9 +1,8 @@
-import { Body, Controller, Post, UseGuards, Req, Res, Get, Param, Delete } from '@nestjs/common'
+import { Body, Controller, Post, UseGuards, Req, Get, Param, Delete, UnauthorizedException } from '@nestjs/common'
 import { InviteService } from './invite.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
-import { Response } from 'express'
 
 @Controller('invites')
 export class InviteController{
@@ -14,7 +13,10 @@ export class InviteController{
   @Post()
   createSystemInvite(@Body() body:any, @Req() req:any){
     const { email, role, scopeType, scopeId } = body
-    const inviterId=req.user.sub
+    const inviterId = req?.user?.sub
+    if (!inviterId) {
+      throw new UnauthorizedException('Missing auth user')
+    }
     return this.invites.createInvite(email, role, scopeType, scopeId, inviterId)
   }
 
@@ -46,12 +48,18 @@ export class InviteController{
     return this.invites.deletePending(inviteId)
   }
 
-  @Post('accept')
-  async accept(@Body('token') token:string, @Body('name') name:string|undefined, @Req() req:any, @Res({passthrough:true}) res:Response){
-    const result = await this.invites.acceptInvite(token, name, req.headers['user-agent'] as string, req.ip)
-    if (result.refreshToken) {
-      res.cookie('refresh_token', result.refreshToken, { httpOnly: true, sameSite: 'lax', secure: false, maxAge: 30 * 24 * 3600 * 1000 })
+  @Get(':token')
+  async summary(@Param('token') token: string){
+    return this.invites.getInviteSummary(token)
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('claim')
+  async claim(@Body('token') token: string, @Req() req: any){
+    const userId = req?.user?.sub
+    if (!userId) {
+      throw new UnauthorizedException('Missing auth user')
     }
-    return result
+    return this.invites.claimInviteForUser(token, userId)
   }
 }

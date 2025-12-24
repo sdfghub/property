@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core'
 import { Controller, Get, Module, ValidationPipe } from '@nestjs/common'
+import cookieParser from 'cookie-parser'
 import { BillingModule } from './modules/billing/billing.module'
 import { PrismaService } from './modules/user/prisma.service'
 import { UserModule } from './modules/user/user.module'
@@ -46,6 +47,7 @@ async function bootstrap() {
     origin: process.env.APP_ORIGIN?.split(',').map(s => s.trim()) || '*',
     credentials: true,
   })
+  app.use(cookieParser())
 
   // Global config
   app.setGlobalPrefix('api')

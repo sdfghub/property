@@ -15,7 +15,7 @@ type PendingInvite = {
 }
 
 export function SystemAdminPanel() {
-  const { api } = useAuth()
+  const { api, user, refreshSession } = useAuth()
   const { t } = useI18n()
   const [communities, setCommunities] = React.useState<Community[]>([])
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
@@ -26,6 +26,16 @@ export function SystemAdminPanel() {
   const [message, setMessage] = React.useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = React.useState('')
   const [busyInvite, setBusyInvite] = React.useState(false)
+  const [createCode, setCreateCode] = React.useState('')
+  const [createName, setCreateName] = React.useState('')
+  const [createPeriodCode, setCreatePeriodCode] = React.useState('')
+  const [createPeriodStart, setCreatePeriodStart] = React.useState('')
+  const [createPeriodEnd, setCreatePeriodEnd] = React.useState('')
+  const [createDef, setCreateDef] = React.useState<any | null>(null)
+  const [createDefName, setCreateDefName] = React.useState<string | null>(null)
+  const [createBusy, setCreateBusy] = React.useState(false)
+  const [createMessage, setCreateMessage] = React.useState<string | null>(null)
+  const [showCreateForm, setShowCreateForm] = React.useState(false)
 
   React.useEffect(() => {
     // System admins can search communities globally.
@@ -37,7 +47,7 @@ export function SystemAdminPanel() {
           setSelectedId(rows[0].id)
         }
       })
-      .catch((err: any) => setMessage(err?.message || 'Could not load communities'))
+      .catch((err: any) => setMessage(err?.message || t('admin.errorLoadCommunities')))
   }, [api, search, selectedId])
 
   React.useEffect(() => {
@@ -48,13 +58,13 @@ export function SystemAdminPanel() {
     api
       .get<AdminEntry[]>(`/communities/${selectedId}/admins`)
       .then(setAdmins)
-      .catch((err: any) => setMessage(err?.message || 'Could not load admins'))
+      .catch((err: any) => setMessage(err?.message || t('admin.errorLoadAdmins')))
       .finally(() => setLoading(false))
 
     api
       .get<PendingInvite[]>(`/invites/community/${selectedId}/pending`)
       .then(setPending)
-      .catch((err: any) => setMessage(err?.message || 'Could not load invites'))
+      .catch((err: any) => setMessage(err?.message || t('admin.errorLoadInvites')))
   }, [api, selectedId])
 
   // Remove an existing admin assignment for the active community.
@@ -66,7 +76,7 @@ export function SystemAdminPanel() {
       await api.del(`/communities/${selectedId}/admins/${userId}`)
       setAdmins((prev) => prev.filter((a) => a.userId !== userId))
     } catch (err: any) {
-      setMessage(err?.message || 'Could not revoke')
+      setMessage(err?.message || t('admin.errorRevoke'))
     } finally {
       setLoading(false)
     }
@@ -79,17 +89,25 @@ export function SystemAdminPanel() {
     setBusyInvite(true)
     setMessage(null)
     try {
+      const targetEmail = inviteEmail.trim()
       await api.post('/invites', {
-        email: inviteEmail,
+        email: targetEmail,
         role: 'COMMUNITY_ADMIN',
         scopeType: 'COMMUNITY',
         scopeId: selectedId,
       })
       setInviteEmail('')
-      const fresh = await api.get<PendingInvite[]>(`/invites/community/${selectedId}/pending`)
-      setPending(fresh)
+      const [freshPending, freshAdmins] = await Promise.all([
+        api.get<PendingInvite[]>(`/invites/community/${selectedId}/pending`),
+        api.get<AdminEntry[]>(`/communities/${selectedId}/admins`),
+      ])
+      setPending(freshPending)
+      setAdmins(freshAdmins)
+      if (user?.email && user.email.toLowerCase() === targetEmail.toLowerCase()) {
+        await refreshSession()
+      }
     } catch (err: any) {
-      setMessage(err?.message || 'Could not invite admin')
+      setMessage(err?.message || t('admin.errorInvite'))
     } finally {
       setBusyInvite(false)
     }
@@ -103,9 +121,75 @@ export function SystemAdminPanel() {
       await api.del(`/invites/community/${selectedId}/pending/${id}`)
       setPending((prev) => prev.filter((p) => p.id !== id))
     } catch (err: any) {
-      setMessage(err?.message || 'Could not delete invite')
+      setMessage(err?.message || t('admin.errorDeleteInvite'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDefUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCreateMessage(null)
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      setCreateDef(parsed)
+      setCreateDefName(file.name)
+      const resolvedCode = parsed?.code || parsed?.id
+      if (!createCode && resolvedCode) setCreateCode(resolvedCode)
+      if (!createName && parsed?.name) setCreateName(parsed.name)
+      if (!createPeriodCode && parsed?.period?.code) setCreatePeriodCode(parsed.period.code)
+      if (!createPeriodStart && parsed?.period?.start) setCreatePeriodStart(parsed.period.start)
+      if (!createPeriodEnd && parsed?.period?.end) setCreatePeriodEnd(parsed.period.end)
+    } catch (err: any) {
+      setCreateDef(null)
+      setCreateDefName(null)
+      setCreateMessage(err?.message || t('admin.createDefInvalid'))
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  function clearDef() {
+    setCreateDef(null)
+    setCreateDefName(null)
+  }
+
+  async function createCommunity(e: React.FormEvent) {
+    e.preventDefault()
+    setCreateBusy(true)
+    setCreateMessage(null)
+    try {
+      const payload: any = {
+        code: createCode.trim(),
+        name: createName.trim(),
+        periodCode: createPeriodCode.trim(),
+      }
+      if (createDef) {
+        payload.def = createDef
+      } else {
+        payload.periodStart = createPeriodStart || undefined
+        payload.periodEnd = createPeriodEnd || undefined
+      }
+      const created = await api.post<{ communityId: string; code: string; name: string }>(`/communities`, payload)
+      setCommunities((prev) => {
+        if (prev.find((c) => c.id === created.communityId)) return prev
+        return [...prev, { id: created.communityId, code: created.code, name: created.name } as Community]
+      })
+      setSelectedId(created.communityId)
+      setCreateMessage(t('admin.createSuccess', { code: created.code }))
+      setCreateCode('')
+      setCreateName('')
+      setCreatePeriodCode('')
+      setCreatePeriodStart('')
+      setCreatePeriodEnd('')
+      setCreateDef(null)
+      setCreateDefName(null)
+    } catch (err: any) {
+      setCreateMessage(err?.message || t('admin.createError'))
+    } finally {
+      setCreateBusy(false)
     }
   }
 
@@ -124,6 +208,86 @@ export function SystemAdminPanel() {
           <h2>{t('communities.title')}</h2>
           {loading && <span className="badge">{t('communities.loading')}</span>}
         </div>
+        <button
+          className="btn secondary"
+          type="button"
+          onClick={() => setShowCreateForm((prev) => !prev)}
+          style={{ marginTop: 8 }}
+        >
+          {showCreateForm ? t('admin.createHide') : t('admin.createShow')}
+        </button>
+        {showCreateForm && (
+          <form className="stack" onSubmit={createCommunity} style={{ margin: '8px 0 12px' }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div>
+                <h4>{t('admin.createTitle')}</h4>
+                <div className="muted">{t('admin.createSubtitle')}</div>
+              </div>
+              {createBusy && <span className="badge">{t('admin.createLoading')}</span>}
+            </div>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                placeholder={t('admin.createCode')}
+                value={createCode}
+                onChange={(e) => setCreateCode(e.target.value)}
+                disabled={!!createDef}
+                required
+              />
+              <input
+                className="input"
+                placeholder={t('admin.createName')}
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                disabled={!!createDef}
+                required
+              />
+              <input
+                className="input"
+                placeholder={t('admin.createPeriodCode')}
+                value={createPeriodCode}
+                onChange={(e) => setCreatePeriodCode(e.target.value)}
+                disabled={!!createDef}
+                required
+              />
+            </div>
+            {!createDef && (
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  className="input"
+                  type="date"
+                  placeholder={t('admin.createPeriodStart')}
+                  value={createPeriodStart}
+                  onChange={(e) => setCreatePeriodStart(e.target.value)}
+                  required
+                />
+                <input
+                  className="input"
+                  type="date"
+                  placeholder={t('admin.createPeriodEnd')}
+                  value={createPeriodEnd}
+                  onChange={(e) => setCreatePeriodEnd(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <label className="btn secondary" style={{ cursor: createBusy ? 'not-allowed' : 'pointer' }}>
+                {createDefName ? t('admin.createDefLoaded', { name: createDefName }) : t('admin.createUploadDef')}
+                <input type="file" accept="application/json" style={{ display: 'none' }} onChange={handleDefUpload} disabled={createBusy} />
+              </label>
+              {createDef && (
+                <button className="btn secondary" type="button" onClick={clearDef} disabled={createBusy}>
+                  {t('admin.createClearDef')}
+                </button>
+              )}
+              <button className="btn" type="submit" disabled={createBusy}>
+                {t('admin.createSubmit')}
+              </button>
+            </div>
+            {createMessage && <div className="badge">{createMessage}</div>}
+          </form>
+        )}
         <input
           className="input"
           placeholder={t('admin.searchCommunities')}
@@ -162,7 +326,7 @@ export function SystemAdminPanel() {
                 <div className="muted">
                   {t('billing.communityLabel')}: {active.code}
                 </div>
-                <div className="badge" style={{ marginTop: 6 }}>Manage community admins</div>
+                <div className="badge" style={{ marginTop: 6 }}>{t('admin.manageAdmins')}</div>
               </div>
             </div>
 
@@ -195,7 +359,7 @@ export function SystemAdminPanel() {
               <input
                 className="input"
                 type="email"
-                placeholder="email@example.com"
+                placeholder={t('admin.invitePlaceholder')}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 required
@@ -219,7 +383,7 @@ export function SystemAdminPanel() {
                       <div>
                         <strong>{p.email}</strong>
                         <div className="muted">
-                          {p.role} · exp {new Date(p.expiresAt).toLocaleDateString()}
+                          {t('admin.inviteExpires', { role: p.role, date: new Date(p.expiresAt).toLocaleDateString() })}
                         </div>
                       </div>
                       <div className="row" style={{ gap: 8 }}>

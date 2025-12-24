@@ -19,8 +19,7 @@ type NormalizedRow = {
   end_period: string
 }
 
-export function parseCommunity(defFolder: string): CommunityImportPlan {
-  const def: CommunityDefJson = JSON.parse(fs.readFileSync(path.join(defFolder, 'def.json'), 'utf8'))
+export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   if (!Array.isArray((def as any).structure) || !(def as any).structure.length) {
     throw new Error('def.json.structure[] is required (structure.csv removed)')
   }
@@ -145,4 +144,9 @@ export function parseCommunity(defFolder: string): CommunityImportPlan {
     memberships,
     periodMeasures
   }
+}
+
+export function parseCommunity(defFolder: string): CommunityImportPlan {
+  const def: CommunityDefJson = JSON.parse(fs.readFileSync(path.join(defFolder, 'def.json'), 'utf8'))
+  return parseCommunityDef(def)
 }

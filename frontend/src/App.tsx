@@ -35,45 +35,9 @@ function LangSwitch() {
 
 function AppShell() {
   const { t } = useI18n()
-  const { user, status, consumeMagicToken, consumeInviteToken, logout, requestMagicLink, error, roles, activeRole, setActiveRole } =
-    useAuth()
-  const [email, setEmail] = React.useState('')
-  const [info, setInfo] = React.useState<string | null>(null)
-  const [linkPending, setLinkPending] = React.useState(false)
-  const [magicStatus, setMagicStatus] = React.useState<'idle' | 'working' | 'done' | 'error'>('idle')
+  const { user, status, logout, roles, activeRole, setActiveRole } = useAuth()
   const params = React.useMemo(() => new URLSearchParams(window.location.search), [])
   const devCommunity = params.get('community')
-
-  // Auto-consume token from query string
-  // Allows clicking emails that include ?token=... or pasting manually.
-  React.useEffect(() => {
-    const token = params.get('token')
-    if (token) {
-      setMagicStatus('working')
-      consumeMagicToken(token)
-        .then(() => {
-          setMagicStatus('done')
-          params.delete('token')
-          window.history.replaceState({}, document.title, `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`)
-          setTimeout(() => setMagicStatus('idle'), 1800)
-        })
-        .catch(() => setMagicStatus('error'))
-    }
-  }, [consumeMagicToken])
-
-  async function handleRequestLink(e: React.FormEvent) {
-    e.preventDefault()
-    setLinkPending(true)
-    setInfo(null)
-    try {
-      await requestMagicLink(email)
-      setInfo(t('auth.linkInfo'))
-    } catch (err: any) {
-      setInfo(err?.message || t('common.error'))
-    } finally {
-      setLinkPending(false)
-    }
-  }
 
   return (
     <div className="app-shell">
@@ -97,9 +61,6 @@ function AppShell() {
         <LangSwitch />
       </div>
 
-      {magicStatus === 'working' && <div className="badge" style={{ marginTop: 12 }}>{t('auth.signingIn')}</div>}
-      {magicStatus === 'error' && <div className="badge negative" style={{ marginTop: 12 }}>{t('auth.magicFail')}</div>}
-
       {devCommunity ? (
         <CommunityAdminDashboard forceCommunityId={devCommunity} />
       ) : user ? (
@@ -113,96 +74,11 @@ function AppShell() {
           <CommunityExplorer />
         )
       ) : (
-        <div className="grid two" style={{ marginTop: 18 }}>
-          <div className="card">
-            <h2>{t('auth.requestTitle')}</h2>
-            <p className="muted">{t('auth.requestHint')}</p>
-            <form className="stack" onSubmit={handleRequestLink}>
-              <label className="label">
-                <span>{t('auth.emailLabel')}</span>
-                <span className="muted">{t('auth.emailNote')}</span>
-              </label>
-              <input
-                className="input"
-                type="email"
-                value={email}
-                required
-                placeholder="alex@example.com"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <button className="btn" type="submit" disabled={linkPending}>
-                {linkPending ? t('auth.sending') : t('auth.sendLink')}
-              </button>
-              {info && <div className="muted">{t('auth.linkInfo')}</div>}
-              {error && (
-                <div className="badge negative">
-                  {t('common.error')}: {error}
-                </div>
-              )}
-            </form>
-            <div className="card">
-              <h3>{t('auth.haveToken')}</h3>
-              <p className="muted">
-                {t('auth.tokenHint', { tokenParam: '?token=xyz' })}
-              </p>
-              <MagicTokenBox onConsume={consumeMagicToken} />
-            </div>
-          </div>
-
-          <div className="grid two" style={{ marginTop: 18 }}>
-            <div className="card">
-              <h3>Accept an invite</h3>
-              <p className="muted">Paste the invite token you received to sign in and claim your role.</p>
-              <InviteTokenBox onConsume={consumeInviteToken} />
-            </div>
-          </div>
+        <div style={{ marginTop: 18 }}>
+          <AuthCard />
         </div>
       )}
     </div>
-  )
-}
-
-function MagicTokenBox({ onConsume }: { onConsume: (token: string) => Promise<void> }) {
-  const { t } = useI18n()
-  const [token, setToken] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const [msg, setMsg] = React.useState<string | null>(null)
-
-  // Small helper form to paste magic token printed in backend logs.
-  async function handleUseToken(e: React.FormEvent) {
-    e.preventDefault()
-    if (!token) return
-    setBusy(true)
-    setMsg(null)
-    try {
-      await onConsume(token)
-      setMsg(t('auth.consumeSuccess'))
-      setToken('')
-    } catch (err: any) {
-      setMsg(err?.message || t('auth.consumeError'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <form className="stack" onSubmit={handleUseToken}>
-      <label className="label">
-        <span>{t('auth.pasteToken')}</span>
-        <span className="muted">{t('auth.tokenNote')}</span>
-      </label>
-      <input
-        className="input"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        placeholder="3dfc...8a12"
-        autoComplete="off"
-      />
-      <button className="btn secondary" type="submit" disabled={busy}>
-        {busy ? t('auth.consuming') : t('auth.consume')}
-      </button>
-      {msg && <div className="muted">{msg}</div>}
-    </form>
   )
 }
 
@@ -243,57 +119,256 @@ function RolePicker({
   )
 }
 
-function InviteTokenBox({ onConsume }: { onConsume: (token: string, name?: string) => Promise<void> }) {
-  const [token, setToken] = React.useState('')
+function AuthCard() {
+  const { t } = useI18n()
+  const { loginWithPassword, registerWithPassword, oauthLogin, getInviteSummary, error, status } = useAuth()
+  const [mode, setMode] = React.useState<'login' | 'register'>('login')
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
   const [name, setName] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const [msg, setMsg] = React.useState<string | null>(null)
+  const [working, setWorking] = React.useState(false)
+  const [formError, setFormError] = React.useState<string | null>(null)
+  const [inviteSummary, setInviteSummary] = React.useState<any | null>(null)
+  const [inviteError, setInviteError] = React.useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = React.useState(false)
+  const [oauthOpen, setOauthOpen] = React.useState<'google' | 'apple' | null>(null)
+  const [providerUserId, setProviderUserId] = React.useState('')
+  const [oauthEmail, setOauthEmail] = React.useState('')
+  const [oauthName, setOauthName] = React.useState('')
 
-  async function handleUseToken(e: React.FormEvent) {
+  const inviteToken = React.useMemo(() => {
+    const search = new URLSearchParams(window.location.search)
+    return search.get('invite') || search.get('inviteToken') || search.get('token')
+  }, [])
+  const canRegister = Boolean(inviteToken)
+
+  React.useEffect(() => {
+    if (!inviteToken) return
+    setInviteLoading(true)
+    getInviteSummary(inviteToken)
+      .then((data) => {
+        setInviteSummary(data)
+        if (data?.email && !email) setEmail(data.email)
+      })
+      .catch((err: any) => {
+        setInviteError(err?.message || t('auth.invite.loadError'))
+      })
+      .finally(() => setInviteLoading(false))
+  }, [getInviteSummary, inviteToken])
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!token) return
-    setBusy(true)
-    setMsg(null)
+    setWorking(true)
+    setFormError(null)
     try {
-      await onConsume(token, name || undefined)
-      setMsg('Invite accepted. You are signed in.')
-      setToken('')
+      if (mode === 'login') {
+        await loginWithPassword({ email, password, inviteToken })
+      } else {
+        if (!canRegister) {
+          setFormError(t('auth.invite.required'))
+          return
+        }
+        await registerWithPassword({ email, password, name: name || undefined, inviteToken })
+      }
     } catch (err: any) {
-      setMsg(err?.message || 'Could not accept invite')
+      setFormError(err?.message || t('common.error'))
     } finally {
-      setBusy(false)
+      setWorking(false)
+    }
+  }
+
+  async function handleOauthSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!oauthOpen) return
+    setWorking(true)
+    setFormError(null)
+    try {
+      await oauthLogin({
+        provider: oauthOpen,
+        providerUserId,
+        email: oauthEmail || undefined,
+        name: oauthName || undefined,
+        inviteToken,
+      })
+    } catch (err: any) {
+      setFormError(err?.message || t('common.error'))
+    } finally {
+      setWorking(false)
     }
   }
 
   return (
-    <form className="stack" onSubmit={handleUseToken}>
-      <label className="label">
-        <span>Invite token</span>
-        <span className="muted">Paste the token from your invite link</span>
-      </label>
-      <input
-        className="input"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        placeholder="invite token"
-        autoComplete="off"
-      />
-      <label className="label">
-        <span>Name (optional)</span>
-        <span className="muted">Will be saved on accept</span>
-      </label>
-      <input
-        className="input"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Your name"
-        autoComplete="off"
-      />
-      <button className="btn secondary" type="submit" disabled={busy}>
-        {busy ? 'Working…' : 'Accept invite'}
-      </button>
-      {msg && <div className="muted">{msg}</div>}
-    </form>
+    <div className="grid two">
+      <div className="card">
+        <h2>{t('auth.title')}</h2>
+        <p className="muted">{t('auth.subtitle')}</p>
+        {!canRegister && (
+          <div className="badge" style={{ marginBottom: 12 }}>
+            {t('auth.invite.required')}
+          </div>
+        )}
+        <div className="row" style={{ gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {(['login', 'register'] as const).map((tab) => (
+            <button
+              key={tab}
+              className="btn secondary"
+              type="button"
+              disabled={tab === 'register' && !canRegister}
+              style={{
+                padding: '6px 10px',
+                background: mode === tab ? 'rgba(43, 212, 213, 0.15)' : undefined,
+                borderColor: mode === tab ? 'rgba(43, 212, 213, 0.5)' : undefined,
+              }}
+              onClick={() => setMode(tab)}
+            >
+              {t(tab === 'login' ? 'auth.tab.login' : 'auth.tab.register')}
+            </button>
+          ))}
+        </div>
+        <form className="stack" onSubmit={handleSubmit}>
+          <label className="label">
+            <span>{t('auth.emailLabel')}</span>
+            <span className="muted">{t('auth.emailNote')}</span>
+          </label>
+          <input
+            className="input"
+            type="email"
+            value={email}
+            required
+            readOnly={Boolean(inviteSummary?.email)}
+            placeholder={t('auth.emailPlaceholder')}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <label className="label">
+            <span>{t('auth.passwordLabel')}</span>
+            <span className="muted">{t('auth.passwordNote')}</span>
+          </label>
+          <input
+            className="input"
+            type="password"
+            value={password}
+            required
+            placeholder={t('auth.passwordPlaceholder')}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {mode === 'register' && (
+            <>
+              <label className="label">
+                <span>{t('auth.nameLabel')}</span>
+                <span className="muted">{t('auth.nameNote')}</span>
+              </label>
+              <input
+                className="input"
+                value={name}
+                placeholder={t('auth.namePlaceholder')}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </>
+          )}
+          <button className="btn" type="submit" disabled={working || status === 'loading'}>
+            {working || status === 'loading'
+              ? t('auth.working')
+              : t(mode === 'login' ? 'auth.loginCta' : 'auth.registerCta')}
+          </button>
+          {(formError || error) && (
+            <div className="badge negative">
+              {t('common.error')}: {formError || error}
+            </div>
+          )}
+        </form>
+      </div>
+
+      <div className="stack" style={{ gap: 16 }}>
+        <div className="card">
+          <h3>{t('auth.invite.title')}</h3>
+          <p className="muted">{t('auth.invite.note')}</p>
+          {inviteLoading && <div className="muted">{t('auth.invite.loading')}</div>}
+          {inviteError && <div className="badge negative">{inviteError}</div>}
+          {inviteSummary && (
+            <div className="stack" style={{ gap: 6 }}>
+              <div>
+                <span className="muted">{t('auth.invite.email')}</span>
+                <div>{inviteSummary.email || t('auth.invite.noEmail')}</div>
+              </div>
+              <div>
+                <span className="muted">{t('auth.invite.role')}</span>
+                <div>{inviteSummary.role}</div>
+              </div>
+              <div>
+                <span className="muted">{t('auth.invite.scope')}</span>
+                <div>{inviteSummary.scopeType}{inviteSummary.scopeId ? ` · ${inviteSummary.scopeId}` : ''}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <h3>{t('auth.social.title')}</h3>
+          <p className="muted">{t('auth.social.note')}</p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {(['google', 'apple'] as const).map((provider) => (
+              <button
+                key={provider}
+                className="btn secondary"
+                type="button"
+                style={{
+                  padding: '6px 10px',
+                  background: oauthOpen === provider ? 'rgba(43, 212, 213, 0.15)' : undefined,
+                  borderColor: oauthOpen === provider ? 'rgba(43, 212, 213, 0.5)' : undefined,
+                }}
+                onClick={() => setOauthOpen(provider)}
+              >
+                {t(provider === 'google' ? 'auth.social.google' : 'auth.social.apple')}
+              </button>
+            ))}
+          </div>
+          {oauthOpen && (
+            <form className="stack" onSubmit={handleOauthSubmit} style={{ marginTop: 12 }}>
+              <label className="label">
+                <span>{t('auth.social.providerIdLabel')}</span>
+                <span className="muted">{t('auth.social.providerIdNote')}</span>
+              </label>
+              <input
+                className="input"
+                value={providerUserId}
+                required
+                placeholder={t('auth.social.providerIdPlaceholder')}
+                onChange={(e) => setProviderUserId(e.target.value)}
+              />
+              <label className="label">
+                <span>{t('auth.social.emailLabel')}</span>
+                <span className="muted">{t('auth.social.emailNote')}</span>
+              </label>
+              <input
+                className="input"
+                type="email"
+                value={oauthEmail}
+                placeholder={t('auth.social.emailPlaceholder')}
+                onChange={(e) => setOauthEmail(e.target.value)}
+              />
+              <label className="label">
+                <span>{t('auth.social.nameLabel')}</span>
+                <span className="muted">{t('auth.social.nameNote')}</span>
+              </label>
+              <input
+                className="input"
+                value={oauthName}
+                placeholder={t('auth.social.namePlaceholder')}
+                onChange={(e) => setOauthName(e.target.value)}
+              />
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn" type="submit" disabled={working || status === 'loading'}>
+                  {working || status === 'loading' ? t('auth.working') : t('auth.social.continue')}
+                </button>
+                <button className="btn secondary" type="button" onClick={() => setOauthOpen(null)}>
+                  {t('auth.social.cancel')}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

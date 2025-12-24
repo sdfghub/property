@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import fs from 'fs'
 import path from 'path'
+import { parseCommunityDef } from '../../importers/community/parse'
+import { applyCommunityPlan } from '../../importers/community/apply'
 
 type SplitLine = { text: string; depth: number; meta?: string | null; extra?: string | null }
 
@@ -77,6 +79,91 @@ type ScopeType = 'SYSTEM' | 'COMMUNITY' | 'BILLING_ENTITY'
 @Injectable()
 export class CommunityService {
   constructor(private prisma: PrismaService) {}
+
+  async createCommunity(input: any) {
+    const code = String(input?.code ?? '').trim()
+    const name = String(input?.name ?? '').trim()
+    const periodCode = String(input?.periodCode ?? input?.period?.code ?? '').trim()
+    if (!code || !name) {
+      throw new BadRequestException('code and name are required')
+    }
+    if (!periodCode) {
+      throw new BadRequestException('periodCode is required')
+    }
+    if (!/^\d{4}-\d{2}$/.test(periodCode)) {
+      throw new BadRequestException('periodCode must be in YYYY-MM format')
+    }
+
+    const existing = await this.prisma.community.findFirst({
+      where: { OR: [{ id: code }, { code }] },
+      select: { id: true },
+    })
+    if (existing) {
+      throw new BadRequestException(`Community ${code} already exists`)
+    }
+
+    if (input?.def) {
+      const def = input.def
+      if (!def?.id || !def?.name || !def?.period?.code) {
+        throw new BadRequestException('def.id, def.name, and def.period.code are required')
+      }
+      if (def.id !== code) {
+        throw new BadRequestException('def.id must match code')
+      }
+      if (def.name !== name) {
+        throw new BadRequestException('def.name must match name')
+      }
+      if (def.period.code !== periodCode) {
+        throw new BadRequestException('def.period.code must match periodCode')
+      }
+      if (!Array.isArray(def.structure) || def.structure.length === 0) {
+        throw new BadRequestException('def.structure[] is required')
+      }
+      try {
+        const plan = parseCommunityDef(def)
+        await applyCommunityPlan(plan)
+        return {
+          ok: true,
+          communityId: plan.communityId,
+          code: plan.communityId,
+          name: plan.communityName,
+          periodCode: plan.periodCode,
+        }
+      } catch (err: any) {
+        throw new BadRequestException(err?.message || 'Failed to import def.json')
+      }
+    }
+
+    const periodStart = input?.periodStart ?? input?.period?.start
+    const periodEnd = input?.periodEnd ?? input?.period?.end
+    if (!periodStart || !periodEnd) {
+      throw new BadRequestException('periodStart and periodEnd are required without def.json')
+    }
+    const startDate = new Date(periodStart)
+    const endDate = new Date(periodEnd)
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('periodStart and periodEnd must be valid dates')
+    }
+    const [y, m] = periodCode.split('-').map(Number)
+    const seq = y * 12 + m
+    if (!Number.isFinite(seq)) {
+      throw new BadRequestException('periodCode must be valid')
+    }
+
+    await this.prisma.community.create({
+      data: { id: code, code, name },
+    })
+    await this.prisma.period.create({
+      data: {
+        communityId: code,
+        code: periodCode,
+        startDate,
+        endDate,
+        seq,
+      },
+    })
+    return { ok: true, communityId: code, code, name, periodCode }
+  }
 
   async listForUser(userId: string, q?: string) {
     // SYSTEM_ADMIN → all communities

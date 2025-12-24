@@ -1,26 +1,54 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common'
+import { Injectable, UnauthorizedException, Logger, BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../user/prisma.service'
-import { randomBytes, createHash } from 'crypto'
+import { randomBytes, createHash, scrypt, timingSafeEqual } from 'crypto'
+import { promisify } from 'util'
 import { MailService } from '../mail/mail.service'
+import { InviteService } from '../invite/invite.service'
 
 type RoleAssignment={ role:string; scopeType:string; scopeId?:string|null }
 
+const scryptAsync = promisify(scrypt)
+
 function sha256(raw: string){ return createHash('sha256').update(raw).digest('hex') }
+function normalizeEmail(email: string){ return email.trim().toLowerCase() }
+
+async function hashPassword(password: string){
+  const salt = randomBytes(16).toString('hex')
+  const derived = (await scryptAsync(password, salt, 64)) as Buffer
+  return `scrypt$${salt}$${derived.toString('hex')}`
+}
+
+async function verifyPassword(password: string, stored: string){
+  const parts = stored.split('$')
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false
+  const salt = parts[1]
+  const expected = Buffer.from(parts[2], 'hex')
+  const derived = (await scryptAsync(password, salt, expected.length)) as Buffer
+  return timingSafeEqual(expected, derived)
+}
 
 @Injectable()
 export class AuthService{
   private readonly logger = new Logger(AuthService.name)
-  constructor(private readonly prisma:PrismaService, private readonly jwt:JwtService, private readonly mail: MailService){}
+  constructor(
+    private readonly prisma:PrismaService,
+    private readonly jwt:JwtService,
+    private readonly mail: MailService,
+    private readonly invites: InviteService,
+  ){}
 
   async requestMagicLink(email:string){
+    const normalized = normalizeEmail(email)
+    const existing = await this.prisma.user.findUnique({ where:{ email: normalized } })
+    if (!existing) throw new BadRequestException('Invite required')
     const token=randomBytes(24).toString('hex')
     const expiresAt=new Date(Date.now()+15*60*1000)
-    await this.prisma.loginToken.create({data:{email,token,expiresAt:expiresAt}})
+    await this.prisma.loginToken.create({data:{email: normalized,token,expiresAt:expiresAt}})
     const urlBase=process.env.APP_PUBLIC_URL||'http://localhost:3000'
     const link=`${urlBase}/magic?token=${token}`
-    await this.mail.send(email, 'Your sign-in link', `<p>Click to sign in: <a href="${link}">${link}</a></p>`)
-    this.logger.log(`Magic link requested for ${email} exp=${expiresAt.toISOString()}`)
+    await this.mail.send(normalized, 'Your sign-in link', `<p>Click to sign in: <a href="${link}">${link}</a></p>`)
+    this.logger.log(`Magic link requested for ${normalized} exp=${expiresAt.toISOString()}`)
     return {ok:true}
   }
 
@@ -40,11 +68,78 @@ export class AuthService{
       throw new UnauthorizedException('Invalid/expired token')
     }
 
-    const user=await this.prisma.user.upsert({ where:{email:rec.email}, update:{}, create:{email:rec.email} })
+    const existing = await this.prisma.user.findUnique({ where:{ email: rec.email } })
+    if (!existing) {
+      throw new BadRequestException('Invite required')
+    }
+    const user=existing
     await this.prisma.loginToken.update({where:{id:rec.id}, data:{usedAt:new Date()} })
 
     this.logger.log(`Magic token consumed for ${user.email} (${user.id}) ua=${userAgent ?? '-'} ip=${ip ?? '-'}`)
     return this.issueTokensForUser(user, userAgent, ip)
+  }
+
+  async registerWithPassword(email: string, password: string, name?: string, inviteToken?: string){
+    const normalized = normalizeEmail(email)
+    const existing = await this.prisma.user.findUnique({ where:{ email: normalized } })
+    if (existing?.passwordHash) throw new BadRequestException('Account already exists')
+    const passwordHash = await hashPassword(password)
+    if (existing) {
+      return this.prisma.user.update({
+        where:{ id: existing.id },
+        data:{ passwordHash, name: name ?? existing.name },
+      })
+    }
+    await this.invites.requireValidInvite(inviteToken, normalized)
+    return this.prisma.user.create({ data:{ email: normalized, name: name ?? null, passwordHash } })
+  }
+
+  async loginWithPassword(email: string, password: string){
+    const normalized = normalizeEmail(email)
+    const user = await this.prisma.user.findUnique({ where:{ email: normalized } })
+    if (!user?.passwordHash) {
+      this.logger.warn(`loginWithPassword missing hash email=${normalized} user=${user?.id ?? 'none'}`)
+      throw new UnauthorizedException('Invalid credentials')
+    }
+    const ok = await verifyPassword(password, user.passwordHash)
+    if (!ok) {
+      this.logger.warn(`loginWithPassword invalid password email=${normalized} user=${user.id}`)
+      throw new UnauthorizedException('Invalid credentials')
+    }
+    this.logger.log(`loginWithPassword success email=${normalized} user=${user.id}`)
+    return user
+  }
+
+  async loginWithOAuth(provider: 'GOOGLE'|'APPLE'|'FACEBOOK'|'MICROSOFT', providerUserId: string, email?: string, name?: string, inviteToken?: string){
+    const existing = await this.prisma.userOAuthAccount.findUnique({
+      where:{ provider_providerUserId:{ provider, providerUserId } },
+      include:{ user:true },
+    })
+    if (existing?.user) return existing.user
+
+    const normalized = email ? normalizeEmail(email) : undefined
+    const user = normalized
+      ? await this.prisma.user.findUnique({ where:{ email: normalized } })
+      : null
+
+    if (!user) {
+      if (!normalized) throw new BadRequestException('Invite required')
+      await this.invites.requireValidInvite(inviteToken, normalized)
+    }
+
+    const ensured = user ?? await this.prisma.user.create({
+      data:{ email: normalized ?? `${providerUserId}@${provider.toLowerCase()}.local`, name: name ?? null },
+    })
+
+    await this.prisma.userOAuthAccount.create({
+      data:{
+        userId: ensured.id,
+        provider,
+        providerUserId,
+        email: normalized ?? null,
+      },
+    })
+    return ensured
   }
 
   async refresh(refreshToken:string){

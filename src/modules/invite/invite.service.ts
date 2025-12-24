@@ -2,56 +2,109 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { randomBytes } from 'crypto'
 import { MailService } from '../mail/mail.service'
-import { AuthService } from '../auth/auth.service'
 
 @Injectable()
 export class InviteService{
   private readonly logger = new Logger(InviteService.name)
   constructor(
     private readonly prisma:PrismaService,
-    private readonly mail: MailService,
-    private readonly auth: AuthService
+    private readonly mail: MailService
   ){}
   async createInvite(email:string, role:'COMMUNITY_ADMIN'|'BILLING_ENTITY_USER'|'SYSTEM_ADMIN', scopeType:'SYSTEM'|'COMMUNITY'|'BILLING_ENTITY', scopeId?:string, invitedBy?:string){
     const token=randomBytes(24).toString('hex')
     const expiresAt=new Date(Date.now()+7*24*3600*1000)
-    const inv=await this.prisma.invite.create({ data:{ email, role, scopeType:scopeType, scopeId:scopeId??null, invitedBy:invitedBy??'', token, expiresAt:expiresAt } })
+    const normalizedEmail = email.trim()
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    })
+    const inv=await this.prisma.invite.create({
+      data:{
+        email: normalizedEmail,
+        role,
+        scopeType:scopeType,
+        scopeId:scopeId??null,
+        invitedBy:invitedBy??'',
+        token,
+        expiresAt:expiresAt
+      }
+    })
     const base=process.env.APP_PUBLIC_URL||'http://localhost:3000'
     const link=`${base}/invite?token=${token}`
-    await this.mail.send(email, 'You are invited', `<p>You were invited as <b>${role}</b>. Accept: <a href="${link}">${link}</a></p>`)
-    this.logger.log(`Invite created for ${email} role=${role} scope=${scopeType}:${scopeId ?? '-'}`)
+    if (existingUser) {
+      await this.claimInviteForUser(token, existingUser.id)
+      await this.mail.send(
+        normalizedEmail,
+        'Access granted',
+        `<p>You were granted <b>${role}</b> access. You can sign in at <a href="${base}">${base}</a>.</p>`
+      )
+      this.logger.log(`Invite auto-accepted for existing user ${existingUser.email} role=${role} scope=${scopeType}:${scopeId ?? '-'}`)
+      return inv
+    }
+    await this.mail.send(normalizedEmail, 'You are invited', `<p>You were invited as <b>${role}</b>. Accept: <a href="${link}">${link}</a></p>`)
+    this.logger.log(`Invite created for ${normalizedEmail} role=${role} scope=${scopeType}:${scopeId ?? '-'}`)
     return inv
   }
-  async acceptInvite(token:string, name?:string, userAgent?:string, ip?:string){
-    const inv=await this.prisma.invite.findUnique({ where:{token} })
-    if(!inv||inv.acceptedAt||inv.expiresAt<new Date()) throw new BadRequestException('Invalid/expired invite')
-    const user=await this.prisma.user.upsert({ where:{email:inv.email}, update:{ name:name??undefined }, create:{ email:inv.email, name } })
-
-  // find existing assignment (null-safe)
-  const existing = await this.prisma.roleAssignment.findFirst({
-    where: {
-      userId: user.id,
+  async getInviteSummary(token: string){
+    const inv = await this.prisma.invite.findUnique({ where:{ token } })
+    if (!inv) throw new BadRequestException('Invalid/expired invite')
+    if (inv.expiresAt < new Date()) throw new BadRequestException('Invalid/expired invite')
+    return {
+      id: inv.id,
+      email: inv.email,
       role: inv.role,
       scopeType: inv.scopeType,
-      scopeId: inv.scopeId ?? null, // works with nullable fields
-    },
-  })
+      scopeId: inv.scopeId,
+      invitedBy: inv.invitedBy,
+      createdAt: inv.createdAt,
+      expiresAt: inv.expiresAt,
+      acceptedAt: inv.acceptedAt,
+    }
+  }
 
-  if (!existing) {
-    await this.prisma.roleAssignment.create({
-      data: {
+  async claimInviteForUser(token: string, userId: string){
+    const inv = await this.prisma.invite.findUnique({ where:{ token } })
+    if (!inv || inv.expiresAt < new Date()) throw new BadRequestException('Invalid/expired invite')
+    const user = await this.prisma.user.findUnique({ where:{ id: userId } })
+    if (!user) throw new BadRequestException('User not found')
+    if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+      throw new BadRequestException('Invite email does not match user')
+    }
+
+    const existing = await this.prisma.roleAssignment.findFirst({
+      where: {
         userId: user.id,
         role: inv.role,
         scopeType: inv.scopeType,
         scopeId: inv.scopeId ?? null,
       },
     })
+    if (!existing) {
+      await this.prisma.roleAssignment.create({
+        data: {
+          userId: user.id,
+          role: inv.role,
+          scopeType: inv.scopeType,
+          scopeId: inv.scopeId ?? null,
+        },
+      })
+    }
+    if (!inv.acceptedAt) {
+      await this.prisma.invite.update({ where:{ id: inv.id }, data:{ acceptedAt: new Date() } })
+    }
+    this.logger.log(`Invite claimed by ${user.email} role=${inv.role} scope=${inv.scopeType}:${inv.scopeId ?? '-'}`)
+    return { ok:true }
   }
-    await this.prisma.invite.update({ where:{id:inv.id}, data:{acceptedAt:new Date()} })
 
-    const tokens = await this.auth.issueTokensForUser(user, userAgent, ip)
-    this.logger.log(`Invite accepted for ${user.email} role=${inv.role} scope=${inv.scopeType}:${inv.scopeId ?? '-'}`)
-    return { ok:true, userId:user.id, ...tokens }
+  async requireValidInvite(token: string | undefined, email: string){
+    if (!token) throw new BadRequestException('Invite required')
+    const inv = await this.prisma.invite.findUnique({ where:{ token } })
+    if (!inv || inv.expiresAt < new Date()) throw new BadRequestException('Invalid/expired invite')
+    if (inv.acceptedAt) throw new BadRequestException('Invite already accepted')
+    if (inv.email.toLowerCase() !== email.toLowerCase()) {
+      throw new BadRequestException('Invite email does not match user')
+    }
+    return inv
   }
 
   async pendingForCommunity(communityId: string){

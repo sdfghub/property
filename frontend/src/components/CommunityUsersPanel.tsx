@@ -20,7 +20,7 @@ type BeRow = {
 }
 
 export function CommunityUsersPanel({ communityId }: { communityId: string }) {
-  const { api } = useAuth()
+  const { api, user, refreshSession } = useAuth()
   const { t } = useI18n()
   const [beRows, setBeRows] = React.useState<BeRow[]>([])
   const [beInviteEmail, setBeInviteEmail] = React.useState<Record<string, string>>({})
@@ -63,14 +63,23 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
   }, [api, communityId])
 
   async function inviteBeUser(beId: string, email: string) {
-    if (!email) return
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) return
     setBusyInvite(true)
     setMessage(null)
     try {
-      await api.post('/invites', { email, role: 'BILLING_ENTITY_USER', scopeType: 'BILLING_ENTITY', scopeId: beId })
+      await api.post('/invites', {
+        email: trimmedEmail,
+        role: 'BILLING_ENTITY_USER',
+        scopeType: 'BILLING_ENTITY',
+        scopeId: beId,
+      })
       const fresh = await api.get<PendingInvite[]>(`/invites/billing-entity/${beId}/pending`)
       setBeRows((prev) => prev.map((be) => (be.id === beId ? { ...be, pending: fresh } : be)))
       setBeInviteEmail((prev) => ({ ...prev, [beId]: '' }))
+      if (user?.email && refreshSession && user.email.toLowerCase() === trimmedEmail.toLowerCase()) {
+        await refreshSession()
+      }
     } catch (err: any) {
       setMessage(err?.message || 'Could not invite responsible')
     } finally {
