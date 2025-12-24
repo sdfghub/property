@@ -64,18 +64,24 @@ jobs:
           APP_STACK_NAME: PropertyExpenses-App
           APP_VERSION_INPUT: ${{ inputs.version }}
         run: |
+          VITE_API_BASE=""
+          VITE_APP_VERSION=""
           if [ -n "$APP_VERSION_INPUT" ]; then
+            VITE_APP_VERSION="$APP_VERSION_INPUT"
             echo "VITE_APP_VERSION=$APP_VERSION_INPUT" >> $GITHUB_ENV
           fi
           if [ -n "$API_BASE_INPUT" ]; then
+            VITE_API_BASE="$API_BASE_INPUT"
             echo "VITE_API_BASE=$API_BASE_INPUT" >> $GITHUB_ENV
             echo "1"
             echo $API_BASE_INPUT
           elif [ -n "$API_BASE_VAR" ]; then
+            VITE_API_BASE="$API_BASE_VAR"
             echo "VITE_API_BASE=$API_BASE_VAR" >> $GITHUB_ENV
             echo "2"
             echo $API_BASE_VAR
           elif [ -n "$API_DOMAIN" ]; then
+            VITE_API_BASE="https://${API_DOMAIN}/api"
             echo "VITE_API_BASE=https://${API_DOMAIN}/api" >> $GITHUB_ENV
             echo "3"
             echo $API_DOMAIN
@@ -84,9 +90,16 @@ jobs:
               --stack-name "$APP_STACK_NAME" \
               --query "Stacks[0].Outputs[?OutputKey=='AlbDns'].OutputValue" \
               --output text)
+            VITE_API_BASE="https://${ALB_DNS}/api"
             echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
             echo "4"
             echo $ALB_DNS
+          fi
+          if [ -n "$VITE_APP_VERSION" ]; then
+            export VITE_APP_VERSION
+          fi
+          if [ -n "$VITE_API_BASE" ]; then
+            export VITE_API_BASE
           fi
           cd frontend
           npm ci
