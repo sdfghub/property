@@ -69,16 +69,24 @@ jobs:
           fi
           if [ -n "$API_BASE_INPUT" ]; then
             echo "VITE_API_BASE=$API_BASE_INPUT" >> $GITHUB_ENV
+            echo "1"
+            echo $API_BASE_INPUT
           elif [ -n "$API_BASE_VAR" ]; then
             echo "VITE_API_BASE=$API_BASE_VAR" >> $GITHUB_ENV
+            echo "2"
+            echo $API_BASE_VAR
           elif [ -n "$API_DOMAIN" ]; then
             echo "VITE_API_BASE=https://${API_DOMAIN}/api" >> $GITHUB_ENV
+            echo "3"
+            echo $API_DOMAIN
           else
             ALB_DNS=$(aws cloudformation describe-stacks \
               --stack-name "$APP_STACK_NAME" \
               --query "Stacks[0].Outputs[?OutputKey=='AlbDns'].OutputValue" \
               --output text)
             echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
+            echo "4"
+            echo $ALB_DNS
           fi
           cd frontend
           npm ci
