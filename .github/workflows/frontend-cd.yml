@@ -4,7 +4,10 @@ on:
 env:
   AWS_REGION: eu-central-1
   STACK_NAME: PropertyExpenses-Frontend
-  FRONTEND_API_BASE: ${{ secrets.FRONTEND_API_BASE }}
+  FRONTEND_API_BASE: ${{ vars.FRONTEND_API_BASE }}
+  FRONTEND_CERT_ARN: ${{ vars.FRONTEND_CERT_ARN }}
+  FRONTEND_DOMAIN: ${{ vars.FRONTEND_DOMAIN }}
+  API_DOMAIN: ${{ vars.API_DOMAIN }}
   APP_STACK_NAME: PropertyExpenses-App
 jobs:
   deploy:
@@ -17,19 +20,32 @@ jobs:
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Build CDK
+        run: |
+          cd infra/cdk
+          npm ci
+          npm run build
+      - name: Deploy frontend stack
+        run: |
+          cd infra/cdk
+          FRONTEND_CERT_ARN=${FRONTEND_CERT_ARN} FRONTEND_DOMAIN="${FRONTEND_DOMAIN}" npx cdk deploy ${STACK_NAME} --require-approval never
       - name: Resolve API base
         run: |
           if [ -n "${FRONTEND_API_BASE}" ]; then
             echo "VITE_API_BASE=${FRONTEND_API_BASE}" >> $GITHUB_ENV
             exit 0
           fi
+          if [ -n "${API_DOMAIN}" ]; then
+            echo "VITE_API_BASE=https://${API_DOMAIN}/api" >> $GITHUB_ENV
+            exit 0
+          fi
           ALB_DNS=$(aws cloudformation describe-stacks \
             --stack-name "${APP_STACK_NAME}" \
             --query "Stacks[0].Outputs[?OutputKey=='AlbDns'].OutputValue" \
             --output text)
-          echo "VITE_API_BASE=http://${ALB_DNS}/api" >> $GITHUB_ENV
+          echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
       - run: |
           cd frontend
           npm ci

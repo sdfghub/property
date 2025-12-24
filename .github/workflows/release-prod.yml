@@ -8,9 +8,6 @@ on:
       api_base:
         description: 'Optional API base URL (e.g. https://api.maocup.eu/api)'
         required: false
-      alb_cert_arn:
-        description: 'Optional ALB cert ARN for HTTPS'
-        required: false
       deploy_frontend:
         description: 'Deploy frontend assets'
         required: false
@@ -30,7 +27,7 @@ jobs:
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Tag release
         run: |
@@ -46,28 +43,18 @@ jobs:
       - name: Build and push API image
         run: |
           ./build-and-push.sh
-      - name: Build CDK
+      - name: Deploy app service
         run: |
-          cd infra/cdk
-          npm ci
-          npm run build
-      - name: Deploy app stacks
-        env:
-          ALB_CERT_ARN_INPUT: ${{ inputs.alb_cert_arn }}
-          APP_VERSION_INPUT: ${{ inputs.version }}
-        run: |
-          cd infra/cdk
-          if [ -n "$ALB_CERT_ARN_INPUT" ]; then
-            export ALB_CERT_ARN="$ALB_CERT_ARN_INPUT"
-          fi
-          if [ -n "$APP_VERSION_INPUT" ]; then
-            export APP_VERSION="$APP_VERSION_INPUT"
-          fi
-          npx cdk deploy PropertyExpenses-Network PropertyExpenses-Data PropertyExpenses-App --require-approval never
-      - name: Deploy frontend stack
-        run: |
-          cd infra/cdk
-          npx cdk deploy PropertyExpenses-Frontend --require-approval never
+          STACK_NAME="PropertyExpenses-App"
+          CLUSTER=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" \
+            --output text)
+          SERVICE=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceName'].OutputValue" \
+            --output text)
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
       - name: Build frontend
         if: ${{ inputs.deploy_frontend == 'true' }}
         env:
@@ -85,11 +72,7 @@ jobs:
               --stack-name "$APP_STACK_NAME" \
               --query "Stacks[0].Outputs[?OutputKey=='AlbDns'].OutputValue" \
               --output text)
-            if [ -n "${{ inputs.alb_cert_arn }}" ]; then
-              echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
-            else
-              echo "VITE_API_BASE=http://${ALB_DNS}/api" >> $GITHUB_ENV
-            fi
+            echo "VITE_API_BASE=https://${ALB_DNS}/api" >> $GITHUB_ENV
           fi
           cd frontend
           npm ci

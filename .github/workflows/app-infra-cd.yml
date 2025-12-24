@@ -14,7 +14,7 @@ jobs:
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Build CDK
         run: |
@@ -24,4 +24,4 @@ jobs:
       - name: Deploy app stack
         run: |
           cd infra/cdk
-          npx cdk deploy PropertyExpenses-App --require-approval never
+          ALB_CERT_ARN=${{ vars.ALB_CERT_ARN }} npx cdk deploy PropertyExpenses-App --require-approval never
