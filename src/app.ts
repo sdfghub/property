@@ -45,11 +45,27 @@ class AppModule {}
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
 
-  console.log(process.env.APP_ORIGIN?.split(',').map(s => s.trim()) || '*')
+  const rawOrigins =
+    process.env.CORS_ORIGINS ||
+    process.env.APP_ORIGIN ||
+    process.env.FRONTEND_ORIGIN
+  const corsOrigins = rawOrigins
+    ? rawOrigins
+        .split(',')
+        .map(origin => origin.trim())
+        .filter(Boolean)
+    : ['http://localhost:5173', 'http://localhost:3000']
 
   app.enableCors({
-    origin: process.env.APP_ORIGIN?.split(',').map(s => s.trim()) || '*',
+    origin: (origin, callback) => {
+      if (!origin || corsOrigins.includes(origin)) {
+        return callback(null, true)
+      }
+      return callback(new Error('CORS origin not allowed'), false)
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
   app.use(cookieParser())
 

@@ -28,9 +28,13 @@ export class AppStack extends cdk.Stack {
     })
 
     const appVersion = process.env.APP_VERSION || this.node.tryGetContext('appVersion')
+    const corsOrigins = process.env.CORS_ORIGINS || this.node.tryGetContext('corsOrigins')
     const environment: Record<string, string> = { PORT: '3000', NODE_ENV: 'production' }
     if (appVersion) {
       environment.APP_VERSION = appVersion
+    }
+    if (corsOrigins) {
+      environment.CORS_ORIGINS = corsOrigins
     }
     task.addContainer('Api', {
       image: ContainerImage.fromEcrRepository(Repository.fromRepositoryName(this, 'Repo', 'property-expenses-api'), 'latest'),
