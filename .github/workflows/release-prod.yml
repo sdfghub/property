@@ -59,6 +59,8 @@ jobs:
         if: ${{ inputs.deploy_frontend == 'true' }}
         env:
           API_BASE_INPUT: ${{ inputs.api_base }}
+          API_BASE_VAR: ${{ vars.FRONTEND_API_BASE }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
           APP_STACK_NAME: PropertyExpenses-App
           APP_VERSION_INPUT: ${{ inputs.version }}
         run: |
@@ -67,6 +69,10 @@ jobs:
           fi
           if [ -n "$API_BASE_INPUT" ]; then
             echo "VITE_API_BASE=$API_BASE_INPUT" >> $GITHUB_ENV
+          elif [ -n "$API_BASE_VAR" ]; then
+            echo "VITE_API_BASE=$API_BASE_VAR" >> $GITHUB_ENV
+          elif [ -n "$API_DOMAIN" ]; then
+            echo "VITE_API_BASE=https://${API_DOMAIN}/api" >> $GITHUB_ENV
           else
             ALB_DNS=$(aws cloudformation describe-stacks \
               --stack-name "$APP_STACK_NAME" \
