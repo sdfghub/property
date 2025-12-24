@@ -43,18 +43,18 @@ jobs:
       - name: Build and push API image
         run: |
           ./build-and-push.sh
-      - name: Deploy app service
+      - name: Build CDK
         run: |
-          STACK_NAME="PropertyExpenses-App"
-          CLUSTER=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" \
-            --output text)
-          SERVICE=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].Outputs[?OutputKey=='ServiceName'].OutputValue" \
-            --output text)
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
+          cd infra/cdk
+          npm ci
+          npm run build
+      - name: Deploy app stack with version
+        env:
+          APP_VERSION: ${{ inputs.version }}
+          ALB_CERT_ARN: ${{ vars.ALB_CERT_ARN }}
+        run: |
+          cd infra/cdk
+          npx cdk deploy PropertyExpenses-App --require-approval never
       - name: Build frontend
         if: ${{ inputs.deploy_frontend == 'true' }}
         env:
