@@ -52,6 +52,7 @@ jobs:
         env:
           APP_VERSION: ${{ inputs.version }}
           ALB_CERT_ARN: ${{ vars.ALB_CERT_ARN }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
         run: |
           cd infra/cdk
           npx cdk deploy PropertyExpenses-App --require-approval never

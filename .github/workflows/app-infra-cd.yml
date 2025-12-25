@@ -24,4 +24,4 @@ jobs:
       - name: Deploy app stack
         run: |
           cd infra/cdk
-          ALB_CERT_ARN=${{ vars.ALB_CERT_ARN }} npx cdk deploy PropertyExpenses-App --require-approval never
+          CORS_ORIGINS="${{ vars.CORS_ORIGINS }}" ALB_CERT_ARN=${{ vars.ALB_CERT_ARN }} npx cdk deploy PropertyExpenses-App --require-approval never
