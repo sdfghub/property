@@ -1,9 +1,10 @@
-/* Global styling for the console. Intentional, vivid look (dark glassmorphism + neon accents). */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&display=swap');
+/* Global styling for the console. Intentional, vivid look (role-aware themes). */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&display=swap');
 
 :root {
   /* Theme tokens; keep colors centralized to align components and allow easy tweaking. */
   color-scheme: light;
+  --font-body: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   --bg: radial-gradient(circle at 15% 20%, rgba(0, 204, 255, 0.18), transparent 25%),
     radial-gradient(circle at 85% 10%, rgba(255, 160, 0, 0.16), transparent 20%),
     linear-gradient(135deg, #0b1c2c, #0c2436 40%, #0a2c3f);
@@ -12,11 +13,21 @@
   --muted: #7ca3c7;
   --accent: #2bd4d5;
   --accent-2: #ffa62b;
+  --accent-border: rgba(43, 212, 213, 0.6);
+  --accent-soft: rgba(43, 212, 213, 0.08);
   --text: #f7fbff;
   --text-strong: #ffffff;
   --success: #59e391;
   --danger: #f87171;
   --card-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
+  --hero-bg: linear-gradient(135deg, rgba(47, 172, 246, 0.2), rgba(11, 28, 44, 0.9));
+  --btn-bg: linear-gradient(135deg, var(--accent), #0de0c0);
+  --btn-text: #0c1b2c;
+  --chip-bg: linear-gradient(135deg, rgba(43, 212, 213, 0.92), #8df1ff);
+  --chip-text: #0c1b2c;
+  --chip-warn-bg: linear-gradient(135deg, rgba(255, 166, 43, 0.9), rgba(255, 204, 112, 0.95));
+  --field-bg: rgba(255, 255, 255, 0.03);
+  --field-text: var(--text);
 }
 
 *,
@@ -29,9 +40,80 @@ body {
   /* Full-page gradient background with legible text. */
   margin: 0;
   min-height: 100vh;
-  font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
+}
+
+body[data-role='SYSTEM_ADMIN'] {
+  --font-body: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --bg: radial-gradient(circle at 18% 12%, rgba(65, 233, 255, 0.24), transparent 26%),
+    radial-gradient(circle at 78% 8%, rgba(142, 255, 159, 0.16), transparent 30%),
+    linear-gradient(145deg, #081321, #081c30 40%, #0a2b3b);
+  --panel: rgba(7, 16, 28, 0.86);
+  --border: rgba(110, 200, 255, 0.15);
+  --muted: #8fb1cf;
+  --accent: #55f2ff;
+  --accent-2: #c9ff5c;
+  --accent-border: rgba(85, 242, 255, 0.6);
+  --accent-soft: rgba(85, 242, 255, 0.1);
+  --text: #f6fbff;
+  --hero-bg: linear-gradient(135deg, rgba(85, 242, 255, 0.2), rgba(9, 18, 32, 0.92));
+  --btn-bg: linear-gradient(135deg, #55f2ff, #a7ff6b);
+  --btn-text: #04121b;
+  --chip-bg: linear-gradient(135deg, rgba(85, 242, 255, 0.95), #b9ff8b);
+  --chip-text: #04121b;
+  --chip-warn-bg: linear-gradient(135deg, rgba(255, 173, 77, 0.95), rgba(255, 224, 139, 0.95));
+  --field-bg: rgba(255, 255, 255, 0.04);
+}
+
+body[data-role='COMMUNITY_ADMIN'] {
+  --font-body: 'Bricolage Grotesque', 'Space Grotesk', system-ui, sans-serif;
+  --bg: radial-gradient(circle at 12% 10%, rgba(255, 188, 120, 0.2), transparent 30%),
+    radial-gradient(circle at 85% 15%, rgba(255, 110, 110, 0.18), transparent 30%),
+    linear-gradient(140deg, #1c0f0d, #2b1510 45%, #2e1f0f);
+  --panel: rgba(34, 19, 12, 0.86);
+  --border: rgba(255, 210, 170, 0.16);
+  --muted: #d8b39a;
+  --accent: #ff8a5b;
+  --accent-2: #ffd166;
+  --accent-border: rgba(255, 138, 91, 0.6);
+  --accent-soft: rgba(255, 138, 91, 0.12);
+  --text: #fff7f0;
+  --hero-bg: linear-gradient(135deg, rgba(255, 138, 91, 0.25), rgba(26, 13, 9, 0.92));
+  --btn-bg: linear-gradient(135deg, #ff8a5b, #ffd166);
+  --btn-text: #23120d;
+  --chip-bg: linear-gradient(135deg, rgba(255, 138, 91, 0.92), #ffd166);
+  --chip-text: #23120d;
+  --chip-warn-bg: linear-gradient(135deg, rgba(255, 197, 92, 0.95), rgba(255, 229, 166, 0.95));
+  --field-bg: rgba(255, 255, 255, 0.05);
+}
+
+body[data-role='BILLING_ENTITY_USER'],
+body[data-role='member'] {
+  color-scheme: light;
+  --font-body: 'IBM Plex Sans', 'Inter', system-ui, sans-serif;
+  --bg: radial-gradient(circle at 12% 14%, rgba(66, 133, 244, 0.12), transparent 26%),
+    radial-gradient(circle at 90% 10%, rgba(52, 168, 83, 0.08), transparent 28%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef3f8 55%, #eef2f6 100%);
+  --panel: rgba(255, 255, 255, 0.9);
+  --border: rgba(15, 23, 42, 0.08);
+  --muted: #5f6b7a;
+  --accent: #1a73e8;
+  --accent-2: #34a853;
+  --accent-border: rgba(26, 115, 232, 0.4);
+  --accent-soft: rgba(26, 115, 232, 0.1);
+  --text: #0f172a;
+  --text-strong: #0b1220;
+  --card-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  --hero-bg: linear-gradient(135deg, rgba(26, 115, 232, 0.1), rgba(255, 255, 255, 0.95));
+  --btn-bg: linear-gradient(135deg, #1a73e8, #4f8df6);
+  --btn-text: #ffffff;
+  --chip-bg: linear-gradient(135deg, rgba(26, 115, 232, 0.12), rgba(26, 115, 232, 0.2));
+  --chip-text: #0b1220;
+  --chip-warn-bg: linear-gradient(135deg, rgba(251, 188, 5, 0.2), rgba(251, 188, 5, 0.35));
+  --field-bg: rgba(255, 255, 255, 0.9);
+  --field-text: #0f172a;
 }
 
 a {
@@ -53,7 +135,7 @@ a {
   justify-content: space-between;
   padding: 18px 20px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(47, 172, 246, 0.2), rgba(11, 28, 44, 0.9));
+  background: var(--hero-bg);
   border: 1px solid var(--border);
   box-shadow: var(--card-shadow);
 }
@@ -112,8 +194,8 @@ a {
   border-radius: 10px;
   padding: 5px 9px;
   font-size: 11px;
-  color: #0c1b2c;
-  background: linear-gradient(135deg, var(--accent), #0de0c0);
+  color: var(--btn-text);
+  background: var(--btn-bg);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.2);
   transition: transform 120ms ease, box-shadow 120ms ease, background 200ms ease;
 }
@@ -140,8 +222,8 @@ a {
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
+  background: var(--field-bg);
+  color: var(--field-text);
   outline: none;
   font-size: 15px;
 }
@@ -152,8 +234,8 @@ textarea {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: #0f1d2d;
-  color: var(--text);
+  background: var(--field-bg);
+  color: var(--field-text);
 }
 
 select option {
@@ -181,6 +263,60 @@ select option {
   gap: 10px;
 }
 
+.combo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.combo-input {
+  padding-right: 10px;
+}
+
+.combo-toggle {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.combo-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--card-shadow);
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.combo-option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border 120ms ease;
+}
+
+.combo-option:hover,
+.combo-option:focus-visible {
+  background: var(--accent-soft);
+}
+
+.combo-option.active {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+}
+
 .list {
   display: grid;
   gap: 8px;
@@ -199,8 +335,8 @@ select option {
 }
 
 .list-item:hover {
-  border-color: rgba(43, 212, 213, 0.6);
-  background: rgba(43, 212, 213, 0.08);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 .chip {
@@ -210,13 +346,13 @@ select option {
   padding: 6px 9px;
   border-radius: 10px;
   font-size: 12px;
-  color: #0c1b2c;
-  background: linear-gradient(135deg, rgba(43, 212, 213, 0.92), #8df1ff);
+  color: var(--chip-text);
+  background: var(--chip-bg);
 }
 
 .chip.warn {
-  background: linear-gradient(135deg, rgba(255, 166, 43, 0.9), rgba(255, 204, 112, 0.95));
-  color: #0f172a;
+  background: var(--chip-warn-bg);
+  color: var(--chip-text);
 }
 
 .table {

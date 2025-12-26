@@ -22,8 +22,8 @@ function LangSwitch() {
           className="btn secondary"
           style={{
             padding: '8px 10px',
-            background: lang === l ? 'rgba(43, 212, 213, 0.15)' : undefined,
-            borderColor: lang === l ? 'rgba(43, 212, 213, 0.5)' : undefined,
+            background: lang === l ? 'var(--accent-soft)' : undefined,
+            borderColor: lang === l ? 'var(--accent-border)' : undefined,
           }}
           type="button"
           onClick={() => setLang(l)}
@@ -43,6 +43,7 @@ function AppShell() {
   const uiVersion = (import.meta as any)?.env?.VITE_APP_VERSION as string | undefined
   const [apiVersion, setApiVersion] = React.useState<string | null>(null)
   const apiBase = React.useMemo(() => API_BASE.replace(/\/$/, ''), [])
+  const roleKey = user ? activeRole?.role || 'member' : 'signed-out'
 
   React.useEffect(() => {
     let active = true
@@ -77,8 +78,13 @@ function AppShell() {
     }
   }, [])
 
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.body.dataset.role = roleKey
+  }, [roleKey])
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-role={roleKey}>
       <div className="hero">
         <div>
           <h1>{t('app.console')}</h1>
@@ -160,30 +166,110 @@ function RolePicker({
   activeRole?: { role: string; scopeType: string; scopeId?: string | null } | null
   onChange: (r: { role: string; scopeType: string; scopeId?: string | null }) => void
 }) {
+  const { t } = useI18n()
   if (!roles.length) return null
+  const options = roles.map((r, idx) => {
+    const label = [r.role, r.scopeType !== 'SYSTEM' ? r.scopeType.toLowerCase() : null, r.scopeId]
+      .filter(Boolean)
+      .join(' · ')
+    return { label, value: `${label}__${idx}`, role: r }
+  })
+  const activeLabel =
+    activeRole &&
+    [activeRole.role, activeRole.scopeType !== 'SYSTEM' ? activeRole.scopeType.toLowerCase() : null, activeRole.scopeId]
+      .filter(Boolean)
+      .join(' · ')
+  const [query, setQuery] = React.useState(activeLabel || '')
+  const [open, setOpen] = React.useState(false)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    setQuery(activeLabel || '')
+  }, [activeLabel])
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!containerRef.current) return
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const shouldShowAll = open && (!normalizedQuery || query === (activeLabel || ''))
+  const filteredOptions = shouldShowAll
+    ? options
+    : options.filter((opt) => opt.label.toLowerCase().includes(normalizedQuery))
   return (
     <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-      {roles.map((r, idx) => {
-        const label = [r.role, r.scopeType !== 'SYSTEM' ? r.scopeType.toLowerCase() : null, r.scopeId]
-          .filter(Boolean)
-          .join(' · ')
-        const selected = activeRole?.role === r.role && activeRole?.scopeId === r.scopeId && activeRole?.scopeType === r.scopeType
-        return (
-          <button
-            key={`${r.role}-${r.scopeType}-${r.scopeId ?? idx}`}
-            className="btn secondary"
-            style={{
-              padding: '6px 10px',
-              background: selected ? 'rgba(43, 212, 213, 0.15)' : undefined,
-              borderColor: selected ? 'rgba(43, 212, 213, 0.5)' : undefined,
-            }}
-            type="button"
-            onClick={() => onChange(r)}
-          >
-            {label}
-          </button>
-        )
-      })}
+      <label className="label" style={{ marginBottom: 0 }}>
+        <span>{t('app.scope')}</span>
+      </label>
+      <div className="combo" ref={containerRef}>
+        <input
+          className="input combo-input"
+          style={{ minWidth: 220 }}
+          value={query}
+          placeholder={t('app.scope')}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setOpen(true)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setOpen(false)
+            if (e.key === 'ArrowDown') setOpen(true)
+            if (e.key === 'Enter' && filteredOptions[0]) {
+              onChange(filteredOptions[0].role)
+              setQuery(filteredOptions[0].label)
+              setOpen(false)
+            }
+          }}
+          onBlur={() => {
+            if (!query) setQuery(activeLabel || '')
+          }}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+        />
+        <button
+          className="btn secondary combo-toggle"
+          type="button"
+          aria-label={t('app.scope')}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          ▾
+        </button>
+        {open && filteredOptions.length > 0 ? (
+          <div className="combo-list" role="listbox">
+            {filteredOptions.map((opt) => {
+              const isActive =
+                activeRole?.role === opt.role.role &&
+                activeRole?.scopeType === opt.role.scopeType &&
+                activeRole?.scopeId === opt.role.scopeId
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`combo-option${isActive ? ' active' : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange(opt.role)
+                    setQuery(opt.label)
+                    setOpen(false)
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

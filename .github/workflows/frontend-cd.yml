@@ -49,6 +49,14 @@ jobs:
       - run: |
           cd frontend
           npm ci
+          VITE_FCM_API_KEY="${{ vars.VITE_FCM_API_KEY }}" \
+          VITE_FCM_AUTH_DOMAIN="${{ vars.VITE_FCM_AUTH_DOMAIN }}" \
+          VITE_FCM_PROJECT_ID="${{ vars.VITE_FCM_PROJECT_ID }}" \
+          VITE_FCM_STORAGE_BUCKET="${{ vars.VITE_FCM_STORAGE_BUCKET }}" \
+          VITE_FCM_SENDER_ID="${{ vars.VITE_FCM_SENDER_ID }}" \
+          VITE_FCM_APP_ID="${{ vars.VITE_FCM_APP_ID }}" \
+          VITE_FCM_MEASUREMENT_ID="${{ vars.VITE_FCM_MEASUREMENT_ID }}" \
+          VITE_FCM_VAPID_KEY="${{ vars.VITE_FCM_VAPID_KEY }}" \
           npm run build
       - name: Sync to S3 + invalidate CloudFront
         run: |

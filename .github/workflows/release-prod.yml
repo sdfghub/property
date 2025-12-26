@@ -64,6 +64,14 @@ jobs:
           API_DOMAIN: ${{ vars.API_DOMAIN }}
           APP_STACK_NAME: PropertyExpenses-App
           APP_VERSION_INPUT: ${{ inputs.version }}
+          VITE_FCM_API_KEY: ${{ vars.VITE_FCM_API_KEY }}
+          VITE_FCM_AUTH_DOMAIN: ${{ vars.VITE_FCM_AUTH_DOMAIN }}
+          VITE_FCM_PROJECT_ID: ${{ vars.VITE_FCM_PROJECT_ID }}
+          VITE_FCM_STORAGE_BUCKET: ${{ vars.VITE_FCM_STORAGE_BUCKET }}
+          VITE_FCM_SENDER_ID: ${{ vars.VITE_FCM_SENDER_ID }}
+          VITE_FCM_APP_ID: ${{ vars.VITE_FCM_APP_ID }}
+          VITE_FCM_MEASUREMENT_ID: ${{ vars.VITE_FCM_MEASUREMENT_ID }}
+          VITE_FCM_VAPID_KEY: ${{ vars.VITE_FCM_VAPID_KEY }}
         run: |
           VITE_API_BASE=""
           VITE_APP_VERSION=""
@@ -101,6 +109,30 @@ jobs:
           fi
           if [ -n "$VITE_API_BASE" ]; then
             export VITE_API_BASE
+          fi
+          if [ -n "$VITE_FCM_API_KEY" ]; then
+            export VITE_FCM_API_KEY
+          fi
+          if [ -n "$VITE_FCM_AUTH_DOMAIN" ]; then
+            export VITE_FCM_AUTH_DOMAIN
+          fi
+          if [ -n "$VITE_FCM_PROJECT_ID" ]; then
+            export VITE_FCM_PROJECT_ID
+          fi
+          if [ -n "$VITE_FCM_STORAGE_BUCKET" ]; then
+            export VITE_FCM_STORAGE_BUCKET
+          fi
+          if [ -n "$VITE_FCM_SENDER_ID" ]; then
+            export VITE_FCM_SENDER_ID
+          fi
+          if [ -n "$VITE_FCM_APP_ID" ]; then
+            export VITE_FCM_APP_ID
+          fi
+          if [ -n "$VITE_FCM_MEASUREMENT_ID" ]; then
+            export VITE_FCM_MEASUREMENT_ID
+          fi
+          if [ -n "$VITE_FCM_VAPID_KEY" ]; then
+            export VITE_FCM_VAPID_KEY
           fi
           cd frontend
           npm ci
