@@ -85,7 +85,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
       })
       .catch((err: any) => {
         if (!mounted) return
-        setCoverageError(err?.message || 'Failed to load template coverage')
+        setCoverageError(err?.message || t('config.templates.coverageError'))
       })
       .finally(() => {
         if (mounted) setCoverageLoading(false)
@@ -156,7 +156,11 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                 return (
                   <li key={m.meterId}>
                     {m.meterId} — {m.typeCode} [{m.scopeType}/{m.scopeCode}]
-                    {missing ? <span className="badge warn" style={{ marginLeft: 6 }}>missing template</span> : null}
+                    {missing ? (
+                      <span className="badge warn" style={{ marginLeft: 6 }}>
+                        {t('config.templates.badge.missingTemplate')}
+                      </span>
+                    ) : null}
                   </li>
                 )
               })}
@@ -164,24 +168,34 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
             </ul>
           </Section>
 
-          <Section title="Meter templates status">
-            {coverageLoading && <div className="muted">Loading template status…</div>}
+          <Section title={t('config.templates.status.meter')}>
+            {coverageLoading && <div className="muted">{t('config.templates.loading')}</div>}
             {coverageError && <div className="badge negative">{coverageError}</div>}
             {!coverageLoading && !coverageError && coverage?.period && (
               <>
-                <div className="muted">Period {coverage.period.code}</div>
+                <div className="muted">
+                  {t('card.period.label')}: {coverage.period.code}
+                </div>
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                  <span className="badge">Templates: {coverage.templates?.meter ?? 0}</span>
-                  <span className="badge">Meters: {meters.length}</span>
-                  <span className="badge">Covered: {countCoveredMetersFromCoverage(meters, coverage)}</span>
-                  <span className="badge warn">Missing: {coverage.meters?.missing ?? 0}</span>
+                  <span className="badge">
+                    {t('config.templates.label.templates')}: {coverage.templates?.meter ?? 0}
+                  </span>
+                  <span className="badge">
+                    {t('config.templates.label.meters')}: {meters.length}
+                  </span>
+                  <span className="badge">
+                    {t('config.templates.label.covered')}: {countCoveredMetersFromCoverage(meters, coverage)}
+                  </span>
+                  <span className="badge warn">
+                    {t('config.templates.label.missing')}: {coverage.meters?.missing ?? 0}
+                  </span>
                 </div>
                 {meters.length > 0 && (
                   <div className="muted" style={{ marginTop: 8 }}>
-                    Missing meters:{' '}
+                    {t('config.templates.label.missingMeters')}:{' '}
                     {listMissingMetersFromCoverage(meters, coverage)
                       .slice(0, 8)
-                      .join(', ') || 'none'}
+                      .join(', ') || t('common.none')}
                     {(coverage.meters?.missing ?? 0) > 8 ? '…' : ''}
                   </div>
                 )}
@@ -232,8 +246,8 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
 
       {activeTab === 'imports' && (
         <div className="grid two">
-          <Section title="Bill templates">
-            <div className="muted">Import bill-templates.json to populate bill templates.</div>
+          <Section title={t('config.import.bill.title')}>
+            <div className="muted">{t('config.import.bill.subtitle')}</div>
             <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <input
                 className="input"
@@ -252,7 +266,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                 onClick={async () => {
                   if (!community?.id) return
                   if (!billImportFile) {
-                    setBillImportError('Pick a JSON file to import')
+                    setBillImportError(t('config.import.pickFile'))
                     setBillImportSuccess(null)
                     return
                   }
@@ -264,23 +278,23 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                     const parsed = JSON.parse(raw)
                     await api.post(`/communities/${community.id}/bill-templates/import`, parsed)
                     setBillImportFile(null)
-                    setBillImportSuccess('Imported bill templates')
+                    setBillImportSuccess(t('config.import.success.bill'))
                   } catch (err: any) {
-                    setBillImportError(err?.message || 'Failed to import bill templates')
+                    setBillImportError(err?.message || t('config.import.error.bill'))
                   } finally {
                     setBillImportLoading(false)
                   }
                 }}
               >
-                {billImportLoading ? 'Importing…' : 'Import'}
+                {billImportLoading ? t('config.import.loading') : t('config.import.button')}
               </button>
               {billImportError && <span className="badge negative">{billImportError}</span>}
               {billImportSuccess && <span className="badge positive">{billImportSuccess}</span>}
             </div>
           </Section>
 
-          <Section title="Meter templates">
-            <div className="muted">Import meter-entry-templates.json to populate meter templates.</div>
+          <Section title={t('config.import.meter.title')}>
+            <div className="muted">{t('config.import.meter.subtitle')}</div>
             <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <input
                 className="input"
@@ -299,7 +313,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                 onClick={async () => {
                   if (!community?.id) return
                   if (!meterImportFile) {
-                    setMeterImportError('Pick a JSON file to import')
+                    setMeterImportError(t('config.import.pickFile'))
                     setMeterImportSuccess(null)
                     return
                   }
@@ -311,15 +325,15 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                     const parsed = JSON.parse(raw)
                     await api.post(`/communities/${community.id}/meter-templates/import`, parsed)
                     setMeterImportFile(null)
-                    setMeterImportSuccess('Imported meter templates')
+                    setMeterImportSuccess(t('config.import.success.meter'))
                   } catch (err: any) {
-                    setMeterImportError(err?.message || 'Failed to import meter templates')
+                    setMeterImportError(err?.message || t('config.import.error.meter'))
                   } finally {
                     setMeterImportLoading(false)
                   }
                 }}
               >
-                {meterImportLoading ? 'Importing…' : 'Import'}
+                {meterImportLoading ? t('config.import.loading') : t('config.import.button')}
               </button>
               {meterImportError && <span className="badge negative">{meterImportError}</span>}
               {meterImportSuccess && <span className="badge positive">{meterImportSuccess}</span>}
@@ -330,24 +344,34 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
 
       {activeTab === 'expenses' && (
         <>
-          <Section title="Bill templates status" style={{ width: '100%', gridColumn: '1 / -1' }}>
-            {coverageLoading && <div className="muted">Loading template status…</div>}
+          <Section title={t('config.templates.status.bill')} style={{ width: '100%', gridColumn: '1 / -1' }}>
+            {coverageLoading && <div className="muted">{t('config.templates.loading')}</div>}
             {coverageError && <div className="badge negative">{coverageError}</div>}
             {!coverageLoading && !coverageError && coverage?.period && (
               <>
-                <div className="muted">Period {coverage.period.code}</div>
+                <div className="muted">
+                  {t('card.period.label')}: {coverage.period.code}
+                </div>
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                  <span className="badge">Templates: {coverage.templates?.bill ?? 0}</span>
-                  <span className="badge">Expense splits: {expenseSplits.length}</span>
-                  <span className="badge">Covered: {countCoveredSplitsFromCoverage(expenseSplits, coverage)}</span>
-                  <span className="badge warn">Missing: {coverage.expenseSplits?.missing ?? 0}</span>
+                  <span className="badge">
+                    {t('config.templates.label.templates')}: {coverage.templates?.bill ?? 0}
+                  </span>
+                  <span className="badge">
+                    {t('config.templates.label.expenseSplits')}: {expenseSplits.length}
+                  </span>
+                  <span className="badge">
+                    {t('config.templates.label.covered')}: {countCoveredSplitsFromCoverage(expenseSplits, coverage)}
+                  </span>
+                  <span className="badge warn">
+                    {t('config.templates.label.missing')}: {coverage.expenseSplits?.missing ?? 0}
+                  </span>
                 </div>
                 {expenseSplits.length > 0 && (
                   <div className="muted" style={{ marginTop: 8 }}>
-                    Missing expense types:{' '}
+                    {t('config.templates.label.missingExpenseTypes')}:{' '}
                     {listMissingSplitsFromCoverage(expenseSplits, coverage)
                       .slice(0, 8)
-                      .join(', ') || 'none'}
+                      .join(', ') || t('common.none')}
                     {(coverage.expenseSplits?.missing ?? 0) > 8 ? '…' : ''}
                   </div>
                 )}
@@ -370,7 +394,11 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
                   <li key={es.splitName || es.expenseName || es.expenseTypeName || idx}>
                     <div>
                       <strong>{displayName}</strong>
-                      {missing ? <span className="badge warn" style={{ marginLeft: 6 }}>missing bill entry</span> : null}
+                      {missing ? (
+                        <span className="badge warn" style={{ marginLeft: 6 }}>
+                          {t('config.templates.badge.missingBillEntry')}
+                        </span>
+                      ) : null}
                     </div>
                     {lines.map((line, i) => (
                       <div
