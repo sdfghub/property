@@ -26,6 +26,10 @@ export class AppStack extends cdk.Stack {
       parameterName: '/property-expenses/DATABASE_URL',
       version: 1,
     })
+    const fcmParam = StringParameter.fromSecureStringParameterAttributes(this, 'FcmServiceAccount', {
+      parameterName: '/property-expenses/FCM_SERVICE_ACCOUNT_JSON',
+      version: 1,
+    })
 
     const appVersion = process.env.APP_VERSION || this.node.tryGetContext('appVersion')
     const corsOrigins = process.env.CORS_ORIGINS || this.node.tryGetContext('corsOrigins')
@@ -40,7 +44,10 @@ export class AppStack extends cdk.Stack {
       image: ContainerImage.fromEcrRepository(Repository.fromRepositoryName(this, 'Repo', 'property-expenses-api'), 'latest'),
       logging: LogDrivers.awsLogs({ logGroup, streamPrefix: 'api' }),
       environment,
-      secrets: { DATABASE_URL: Secret.fromSsmParameter(dbUrlParam) },
+      secrets: {
+        DATABASE_URL: Secret.fromSsmParameter(dbUrlParam),
+        FCM_SERVICE_ACCOUNT_JSON: Secret.fromSsmParameter(fcmParam),
+      },
     }).addPortMappings({ containerPort: 3000, protocol: Protocol.TCP })
     
     const albSg = new SecurityGroup(this, 'AlbSg', { vpc: props.vpc })

@@ -7,6 +7,7 @@ import { I18nProvider, useI18n } from './i18n/useI18n'
 import { SystemAdminPanel } from './components/SystemAdminPanel'
 import { CommunityAdminDashboard } from './components/community-admin/CommunityAdminDashboard'
 import { BillingEntityResponsibleDashboard } from './components/BillingEntityResponsibleDashboard'
+import { PushPrompt } from './components/PushPrompt'
 import { API_BASE } from './api/client'
 import './styles/index.css'
 
@@ -126,6 +127,8 @@ function AppShell() {
           )}
         </div>
       </div>
+
+      {user ? <PushPrompt /> : null}
 
       {devCommunity ? (
         <CommunityAdminDashboard forceCommunityId={devCommunity} />

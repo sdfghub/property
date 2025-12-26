@@ -13,6 +13,7 @@ import { CommunityModule } from './modules/community/community.module'
 import { PeriodModule } from './modules/period/period.module'
 import { BeFinancialsModule } from './modules/be-financials/be-financials.module'
 import { ProgramModule } from './modules/program/program.module'
+import { PushModule } from './modules/push/push.module'
 
 @Controller()
 class HealthController {
@@ -37,6 +38,7 @@ class HealthController {
     PeriodModule,
     BeFinancialsModule,
     ProgramModule,
+    PushModule,
   ],
   controllers: [HealthController],
 })
