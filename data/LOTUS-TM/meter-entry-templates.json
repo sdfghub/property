@@ -23,6 +23,7 @@
         { "key": "elec_staircase_c", "label": "Curent scara C", "kind": "meter", "meterId": "ELEC-STAIRCASE-C" },
         { "key": "elec_parking", "label": "Curent parcare subterana", "kind": "meter", "meterId": "ELEC-PARKING" },
         { "key": "elec_hw_pump", "label": "Curent pompe apa calda", "kind": "meter", "meterId": "ELEC-HW-PUMP" },
+        { "key": "elec_heat_pump", "label": "Curent pompe incalzire", "kind": "meter", "meterId": "ELEC-HEAT-PUMP" },
         { "key": "elec_boiler", "label": "Curent centrala", "kind": "meter", "meterId": "ELEC-BOILER" },
         { "key": "elec_hydro", "label": "Curent hidrofor", "kind": "meter", "meterId": "ELEC-HYDRO" },
         { "key": "elec_chiller", "label": "Curent chiller", "kind": "meter", "meterId": "ELEC-CHILLER" },

@@ -24,6 +24,17 @@
     "order": 2
   },  
   {
+    "code": "ELECTRICITY-BILL",
+    "name": "Factură curent",
+    "template": {
+      "title": "Hidroelectrica",
+      "items": [
+        { "key": "electricity", "label": "Cost curent", "kind": "expense", "expenseTypeCode": "ELECTRICITY" }
+      ]
+    },
+    "order": 2.5
+  },  
+  {
     "code": "ADMIN-BILL",
     "name": "Factură Administrare",
     "template": {
@@ -101,5 +112,16 @@
       ]
     },
     "order": 8
+  },  
+  {
+    "code": "ELEVATOR-BILL",
+    "name": "Lifturi",
+    "template": {
+      "title": "Lifturi",
+      "items": [
+        { "key": "elevator-maintenance", "label": "Mentenanta lifturi", "kind": "expense", "expenseTypeCode": "ELEVATOR" }
+      ]
+    },
+    "order": 9
   }
 ]

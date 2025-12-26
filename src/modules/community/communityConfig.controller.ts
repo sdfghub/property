@@ -20,6 +20,13 @@ export class CommunityConfigController {
     return cfg
   }
 
+  @Get(':communityCode/template-coverage')
+  async templateCoverage(@Param('communityCode') communityCode: string) {
+    const coverage = await this.svc.getTemplateCoverage(communityCode)
+    if (!coverage) throw new NotFoundException('Coverage not found')
+    return coverage
+  }
+
   // Back-compat alias
   @Get(':communityCode/meters-config')
   async metersAlias(@Param('communityCode') communityCode: string) {

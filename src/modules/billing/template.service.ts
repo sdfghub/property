@@ -4,6 +4,22 @@ import { PrismaService } from '../user/prisma.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 type TemplateKind = 'BILL' | 'METER'
+type BillTemplateDto = {
+  code: string
+  name: string
+  order?: number
+  startPeriodCode?: string | null
+  endPeriodCode?: string | null
+  template: { title?: string; items?: any[] }
+}
+type MeterTemplateDto = {
+  code: string
+  name: string
+  order?: number
+  startPeriodCode?: string | null
+  endPeriodCode?: string | null
+  template: any
+}
 
 @Injectable()
 export class TemplateService {
@@ -17,6 +33,131 @@ export class TemplateService {
 
   private ensureAdmin(_roles: RoleAssignment[], _communityId: string) {
     return
+  }
+
+  private normalizeBillTemplates(raw: any): BillTemplateDto[] {
+    const templates: BillTemplateDto[] = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object'
+      ? Object.entries(raw).map(([code, tpl]: any) => ({
+          code,
+          name: (tpl as any).title || code,
+          order: (tpl as any).order ?? null,
+          startPeriodCode: (tpl as any).startPeriodCode ?? null,
+          endPeriodCode: (tpl as any).endPeriodCode ?? null,
+          template: tpl,
+        }))
+      : []
+    if (!templates.length) throw new ForbiddenException('Bill templates payload must be a non-empty array or object')
+    return templates.map((tpl) => {
+      const code = String(tpl.code || '').trim()
+      const templateName = (tpl as any)?.template?.title
+      const name = String(tpl.name || templateName || code || '').trim()
+      return { ...tpl, code, name }
+    })
+  }
+
+  private normalizeMeterTemplates(raw: any): MeterTemplateDto[] {
+    const templates: MeterTemplateDto[] = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object'
+      ? Object.entries(raw).map(([code, tpl]: any) => ({
+          code,
+          name: (tpl as any).title || (tpl as any).name || code,
+          order: (tpl as any).order ?? null,
+          startPeriodCode: (tpl as any).startPeriodCode ?? null,
+          endPeriodCode: (tpl as any).endPeriodCode ?? null,
+          template: tpl,
+        }))
+      : []
+    if (!templates.length) throw new ForbiddenException('Meter templates payload must be a non-empty array or object')
+    return templates.map((tpl) => {
+      const code = String(tpl.code || '').trim()
+      const templateName = (tpl as any)?.template?.title || (tpl as any)?.template?.name
+      const name = String(tpl.name || templateName || code || '').trim()
+      return { ...tpl, code, name }
+    })
+  }
+
+  private ensureTemplateCodes(templates: Array<{ code: string; name: string }>, kind: string) {
+    const seen = new Set<string>()
+    for (const tpl of templates) {
+      if (!tpl.code || !tpl.name) throw new ForbiddenException(`${kind} templates require code and name`)
+      if (seen.has(tpl.code)) throw new ForbiddenException(`Duplicate ${kind} template code: ${tpl.code}`)
+      seen.add(tpl.code)
+    }
+  }
+
+  async importBillTemplates(communityRef: string, roles: RoleAssignment[], body: any) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const templates = this.normalizeBillTemplates(body)
+    this.ensureTemplateCodes(templates, 'bill')
+    const repo: any = (this.prisma as any).billTemplate
+    if (!repo) throw new NotFoundException('Bill templates not supported')
+    await this.prisma.$transaction(async (tx) => {
+      for (const tpl of templates) {
+        if (!tpl.template || typeof tpl.template !== 'object') {
+          throw new ForbiddenException(`Bill template ${tpl.code} must include a template object`)
+        }
+        await (tx as any).billTemplate.upsert({
+          where: { communityId_code: { communityId, code: tpl.code } },
+          update: {
+            name: tpl.name,
+            order: tpl.order ?? null,
+            startPeriodCode: tpl.startPeriodCode ?? null,
+            endPeriodCode: tpl.endPeriodCode ?? null,
+            template: tpl.template,
+          },
+          create: {
+            communityId,
+            code: tpl.code,
+            name: tpl.name,
+            order: tpl.order ?? null,
+            startPeriodCode: tpl.startPeriodCode ?? null,
+            endPeriodCode: tpl.endPeriodCode ?? null,
+            template: tpl.template,
+          },
+        })
+      }
+    })
+    return { count: templates.length, codes: templates.map((t) => t.code) }
+  }
+
+  async importMeterTemplates(communityRef: string, roles: RoleAssignment[], body: any) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const templates = this.normalizeMeterTemplates(body)
+    this.ensureTemplateCodes(templates, 'meter')
+    const repo: any = (this.prisma as any).meterEntryTemplate
+    if (!repo) throw new NotFoundException('Meter templates not supported')
+    await this.prisma.$transaction(async (tx) => {
+      for (const tpl of templates) {
+        if (!tpl.template || typeof tpl.template !== 'object') {
+          throw new ForbiddenException(`Meter template ${tpl.code} must include a template object`)
+        }
+        await (tx as any).meterEntryTemplate.upsert({
+          where: { communityId_code: { communityId, code: tpl.code } },
+          update: {
+            name: tpl.name,
+            order: tpl.order ?? null,
+            startPeriodCode: tpl.startPeriodCode ?? null,
+            endPeriodCode: tpl.endPeriodCode ?? null,
+            template: tpl.template,
+          },
+          create: {
+            communityId,
+            code: tpl.code,
+            name: tpl.name,
+            order: tpl.order ?? null,
+            startPeriodCode: tpl.startPeriodCode ?? null,
+            endPeriodCode: tpl.endPeriodCode ?? null,
+            template: tpl.template,
+          },
+        })
+      }
+    })
+    return { count: templates.length, codes: templates.map((t) => t.code) }
   }
 
   // ----- Bill templates -----

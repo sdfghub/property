@@ -24,11 +24,63 @@ export class ProgramService {
     return defaultBucket || `PROGRAM:${programId}`
   }
 
-  private ensureCommunityAdmin(roles: RoleAssignment[], communityId: string) {
+  private ensureCommunityAdmin(roles: RoleAssignment[], community: { id: string; code: string }, rawId: string) {
     const ok = roles.some(
-      (r) => r.role === 'COMMUNITY_ADMIN' && r.scopeType === 'COMMUNITY' && r.scopeId === communityId,
+      (r) =>
+        r.role === 'COMMUNITY_ADMIN' &&
+        r.scopeType === 'COMMUNITY' &&
+        !!r.scopeId &&
+        (r.scopeId === community.id || r.scopeId === community.code || r.scopeId === rawId),
     )
     if (!ok) throw new ForbiddenException('Community admin required')
+  }
+
+  private async resolveCommunity(idOrCode: string) {
+    return this.prisma.community.findFirst({
+      where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
+      select: { id: true, code: true },
+    })
+  }
+
+  private parseTargets(raw: any, code: string) {
+    if (!Array.isArray(raw)) {
+      throw new BadRequestException(`Program ${code}: targets must be an array`)
+    }
+    return raw.map((t: any, idx: number) => {
+      const offset = Number(t?.offset)
+      const amount = Number(t?.amount)
+      if (!Number.isFinite(offset) || offset < 0 || !Number.isInteger(offset)) {
+        throw new BadRequestException(`Program ${code}: target[${idx}].offset must be a non-negative integer`)
+      }
+      if (!Number.isFinite(amount) || amount < 0) {
+        throw new BadRequestException(`Program ${code}: target[${idx}].amount must be a non-negative number`)
+      }
+      return { offset, amount }
+    })
+  }
+
+  private parseTargetPlan(raw: any, code: string) {
+    if (!raw) return null
+    const periodCount = Number(raw?.periodCount)
+    const perPeriodAmount = Number(raw?.perPeriodAmount)
+    if (!Number.isFinite(periodCount) || periodCount <= 0 || !Number.isInteger(periodCount)) {
+      throw new BadRequestException(`Program ${code}: targetPlan.periodCount must be a positive integer`)
+    }
+    if (!Number.isFinite(perPeriodAmount) || perPeriodAmount <= 0) {
+      throw new BadRequestException(`Program ${code}: targetPlan.perPeriodAmount must be a positive number`)
+    }
+    return { periodCount, perPeriodAmount }
+  }
+
+  private validateTotalTarget(code: string, totalTarget: number | null | undefined, targets?: Array<{ offset: number; amount: number }>) {
+    if (totalTarget == null || !targets?.length) return
+    const sum = targets.reduce((s, t) => s + Number(t.amount ?? 0), 0)
+    const delta = Math.abs(sum - Number(totalTarget))
+    if (delta > 0.01) {
+      throw new BadRequestException(
+        `Program ${code}: sum of targets (${sum}) differs from totalTarget (${totalTarget})`,
+      )
+    }
   }
 
   async listBalances(communityId: string) {
@@ -153,65 +205,87 @@ export class ProgramService {
   }
 
   async importPrograms(communityId: string, roles: RoleAssignment[], body: ProgramDef[]) {
-    this.ensureCommunityAdmin(roles, communityId)
+    const community = await this.resolveCommunity(communityId)
+    if (!community) throw new NotFoundException('Community not found')
+    this.ensureCommunityAdmin(roles, community, communityId)
     if (!Array.isArray(body)) throw new BadRequestException('Programs payload must be an array')
 
     const imported: string[] = []
+    const normalized: ProgramDef[] = []
+    const seenCodes = new Set<string>()
+
     for (const proj of body) {
-      if (!proj?.code || !proj?.name) throw new BadRequestException('Program code and name are required')
+      const code = typeof proj?.code === 'string' ? proj.code.trim() : ''
+      const name = typeof proj?.name === 'string' ? proj.name.trim() : ''
+      if (!code || !name) throw new BadRequestException('Program code and name are required')
+      if (seenCodes.has(code)) throw new BadRequestException(`Duplicate program code in payload: ${code}`)
+      seenCodes.add(code)
 
       let targets: Array<{ offset: number; amount: number }> | undefined
-      if (Array.isArray(proj.targets) && proj.targets.length) {
-        targets = proj.targets
+      if (proj.targets != null) {
+        targets = this.parseTargets(proj.targets, code)
       } else if (proj.targetPlan) {
-        const pc = proj.targetPlan.periodCount
-        const ppa = proj.targetPlan.perPeriodAmount
-        if (pc && ppa && pc > 0 && ppa > 0) {
-          targets = Array.from({ length: pc }, (_, idx) => ({ offset: idx, amount: ppa }))
+        const plan = this.parseTargetPlan(proj.targetPlan, code)
+        if (plan) {
+          targets = Array.from({ length: plan.periodCount }, (_, idx) => ({ offset: idx, amount: plan.perPeriodAmount }))
         }
       }
 
-      if (proj.totalTarget != null && targets?.length) {
-        const sum = targets.reduce((s, t) => s + Number(t.amount ?? 0), 0)
-        const delta = Math.abs(sum - Number(proj.totalTarget))
-        if (delta > 0.01) {
-          throw new BadRequestException(
-            `Program ${proj.code}: sum of targets (${sum}) differs from totalTarget (${proj.totalTarget})`,
-          )
-        }
+      const totalTarget = proj.totalTarget != null ? Number(proj.totalTarget) : null
+      if (totalTarget != null && !Number.isFinite(totalTarget)) {
+        throw new BadRequestException(`Program ${code}: totalTarget must be a number`)
       }
+      this.validateTotalTarget(code, totalTarget, targets)
 
-      await this.prisma.program.upsert({
-        where: { communityId_code: { communityId, code: proj.code } },
-        update: {
-          name: proj.name,
-          description: proj.description ?? null,
-          status: proj.status ?? 'PLANNED',
-          currency: proj.currency ?? 'RON',
-          totalTarget: proj.totalTarget ?? null,
-          startPeriodCode: proj.startPeriodCode ?? null,
-          targetPlan: proj.targetPlan ?? undefined,
-          targets: targets ?? undefined,
-          defaultBucket: proj.defaultBucket ?? null,
-          allocation: proj.allocation ?? null,
-        },
-        create: {
-          communityId,
-          code: proj.code,
-          name: proj.name,
-          description: proj.description ?? null,
-          status: proj.status ?? 'PLANNED',
-          currency: proj.currency ?? 'RON',
-          totalTarget: proj.totalTarget ?? null,
-          startPeriodCode: proj.startPeriodCode ?? null,
-          targetPlan: proj.targetPlan ?? undefined,
-          targets: targets ?? undefined,
-          defaultBucket: proj.defaultBucket ?? null,
-          allocation: proj.allocation ?? null,
-        },
+      normalized.push({
+        code,
+        name,
+        description: proj.description,
+        status: proj.status,
+        currency: proj.currency,
+        totalTarget: totalTarget ?? undefined,
+        startPeriodCode: proj.startPeriodCode,
+        targetPlan: proj.targetPlan,
+        targets,
+        defaultBucket: proj.defaultBucket,
+        allocation: proj.allocation,
       })
-      imported.push(proj.code)
     }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const proj of normalized) {
+        await tx.program.upsert({
+          where: { communityId_code: { communityId: community.id, code: proj.code } },
+          update: {
+            name: proj.name,
+            description: proj.description ?? null,
+            status: proj.status ?? 'PLANNED',
+            currency: proj.currency ?? 'RON',
+            totalTarget: proj.totalTarget ?? null,
+            startPeriodCode: proj.startPeriodCode ?? null,
+            targetPlan: proj.targetPlan ?? undefined,
+            targets: proj.targets ?? undefined,
+            defaultBucket: proj.defaultBucket ?? null,
+            allocation: proj.allocation ?? null,
+          },
+          create: {
+            communityId: community.id,
+            code: proj.code,
+            name: proj.name,
+            description: proj.description ?? null,
+            status: proj.status ?? 'PLANNED',
+            currency: proj.currency ?? 'RON',
+            totalTarget: proj.totalTarget ?? null,
+            startPeriodCode: proj.startPeriodCode ?? null,
+            targetPlan: proj.targetPlan ?? undefined,
+            targets: proj.targets ?? undefined,
+            defaultBucket: proj.defaultBucket ?? null,
+            allocation: proj.allocation ?? null,
+          },
+        })
+        imported.push(proj.code)
+      }
+    })
 
     return { count: imported.length, codes: imported }
   }

@@ -67,7 +67,6 @@ export function MeterTemplatesHost({
   }, [fetchTemplates])
 
   if (message) return <div className="badge negative">{message}</div>
-  if (!templates.length) return null
 
   const active = templates.find((t) => ((t as any).code || t.title) === activeCode) || templates[0]
   const body: any = active ? (active as any).template || active : null
@@ -131,7 +130,7 @@ export function MeterTemplatesHost({
           />
         </>
       ) : (
-        <div className="muted">No meter template selected.</div>
+        <div className="muted">{templates.length ? 'No meter template selected.' : 'No meter templates yet.'}</div>
       )}
     </div>
   )

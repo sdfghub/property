@@ -45,7 +45,6 @@ export function BillTemplatesHost({
   }, [api, communityId, periodCode, refreshKey])
 
   if (message) return <div className="badge negative">{message}</div>
-  if (!templates.length) return null
 
   const active = templates.find((t) => ((t as any).code || t.title) === activeCode) || templates[0]
   const body: any = active ? (active as any).template || active : null
@@ -107,7 +106,7 @@ export function BillTemplatesHost({
           />
         </>
       ) : (
-        <div className="muted">No bill template selected.</div>
+        <div className="muted">{templates.length ? 'No bill template selected.' : 'No bill templates yet.'}</div>
       )}
     </div>
   )

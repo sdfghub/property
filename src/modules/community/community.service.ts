@@ -557,4 +557,127 @@ export class CommunityService {
     })
     return { meters, aggregationRules, derivedMeters, measureTypes }
   }
+
+  async getTemplateCoverage(communityCode: string) {
+    const community = await this.prisma.community.findFirst({
+      where: { code: communityCode },
+      select: { id: true, code: true },
+    })
+    if (!community) return null
+
+    const lastOpen = await this.prisma.period.findFirst({
+      where: { communityId: community.id, status: { not: 'CLOSED' } },
+      orderBy: { seq: 'desc' },
+      select: { id: true, code: true, status: true, seq: true },
+    })
+    const lastAny = lastOpen
+      ? null
+      : await this.prisma.period.findFirst({
+          where: { communityId: community.id },
+          orderBy: { seq: 'desc' },
+          select: { id: true, code: true, status: true, seq: true },
+        })
+    const period = lastOpen || lastAny
+    if (!period) return null
+
+    const unitCodes = await (this.prisma as any).unit.findMany({
+      where: { communityId: community.id },
+      select: { code: true },
+    })
+    const meters = await this.prisma.meter.findMany({
+      where: {
+        origin: { not: 'DERIVED' },
+        scopeCode: { in: [community.code, ...unitCodes.map((u: any) => u.code)] },
+      },
+      orderBy: { meterId: 'asc' },
+      select: { meterId: true, typeCode: true },
+    })
+
+    const billTemplates = await (this.prisma as any).billTemplate.findMany({
+      where: {
+        communityId: community.id,
+        OR: [
+          { startPeriodCode: null, endPeriodCode: null },
+          { startPeriodCode: null, endPeriodCode: period.code },
+          { startPeriodCode: period.code, endPeriodCode: null },
+          { startPeriodCode: { lte: period.code }, endPeriodCode: { gte: period.code } },
+          { startPeriodCode: null, endPeriodCode: { gte: period.code } },
+          { startPeriodCode: { lte: period.code }, endPeriodCode: null },
+        ],
+      },
+      select: { code: true, template: true },
+    })
+    const meterTemplates = await (this.prisma as any).meterEntryTemplate.findMany({
+      where: {
+        communityId: community.id,
+        OR: [
+          { startPeriodCode: null, endPeriodCode: null },
+          { startPeriodCode: null, endPeriodCode: period.code },
+          { startPeriodCode: period.code, endPeriodCode: null },
+          { startPeriodCode: { lte: period.code }, endPeriodCode: { gte: period.code } },
+          { startPeriodCode: null, endPeriodCode: { gte: period.code } },
+          { startPeriodCode: { lte: period.code }, endPeriodCode: null },
+        ],
+      },
+      select: { code: true, template: true },
+    })
+
+    const billItems: any[] = []
+    billTemplates.forEach((tpl: any) => {
+      const body = tpl?.template || {}
+      const items = Array.isArray(body.items) ? body.items : []
+      items.forEach((i: any) => billItems.push(i))
+    })
+    const meterItems: any[] = []
+    meterTemplates.forEach((tpl: any) => {
+      const body = tpl?.template || {}
+      const items = Array.isArray(body.items) ? body.items : []
+      items.forEach((i: any) => meterItems.push(i))
+    })
+
+    const coveredMeterIds = new Set<string>()
+    const coveredMeterTypes = new Set<string>()
+    meterItems.forEach((it) => {
+      if (it?.meterId) coveredMeterIds.add(it.meterId)
+      if (it?.typeCode) coveredMeterTypes.add(it.typeCode)
+    })
+    const missingMeters = meters
+      .filter((m) => !coveredMeterIds.has(m.meterId) && !coveredMeterTypes.has(m.typeCode))
+      .map((m) => m.meterId)
+
+    const expenseTypes = await this.prisma.expenseType.findMany({
+      where: { communityId: community.id },
+      select: { code: true, params: true },
+    })
+    const splitExpenseCodes = expenseTypes
+      .filter((et) => {
+        const tmpl: any = (et.params as any)?.splitTemplate
+        if (Array.isArray(tmpl) && tmpl.length) return true
+        if (Array.isArray(tmpl?.splits) && tmpl.splits.length) return true
+        return false
+      })
+      .map((et) => et.code)
+    const coveredExpenseCodes = new Set<string>()
+    billItems.forEach((it) => {
+      if (it?.kind === 'expense' && it?.expenseTypeCode) {
+        coveredExpenseCodes.add(it.expenseTypeCode)
+      }
+    })
+    const missingExpenseSplits = splitExpenseCodes.filter((code) => !coveredExpenseCodes.has(code))
+
+    return {
+      period,
+      templates: { bill: billTemplates.length, meter: meterTemplates.length },
+      meters: {
+        total: meters.length,
+        missing: missingMeters.length,
+        missingIds: missingMeters,
+      },
+      expenseSplits: {
+        total: splitExpenseCodes.length,
+        missing: missingExpenseSplits.length,
+        missingCodes: missingExpenseSplits,
+      },
+    }
+  }
 }

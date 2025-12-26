@@ -29,6 +29,11 @@ export class TemplateController {
     })
   }
 
+  @Post('bill-templates/import')
+  importBillTemplates(@Param('communityId') communityId: string, @Body() body: any, @Req() req: any) {
+    return this.templates.importBillTemplates(communityId, req.user?.roles ?? [], body)
+  }
+
   @Get('periods/:periodCode/bill-templates/:code/attachments')
   listBillAttachments(@Param('communityId') communityId: string, @Param('periodCode') periodCode: string, @Param('code') code: string, @Req() req: any) {
     return this.templates.listBillTemplateAttachments(communityId, periodCode, code, req.user?.roles ?? [])
@@ -85,6 +90,11 @@ export class TemplateController {
       state: body.state,
       values: body.values,
     })
+  }
+
+  @Post('meter-templates/import')
+  importMeterTemplates(@Param('communityId') communityId: string, @Body() body: any, @Req() req: any) {
+    return this.templates.importMeterTemplates(communityId, req.user?.roles ?? [], body)
   }
 
   @Get('periods/:periodCode/meter-templates/:code/attachments')
