@@ -63,6 +63,19 @@ function AppShell() {
     }
   }, [apiBase])
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    const before = url.toString()
+    url.searchParams.delete('invite')
+    url.searchParams.delete('inviteToken')
+    url.searchParams.delete('token')
+    const after = url.toString()
+    if (before !== after) {
+      window.history.replaceState({}, document.title, after)
+    }
+  }, [])
+
   return (
     <div className="app-shell">
       <div className="hero">
@@ -75,7 +88,20 @@ function AppShell() {
               <span>{user.email}</span>
               <RolePicker roles={roles} activeRole={activeRole} onChange={setActiveRole} />
             </div>
-            <button className="btn secondary" style={{ padding: '8px 12px' }} onClick={logout}>
+            <button
+              className="btn secondary"
+              style={{ padding: '8px 12px' }}
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href)
+                  url.searchParams.delete('invite')
+                  url.searchParams.delete('inviteToken')
+                  url.searchParams.delete('token')
+                  window.history.replaceState({}, document.title, url.toString())
+                }
+                logout()
+              }}
+            >
               {t('app.logout')}
             </button>
           </div>
@@ -161,8 +187,7 @@ function RolePicker({
 
 function AuthCard() {
   const { t } = useI18n()
-  const { loginWithPassword, registerWithPassword, oauthLogin, getInviteSummary, error, status } = useAuth()
-  const [mode, setMode] = React.useState<'login' | 'register'>('login')
+  const { loginWithPassword, registerWithPassword, getInviteSummary, error, status } = useAuth()
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [name, setName] = React.useState('')
@@ -171,10 +196,6 @@ function AuthCard() {
   const [inviteSummary, setInviteSummary] = React.useState<any | null>(null)
   const [inviteError, setInviteError] = React.useState<string | null>(null)
   const [inviteLoading, setInviteLoading] = React.useState(false)
-  const [oauthOpen, setOauthOpen] = React.useState<'google' | 'apple' | null>(null)
-  const [providerUserId, setProviderUserId] = React.useState('')
-  const [oauthEmail, setOauthEmail] = React.useState('')
-  const [oauthName, setOauthName] = React.useState('')
 
   const inviteToken = React.useMemo(() => {
     const search = new URLSearchParams(window.location.search)
@@ -201,15 +222,7 @@ function AuthCard() {
     setWorking(true)
     setFormError(null)
     try {
-      if (mode === 'login') {
-        await loginWithPassword({ email, password, inviteToken })
-      } else {
-        if (!canRegister) {
-          setFormError(t('auth.invite.required'))
-          return
-        }
-        await registerWithPassword({ email, password, name: name || undefined, inviteToken })
-      }
+      await loginWithPassword({ email, password, inviteToken })
     } catch (err: any) {
       setFormError(err?.message || t('common.error'))
     } finally {
@@ -217,19 +230,16 @@ function AuthCard() {
     }
   }
 
-  async function handleOauthSubmit(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
-    if (!oauthOpen) return
     setWorking(true)
     setFormError(null)
     try {
-      await oauthLogin({
-        provider: oauthOpen,
-        providerUserId,
-        email: oauthEmail || undefined,
-        name: oauthName || undefined,
-        inviteToken,
-      })
+      if (!canRegister) {
+        setFormError(t('auth.invite.required'))
+        return
+      }
+      await registerWithPassword({ email, password, name: name || undefined, inviteToken })
     } catch (err: any) {
       setFormError(err?.message || t('common.error'))
     } finally {
@@ -237,35 +247,33 @@ function AuthCard() {
     }
   }
 
-  return (
-    <div className="grid two">
+  if (canRegister) {
+    return (
       <div className="card">
-        <h2>{t('auth.title')}</h2>
-        <p className="muted">{t('auth.subtitle')}</p>
-        {!canRegister && (
-          <div className="badge" style={{ marginBottom: 12 }}>
-            {t('auth.invite.required')}
-          </div>
-        )}
-        <div className="row" style={{ gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {(['login', 'register'] as const).map((tab) => (
-            <button
-              key={tab}
-              className="btn secondary"
-              type="button"
-              disabled={tab === 'register' && !canRegister}
-              style={{
-                padding: '6px 10px',
-                background: mode === tab ? 'rgba(43, 212, 213, 0.15)' : undefined,
-                borderColor: mode === tab ? 'rgba(43, 212, 213, 0.5)' : undefined,
-              }}
-              onClick={() => setMode(tab)}
-            >
-              {t(tab === 'login' ? 'auth.tab.login' : 'auth.tab.register')}
-            </button>
-          ))}
-        </div>
-        <form className="stack" onSubmit={handleSubmit}>
+        <h3>{t('auth.invite.title')}</h3>
+        <p className="muted">{t('auth.invite.note')}</p>
+        {inviteLoading && <div className="muted">{t('auth.invite.loading')}</div>}
+        {inviteError && <div className="badge negative">{inviteError}</div>}
+        {inviteSummary && (
+          <div className="stack" style={{ gap: 6 }}>
+            <div>
+              <span className="muted">{t('auth.invite.email')}</span>
+              <div>{inviteSummary.email || t('auth.invite.noEmail')}</div>
+            </div>
+            <div>
+              <span className="muted">{t('auth.invite.role')}</span>
+              <div>{inviteSummary.role}</div>
+            </div>
+            <div>
+              <span className="muted">{t('auth.invite.scope')}</span>
+              <div>
+                {inviteSummary.scopeType}
+                {inviteSummary.scopeId ? ` · ${inviteSummary.scopeId}` : ''}
+              </div>
+            </div>
+            </div>
+          )}
+        <form className="stack" onSubmit={handleRegister} style={{ marginTop: 12 }}>
           <label className="label">
             <span>{t('auth.emailLabel')}</span>
             <span className="muted">{t('auth.emailNote')}</span>
@@ -291,24 +299,18 @@ function AuthCard() {
             placeholder={t('auth.passwordPlaceholder')}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {mode === 'register' && (
-            <>
-              <label className="label">
-                <span>{t('auth.nameLabel')}</span>
-                <span className="muted">{t('auth.nameNote')}</span>
-              </label>
-              <input
-                className="input"
-                value={name}
-                placeholder={t('auth.namePlaceholder')}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </>
-          )}
+          <label className="label">
+            <span>{t('auth.nameLabel')}</span>
+            <span className="muted">{t('auth.nameNote')}</span>
+          </label>
+          <input
+            className="input"
+            value={name}
+            placeholder={t('auth.namePlaceholder')}
+            onChange={(e) => setName(e.target.value)}
+          />
           <button className="btn" type="submit" disabled={working || status === 'loading'}>
-            {working || status === 'loading'
-              ? t('auth.working')
-              : t(mode === 'login' ? 'auth.loginCta' : 'auth.registerCta')}
+            {working || status === 'loading' ? t('auth.working') : t('auth.registerCta')}
           </button>
           {(formError || error) && (
             <div className="badge negative">
@@ -317,97 +319,50 @@ function AuthCard() {
           )}
         </form>
       </div>
+    )
+  }
 
-      <div className="stack" style={{ gap: 16 }}>
-        <div className="card">
-          <h3>{t('auth.invite.title')}</h3>
-          <p className="muted">{t('auth.invite.note')}</p>
-          {inviteLoading && <div className="muted">{t('auth.invite.loading')}</div>}
-          {inviteError && <div className="badge negative">{inviteError}</div>}
-          {inviteSummary && (
-            <div className="stack" style={{ gap: 6 }}>
-              <div>
-                <span className="muted">{t('auth.invite.email')}</span>
-                <div>{inviteSummary.email || t('auth.invite.noEmail')}</div>
-              </div>
-              <div>
-                <span className="muted">{t('auth.invite.role')}</span>
-                <div>{inviteSummary.role}</div>
-              </div>
-              <div>
-                <span className="muted">{t('auth.invite.scope')}</span>
-                <div>{inviteSummary.scopeType}{inviteSummary.scopeId ? ` · ${inviteSummary.scopeId}` : ''}</div>
-              </div>
+  return (
+    <div className="grid two">
+      <div className="card">
+        <h2>{t('auth.title')}</h2>
+        <p className="muted">{t('auth.subtitle')}</p>
+        <form className="stack" onSubmit={handleSubmit}>
+          <label className="label">
+            <span>{t('auth.emailLabel')}</span>
+          </label>
+          <input
+            className="input"
+            type="email"
+            value={email}
+            required
+            readOnly={Boolean(inviteSummary?.email)}
+            placeholder={t('auth.emailPlaceholder')}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <label className="label">
+            <span>{t('auth.passwordLabel')}</span>
+            <span className="muted">{t('auth.passwordNote')}</span>
+          </label>
+          <input
+            className="input"
+            type="password"
+            value={password}
+            required
+            placeholder={t('auth.passwordPlaceholder')}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button className="btn" type="submit" disabled={working || status === 'loading'}>
+            {working || status === 'loading' ? t('auth.working') : t('auth.loginCta')}
+          </button>
+          {(formError || error) && (
+            <div className="badge negative">
+              {t('common.error')}: {formError || error}
             </div>
           )}
-        </div>
-
-        <div className="card">
-          <h3>{t('auth.social.title')}</h3>
-          <p className="muted">{t('auth.social.note')}</p>
-          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {(['google', 'apple'] as const).map((provider) => (
-              <button
-                key={provider}
-                className="btn secondary"
-                type="button"
-                style={{
-                  padding: '6px 10px',
-                  background: oauthOpen === provider ? 'rgba(43, 212, 213, 0.15)' : undefined,
-                  borderColor: oauthOpen === provider ? 'rgba(43, 212, 213, 0.5)' : undefined,
-                }}
-                onClick={() => setOauthOpen(provider)}
-              >
-                {t(provider === 'google' ? 'auth.social.google' : 'auth.social.apple')}
-              </button>
-            ))}
-          </div>
-          {oauthOpen && (
-            <form className="stack" onSubmit={handleOauthSubmit} style={{ marginTop: 12 }}>
-              <label className="label">
-                <span>{t('auth.social.providerIdLabel')}</span>
-                <span className="muted">{t('auth.social.providerIdNote')}</span>
-              </label>
-              <input
-                className="input"
-                value={providerUserId}
-                required
-                placeholder={t('auth.social.providerIdPlaceholder')}
-                onChange={(e) => setProviderUserId(e.target.value)}
-              />
-              <label className="label">
-                <span>{t('auth.social.emailLabel')}</span>
-                <span className="muted">{t('auth.social.emailNote')}</span>
-              </label>
-              <input
-                className="input"
-                type="email"
-                value={oauthEmail}
-                placeholder={t('auth.social.emailPlaceholder')}
-                onChange={(e) => setOauthEmail(e.target.value)}
-              />
-              <label className="label">
-                <span>{t('auth.social.nameLabel')}</span>
-                <span className="muted">{t('auth.social.nameNote')}</span>
-              </label>
-              <input
-                className="input"
-                value={oauthName}
-                placeholder={t('auth.social.namePlaceholder')}
-                onChange={(e) => setOauthName(e.target.value)}
-              />
-              <div className="row" style={{ gap: 8 }}>
-                <button className="btn" type="submit" disabled={working || status === 'loading'}>
-                  {working || status === 'loading' ? t('auth.working') : t('auth.social.continue')}
-                </button>
-                <button className="btn secondary" type="button" onClick={() => setOauthOpen(null)}>
-                  {t('auth.social.cancel')}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+        </form>
       </div>
+      <div />
     </div>
   )
 }

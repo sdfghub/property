@@ -365,7 +365,7 @@ export const translations = {
   // Romanian translations
   ro: {
     'app.cockpit': 'Tablou cheltuieli proprietăți',
-    'app.console': 'Bill ’Em All',
+    'app.console': 'Ma ocup eu!',
     'app.logout': 'Deconectare',
     'app.versionUi': 'Versiune UI',
     'app.versionApi': 'Versiune API',
