@@ -263,58 +263,84 @@ select option {
   gap: 10px;
 }
 
-.combo {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+.scope-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scope-row {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-.combo-input {
-  padding-right: 10px;
-}
-
-.combo-toggle {
+.scope-option {
   padding: 6px 10px;
   font-size: 12px;
-  line-height: 1;
 }
 
-.combo-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  border: 1px solid var(--border);
+.scope-drawer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
+  padding: 10px;
   border-radius: 12px;
+  border: 1px solid var(--border);
   background: var(--panel);
   box-shadow: var(--card-shadow);
-  max-height: 240px;
-  overflow: auto;
-  padding: 6px;
 }
 
-.combo-option {
-  width: 100%;
+.scope-drawer-option {
   text-align: left;
-  border: none;
   border-radius: 10px;
+  border: 1px solid transparent;
   padding: 8px 10px;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border 120ms ease;
+  transition: background 120ms ease, border 120ms ease;
 }
 
-.combo-option:hover,
-.combo-option:focus-visible {
+.scope-drawer-option:hover,
+.scope-drawer-option:focus-visible {
   background: var(--accent-soft);
 }
 
-.combo-option.active {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
+.scope-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 12, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 80px 24px 24px;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.scope-drawer-panel {
+  width: min(720px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scope-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.scope-drawer-close {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .list {

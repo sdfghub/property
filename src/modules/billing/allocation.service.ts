@@ -141,6 +141,56 @@ export class AllocationService {
     const meterLabels = await this.getMeterLabelMap(communityId, period.id)
 
     let splitsToUse = input.splits
+    const splitRepo = (this.prisma as any).expenseSplit
+    if ((!splitsToUse || !splitsToUse.length) && splitRepo?.findMany) {
+      const existingSplits = await splitRepo.findMany({
+        where: { expenseId: expId },
+        select: {
+          id: true,
+          parentSplitId: true,
+          share: true,
+          amount: true,
+          basisType: true,
+          basisCode: true,
+          meta: true,
+        },
+      })
+      if (existingSplits.length) {
+        const byId = new Map<string, any>()
+        for (const s of existingSplits) {
+          const meta = (s.meta as any) ?? {}
+          const basis =
+            meta.basis ??
+            meta?.allocation?.basis ??
+            (s.basisType || s.basisCode ? { type: s.basisType, code: s.basisCode } : undefined)
+          const derivedShare = meta.derivedShare ?? meta.derived_share
+          const node: any = {
+            ...meta,
+            share: meta.share ?? (derivedShare == null && s.share != null ? Number(s.share) : undefined),
+            derivedShare,
+            allocation: meta.allocation ?? meta.alloc,
+            basis,
+            _existingSplitId: s.id,
+            _parentSplitId: s.parentSplitId ?? null,
+            _storedMeta: meta,
+          }
+          delete node.children
+          byId.set(s.id, node)
+        }
+        const roots: any[] = []
+        for (const node of byId.values()) {
+          const parentId = node._parentSplitId
+          if (parentId && byId.has(parentId)) {
+            const parent = byId.get(parentId)
+            if (!parent.children) parent.children = []
+            parent.children.push(node)
+          } else {
+            roots.push(node)
+          }
+        }
+        splitsToUse = roots
+      }
+    }
     if ((!splitsToUse || !splitsToUse.length) && input.expenseTypeId) {
       const et = await this.prisma.expenseType.findUnique({ where: { id: input.expenseTypeId }, select: { params: true } })
       const tmpl: any = (et?.params as any)?.splitTemplate
@@ -148,7 +198,6 @@ export class AllocationService {
     }
 
     if (splitsToUse && Array.isArray(splitsToUse) && splitsToUse.length) {
-      const splitRepo = (this.prisma as any).expenseSplit
       const allocationLineRepo: any = (this.prisma as any).allocationLine
 
       const resolveShares = async (siblings: any[]) => {
@@ -354,7 +403,7 @@ export class AllocationService {
           if (val === undefined || val === null) throw new ForbiddenException(`Missing measure ${typeCode} for unit ${u.code}`)
           return s + val
         }, 0)
-        if (total <= 0) return
+        if (total <= 0) throw new ForbiddenException(`Total ${typeCode} is zero for allocation`)
 
         for (const u of units) {
           const val = byUnit.get(u.id)!
@@ -415,39 +464,64 @@ export class AllocationService {
         )
       }
 
+      const buildSplitMeta = (node: any, splitAmount: number) => {
+        const base: any = { ...(node._storedMeta ?? node) }
+        delete base._storedMeta
+        delete base._existingSplitId
+        delete base._parentSplitId
+        delete base._resolvedShare
+        const display = this.formatDisplay(
+          {
+            allocationMethod: (node.allocation as any)?.method,
+            basis: (node.allocation as any)?.basis ?? node.basis,
+            splitNode: node,
+          },
+          { description: input.description, amount: splitAmount, meterLabels },
+        )
+        return { ...base, display }
+      }
+
       const processSplits = async (nodes: any[], amount: number, parentId: string | null) => {
         await resolveShares(nodes)
         for (const node of nodes) {
           const share = node._resolvedShare ?? node.share
           if (share == null) throw new ForbiddenException('Split share missing')
           const splitAmount = amount * Number(share)
-          const split = await splitRepo.create({
-            data: {
-              communityId,
-              periodId: period.id,
-              expenseId: expId,
-              parentSplitId: parentId,
-              share: share,
-              amount: splitAmount,
-              basisType: ((node.allocation as any)?.basis ?? node.basis)?.type ?? null,
-              basisCode: ((node.allocation as any)?.basis ?? node.basis)?.code ?? null,
-              meta: {
-                ...node,
-                display: this.formatDisplay(
-                  {
-                    allocationMethod: (node.allocation as any)?.method,
-                    basis: (node.allocation as any)?.basis ?? node.basis,
-                    splitNode: node,
-                  },
-                  { description: input.description, amount: splitAmount, meterLabels },
-                ),
+          const basis = (node.allocation as any)?.basis ?? node.basis
+          const meta = buildSplitMeta(node, splitAmount)
+          let splitId = node._existingSplitId
+          if (splitId) {
+            await splitRepo.update({
+              where: { id: splitId },
+              data: {
+                parentSplitId: parentId,
+                share: share,
+                amount: splitAmount,
+                basisType: basis?.type ?? null,
+                basisCode: basis?.code ?? null,
+                meta,
               },
-            },
-          })
-          if (node.children && node.children.length) {
-            await processSplits(node.children, splitAmount, split.id)
+            })
           } else {
-            await allocateLeaf(node, splitAmount, split.id)
+            const split = await splitRepo.create({
+              data: {
+                communityId,
+                periodId: period.id,
+                expenseId: expId,
+                parentSplitId: parentId,
+                share: share,
+                amount: splitAmount,
+                basisType: basis?.type ?? null,
+                basisCode: basis?.code ?? null,
+                meta,
+              },
+            })
+            splitId = split.id
+          }
+          if (node.children && node.children.length) {
+            await processSplits(node.children, splitAmount, splitId)
+          } else {
+            await allocateLeaf(node, splitAmount, splitId)
           }
         }
       }

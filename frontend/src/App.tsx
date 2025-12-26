@@ -179,13 +179,8 @@ function RolePicker({
     [activeRole.role, activeRole.scopeType !== 'SYSTEM' ? activeRole.scopeType.toLowerCase() : null, activeRole.scopeId]
       .filter(Boolean)
       .join(' · ')
-  const [query, setQuery] = React.useState(activeLabel || '')
   const [open, setOpen] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
-
-  React.useEffect(() => {
-    setQuery(activeLabel || '')
-  }, [activeLabel])
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -200,73 +195,82 @@ function RolePicker({
     }
   }, [])
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const shouldShowAll = open && (!normalizedQuery || query === (activeLabel || ''))
-  const filteredOptions = shouldShowAll
-    ? options
-    : options.filter((opt) => opt.label.toLowerCase().includes(normalizedQuery))
+  const mainOptions = options.slice(0, 3)
+  const extraOptions = options.slice(3)
   return (
     <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
       <label className="label" style={{ marginBottom: 0 }}>
         <span>{t('app.scope')}</span>
       </label>
-      <div className="combo" ref={containerRef}>
-        <input
-          className="input combo-input"
-          style={{ minWidth: 220 }}
-          value={query}
-          placeholder={t('app.scope')}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setOpen(true)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setOpen(false)
-            if (e.key === 'ArrowDown') setOpen(true)
-            if (e.key === 'Enter' && filteredOptions[0]) {
-              onChange(filteredOptions[0].role)
-              setQuery(filteredOptions[0].label)
-              setOpen(false)
-            }
-          }}
-          onBlur={() => {
-            if (!query) setQuery(activeLabel || '')
-          }}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-        />
-        <button
-          className="btn secondary combo-toggle"
-          type="button"
-          aria-label={t('app.scope')}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          ▾
-        </button>
-        {open && filteredOptions.length > 0 ? (
-          <div className="combo-list" role="listbox">
-            {filteredOptions.map((opt) => {
-              const isActive =
-                activeRole?.role === opt.role.role &&
-                activeRole?.scopeType === opt.role.scopeType &&
-                activeRole?.scopeId === opt.role.scopeId
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`combo-option${isActive ? ' active' : ''}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onChange(opt.role)
-                    setQuery(opt.label)
-                    setOpen(false)
-                  }}
-                >
-                  {opt.label}
+      <div className="scope-picker" ref={containerRef}>
+        <div className="scope-row">
+          {mainOptions.map((opt) => {
+            const isActive =
+              activeRole?.role === opt.role.role &&
+              activeRole?.scopeType === opt.role.scopeType &&
+              activeRole?.scopeId === opt.role.scopeId
+            return (
+              <button
+                key={opt.value}
+                className="btn secondary scope-option"
+                style={{
+                  background: isActive ? 'var(--accent-soft)' : undefined,
+                  borderColor: isActive ? 'var(--accent-border)' : undefined,
+                }}
+                type="button"
+                onClick={() => onChange(opt.role)}
+                title={opt.label}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+          {extraOptions.length ? (
+            <button
+              className="btn secondary scope-option"
+              type="button"
+              onClick={() => setOpen((prev) => !prev)}
+            >
+              {t('app.more')} ({extraOptions.length})
+            </button>
+          ) : null}
+        </div>
+        {open && extraOptions.length ? (
+          <div className="scope-drawer-overlay" role="dialog" aria-label={t('app.scope')}>
+            <div className="scope-drawer-panel">
+              <div className="scope-drawer-header">
+                <span>{t('app.scope')}</span>
+                <button className="btn secondary scope-drawer-close" type="button" onClick={() => setOpen(false)}>
+                  ✕
                 </button>
-              )
-            })}
+              </div>
+              <div className="scope-drawer" role="listbox">
+                {extraOptions.map((opt) => {
+                  const isActive =
+                    activeRole?.role === opt.role.role &&
+                    activeRole?.scopeType === opt.role.scopeType &&
+                    activeRole?.scopeId === opt.role.scopeId
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className="scope-drawer-option"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        onChange(opt.role)
+                        setOpen(false)
+                      }}
+                      style={{
+                        background: isActive ? 'var(--accent-soft)' : undefined,
+                        borderColor: isActive ? 'var(--accent-border)' : undefined,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         ) : null}
       </div>
