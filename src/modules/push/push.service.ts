@@ -5,7 +5,7 @@ import fs from 'fs'
 
 type PushPayload = { title?: string; body?: string; url?: string; token?: string }
 type PushSendPayload = { title?: string; body?: string; url?: string }
-const DEFAULT_DEV_FCM_PATH = 'property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json'
+const DEFAULT_DEV_FCM_PATH = `${process.env.HOME || ''}/.config/property/fcm-service-account.json`
 
 @Injectable()
 export class PushService {
@@ -20,10 +20,9 @@ export class PushService {
       creds = JSON.parse(json)
     } else if (path) {
       creds = JSON.parse(fs.readFileSync(path, 'utf8'))
-    } else if (process.env.NODE_ENV !== 'production') {
-      const fallbackPath = `${process.cwd()}/${DEFAULT_DEV_FCM_PATH}`
-      if (fs.existsSync(fallbackPath)) {
-        creds = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
+    } else if (process.env.NODE_ENV !== 'production' && DEFAULT_DEV_FCM_PATH) {
+      if (fs.existsSync(DEFAULT_DEV_FCM_PATH)) {
+        creds = JSON.parse(fs.readFileSync(DEFAULT_DEV_FCM_PATH, 'utf8'))
       }
     }
     if (!creds) {
