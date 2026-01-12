@@ -7,6 +7,7 @@
     "dev:db": "prisma migrate dev --name init",
     "generate": "prisma generate",
     "build": "tsc -p .",
+    "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "seed": "ts-node --transpile-only prisma/seed.ts",
     "allocate": "ts-node --transpile-only src/cli/allocate.ts",
     "serve": "node dist/server.js",
@@ -25,7 +26,9 @@
     "add:payment": "ts-node --transpile-only src/scripts/add-payment.ts",
     "import:opening": "ts-node --transpile-only src/scripts/import-opening-balances.ts",
     "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts",
-    "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts"
+    "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts",
+    "wipe:community": "ts-node --transpile-only src/scripts/wipe-community.ts",
+    "make:system-admin": "ts-node --transpile-only src/scripts/make-system-admin.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
@@ -53,6 +56,7 @@
     "@typescript-eslint/parser": "^8.14.0",
     "eslint": "^9.10.0",
     "prisma": "^5.22.0",
+    "ts-node-dev": "^2.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   },

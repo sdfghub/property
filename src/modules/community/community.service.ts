@@ -185,23 +185,11 @@ export class CommunityService {
     })
     byCommunity.forEach(x => { if (x.scopeId) communityIds.add(x.scopeId) })
 
-    // BILLING_ENTITY-scoped roles → map BE → community
-    const byBe = await this.prisma.roleAssignment.findMany({
-      where: { userId, scopeType: 'BILLING_ENTITY' as ScopeType },
-      select: { scopeId: true },
+    const beRoles = await this.prisma.billingEntityUserRole.findMany({
+      where: { userId },
+      select: { billingEntity: { select: { communityId: true } } },
     })
-
-    const beIds: string[] = byBe
-      .map(x => x.scopeId)
-      .filter((id): id is string => !!id)
-
-    if (byBe.length) {
-      const bes = await this.prisma.billingEntity.findMany({
-        where: { id: { in: beIds } },
-        select: { communityId: true },
-      })
-      bes.forEach(b => communityIds.add(b.communityId))
-    }
+    beRoles.forEach((r) => communityIds.add(r.billingEntity.communityId))
 
     if (communityIds.size === 0) return []
 
@@ -221,6 +209,24 @@ export class CommunityService {
         : {}),
       orderBy: { name: 'asc' },
     })
+  }
+
+  async listScopesForUser(userId: string) {
+    const communities = await this.listForUser(userId)
+    const beRoles = await this.prisma.billingEntityUserRole.findMany({
+      where: { userId },
+      select: { billingEntityId: true },
+    })
+    const beIds = Array.from(new Set(beRoles.map((r) => r.billingEntityId).filter(Boolean)))
+    if (beIds.length === 0) {
+      return { communities, billingEntities: [] }
+    }
+    const billingEntities = await this.prisma.billingEntity.findMany({
+      where: { id: { in: beIds } },
+      select: { id: true, code: true, name: true, communityId: true },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
+    })
+    return { communities, billingEntities }
   }
 
   async listAdmins(communityId: string) {
@@ -253,8 +259,12 @@ export class CommunityService {
     })
     if (bes.length === 0) return []
     const beIds = bes.map(b => b.id)
-    const assignments = await this.prisma.roleAssignment.findMany({
-      where: { role: 'BILLING_ENTITY_USER', scopeType: 'BILLING_ENTITY', scopeId: { in: beIds } },
+    const assignments = await this.prisma.billingEntityUserRole.findMany({
+      where: { role: 'EXPENSE_RESPONSIBLE', billingEntityId: { in: beIds } },
+      include: { user: { select: { id: true, email: true, name: true } } },
+    })
+    const beUsers = await this.prisma.billingEntityUserRole.findMany({
+      where: { billingEntityId: { in: beIds } },
       include: { user: { select: { id: true, email: true, name: true } } },
     })
     const pendingInvites = await this.prisma.invite.findMany({
@@ -265,13 +275,29 @@ export class CommunityService {
         acceptedAt: null,
         expiresAt: { gt: new Date() },
       },
-      select: { id: true, email: true, role: true, scopeId: true, createdAt: true, expiresAt: true },
+      select: { id: true, email: true, role: true, beRoles: true, scopeId: true, createdAt: true, expiresAt: true },
     })
     const byBe = new Map<string, typeof assignments>()
     for (const a of assignments) {
-      const list = byBe.get(a.scopeId || '') ?? []
+      const list = byBe.get(a.billingEntityId) ?? []
       list.push(a)
-      byBe.set(a.scopeId || '', list)
+      byBe.set(a.billingEntityId, list)
+    }
+    const usersByBe = new Map<string, Array<{ userId: string; email: string; name?: string | null; roles: string[] }>>()
+    for (const row of beUsers) {
+      const list = usersByBe.get(row.billingEntityId) ?? []
+      const existing = list.find((u) => u.userId === row.userId)
+      if (existing) {
+        if (!existing.roles.includes(row.role)) existing.roles.push(row.role)
+      } else {
+        list.push({
+          userId: row.userId,
+          email: row.user?.email ?? '',
+          name: row.user?.name ?? null,
+          roles: [row.role],
+        })
+      }
+      usersByBe.set(row.billingEntityId, list)
     }
     const pendingByBe = new Map<string, typeof pendingInvites>()
     for (const p of pendingInvites) {
@@ -289,14 +315,53 @@ export class CommunityService {
         name: a.user?.name ?? null,
         assignmentId: a.id,
       })),
+      users: usersByBe.get(be.id) ?? [],
       pending: (pendingByBe.get(be.id) || []).map(p => ({
         id: p.id,
         email: p.email,
         role: p.role,
+        beRoles: (p as any).beRoles ?? [],
         createdAt: p.createdAt,
         expiresAt: p.expiresAt,
       })),
     }))
+  }
+
+  async updateBillingEntityUserRoles(
+    communityId: string,
+    billingEntityId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const be = await this.prisma.billingEntity.findFirst({
+      where: { id: billingEntityId, communityId },
+      select: { id: true },
+    })
+    if (!be) throw new BadRequestException('Invalid billing entity')
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId },
+      select: { id: true },
+    })
+    if (!user) throw new BadRequestException('User not found')
+
+    const allowed = new Set(['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE'])
+    const normalized = Array.from(
+      new Set((roles || []).map((r) => String(r ?? '').toUpperCase()).filter((r) => allowed.has(r))),
+    )
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.billingEntityUserRole.deleteMany({
+        where: { billingEntityId, userId },
+      })
+      if (normalized.length) {
+        await tx.billingEntityUserRole.createMany({
+          data: normalized.map((role) => ({ billingEntityId, userId, role: role as any })),
+        })
+      }
+    })
+
+    return { ok: true, roles: normalized }
   }
 
   async getConfigSnapshot(communityCode: string) {
@@ -356,8 +421,8 @@ export class CommunityService {
           })
           const beIds = bes.map((b) => b.id)
           if (!beIds.length) return { responsibles: [], pendingInvites: [] }
-          const responsibles = await this.prisma.roleAssignment.findMany({
-            where: { role: 'BILLING_ENTITY_USER', scopeType: 'BILLING_ENTITY', scopeId: { in: beIds } },
+          const responsibles = await this.prisma.billingEntityUserRole.findMany({
+            where: { role: 'EXPENSE_RESPONSIBLE', billingEntityId: { in: beIds } },
             include: { user: { select: { id: true, email: true, name: true } } },
           })
           const pendingInvites = await this.prisma.invite.findMany({
@@ -368,7 +433,7 @@ export class CommunityService {
               acceptedAt: null,
               expiresAt: { gt: new Date() },
             },
-            select: { id: true, email: true, role: true, scopeId: true, createdAt: true, expiresAt: true },
+            select: { id: true, email: true, role: true, beRoles: true, scopeId: true, createdAt: true, expiresAt: true },
           })
           return { responsibles, pendingInvites }
         })(),

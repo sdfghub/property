@@ -36,9 +36,13 @@ export function SystemAdminPanel() {
   const [createBusy, setCreateBusy] = React.useState(false)
   const [createMessage, setCreateMessage] = React.useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = React.useState(false)
+  const communityLoadRef = React.useRef<string | null>(null)
+  const adminLoadRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     // System admins can search communities globally.
+    if (communityLoadRef.current === search) return
+    communityLoadRef.current = search
     api
       .get<Community[]>(`/communities${search ? `?q=${encodeURIComponent(search)}` : ''}`)
       .then((rows) => {
@@ -48,11 +52,13 @@ export function SystemAdminPanel() {
         }
       })
       .catch((err: any) => setMessage(err?.message || t('admin.errorLoadCommunities')))
-  }, [api, search, selectedId])
+  }, [api, search, t])
 
   React.useEffect(() => {
     // When a community is selected, load current admins + pending invites.
     if (!selectedId) return
+    if (adminLoadRef.current === selectedId) return
+    adminLoadRef.current = selectedId
     setLoading(true)
     setMessage(null)
     api
@@ -65,7 +71,7 @@ export function SystemAdminPanel() {
       .get<PendingInvite[]>(`/invites/community/${selectedId}/pending`)
       .then(setPending)
       .catch((err: any) => setMessage(err?.message || t('admin.errorLoadInvites')))
-  }, [api, selectedId])
+  }, [api, selectedId, t])
 
   // Remove an existing admin assignment for the active community.
   async function revoke(userId: string) {
@@ -322,11 +328,7 @@ export function SystemAdminPanel() {
           <div className="stack">
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div>
-                <h3>{active.name}</h3>
-                <div className="muted">
-                  {t('billing.communityLabel')}: {active.code}
-                </div>
-                <div className="badge" style={{ marginTop: 6 }}>{t('admin.manageAdmins')}</div>
+                <h3>{active.name} ({active.code})</h3>
               </div>
             </div>
 
@@ -375,7 +377,7 @@ export function SystemAdminPanel() {
                 <div className="badge">{t('admin.pendingCount', { count: pending.length })}</div>
               </div>
               {pending.length === 0 ? (
-                <div className="empty">{t('admin.noPending')}</div>
+                <div className="empty"></div>
               ) : (
                 <div className="list">
                   {pending.map((p) => (

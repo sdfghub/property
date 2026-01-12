@@ -134,7 +134,7 @@ applyExpensePlan(plan)
         expense_type: string | null
         split: string | null
         amount: number
-        meta: any
+        allocation_trace: any
       }>
     >(
       `
@@ -156,9 +156,10 @@ applyExpensePlan(plan)
         et.code AS expense_type,
         al.expense_split_id AS split,
         al.amount::numeric AS amount,
-        al.meta AS meta
+        at.trace AS allocation_trace
       FROM allocation_line al
       JOIN tp ON tp.id = al.period_id
+      LEFT JOIN allocation_trace at ON at.allocation_line_id = al.id
       JOIN active_members am ON am.unit_id = al.unit_id
       JOIN billing_entity be ON be.id = am.billing_entity_id
       JOIN unit u ON u.id = al.unit_id
@@ -212,7 +213,7 @@ applyExpensePlan(plan)
           )
           entry.splits.forEach((row) =>
             console.log(
-            `        split ${row.split ?? 'n/a'}: ${row.expense} [${row.expense_type ?? 'custom'}] = ${Number(row.amount ?? 0).toFixed(4)} meta=${JSON.stringify(row.meta ?? {})}`,
+            `        split ${row.split ?? 'n/a'}: ${row.expense} [${row.expense_type ?? 'custom'}] = ${Number(row.amount ?? 0).toFixed(4)} trace=${JSON.stringify(row.allocation_trace ?? {})}`,
             ),
           )
         })

@@ -3,16 +3,20 @@ import { useAuth } from '../hooks/useAuth'
 import { useI18n } from '../i18n/useI18n'
 import { getPushPermission, isPushSupported, registerPushToken, requestPushPermission } from '../services/push'
 
-export function PushPrompt() {
+export function PushPrompt({ variant = 'card' }: { variant?: 'card' | 'menu' }) {
   const { api, user } = useAuth()
   const { t } = useI18n()
+  const storageKey = 'pe-push-disabled'
   const [supported, setSupported] = React.useState<boolean | null>(null)
   const [permission, setPermission] = React.useState<'default' | 'granted' | 'denied' | 'unsupported'>('default')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [registered, setRegistered] = React.useState(false)
-  const [sending, setSending] = React.useState(false)
-  const [sendOk, setSendOk] = React.useState<string | null>(null)
+  const [disabling, setDisabling] = React.useState(false)
+  const [disabled, setDisabled] = React.useState(() => {
+    if (typeof localStorage === 'undefined') return false
+    return localStorage.getItem(storageKey) === 'true'
+  })
 
   React.useEffect(() => {
     if (!user) return
@@ -36,6 +40,7 @@ export function PushPrompt() {
   React.useEffect(() => {
     if (!user || supported !== true) return
     if (permission !== 'granted') return
+    if (disabled) return
     if (registered) return
     setBusy(true)
     setError(null)
@@ -50,23 +55,54 @@ export function PushPrompt() {
 
   if (!user) return null
   if (supported === false || permission === 'unsupported') return null
-  if (permission === 'granted' && registered) {
-    return (
+  const wrap = (content: React.ReactNode) =>
+    variant === 'menu' ? (
+      <div className="stack" style={{ gap: 8 }}>
+        {content}
+      </div>
+    ) : (
       <div className="card soft" style={{ marginTop: 12 }}>
+        {content}
+      </div>
+    )
+
+  const disablePush = async () => {
+    if (!user) return
+    setDisabling(true)
+    setError(null)
+    try {
+      const tokens = await api.get<Array<{ id: string }>>('/push-tokens')
+      if (Array.isArray(tokens) && tokens.length) {
+        await Promise.all(tokens.map((t) => api.del(`/push-tokens/${t.id}`)))
+      }
+      setRegistered(false)
+      setDisabled(true)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(storageKey, 'true')
+      }
+    } catch (err: any) {
+      setError(err?.message || t('push.error'))
+    } finally {
+      setDisabling(false)
+    }
+  }
+
+  if (permission === 'granted' && registered && !disabled) {
+    return wrap(
+      <>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontWeight: 600 }}>{t('push.ready.title')}</div>
             <div className="muted" style={{ fontSize: 12 }}>{t('push.ready.body')}</div>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn secondary" type="button" onClick={sendTest} disabled={sending}>
-              {sending ? t('push.test.sending') : t('push.test.cta')}
+            <button className="btn secondary" type="button" onClick={disablePush} disabled={disabling}>
+              {disabling ? t('push.working') : t('push.disable.cta')}
             </button>
           </div>
         </div>
-        {sendOk && <div className="badge positive" style={{ marginTop: 8 }}>{t('push.test.success')}</div>}
         {error && <div className="badge negative" style={{ marginTop: 8 }}>{error}</div>}
-      </div>
+      </>,
     )
   }
 
@@ -74,6 +110,10 @@ export function PushPrompt() {
     setBusy(true)
     setError(null)
     try {
+      setDisabled(false)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(storageKey)
+      }
       const result = await requestPushPermission()
       const next = result === 'default' ? 'default' : result
       setPermission(next as any)
@@ -94,26 +134,8 @@ export function PushPrompt() {
     window.open('https://support.google.com/chrome/answer/3220216', '_blank', 'noopener')
   }
 
-  async function sendTest() {
-    setSending(true)
-    setError(null)
-    setSendOk(null)
-    try {
-      const res = await api.post<{ messageId?: string }>('/push-tokens/test-send', {
-        title: 'Test notification',
-        body: 'Hello from the API',
-        url: window.location.origin,
-      })
-      setSendOk(res?.messageId || 'sent')
-    } catch (err: any) {
-      setError(err?.message || t('push.test.error'))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <div className="card soft" style={{ marginTop: 12 }}>
+  return wrap(
+    <>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontWeight: 600 }}>
@@ -135,19 +157,7 @@ export function PushPrompt() {
           )}
         </div>
       </div>
-      <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <button
-          className="btn secondary"
-          type="button"
-          onClick={sendTest}
-          disabled={sending || permission !== 'granted'}
-          title={permission !== 'granted' ? t('push.test.disabled') : undefined}
-        >
-          {sending ? t('push.test.sending') : t('push.test.cta')}
-        </button>
-        {sendOk && <span className="badge positive">{t('push.test.success')}</span>}
-      </div>
       {error && <div className="badge negative" style={{ marginTop: 8 }}>{error}</div>}
-    </div>
+    </>,
   )
 }

@@ -51,42 +51,50 @@ const tables = [
   'be_opening_balance',
   'external_ref',
   'refresh_token',
-  'login_token',
   'invite',
   'role_assignment',
   '"user"',
   'community'
 ]
 
+const userTables = ['role_assignment', 'invite', 'refresh_token', '"user"', 'community']
+
 function usage(msg?: string): never {
   if (msg) console.error(`Error: ${msg}\n`)
   console.log(`Flush all DB tables (destructive!)
 
 Usage:
-  npm run db:flush -- --yes
+  npm run db:flush -- --yes [--preserve-users]
 
 Options:
   --yes    Required. Confirm you want to truncate all tables (CASCADE).
+  --preserve-users  Keep user/auth/community tables.
 `)
   process.exit(msg ? 1 : 0)
 }
 
 function parseArgs(argv: string[]) {
   let yes = false
+  let preserveUsers = false
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--yes') yes = true
+    else if (a === '--preserve-users') preserveUsers = true
     else usage(`Unknown arg: ${a}`)
   }
   if (!yes) usage('Missing --yes confirmation')
+  return { preserveUsers }
 }
 
 async function main() {
-  parseArgs(process.argv)
+  const { preserveUsers } = parseArgs(process.argv)
   const existing = (await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
   `).map((r) => r.tablename)
-  const toTruncate = tables.filter((t) => existing.includes(t))
+  let toTruncate = tables.filter((t) => existing.includes(t))
+  if (preserveUsers) {
+    toTruncate = toTruncate.filter((t) => !userTables.includes(t))
+  }
   if (!toTruncate.length) {
     console.log('No known tables found to truncate.')
     return

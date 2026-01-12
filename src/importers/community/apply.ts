@@ -1,4 +1,4 @@
-import { PrismaClient, SeriesOrigin, SeriesScope } from '@prisma/client'
+import { PrismaClient, SeriesOrigin, SeriesScope, Role, ScopeType } from '@prisma/client'
 import { CommunityImportPlan } from './types'
 const prisma = new PrismaClient()
 const INT4_MAX = 2147483647
@@ -25,6 +25,29 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     update: { code: communityId, name: plan.communityName },
     create: { id: communityId, code: communityId, name: plan.communityName },
   })
+  const sysAdmins = await prisma.roleAssignment.findMany({
+    where: { role: Role.SYSTEM_ADMIN, scopeType: ScopeType.SYSTEM },
+    select: { userId: true },
+  })
+  for (const admin of sysAdmins) {
+    await prisma.roleAssignment.upsert({
+      where: {
+        userId_role_scopeType_scopeId: {
+          userId: admin.userId,
+          role: Role.COMMUNITY_ADMIN,
+          scopeType: ScopeType.COMMUNITY,
+          scopeId: communityId,
+        },
+      },
+      update: {},
+      create: {
+        userId: admin.userId,
+        role: Role.COMMUNITY_ADMIN,
+        scopeType: ScopeType.COMMUNITY,
+        scopeId: communityId,
+      },
+    })
+  }
   const period = await prisma.period.upsert({
     where: { communityId_code: { communityId, code: plan.periodCode } },
     update: {},

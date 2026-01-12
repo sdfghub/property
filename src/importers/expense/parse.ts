@@ -4,7 +4,8 @@ import { parse as parseCsv } from 'csv-parse/sync'
 import { ExpenseImportPlan, ExpenseCsvRow } from './types'
 
 export function parseExpenses(folder: string, periodCode: string): ExpenseImportPlan {
-  const jsonPath = path.join(folder, 'expenses.json')
+  const periodJsonPath = path.join(folder, `expenses-${periodCode}.json`)
+  const periodCsvPath = path.join(folder, `expenses-${periodCode}.csv`)
   const defPath = path.join(folder, 'def.json')
   let defSplits: Record<string, any> = {}
   if (fs.existsSync(defPath)) {
@@ -21,8 +22,8 @@ export function parseExpenses(folder: string, periodCode: string): ExpenseImport
       // ignore def parse errors here; importer will throw later if needed
     }
   }
-  if (fs.existsSync(jsonPath)) {
-    const raw = fs.readFileSync(jsonPath, 'utf8')
+  if (fs.existsSync(periodJsonPath)) {
+    const raw = fs.readFileSync(periodJsonPath, 'utf8')
     const parsed = JSON.parse(raw)
     return {
       communityId: parsed.communityId ?? path.basename(folder),
@@ -41,8 +42,10 @@ export function parseExpenses(folder: string, periodCode: string): ExpenseImport
     }
   }
 
-  const csvPath = path.join(folder, `expenses-${periodCode}.csv`)
-  const raw = fs.readFileSync(csvPath, 'utf8')
+  if (!fs.existsSync(periodCsvPath)) {
+    throw new Error(`Missing expenses file for period ${periodCode}: expected ${periodJsonPath} or ${periodCsvPath}`)
+  }
+  const raw = fs.readFileSync(periodCsvPath, 'utf8')
   const rows: ExpenseCsvRow[] = parseCsv(raw, { columns: true, skip_empty_lines: true })
 
   const items = rows.map(r => ({
@@ -52,7 +55,8 @@ export function parseExpenses(folder: string, periodCode: string): ExpenseImport
     currency: (r.currency ?? 'RON').trim(),
     targetType: r.targetType as any,
     targetCode: r.targetCode?.trim(),
-    weightSource: (r.weightSource as any) ?? undefined
+    weightSource: (r.weightSource as any) ?? undefined,
+    splits: defSplits[String(r.expenseTypeCode)]?.splits ?? null,
   }))
 
   const communityId = path.basename(folder)

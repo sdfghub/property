@@ -51,10 +51,14 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   // Core requester: injects auth header, auto-retries once on 401 via refresh.
   async function request<T>(path: string, init: RequestInit = {}, attemptRefresh = true): Promise<T> {
     const tokens = config.getTokens()
+    let accessToken = tokens.accessToken
+    if (!accessToken && tokens.refreshToken && attemptRefresh) {
+      accessToken = await refreshAccessToken()
+    }
     const headers: Record<string, string> = {
       ...(init.headers as Record<string, string>),
     }
-    if (tokens.accessToken) headers.Authorization = `Bearer ${tokens.accessToken}`
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`
     const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
     if (!isFormData && !('Content-Type' in headers)) {
       headers['Content-Type'] = 'application/json'

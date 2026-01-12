@@ -10,7 +10,14 @@ export class InviteService{
     private readonly prisma:PrismaService,
     private readonly mail: MailService
   ){}
-  async createInvite(email:string, role:'COMMUNITY_ADMIN'|'BILLING_ENTITY_USER'|'SYSTEM_ADMIN', scopeType:'SYSTEM'|'COMMUNITY'|'BILLING_ENTITY', scopeId?:string, invitedBy?:string){
+  async createInvite(
+    email: string,
+    role: 'COMMUNITY_ADMIN' | 'BILLING_ENTITY_USER' | 'SYSTEM_ADMIN',
+    scopeType: 'SYSTEM' | 'COMMUNITY' | 'BILLING_ENTITY',
+    scopeId?: string,
+    invitedBy?: string,
+    beRoles?: string[],
+  ){
     const token=randomBytes(24).toString('hex')
     const expiresAt=new Date(Date.now()+7*24*3600*1000)
     const normalizedEmail = email.trim()
@@ -18,12 +25,23 @@ export class InviteService{
       where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
       select: { id: true, email: true },
     })
+    const allowedBeRoles = new Set(['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE'])
+    const normalizedBeRoles = Array.from(
+      new Set((beRoles || []).map((r) => String(r ?? '').toUpperCase()).filter((r) => allowedBeRoles.has(r))),
+    )
+    const effectiveBeRoles =
+      role === 'BILLING_ENTITY_USER' && scopeType === 'BILLING_ENTITY'
+        ? normalizedBeRoles.length
+          ? normalizedBeRoles
+          : ['EXPENSE_RESPONSIBLE']
+        : []
     const inv=await this.prisma.invite.create({
       data:{
         email: normalizedEmail,
         role,
         scopeType:scopeType,
         scopeId:scopeId??null,
+        beRoles: effectiveBeRoles as any,
         invitedBy:invitedBy??'',
         token,
         expiresAt:expiresAt
@@ -55,6 +73,7 @@ export class InviteService{
       role: inv.role,
       scopeType: inv.scopeType,
       scopeId: inv.scopeId,
+      beRoles: inv.beRoles ?? [],
       invitedBy: inv.invitedBy,
       createdAt: inv.createdAt,
       expiresAt: inv.expiresAt,
@@ -71,23 +90,43 @@ export class InviteService{
       throw new BadRequestException('Invite email does not match user')
     }
 
-    const existing = await this.prisma.roleAssignment.findFirst({
-      where: {
-        userId: user.id,
-        role: inv.role,
-        scopeType: inv.scopeType,
-        scopeId: inv.scopeId ?? null,
-      },
-    })
-    if (!existing) {
-      await this.prisma.roleAssignment.create({
-        data: {
+    if (inv.role === 'BILLING_ENTITY_USER' && inv.scopeType === 'BILLING_ENTITY') {
+      if (!inv.scopeId) throw new BadRequestException('Invite missing billing entity')
+      const roles = (inv.beRoles?.length ? inv.beRoles : ['EXPENSE_RESPONSIBLE']) as any[]
+      const existing = await this.prisma.billingEntityUserRole.findMany({
+        where: { userId: user.id, billingEntityId: inv.scopeId, role: { in: roles } },
+        select: { role: true },
+      })
+      const existingSet = new Set(existing.map((r) => r.role))
+      const missing = roles.filter((r) => !existingSet.has(r))
+      if (missing.length) {
+        await this.prisma.billingEntityUserRole.createMany({
+          data: missing.map((role) => ({
+            userId: user.id,
+            billingEntityId: inv.scopeId as string,
+            role,
+          })),
+        })
+      }
+    } else {
+      const existing = await this.prisma.roleAssignment.findFirst({
+        where: {
           userId: user.id,
           role: inv.role,
           scopeType: inv.scopeType,
           scopeId: inv.scopeId ?? null,
         },
       })
+      if (!existing) {
+        await this.prisma.roleAssignment.create({
+          data: {
+            userId: user.id,
+            role: inv.role,
+            scopeType: inv.scopeType,
+            scopeId: inv.scopeId ?? null,
+          },
+        })
+      }
     }
     if (!inv.acceptedAt) {
       await this.prisma.invite.update({ where:{ id: inv.id }, data:{ acceptedAt: new Date() } })
@@ -120,6 +159,7 @@ export class InviteService{
         id:true,
         email:true,
         role:true,
+        beRoles:true,
         scopeType:true,
         scopeId:true,
         invitedBy:true,
@@ -152,6 +192,7 @@ export class InviteService{
         id:true,
         email:true,
         role:true,
+        beRoles:true,
         scopeId:true,
         scopeType:true,
         invitedBy:true,

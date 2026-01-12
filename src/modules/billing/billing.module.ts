@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BillingBeController } from './billing-be.controller';
+import { EngagementModule } from '../engagement/engagement.module';
+import { ProgramModule } from '../program/program.module';
 import { BillingPeriodLookupService } from './period-lookup.service';
 import { PrismaService } from '../user/prisma.service';
 import { TemplateService } from './template.service';
@@ -15,6 +17,7 @@ import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
 
 @Module({
+  imports: [EngagementModule, ProgramModule],
   controllers: [BillingBeController, CommunityBillingEntityController, ExpenseController, TemplateController, VendorInvoiceController, PaymentController],
   providers: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, ExpenseService, VendorInvoiceService, PaymentService, PrismaService],
   exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, ExpenseService],

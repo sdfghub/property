@@ -1,12 +1,19 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { BillingPeriodLookupService } from './period-lookup.service'
+import { EngagementService } from '../engagement/engagement.service'
+import { ProgramService } from '../program/program.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
 @Injectable()
 export class BeQueryService {
-  constructor(private readonly prisma: PrismaService, private readonly periodLookup: BillingPeriodLookupService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly periodLookup: BillingPeriodLookupService,
+    private readonly engagement: EngagementService,
+    private readonly programs: ProgramService,
+  ) {}
 
   private async getBeById(beId: string) {
     const be = await this.prisma.billingEntity.findUnique({
@@ -18,24 +25,37 @@ export class BeQueryService {
   }
 
   // TEMP: relaxed access control
-  private ensureAccess(_beId: string, _communityId: string, _roles: RoleAssignment[]) {
-    return
+  private async ensureAccess(beId: string, communityId: string, roles: RoleAssignment[], userId?: string) {
+    if (this.canCommunityAdmin(roles, communityId)) return
+    if (!userId) throw new ForbiddenException('Insufficient permissions for billing entity')
+    const match = await this.prisma.billingEntityUserRole.findFirst({
+      where: { userId, billingEntityId: beId },
+      select: { id: true },
+    })
+    if (!match) throw new ForbiddenException('Insufficient permissions for billing entity')
   }
   private canCommunityAdmin(_roles: RoleAssignment[], _communityId: string) {
-    return true
+    return _roles.some(
+      (r) => r.role === 'COMMUNITY_ADMIN' && r.scopeType === 'COMMUNITY' && r.scopeId === _communityId,
+    )
   }
   private ensureCommunityAdmin(_roles: RoleAssignment[], _communityId: string) {
-    return
+    if (this.canCommunityAdmin(_roles, _communityId)) return
+    throw new ForbiddenException('Admin permissions required')
   }
 
   async listBillingEntities(communityRef: string, periodCode: string, roles: RoleAssignment[], userId?: string) {
     const communityId = await this.periodLookup.resolveCommunityId(communityRef)
-    const beRoles = roles
-      .filter(r => r.role === 'BILLING_ENTITY_USER' && r.scopeType === 'BILLING_ENTITY')
-      .map(r => r.scopeId)
-      .filter((id): id is string => !!id)
-
     const isCommunityAdmin = this.canCommunityAdmin(roles, communityId)
+    let beRoles: string[] = []
+    if (!isCommunityAdmin) {
+      if (!userId) throw new ForbiddenException('Insufficient permissions for community')
+      const rows = await this.prisma.billingEntityUserRole.findMany({
+        where: { userId, billingEntity: { communityId } },
+        select: { billingEntityId: true },
+      })
+      beRoles = rows.map((r) => r.billingEntityId)
+    }
     if (!isCommunityAdmin && beRoles.length === 0) {
       throw new ForbiddenException('Insufficient permissions for community')
     }
@@ -79,7 +99,7 @@ export class BeQueryService {
     });
     if (!be) throw new NotFoundException(`Billing entity ${beCode} not found`);
 
-    this.ensureAccess(be.id, communityId, roles)
+    await this.ensureAccess(be.id, communityId, roles, userId)
 
     const members = await this.prisma.$queryRawUnsafe<any[]>(`
       WITH p AS (SELECT $1::text AS community_id, $2::int AS seq, $3::text AS period_id, $4::text AS be_id)
@@ -113,7 +133,7 @@ export class BeQueryService {
     });
     if (!be) throw new NotFoundException(`Billing entity ${beCode} not found`);
 
-    this.ensureAccess(be.id, communityId, roles)
+    await this.ensureAccess(be.id, communityId, roles, userId)
 
     const lines = await this.prisma.$queryRawUnsafe<any[]>(`
       WITH p AS (SELECT $1::text AS community_id, $2::int AS seq, $3::text AS period_id, $4::text AS be_id)
@@ -156,7 +176,7 @@ export class BeQueryService {
     });
     if (!be) throw new NotFoundException(`Billing entity ${beCode} not found`);
 
-    this.ensureAccess(be.id, communityId, roles)
+    await this.ensureAccess(be.id, communityId, roles, userId)
 
     const unit = await this.prisma.unit.findUnique({
       where: { code_communityId: { code: unitCode, communityId } },
@@ -186,9 +206,9 @@ export class BeQueryService {
     return { period, be, unit, total, lines };
   }
 
-  async getAllocationsByBeId(beId: string, periodCode: string, roles: RoleAssignment[]) {
+  async getAllocationsByBeId(beId: string, periodCode: string, roles: RoleAssignment[], userId?: string) {
     const be = await this.getBeById(beId)
-    this.ensureAccess(be.id, be.communityId, roles)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
     const period = await this.periodLookup.getPeriod(be.communityId, periodCode);
 
     const lines = await this.prisma.$queryRawUnsafe<any[]>(`
@@ -221,9 +241,9 @@ export class BeQueryService {
     return { period, be, lines }
   }
 
-  async getFinancials(beId: string, periodCode: string, roles: RoleAssignment[]) {
+  async getFinancials(beId: string, periodCode: string, roles: RoleAssignment[], userId?: string) {
     const be = await this.getBeById(beId)
-    this.ensureAccess(be.id, be.communityId, roles)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
     const period = await this.periodLookup.getPeriod(be.communityId, periodCode)
 
     const [statement, ledgerEntries, allocationsRaw, splitGroups, splitGroupMembers, expenseTypes] = await Promise.all([
@@ -238,7 +258,7 @@ export class BeQueryService {
       }),
       this.prisma.beLedgerEntry.findMany({
         where: { communityId: be.communityId, periodId: period.id, billingEntityId: be.id },
-        orderBy: [{ kind: 'asc' }, { bucket: 'asc' }],
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         include: {
           details: {
             include: { unit: { select: { code: true } } },
@@ -257,13 +277,14 @@ export class BeQueryService {
           e.currency,
           e.allocatable_amount,
           al.split_node_id,
-          al.meta,
+          at.trace AS allocation_trace,
           sg.id AS split_group_id,
           sg.name AS split_group_name
         FROM allocation_line al
         JOIN unit u ON u.id = al.unit_id
         JOIN expense e ON e.id = al.expense_id
         JOIN expense_type et ON et.id = e.expense_type_id
+        LEFT JOIN allocation_trace at ON at.allocation_line_id = al.id
         LEFT JOIN split_group_member sgm ON sgm.split_node_id = al.split_node_id
         LEFT JOIN split_group sg ON sg.id = sgm.split_group_id
         WHERE al.period_id = $1
@@ -306,16 +327,107 @@ export class BeQueryService {
     expenseTypes.forEach((et: any) => collectNodes(et.params as any))
 
     const allocations = (allocationsRaw || []).map((a: any) => {
-      const metaName = (a.meta as any)?.splitNode?.name ?? null
+      const trail = (a.allocation_trace as any)?.split?.trail ?? null
+      const last = Array.isArray(trail) && trail.length ? trail[trail.length - 1] : null
+      const traceName = last?.name || last?.id || null
       return {
         ...a,
-        split_name: metaName ?? (a.split_node_id ? splitNodeNames[a.split_node_id] || null : null),
+        split_name: traceName ?? (a.split_node_id ? splitNodeNames[a.split_node_id] || null : null),
         split_group_id: a.split_group_id,
         split_group_name: a.split_group_name,
       }
     })
 
     return { be, period, statement, ledgerEntries, allocations, splitGroups, splitGroupMembers, splitNodeNames }
+  }
+
+  async getBeSummary(beId: string, roles: RoleAssignment[], userId?: string) {
+    const be = await this.getBeById(beId)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
+    return { id: be.id, code: be.code, name: be.name, communityId: be.communityId }
+  }
+
+  async getBeDashboard(beId: string, roles: RoleAssignment[], userId?: string) {
+    const be = await this.getBeById(beId)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
+
+    const community = await this.prisma.community.findUnique({
+      where: { id: be.communityId },
+      select: { id: true, name: true },
+    })
+    const closed = await this.periodLookup.listClosedForBe(beId)
+    const lastClosed = closed[0] ?? null
+    const previousClosed = closed.length > 1 ? closed[1] : null
+
+    let statement: any = null
+    let ledgerEntries: any[] = []
+    let period: any = null
+    if (lastClosed) {
+      period = await this.periodLookup.getPeriod(be.communityId, lastClosed.code)
+      statement = await this.prisma.beStatement.findUnique({
+        where: {
+          communityId_periodId_billingEntityId: {
+            communityId: be.communityId,
+            periodId: period.id,
+            billingEntityId: be.id,
+          },
+        },
+      })
+      ledgerEntries = await this.prisma.beLedgerEntry.findMany({
+        where: { communityId: be.communityId, periodId: period.id, billingEntityId: be.id },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        include: {
+          details: {
+            include: { unit: { select: { code: true } } },
+          },
+        },
+      })
+    }
+
+    const [events, polls, programs] = await Promise.all([
+      this.engagement.listEvents(be.communityId, userId ?? '', roles),
+      this.engagement.listPolls(be.communityId, userId ?? '', roles),
+      this.programs.listBalances(be.communityId),
+    ])
+
+    const now = Date.now()
+    const upcomingEvents = (events || [])
+      .filter((event: any) => new Date(event.endAt).getTime() >= now)
+      .sort((a: any, b: any) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+
+    const ongoingPolls = (polls || [])
+      .filter((poll: any) => {
+        const startAt = new Date(poll.startAt).getTime()
+        const endAt = new Date(poll.endAt).getTime()
+        return poll.status === 'APPROVED' && !poll.closedAt && now >= startAt && now <= endAt
+      })
+      .slice(0, 3)
+
+    const programBuckets = (programs || []).reduce<Record<string, { id: string; code: string; name: string }>>(
+      (acc, prog: any) => {
+        if (prog?.bucket) acc[prog.bucket] = { id: prog.id, code: prog.code, name: prog.name }
+        return acc
+      },
+      {},
+    )
+
+    return {
+      be: {
+        id: be.id,
+        code: be.code,
+        name: be.name,
+        communityId: be.communityId,
+        communityName: community?.name ?? null,
+      },
+      period: period ? { code: period.code, status: period.status } : null,
+      previousPeriod: previousClosed ? { code: previousClosed.code, status: previousClosed.status } : null,
+      statement,
+      ledgerEntries,
+      events: upcomingEvents,
+      polls: ongoingPolls,
+      programs,
+      programBuckets,
+    }
   }
 
 }

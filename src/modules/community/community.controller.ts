@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards, Delete, Param, Post, Body } from '@nestjs/common'
+import { Controller, Get, Req, UseGuards, Delete, Param, Post, Body, Patch } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { CommunityService } from './community.service'
@@ -15,6 +15,12 @@ export class CommunityController {
     // Support either req.user.id or req.user.sub (depending on your JWT)
     const userId: string = req.user?.id ?? req.user?.sub
     return this.svc.listForUser(userId, q)
+  }
+
+  @Get('scopes')
+  async scopes(@Req() req: any) {
+    const userId: string = req.user?.id ?? req.user?.sub
+    return this.svc.listScopesForUser(userId)
   }
 
   @Scopes({ role: 'SYSTEM_ADMIN', scopeType: 'SYSTEM' })
@@ -43,5 +49,17 @@ export class CommunityController {
   @Get(':communityId/billing-entities/responsibles')
   async beResponsibles(@Param('communityId') communityId: string) {
     return this.svc.listBillingEntityResponsibles(communityId)
+  }
+
+  @UseGuards(JwtAuthGuard, ScopesGuard)
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Patch(':communityId/billing-entities/:beId/users/:userId/roles')
+  async updateBeUserRoles(
+    @Param('communityId') communityId: string,
+    @Param('beId') beId: string,
+    @Param('userId') userId: string,
+    @Body('roles') roles: string[],
+  ) {
+    return this.svc.updateBillingEntityUserRoles(communityId, beId, userId, roles)
   }
 }

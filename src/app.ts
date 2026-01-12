@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core'
 import { Controller, Get, Module, ValidationPipe } from '@nestjs/common'
+import type { NextFunction, Request, Response } from 'express'
 import cookieParser from 'cookie-parser'
 import { BillingModule } from './modules/billing/billing.module'
 import { PrismaService } from './modules/user/prisma.service'
@@ -14,6 +15,12 @@ import { PeriodModule } from './modules/period/period.module'
 import { BeFinancialsModule } from './modules/be-financials/be-financials.module'
 import { ProgramModule } from './modules/program/program.module'
 import { PushModule } from './modules/push/push.module'
+import { EngagementModule } from './modules/engagement/engagement.module'
+import { TicketingModule } from './modules/ticketing/ticketing.module'
+import { CommunicationsModule } from './modules/communications/communications.module'
+import { NotificationsModule } from './modules/notifications/notifications.module'
+import { NotificationsJobsModule } from './modules/notifications-jobs/notifications-jobs.module'
+import { InventoryModule } from './modules/inventory/inventory.module'
 
 @Controller()
 class HealthController {
@@ -39,6 +46,12 @@ class HealthController {
     BeFinancialsModule,
     ProgramModule,
     PushModule,
+    EngagementModule,
+    TicketingModule,
+    CommunicationsModule,
+    NotificationsModule,
+    NotificationsJobsModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
 })
@@ -70,6 +83,47 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
   app.use(cookieParser())
+  app.use((_: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    next()
+  })
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    // Debug: log all requests with headers/body.
+    console.log('[REQ]', {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      headers: req.headers,
+      query: req.query,
+      body: req.body,
+    })
+    const originalSend = res.send.bind(res)
+    let responseBody: any = undefined
+    res.send = (body?: any) => {
+      responseBody = body
+      return originalSend(body)
+    }
+    res.on('finish', () => {
+      const serializeBody = (value: any) => {
+        if (value == null) return value
+        if (typeof value === 'string') return value
+        if (Buffer.isBuffer(value)) return value.toString('utf8')
+        try {
+          return JSON.stringify(value)
+        } catch {
+          return '[unserializable]'
+        }
+      }
+      console.log('[RES]', {
+        method: req.method,
+        url: req.originalUrl || req.url,
+        status: res.statusCode,
+        body: serializeBody(responseBody),
+      })
+    })
+    next()
+  })
 
   // Global config
   app.setGlobalPrefix('api')

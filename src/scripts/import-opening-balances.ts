@@ -15,7 +15,7 @@ type Row = {
 
 function usage(msg?: string): never {
   if (msg) console.error(`Error: ${msg}\n`)
-  console.log(`Import opening balances as ledger charges (bucketed).
+  console.log(`Import opening balances into be_opening_balance.
 
 Usage:
   npm run import:opening -- <file>
@@ -76,37 +76,29 @@ async function main() {
       console.warn(`Skipping: BE ${r.beCode} not found for ${r.communityId}`)
       continue
     }
-    await prisma.beLedgerEntry.upsert({
+    await prisma.beOpeningBalance.upsert({
       where: {
-        communityId_periodId_billingEntityId_refType_refId_bucket: {
+        communityId_periodId_billingEntityId: {
           communityId: r.communityId,
           periodId: period.id,
           billingEntityId: be.id,
-          refType: 'OPENING',
-          refId: period.id,
-          bucket: r.bucket,
         },
       },
       update: {
         amount: r.amount,
         currency: r.currency ?? 'RON',
-        kind: 'CHARGE',
       },
       create: {
         communityId: r.communityId,
         periodId: period.id,
         billingEntityId: be.id,
-        kind: 'CHARGE',
         amount: r.amount,
         currency: r.currency ?? 'RON',
-        refType: 'OPENING',
-        refId: period.id,
-        bucket: r.bucket,
       },
     })
     count += 1
   }
-  console.log(`✅ Imported ${count} opening balances from ${file}`)
+  console.log(`✅ Imported ${count} opening balances into be_opening_balance from ${file}`)
 }
 
 main().catch((e) => {

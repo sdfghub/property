@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Res, UseGuards, Req, Logger } from '@nestjs/common'
+import { Body, Controller, Post, Res, UseGuards, Req } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { Response, Request } from 'express'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
@@ -6,21 +6,7 @@ import { InviteService } from '../invite/invite.service'
 
 @Controller('auth')
 export class AuthController{
-  private readonly logger = new Logger(AuthController.name)
   constructor(private readonly auth:AuthService, private readonly invites: InviteService){}
-
-  @Post('request-link')
-  async request(@Body('email') email:string){
-    return this.auth.requestMagicLink(email)
-  }
-
-  @Post('consume-link')
-  async consume(@Body('token') token:string, @Req() req:Request, @Res({passthrough:true}) res:Response){
-    this.logger.log(`consume-link hit token=${token?.slice(0,8) ?? 'null'}... ip=${req.ip}`)
-    const {accessToken, refreshToken, user}=await this.auth.consumeMagicToken(token, req.headers['user-agent'] as string, req.ip)
-    res.cookie('refresh_token',refreshToken,{ httpOnly:true, sameSite:'lax', secure:false, maxAge:30*24*3600*1000 })
-    return { accessToken, refreshToken, user }
-  }
 
   @Post('register')
   async register(

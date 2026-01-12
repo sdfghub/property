@@ -1,6 +1,4 @@
 import React from 'react'
-import { formatAllocationMeta } from '../../services/allocationMeta'
-import { useI18n } from '../../i18n/useI18n'
 
 type Detail = {
   allocationId?: string
@@ -12,29 +10,26 @@ type Detail = {
   unitName?: string
   unitCode?: string
   amount?: number | string
-  meta?: unknown
-  splitTrail?: Array<{ id?: string; name?: string; meta?: unknown }>
+  allocationTrace?: any
+  splitTrailPhrases?: string[]
+  splitTrail?: Array<{
+    id?: string
+    name?: string
+    splitId?: string
+    share?: number
+    amount?: number
+    basis?: { type?: string; code?: string }
+    derivedShare?: string | null
+    allocation?: {
+      method?: string | null
+      ruleCode?: string | null
+      basis?: { type?: string; code?: string } | null
+      weightSource?: string | null
+    } | null
+  }>
 }
 
 export function BeAllocationDetailTable({ title, lines }: { title?: string | null; lines: Detail[] }) {
-  const { t } = useI18n()
-
-  const renderDisplay = (meta: any) => {
-    if (!meta) return ''
-    if (meta.displayKey) return t(meta.displayKey, meta.displayParams || {})
-    if (typeof meta.display === 'string') return meta.display
-    return ''
-  }
-
-  const renderParams = (meta: any) => {
-    const params = meta?.displayParams
-    if (!params || typeof params !== 'object') return ''
-    const entries = Object.entries(params)
-    if (!entries.length) return ''
-    return entries
-      .map(([k, v]) => `${k}: ${typeof v === 'number' ? v : String(v)}`)
-      .join(' · ')
-  }
   
   if (!lines || lines.length === 0) return null
   return (
@@ -48,35 +43,19 @@ export function BeAllocationDetailTable({ title, lines }: { title?: string | nul
                 <td>{ln.unitName || ln.unitCode || '—'}</td>
                 <td style={{ textAlign: 'right' }}>{Number(ln.amount || 0).toFixed(2)}</td>
               </tr>
-              {ln.meta && (
+              {Array.isArray(ln.splitTrailPhrases) && ln.splitTrailPhrases.length > 0 ? (
                 <tr>
                   <td colSpan={4} className="muted" style={{ fontSize: 11 }}>
-                    {renderDisplay(ln.meta)}
-                    {renderParams(ln.meta) ? (
-                      <div style={{ marginTop: 2 }}>{renderParams(ln.meta)}</div>
-                    ) : null}
-                  </td>
-                </tr>
-              )}
-              {Array.isArray(ln.splitTrail) && ln.splitTrail.length > 0 && (
-                <tr>
-                  <td colSpan={4}>
-                    <div className="stack" style={{ gap: 4, fontSize: 11 }}>
-                      {ln.splitTrail.map((trail, idx) => (
-                        <div key={trail.id || idx} style={{ paddingLeft: `${idx * 12}px` }}>
-                          <div>{trail.name || trail.id || '—'}</div>
-                          {trail.meta && (
-                            <div className="muted" style={{ marginLeft: 8 }}>
-                              {renderDisplay(trail.meta)}
-                              {renderParams(trail.meta) ? <div>{renderParams(trail.meta)}</div> : null}
-                            </div>
-                          )}
+                    <div className="stack" style={{ gap: 4 }}>
+                      {ln.splitTrailPhrases.map((phrase, idx) => (
+                        <div key={`${ln.allocationId || i}-phrase-${idx}`} style={{ paddingLeft: idx * 8 }}>
+                          {phrase}
                         </div>
                       ))}
                     </div>
                   </td>
                 </tr>
-              )}
+              ) : null}
             </React.Fragment>
           ))}
         </tbody>

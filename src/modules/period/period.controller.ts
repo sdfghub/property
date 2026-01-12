@@ -59,6 +59,11 @@ export class PeriodQueryController {
     return this.periods.getEditable(c)
   }
 
+  @Get()
+  listAll(@Param('communityId') c: string) {
+    return this.periods.listAll(c)
+  }
+
   @Get('closed')
   listClosed(@Param('communityId') c: string) {
     return this.periods.listClosed(c)

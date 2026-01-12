@@ -6,5 +6,6 @@ import { PrismaService } from '../user/prisma.service'
 @Module({
   controllers: [PushController],
   providers: [PushService, PrismaService],
+  exports: [PushService],
 })
 export class PushModule {}

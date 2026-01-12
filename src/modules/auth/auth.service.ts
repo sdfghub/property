@@ -3,7 +3,6 @@ import { JwtService } from '@nestjs/jwt'
 import { PrismaService } from '../user/prisma.service'
 import { randomBytes, createHash, scrypt, timingSafeEqual } from 'crypto'
 import { promisify } from 'util'
-import { MailService } from '../mail/mail.service'
 import { InviteService } from '../invite/invite.service'
 
 type RoleAssignment={ role:string; scopeType:string; scopeId?:string|null }
@@ -34,50 +33,8 @@ export class AuthService{
   constructor(
     private readonly prisma:PrismaService,
     private readonly jwt:JwtService,
-    private readonly mail: MailService,
     private readonly invites: InviteService,
   ){}
-
-  async requestMagicLink(email:string){
-    const normalized = normalizeEmail(email)
-    const existing = await this.prisma.user.findUnique({ where:{ email: normalized } })
-    if (!existing) throw new BadRequestException('Invite required')
-    const token=randomBytes(24).toString('hex')
-    const expiresAt=new Date(Date.now()+15*60*1000)
-    await this.prisma.loginToken.create({data:{email: normalized,token,expiresAt:expiresAt}})
-    const urlBase=process.env.APP_PUBLIC_URL||'http://localhost:3000'
-    const link=`${urlBase}/magic?token=${token}`
-    await this.mail.send(normalized, 'Your sign-in link', `<p>Click to sign in: <a href="${link}">${link}</a></p>`)
-    this.logger.log(`Magic link requested for ${normalized} exp=${expiresAt.toISOString()}`)
-    return {ok:true}
-  }
-
-  async consumeMagicToken(token:string, userAgent?:string, ip?:string){
-    this.logger.log(`consumeMagicToken token=${token?.slice(0,8)}... ua=${userAgent ?? '-'} ip=${ip ?? '-'}`)
-    const rec=await this.prisma.loginToken.findUnique({where:{token}})
-    if(!rec){ 
-      this.logger.warn(`magic token not found`)
-      throw new UnauthorizedException('Invalid/expired token')
-    }
-    if(rec.usedAt){ 
-      this.logger.warn(`magic token already used`)
-      throw new UnauthorizedException('Invalid/expired token')
-    }
-    if(rec.expiresAt == null || rec.expiresAt?.getTime() < Date.now()){
-      this.logger.warn(`magic token expired at=${rec.expiresAt}`)
-      throw new UnauthorizedException('Invalid/expired token')
-    }
-
-    const existing = await this.prisma.user.findUnique({ where:{ email: rec.email } })
-    if (!existing) {
-      throw new BadRequestException('Invite required')
-    }
-    const user=existing
-    await this.prisma.loginToken.update({where:{id:rec.id}, data:{usedAt:new Date()} })
-
-    this.logger.log(`Magic token consumed for ${user.email} (${user.id}) ua=${userAgent ?? '-'} ip=${ip ?? '-'}`)
-    return this.issueTokensForUser(user, userAgent, ip)
-  }
 
   async registerWithPassword(email: string, password: string, name?: string, inviteToken?: string){
     const normalized = normalizeEmail(email)
@@ -152,8 +109,24 @@ export class AuthService{
     const user = await this.prisma.user.findUnique({ where:{ id: decoded.sub } })
     if(!user) throw new UnauthorizedException('User not found')
 
-    const roles=await this.prisma.roleAssignment.findMany({ where:{userId:user.id} })
-    const payload={ sub:user.id, email:user.email, roles:roles.map(r=>({role:r.role, scopeType:r.scopeType, scopeId:r.scopeId})), token_version: user.tokenVersion }
+    const roles = await this.prisma.roleAssignment.findMany({
+      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN'] } },
+    })
+    const beRoles = await this.prisma.billingEntityUserRole.findMany({
+      where: { userId: user.id },
+      select: { billingEntityId: true },
+    })
+    const beRoleIds = Array.from(new Set(beRoles.map((r) => r.billingEntityId)))
+    const mergedRoles = [
+      ...roles.map((r) => ({ role: r.role, scopeType: r.scopeType, scopeId: r.scopeId })),
+      ...beRoleIds.map((id) => ({ role: 'BILLING_ENTITY_USER', scopeType: 'BILLING_ENTITY', scopeId: id })),
+    ]
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      roles: mergedRoles,
+      token_version: user.tokenVersion,
+    }
     const accessToken=await this.jwt.signAsync(payload)
     this.logger.log(`Access token refreshed for user ${user.id}`)
     return { accessToken }
@@ -180,13 +153,22 @@ export class AuthService{
   }
 
   async issueTokensForUser(user: { id: string; email: string; tokenVersion?: number }, userAgent?: string, ip?: string) {
-    const roles = await this.prisma.roleAssignment.findMany({ where: { userId: user.id } })
+    const roles = await this.prisma.roleAssignment.findMany({
+      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN'] } },
+    })
+    const beRoles = await this.prisma.billingEntityUserRole.findMany({
+      where: { userId: user.id },
+      select: { billingEntityId: true },
+    })
+    const beRoleIds = Array.from(new Set(beRoles.map((r) => r.billingEntityId)))
+    const mergedRoles = [
+      ...roles.map((r) => ({ role: r.role, scopeType: r.scopeType, scopeId: r.scopeId })),
+      ...beRoleIds.map((id) => ({ role: 'BILLING_ENTITY_USER', scopeType: 'BILLING_ENTITY', scopeId: id })),
+    ]
     const payload = {
       sub: user.id,
       email: user.email,
-      roles: roles.map(
-        (r) => ({ role: r.role, scopeType: r.scopeType, scopeId: r.scopeId } as RoleAssignment),
-      ),
+      roles: mergedRoles.map((r) => r as RoleAssignment),
       token_version: user.tokenVersion,
     }
     const accessToken = await this.jwt.signAsync(payload)

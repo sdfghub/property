@@ -65,6 +65,7 @@ export function ProgramsTab({ programs, programError, communityCode, onRefreshPr
   const [importLoading, setImportLoading] = React.useState(false)
   const [importError, setImportError] = React.useState<string | null>(null)
   const [importSuccess, setImportSuccess] = React.useState<string | null>(null)
+  const lastLedgerKeyRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
     if (!activeCode && programs.length > 0) {
@@ -83,6 +84,9 @@ export function ProgramsTab({ programs, programError, communityCode, onRefreshPr
       setLedgerError(null)
       return
     }
+    const ledgerKey = `${communityCode}:${activeProgram.id}`
+    if (lastLedgerKeyRef.current === ledgerKey) return
+    lastLedgerKeyRef.current = ledgerKey
     const controller = new AbortController()
     const load = async () => {
       setLedgerLoading(true)

@@ -1,0 +1,224 @@
+{
+  "id": "DUMMY",
+  "name": "Cedar Vale Court",
+  "period": {
+    "code": "2025-07",
+    "start": "2025-07-01",
+    "end": "2025-07-31"
+  },
+  "groups": [
+    { "code": "UNIT", "name": "All units" },
+    { "code": "RESIDENTIAL", "name": "Residential" },
+    { "code": "WATER", "name": "Cold water users" },
+    { "code": "HOT_WATER", "name": "Hot water users" }
+  ],
+  "allocationRules": [
+    { "code": "BY_SQM", "name": "By sqm", "method": "BY_SQM" },
+    { "code": "BY_CONSUMPTION", "name": "By consumption", "method": "BY_CONSUMPTION" }
+  ],
+  "expenseSplits": [
+    {
+      "id": "EXP-WATER",
+      "expenseTypeCode": "WATER",
+      "name": "Water",
+      "splits": [
+        {
+          "id": "WATER-HOT",
+          "name": "Hot water",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "METER-WATER-TOTAL",
+            "partMeterId": "METER-WATER-HOT"
+          },
+          "allocation": {
+            "basis": { "type": "GROUP", "code": "HOT_WATER" },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "HOT_WATER"
+          }
+        },
+        {
+          "id": "WATER-COLD",
+          "name": "Cold water",
+          "derivedShare": "remainder",
+          "allocation": {
+            "basis": { "type": "GROUP", "code": "WATER" },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "EXP-GAS",
+      "expenseTypeCode": "GAS",
+      "name": "Gas",
+      "splits": [
+        {
+          "id": "GAS-HOTWATER",
+          "name": "Gas for hot water",
+          "share": 1,
+          "allocation": {
+            "basis": { "type": "GROUP", "code": "HOT_WATER" },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "HOT_WATER"
+          }
+        }
+      ]
+    }
+  ],
+  "measureTypes": [
+    { "code": "RESIDENTS", "name": "Residents", "unit": "count" },
+    { "code": "SQM", "name": "Square meters", "unit": "sqm" },
+    { "code": "WATER_COLD", "name": "Cold water", "unit": "m3" },
+    { "code": "HOT_WATER", "name": "Hot water", "unit": "m3" },
+    { "code": "WATER_TOTAL", "name": "Total water", "unit": "m3" }
+  ],
+  "meters": [
+    {
+      "name": "Total water",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "DUMMY",
+      "typeCode": "WATER_TOTAL",
+      "meterId": "METER-WATER-TOTAL",
+      "origin": "METER"
+    },
+    {
+      "name": "Total hot water",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "DUMMY",
+      "typeCode": "HOT_WATER",
+      "meterId": "METER-WATER-HOT",
+      "origin": "METER"
+    },
+    {
+      "name": "D1 cold water",
+      "scopeType": "UNIT",
+      "scopeCode": "D1",
+      "typeCode": "WATER_COLD",
+      "meterId": "D1-COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "D1 hot water",
+      "scopeType": "UNIT",
+      "scopeCode": "D1",
+      "typeCode": "HOT_WATER",
+      "meterId": "D1-HOT",
+      "origin": "METER"
+    },
+    {
+      "name": "D2 cold water",
+      "scopeType": "UNIT",
+      "scopeCode": "D2",
+      "typeCode": "WATER_COLD",
+      "meterId": "D2-COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "D2 hot water",
+      "scopeType": "UNIT",
+      "scopeCode": "D2",
+      "typeCode": "HOT_WATER",
+      "meterId": "D2-HOT",
+      "origin": "METER"
+    },
+    {
+      "name": "D3 cold water",
+      "scopeType": "UNIT",
+      "scopeCode": "D3",
+      "typeCode": "WATER_COLD",
+      "meterId": "D3-COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "D3 hot water",
+      "scopeType": "UNIT",
+      "scopeCode": "D3",
+      "typeCode": "HOT_WATER",
+      "meterId": "D3-HOT",
+      "origin": "METER"
+    },
+    {
+      "name": "D4 cold water",
+      "scopeType": "UNIT",
+      "scopeCode": "D4",
+      "typeCode": "WATER_COLD",
+      "meterId": "D4-COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "D4 hot water",
+      "scopeType": "UNIT",
+      "scopeCode": "D4",
+      "typeCode": "HOT_WATER",
+      "meterId": "D4-HOT",
+      "origin": "METER"
+    }
+  ],
+  "structure": [
+    {
+      "code": "D1",
+      "residents": 2,
+      "sqm": 58,
+      "billingEntity": "OAKSTONE_FAMILY",
+      "groupCodes": ["UNIT", "RESIDENTIAL", "WATER", "HOT_WATER"],
+      "startPeriod": "2025-07",
+      "endPeriod": null,
+      "order": 1
+    },
+    {
+      "code": "D2",
+      "residents": 1,
+      "sqm": 46,
+      "billingEntity": "OAKSTONE_FAMILY",
+      "groupCodes": ["UNIT", "RESIDENTIAL", "WATER", "HOT_WATER"],
+      "startPeriod": "2025-07",
+      "endPeriod": null,
+      "order": 2
+    },
+    {
+      "code": "D3",
+      "residents": 3,
+      "sqm": 71,
+      "billingEntity": "PINEHILL_RENTS",
+      "groupCodes": ["UNIT", "RESIDENTIAL", "WATER", "HOT_WATER"],
+      "startPeriod": "2025-07",
+      "endPeriod": null,
+      "order": 3
+    },
+    {
+      "code": "D4",
+      "residents": 2,
+      "sqm": 62,
+      "billingEntity": "RIVERBEND_HOMES",
+      "groupCodes": ["UNIT", "RESIDENTIAL", "WATER", "HOT_WATER"],
+      "startPeriod": "2025-07",
+      "endPeriod": null,
+      "order": 4
+    }
+  ],
+  "billingEntities": [
+    { "code": "OAKSTONE_FAMILY", "name": "Oakstone Family", "order": 1 },
+    { "code": "PINEHILL_RENTS", "name": "Pinehill Rents", "order": 2 },
+    { "code": "RIVERBEND_HOMES", "name": "Riverbend Homes", "order": 3 }
+  ],
+  "splitGroups": [
+    {
+      "code": "COLD_WATER",
+      "name": "Apa rece",
+      "splitIds": [
+        "WATER-COLD"
+      ],
+      "order": 1
+    },
+    {
+      "code": "HOT_WATER",
+      "name": "Apa calda",
+      "splitIds": [
+        "WATER-HOT",
+        "GAS-HOTWATER"
+      ],
+      "order": 2
+    }
+  ]
+}

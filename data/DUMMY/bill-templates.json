@@ -1,0 +1,24 @@
+[
+  {
+    "code": "WATER-BILL",
+    "name": "Factura apa",
+    "template": {
+      "title": "Apa",
+      "items": [
+        { "key": "water", "label": "Cost apa", "kind": "expense", "expenseTypeCode": "WATER" }
+      ]
+    },
+    "order": 1
+  },
+  {
+    "code": "GAS-BILL",
+    "name": "Factura gaz",
+    "template": {
+      "title": "Gaz",
+      "items": [
+        { "key": "gas", "label": "Cost gaz", "kind": "expense", "expenseTypeCode": "GAS" }
+      ]
+    },
+    "order": 2
+  }
+]

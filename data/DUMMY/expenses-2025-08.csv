@@ -1,0 +1,3 @@
+description,expenseTypeCode,allocatableAmount,currency,weightSource
+Water August,WATER,1045.2,RON,WATER_COLD
+Gas August,GAS,640.0,RON,SQM

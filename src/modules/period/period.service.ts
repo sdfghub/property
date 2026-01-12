@@ -34,6 +34,14 @@ export class PeriodService {
     })
   }
 
+  async listAll(communityId: string) {
+    return this.prisma.period.findMany({
+      where: { communityId },
+      orderBy: { seq: 'asc' },
+      select: { id: true, code: true, seq: true, status: true, closedAt: true },
+    })
+  }
+
   async createNext(communityId: string, explicitCode?: string) {
     const last = await this.prisma.period.findFirst({
       where: { communityId },
@@ -195,6 +203,7 @@ export class PeriodService {
     const statements = await this.prisma.$queryRawUnsafe(
       `
       SELECT currency,
+             SUM(due_start)::numeric AS due_start,
              SUM(charges)::numeric   AS charges,
              SUM(payments)::numeric  AS payments,
              SUM(due_end)::numeric   AS balance
@@ -209,17 +218,34 @@ export class PeriodService {
 
     const allocations = await this.prisma.$queryRawUnsafe(
       `
+      WITH expected AS (
+        SELECT
+          COALESCE(et.code, 'custom') AS expense_type,
+          SUM(e.allocatable_amount)::numeric AS expected
+        FROM expense e
+        JOIN period p ON p.id = e.period_id
+        LEFT JOIN expense_type et ON et.id = e.expense_type_id
+        WHERE e.community_id = $1 AND p.code = $2
+        GROUP BY COALESCE(et.code, 'custom')
+      ),
+      allocated AS (
+        SELECT
+          COALESCE(et.code, 'custom') AS expense_type,
+          COALESCE(SUM(al.amount), 0)::numeric AS allocated
+        FROM expense e
+        JOIN period p ON p.id = e.period_id
+        LEFT JOIN expense_type et ON et.id = e.expense_type_id
+        LEFT JOIN allocation_line al ON al.expense_id = e.id
+        WHERE e.community_id = $1 AND p.code = $2
+        GROUP BY COALESCE(et.code, 'custom')
+      )
       SELECT
-        COALESCE(et.code, 'custom') AS expense_type,
-        SUM(e.allocatable_amount)::numeric AS expected,
-        COALESCE(SUM(al.amount), 0)::numeric AS allocated,
-        (SUM(e.allocatable_amount) - COALESCE(SUM(al.amount),0))::numeric AS delta
-      FROM expense e
-      JOIN period p ON p.id = e.period_id
-      LEFT JOIN expense_type et ON et.id = e.expense_type_id
-      LEFT JOIN allocation_line al ON al.expense_id = e.id
-      WHERE e.community_id = $1 AND p.code = $2
-      GROUP BY COALESCE(et.code, 'custom')
+        COALESCE(expected.expense_type, allocated.expense_type) AS expense_type,
+        COALESCE(expected.expected, 0)::numeric AS expected,
+        COALESCE(allocated.allocated, 0)::numeric AS allocated,
+        (COALESCE(expected.expected, 0) - COALESCE(allocated.allocated, 0))::numeric AS delta
+      FROM expected
+      FULL OUTER JOIN allocated USING (expense_type)
       ORDER BY expense_type;
     `,
       communityId,
@@ -607,7 +633,10 @@ export class PeriodService {
   }
 
   private async computeStatements(tx: TxOrClient, communityId: string, periodId: string) {
-    const period = await tx.period.findUnique({ where: { id: periodId }, select: { endDate: true } })
+    const period = await tx.period.findUnique({
+      where: { id: periodId },
+      select: { endDate: true, seq: true, communityId: true },
+    })
     const cutoff = period?.endDate ?? new Date()
     const bes = await tx.billingEntity.findMany({
       where: { communityId },
@@ -615,6 +644,24 @@ export class PeriodService {
     })
 
     for (const be of bes) {
+      const previousPeriod = await tx.period.findFirst({
+        where: { communityId, seq: { lt: period?.seq ?? 0 } },
+        orderBy: { seq: 'desc' },
+        select: { id: true },
+      })
+      const previousStatement = previousPeriod
+        ? await tx.beStatement.findUnique({
+            where: {
+              communityId_periodId_billingEntityId: {
+                communityId,
+                periodId: previousPeriod.id,
+                billingEntityId: be.id,
+              },
+            },
+            select: { dueEnd: true, currency: true },
+          })
+        : null
+
       const opening = await tx.beOpeningBalance.findUnique({
         where: {
           communityId_periodId_billingEntityId: {
@@ -641,7 +688,7 @@ export class PeriodService {
         }),
       ])
 
-      const dueStart = Number(opening?.amount ?? 0)
+      const dueStart = Number(previousStatement?.dueEnd ?? opening?.amount ?? 0)
       const charges = Number(chargesAgg._sum.amount ?? 0)
       const payments = Number(paymentsAgg._sum.amount ?? 0)
       const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
@@ -663,7 +710,7 @@ export class PeriodService {
           payments,
           adjustments,
           dueEnd,
-          currency: opening?.currency ?? 'RON',
+          currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
         },
         create: {
           communityId,
@@ -674,7 +721,7 @@ export class PeriodService {
           payments,
           adjustments,
           dueEnd,
-          currency: opening?.currency ?? 'RON',
+          currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
         },
       })
     }

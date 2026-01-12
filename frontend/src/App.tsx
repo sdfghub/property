@@ -5,11 +5,35 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import { CommunityExplorer } from './components/CommunityExplorer'
 import { I18nProvider, useI18n } from './i18n/useI18n'
 import { SystemAdminPanel } from './components/SystemAdminPanel'
-import { CommunityAdminDashboard } from './components/community-admin/CommunityAdminDashboard'
+import { CommunityAdminDashboard, type CommunityAdminTabKey } from './components/community-admin/CommunityAdminDashboard'
 import { BillingEntityResponsibleDashboard } from './components/BillingEntityResponsibleDashboard'
 import { PushPrompt } from './components/PushPrompt'
 import { API_BASE } from './api/client'
 import './styles/index.css'
+
+type ScopePayload = {
+  communities: Array<{ id: string; code: string; name: string }>
+  billingEntities: Array<{ id: string; code?: string | null; name?: string | null; communityId?: string | null }>
+}
+
+let scopesCache: ScopePayload | null = null
+let scopesPromise: Promise<ScopePayload> | null = null
+
+async function fetchScopes(api: { get: <T>(path: string) => Promise<T> }) {
+  if (scopesCache) return scopesCache
+  if (scopesPromise) return scopesPromise
+  scopesPromise = api
+    .get<ScopePayload>('/communities/scopes')
+    .then((data) => {
+      scopesCache = data
+      return data
+    })
+    .catch((err) => {
+      scopesPromise = null
+      throw err
+    })
+  return scopesPromise
+}
 
 function LangSwitch() {
   const { lang, setLang } = useI18n()
@@ -35,17 +59,108 @@ function LangSwitch() {
   )
 }
 
+function ProfileMenu({
+  email,
+  canOpenNotifications,
+  onOpenNotifications,
+  onLogout,
+}: {
+  email?: string | null
+  canOpenNotifications: boolean
+  onOpenNotifications: () => void
+  onLogout: () => void
+}) {
+  const { t } = useI18n()
+  const [open, setOpen] = React.useState(false)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!containerRef.current) return
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <button className="btn secondary" type="button" onClick={() => setOpen((prev) => !prev)}>
+        {t('app.profile') || 'Profile'}
+      </button>
+      {open ? (
+        <div
+          className="card soft"
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 'calc(100% + 8px)',
+            minWidth: 220,
+            zIndex: 40,
+          }}
+        >
+          <div className="stack" style={{ gap: 10 }}>
+            <div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {t('auth.emailLabel')}
+              </div>
+              <div className="badge" style={{ marginTop: 6 }}>
+                {email || '-'}
+              </div>
+            </div>
+            <PushPrompt variant="menu" />
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => {
+                onOpenNotifications()
+                setOpen(false)
+              }}
+              disabled={!canOpenNotifications}
+              title={!canOpenNotifications ? 'Available in community admin scope' : undefined}
+            >
+              {t('notifications.prefsTitle') || 'Notification settings'}
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => {
+                onLogout()
+                setOpen(false)
+              }}
+            >
+              {t('app.logout')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function AppShell() {
   const { t } = useI18n()
-  const { user, status, logout, roles, activeRole, setActiveRole } = useAuth()
+  const { user, status, logout, roles, activeRole, setActiveRole, api } = useAuth()
   const params = React.useMemo(() => new URLSearchParams(window.location.search), [])
   const devCommunity = params.get('community')
   const uiVersion = (import.meta as any)?.env?.VITE_APP_VERSION as string | undefined
   const [apiVersion, setApiVersion] = React.useState<string | null>(null)
+  const [adminTabRequest, setAdminTabRequest] = React.useState<CommunityAdminTabKey | null>(null)
+  const [communityNames, setCommunityNames] = React.useState<Record<string, string>>({})
+  const [beNames, setBeNames] = React.useState<Record<string, string>>({})
+  const [accessibleCommunities, setAccessibleCommunities] = React.useState<Array<{ id: string; code: string; name: string }>>([])
   const apiBase = React.useMemo(() => API_BASE.replace(/\/$/, ''), [])
   const roleKey = user ? activeRole?.role || 'member' : 'signed-out'
+  const versionLoadRef = React.useRef(false)
+  const scopeLoadRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
+    if (versionLoadRef.current) return
+    versionLoadRef.current = true
     let active = true
     async function loadVersion() {
       try {
@@ -83,6 +198,102 @@ function AppShell() {
     document.body.dataset.role = roleKey
   }, [roleKey])
 
+  React.useEffect(() => {
+    if (!user) {
+      setCommunityNames({})
+      setBeNames({})
+      setAccessibleCommunities([])
+      scopeLoadRef.current = null
+      return
+    }
+    const scopeKey = `${user.id || ''}:${roles.length}`
+    const hasScopes = accessibleCommunities.length > 0 || Object.keys(communityNames).length > 0
+    if (scopeLoadRef.current === scopeKey && hasScopes) return
+    let mounted = true
+    async function loadScopeNames() {
+      try {
+        const scopeData = await fetchScopes(api)
+        if (!mounted) return
+        const communityMap: Record<string, string> = {}
+        const communities = scopeData?.communities ?? []
+        const billingEntities = scopeData?.billingEntities ?? []
+        setAccessibleCommunities(communities)
+        communities.forEach((c) => {
+          const label = c.name || c.code || c.id
+          communityMap[c.id] = label
+          if (c.code) {
+            communityMap[c.code] = label
+          }
+        })
+        if (mounted) {
+          setCommunityNames(communityMap)
+          setBeNames(() => {
+            const next: Record<string, string> = {}
+            billingEntities.forEach((be) => {
+              if (!be?.id) return
+              const communityLabel = communityMap[be.communityId ?? ''] || (be.communityId ?? '')
+              const beLabel = be.name || be.code || be.id
+              const fullLabel = [communityLabel, beLabel].filter((val) => val != null && val !== '').join(' · ')
+              next[be.id] = fullLabel
+              if (be.code) {
+                next[be.code] = fullLabel
+              }
+            })
+            return next
+          })
+          scopeLoadRef.current = scopeKey
+        }
+      } catch {
+        if (mounted) {
+          setCommunityNames({})
+          setBeNames({})
+          setAccessibleCommunities([])
+        }
+        scopeLoadRef.current = null
+      }
+    }
+    loadScopeNames()
+    return () => {
+      mounted = false
+    }
+  }, [api, user?.id, roles.length])
+
+  const handleLogout = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('invite')
+      url.searchParams.delete('inviteToken')
+      url.searchParams.delete('token')
+      window.history.replaceState({}, document.title, url.toString())
+    }
+    logout()
+  }, [logout])
+
+  const handleOpenNotifications = React.useCallback(() => {
+    if (activeRole?.role !== 'COMMUNITY_ADMIN') return
+    setAdminTabRequest('notifications')
+  }, [activeRole?.role])
+
+  const handleCommunityConfigLoaded = React.useCallback(
+    (community: { id?: string; code?: string; name?: string } | null, billingEntities: any[]) => {
+      if (!community) return
+      const communityLabel = communityNames[community.id ?? ''] || community.name || community.code || community.id || ''
+      if (!communityLabel) return
+      if (!Array.isArray(billingEntities) || billingEntities.length === 0) return
+      setBeNames((prev) => {
+        const next = { ...prev }
+        billingEntities.forEach((be) => {
+          if (be?.id) {
+            const beLabel = be.name || be.code || be.id
+            next[be.id] = [communityLabel, beLabel].filter((val) => val != null && val !== '').join(' · ')
+          }
+        })
+        return next
+      })
+    },
+    [communityNames],
+  )
+
   return (
     <div className="app-shell" data-role={roleKey}>
       <div className="hero">
@@ -92,31 +303,31 @@ function AppShell() {
         {user ? (
           <div className="pill-tight">
             <div className="stack" style={{ gap: 4 }}>
-              <span>{user.email}</span>
-              <RolePicker roles={roles} activeRole={activeRole} onChange={setActiveRole} />
+              <RolePicker
+                roles={roles}
+                activeRole={activeRole}
+                onChange={setActiveRole}
+                communityNames={communityNames}
+                beNames={beNames}
+                accessibleCommunities={accessibleCommunities}
+              />
             </div>
-            <button
-              className="btn secondary"
-              style={{ padding: '8px 12px' }}
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  const url = new URL(window.location.href)
-                  url.searchParams.delete('invite')
-                  url.searchParams.delete('inviteToken')
-                  url.searchParams.delete('token')
-                  window.history.replaceState({}, document.title, url.toString())
-                }
-                logout()
-              }}
-            >
-              {t('app.logout')}
-            </button>
           </div>
         ) : (
           <div className="badge">{status === 'loading' ? t('status.connecting') : t('status.signedOut')}</div>
         )}
         <div className="stack" style={{ gap: 6, alignItems: 'flex-end' }}>
-          <LangSwitch />
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+            <LangSwitch />
+            {user ? (
+              <ProfileMenu
+                email={user.email}
+                canOpenNotifications={activeRole?.role === 'COMMUNITY_ADMIN'}
+                onOpenNotifications={handleOpenNotifications}
+                onLogout={handleLogout}
+              />
+            ) : null}
+          </div>
           {(uiVersion || apiVersion) && (
             <div className="muted" style={{ fontSize: 12, textAlign: 'right' }}>
               {uiVersion ? (
@@ -134,15 +345,24 @@ function AppShell() {
         </div>
       </div>
 
-      {user ? <PushPrompt /> : null}
-
       {devCommunity ? (
-        <CommunityAdminDashboard forceCommunityId={devCommunity} />
+        <CommunityAdminDashboard
+          forceCommunityId={devCommunity}
+          requestedTab={adminTabRequest}
+          onTabRequestHandled={() => setAdminTabRequest(null)}
+          communitiesOverride={accessibleCommunities}
+          onCommunityConfigLoaded={handleCommunityConfigLoaded}
+        />
       ) : user ? (
         activeRole?.role === 'SYSTEM_ADMIN' ? (
           <SystemAdminPanel />
         ) : activeRole?.role === 'COMMUNITY_ADMIN' ? (
-          <CommunityAdminDashboard />
+          <CommunityAdminDashboard
+            requestedTab={adminTabRequest}
+            onTabRequestHandled={() => setAdminTabRequest(null)}
+            communitiesOverride={accessibleCommunities}
+            onCommunityConfigLoaded={handleCommunityConfigLoaded}
+          />
         ) : activeRole?.role === 'BILLING_ENTITY_USER' ? (
           <BillingEntityResponsibleDashboard />
         ) : (
@@ -161,23 +381,58 @@ function RolePicker({
   roles,
   activeRole,
   onChange,
+  communityNames,
+  beNames,
+  accessibleCommunities,
 }: {
   roles: { role: string; scopeType: string; scopeId?: string | null }[]
   activeRole?: { role: string; scopeType: string; scopeId?: string | null } | null
   onChange: (r: { role: string; scopeType: string; scopeId?: string | null }) => void
+  communityNames: Record<string, string>
+  beNames: Record<string, string>
+  accessibleCommunities: Array<{ id: string; code: string; name: string }>
 }) {
   const { t } = useI18n()
   if (!roles.length) return null
+  const roleLabels: Record<string, string> = {
+    SYSTEM_ADMIN: t('role.systemAdmin') || 'System admin',
+    COMMUNITY_ADMIN: t('role.communityAdmin') || 'Community admin',
+    BILLING_ENTITY_USER: t('role.billingEntityUser') || 'Billing entity user',
+    CENSOR: t('role.censor') || 'Censor',
+  }
+  const communityIndex = React.useMemo(() => {
+    const map: Record<string, string> = { ...communityNames }
+    accessibleCommunities.forEach((c) => {
+      const label = c.name || c.code || c.id
+      const keys = [c.id, c.code, c.id?.toUpperCase(), c.code?.toUpperCase()].filter(Boolean) as string[]
+      keys.forEach((key) => {
+        if (!map[key]) map[key] = label
+      })
+    })
+    return map
+  }, [accessibleCommunities, communityNames])
+  function resolveScopeName(scopeType?: string | null, scopeId?: string | null) {
+    if (!scopeId) return null
+    if (scopeType === 'COMMUNITY') {
+      const normalized = scopeId.trim()
+      const direct = communityIndex[normalized] || communityIndex[normalized.toUpperCase()]
+      if (direct) return direct
+      const match = accessibleCommunities.find((c) => c.id === scopeId || c.code === scopeId)
+      if (match) return match.name || match.code || match.id
+      return scopeId
+    }
+    if (scopeType === 'BILLING_ENTITY') return beNames[scopeId] || scopeId
+    return scopeId
+  }
   const options = roles.map((r, idx) => {
-    const label = [r.role, r.scopeType !== 'SYSTEM' ? r.scopeType.toLowerCase() : null, r.scopeId]
-      .filter(Boolean)
-      .join(' · ')
+    const scopeName = resolveScopeName(r.scopeType, r.scopeId)
+    const label = [roleLabels[r.role] || r.role, scopeName].filter((val) => val != null && val !== '').join(' · ')
     return { label, value: `${label}__${idx}`, role: r }
   })
   const activeLabel =
     activeRole &&
-    [activeRole.role, activeRole.scopeType !== 'SYSTEM' ? activeRole.scopeType.toLowerCase() : null, activeRole.scopeId]
-      .filter(Boolean)
+    [roleLabels[activeRole.role] || activeRole.role, resolveScopeName(activeRole.scopeType, activeRole.scopeId)]
+      .filter((val) => val != null && val !== '')
       .join(' · ')
   const [open, setOpen] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -195,47 +450,19 @@ function RolePicker({
     }
   }, [])
 
-  const mainOptions = options.slice(0, 3)
-  const extraOptions = options.slice(3)
+  const displayLabel = activeLabel || options[0]?.label || ''
   return (
     <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-      <label className="label" style={{ marginBottom: 0 }}>
-        <span>{t('app.scope')}</span>
-      </label>
       <div className="scope-picker" ref={containerRef}>
-        <div className="scope-row">
-          {mainOptions.map((opt) => {
-            const isActive =
-              activeRole?.role === opt.role.role &&
-              activeRole?.scopeType === opt.role.scopeType &&
-              activeRole?.scopeId === opt.role.scopeId
-            return (
-              <button
-                key={opt.value}
-                className="btn secondary scope-option"
-                style={{
-                  background: isActive ? 'var(--accent-soft)' : undefined,
-                  borderColor: isActive ? 'var(--accent-border)' : undefined,
-                }}
-                type="button"
-                onClick={() => onChange(opt.role)}
-                title={opt.label}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-          {extraOptions.length ? (
-            <button
-              className="btn secondary scope-option"
-              type="button"
-              onClick={() => setOpen((prev) => !prev)}
-            >
-              {t('app.more')} ({extraOptions.length})
-            </button>
-          ) : null}
+        <div className="scope-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <div className="badge scope-badge" title={displayLabel}>
+            {displayLabel}
+          </div>
+          <button className="btn secondary scope-option" type="button" onClick={() => setOpen((prev) => !prev)}>
+            {t('app.change') || 'Change'}
+          </button>
         </div>
-        {open && extraOptions.length ? (
+        {open && options.length ? (
           <div className="scope-drawer-overlay" role="dialog" aria-label={t('app.scope')}>
             <div className="scope-drawer-panel">
               <div className="scope-drawer-header">
@@ -245,7 +472,7 @@ function RolePicker({
                 </button>
               </div>
               <div className="scope-drawer" role="listbox">
-                {extraOptions.map((opt) => {
+                {options.map((opt) => {
                   const isActive =
                     activeRole?.role === opt.role.role &&
                     activeRole?.scopeType === opt.role.scopeType &&

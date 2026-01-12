@@ -1,0 +1,14 @@
+[
+  {
+    "code": "UNIT-WATER-READINGS",
+    "name": "Citiri apa apartamente",
+    "template": {
+      "title": "Citiri apa apartamente",
+      "items": [
+        { "key": "coldwater", "label": "Apa rece", "kind": "meter", "typeCode": "WATER_COLD" },
+        { "key": "hotwater", "label": "Apa calda", "kind": "meter", "typeCode": "HOT_WATER" }
+      ]
+    },
+    "order": 1
+  }
+]

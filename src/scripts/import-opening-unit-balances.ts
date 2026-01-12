@@ -15,7 +15,7 @@ type Row = {
 
 function usage(msg?: string): never {
   if (msg) console.error(`Error: ${msg}\n`)
-  console.log(`Import opening balances per unit, rolled up to BE bucketed charges (OPENING).
+  console.log(`Import opening balances per unit, rolled up to be_opening_balance.
 
 Usage:
   npm run import:opening:units -- <file>
@@ -63,10 +63,8 @@ async function main() {
       communityId: string
       periodId: string
       beId: string
-      bucket: string
       currency: string
       amount: number
-      details: Array<{ unitId: string; amount: number }>
     }
   >()
 
@@ -100,66 +98,43 @@ async function main() {
       console.warn(`Skipping: no BE membership for unit ${r.unitCode} at ${r.periodCode}`)
       continue
     }
-    const key = `${r.communityId}::${period.id}::${bem.billingEntityId}::${r.bucket}`
+    const key = `${r.communityId}::${period.id}::${bem.billingEntityId}`
     const entry =
       aggregates.get(key) ??
       {
         communityId: r.communityId,
         periodId: period.id,
         beId: bem.billingEntityId,
-        bucket: r.bucket,
         currency: r.currency ?? 'RON',
         amount: 0,
-        details: [],
       }
     entry.amount += r.amount
-    entry.details.push({ unitId: unit.id, amount: r.amount })
     aggregates.set(key, entry)
   }
 
   let count = 0
   for (const agg of aggregates.values()) {
-    const le = await prisma.beLedgerEntry.upsert({
+    await prisma.beOpeningBalance.upsert({
       where: {
-        communityId_periodId_billingEntityId_refType_refId_bucket: {
+        communityId_periodId_billingEntityId: {
           communityId: agg.communityId,
           periodId: agg.periodId,
           billingEntityId: agg.beId,
-          refType: 'OPENING',
-          refId: agg.periodId,
-          bucket: agg.bucket,
         },
       },
-      update: { amount: agg.amount, currency: agg.currency, kind: 'CHARGE' },
+      update: { amount: agg.amount, currency: agg.currency },
       create: {
         communityId: agg.communityId,
         periodId: agg.periodId,
         billingEntityId: agg.beId,
-        kind: 'CHARGE',
         amount: agg.amount,
         currency: agg.currency,
-        refType: 'OPENING',
-        refId: agg.periodId,
-        bucket: agg.bucket,
       },
     })
-    // replace details for idempotency
-    await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: le.id } })
-    if (agg.details.length) {
-      await prisma.beLedgerEntryDetail.createMany({
-        data: agg.details.map((d) => ({
-          ledgerEntryId: le.id,
-          unitId: d.unitId,
-          amount: d.amount,
-          meta: { source: 'OPENING_UNIT' },
-        })),
-        skipDuplicates: true,
-      })
-    }
     count++
   }
 
-  console.log(`✅ Imported ${count} opening balances from ${file} (unit-level, rolled to BE)`)
+  console.log(`✅ Imported ${count} opening balances into be_opening_balance from ${file} (unit-level, rolled to BE)`)
 }
 
 main().catch((e) => {

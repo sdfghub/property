@@ -13,6 +13,15 @@ type EditablePeriod = {
   canPrepare?: boolean
 } | null
 
+type DashboardData = {
+  currentPeriod?: EditablePeriod
+  lastClosedPeriod?: { code: string; closedAt?: string } | null
+  tasks?: any[]
+  incidents?: any[]
+  upcomingEvents?: any[]
+  ongoingPolls?: any[]
+}
+
 type Props = {
   editablePeriod: EditablePeriod
   onGoPeriod: () => void
@@ -26,13 +35,32 @@ type Props = {
   summary?: any | null
   summaryError?: string | null
   summaryLoading?: boolean
+  onLoadSummary?: () => void
   lastClosed?: { code: string; closedAt?: string } | null
   onReopen?: () => void
   onReopenPrepared?: () => void
   onCreatePeriod?: () => void
   onGoStatements?: () => void
   lastClosedSummary?: any | null
+  onLoadLastClosedSummary?: () => void
   communityId?: string
+  programs?: any[]
+  invoices?: any[]
+  invoicesLoading?: boolean
+  invoicesError?: string | null
+  onReloadInvoices?: () => void
+  onLinkInvoice?: (
+    invoiceId: string,
+    programId: string,
+    amount?: number | null,
+    portionKey?: string | null,
+    newInvoicePayload?: any,
+  ) => Promise<string | null>
+  dashboardData?: DashboardData | null
+  dashboardLoading?: boolean
+  dashboardError?: string | null
+  onEnsurePrograms?: () => void
+  onEnsureInvoices?: () => void
 }
 
 export function OverviewTab({
@@ -48,12 +76,14 @@ export function OverviewTab({
   summary,
   summaryError,
   summaryLoading,
+  onLoadSummary,
   lastClosed,
   onReopen,
   onReopenPrepared,
   onCreatePeriod,
   onGoStatements,
   lastClosedSummary,
+  onLoadLastClosedSummary,
   onAddInvoice,
   programs = [],
   invoices = [],
@@ -61,6 +91,11 @@ export function OverviewTab({
   invoicesError,
   onReloadInvoices,
   onLinkInvoice,
+  dashboardData,
+  dashboardLoading,
+  dashboardError,
+  onEnsurePrograms,
+  onEnsureInvoices,
 }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
@@ -94,6 +129,48 @@ export function OverviewTab({
   const [periodExpenses, setPeriodExpenses] = React.useState<any[]>([])
   const [expensesLoading, setExpensesLoading] = React.useState(false)
   const [expensesError, setExpensesError] = React.useState<string | null>(null)
+  const [tasks, setTasks] = React.useState<any[]>([])
+  const [incidents, setIncidents] = React.useState<any[]>([])
+  const [ticketsLoading, setTicketsLoading] = React.useState(false)
+  const [ticketsError, setTicketsError] = React.useState<string | null>(null)
+  const [upcomingEvents, setUpcomingEvents] = React.useState<any[]>([])
+  const [ongoingPolls, setOngoingPolls] = React.useState<any[]>([])
+  const [eventsLoading, setEventsLoading] = React.useState(false)
+  const [pollsLoading, setPollsLoading] = React.useState(false)
+  const [eventsError, setEventsError] = React.useState<string | null>(null)
+  const [pollsError, setPollsError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!showInvoiceForm && !showNewInvoice) return
+    onEnsurePrograms?.()
+    onEnsureInvoices?.()
+  }, [onEnsurePrograms, onEnsureInvoices, showInvoiceForm, showNewInvoice])
+
+  React.useEffect(() => {
+    if (typeof dashboardLoading === 'boolean') {
+      setTicketsLoading(dashboardLoading)
+      setEventsLoading(dashboardLoading)
+      setPollsLoading(dashboardLoading)
+    }
+    if (dashboardLoading) return
+    if (dashboardError) {
+      setTicketsError(dashboardError)
+      setEventsError(dashboardError)
+      setPollsError(dashboardError)
+      setTasks([])
+      setIncidents([])
+      setUpcomingEvents([])
+      setOngoingPolls([])
+      return
+    }
+    setTicketsError(null)
+    setEventsError(null)
+    setPollsError(null)
+    setTasks(dashboardData?.tasks ?? [])
+    setIncidents(dashboardData?.incidents ?? [])
+    setUpcomingEvents(dashboardData?.upcomingEvents ?? [])
+    setOngoingPolls(dashboardData?.ongoingPolls ?? [])
+  }, [dashboardData, dashboardError, dashboardLoading])
 
   React.useEffect(() => {
     if (!communityId || !editablePeriod?.period?.code || !showCustomForm) return
@@ -118,6 +195,7 @@ export function OverviewTab({
   }, [api, communityId, editablePeriod?.period?.code, showCustomForm])
 
   React.useEffect(() => {
+    if (!showCustomForm) return
     if (!communityId || !editablePeriod?.period?.code) return
     setExpensesLoading(true)
     setExpensesError(null)
@@ -130,6 +208,7 @@ export function OverviewTab({
       })
       .finally(() => setExpensesLoading(false))
   }, [api, communityId, editablePeriod?.period?.code, showCustomForm])
+
 
   const canLink =
     !!onLinkInvoice &&
@@ -613,6 +692,16 @@ export function OverviewTab({
                 )}
               </div>
             )}
+            {editablePeriod.period?.status === 'PREPARED' && !summary && onLoadSummary && (
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={onLoadSummary}
+                disabled={summaryLoading}
+              >
+                {summaryLoading ? t('common.loading') || 'Loading…' : t('card.period.loadSummary', 'Load summary')}
+              </button>
+            )}
             {summaryLoading && <div className="muted">{t('common.loading') || 'Loading…'}</div>}
             {summaryError && <div className="badge negative">{summaryError}</div>}
             {summary && editablePeriod.period?.status === 'PREPARED' && (
@@ -676,10 +765,96 @@ export function OverviewTab({
                 <div className="muted">{t('card.period.lastClosedSummary', 'Summary')}</div>
                 <BillingEntitiesPeriodView summary={lastClosedSummary} />
               </div>
-            ) : null}
+            ) : (
+              onLoadLastClosedSummary && (
+                <button className="btn secondary small" type="button" onClick={onLoadLastClosedSummary}>
+                  {t('card.period.loadSummary', 'Load summary')}
+                </button>
+              )
+            )}
           </div>
         ) : (
           <div className="muted" style={{ marginTop: 6 }}>{t('card.period.noClosed') || 'No closed periods'}</div>
+        )}
+      </div>
+      <div className="card soft">
+        <h3>{t('card.tasks.title', 'Upcoming tasks')}</h3>
+        {ticketsLoading ? (
+          <div className="muted">{t('card.tasks.loading', 'Loading…')}</div>
+        ) : ticketsError ? (
+          <div className="badge negative">{ticketsError}</div>
+        ) : tasks.length ? (
+          <div className="stack" style={{ gap: 6 }}>
+            {tasks.map((task) => (
+              <div key={task.id} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <span className="badge secondary">{task.status}</span>
+                <span>{task.title}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">{t('card.tasks.empty', 'No upcoming tasks')}</div>
+        )}
+      </div>
+      <div className="card soft">
+        <h3>{t('card.incidents.title', 'Active incidents')}</h3>
+        {ticketsLoading ? (
+          <div className="muted">{t('card.incidents.loading', 'Loading…')}</div>
+        ) : ticketsError ? (
+          <div className="badge negative">{ticketsError}</div>
+        ) : incidents.length ? (
+          <div className="stack" style={{ gap: 6 }}>
+            {incidents.map((incident) => (
+              <div key={incident.id} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <span className="badge secondary">{incident.status}</span>
+                <span>{incident.title}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">{t('card.incidents.empty', 'No active incidents')}</div>
+        )}
+      </div>
+      <div className="card soft">
+        <h3>{t('card.events.title', 'Upcoming events')}</h3>
+        {eventsLoading ? (
+          <div className="muted">{t('card.events.loading', 'Loading…')}</div>
+        ) : eventsError ? (
+          <div className="badge negative">{eventsError}</div>
+        ) : upcomingEvents.length ? (
+          <div className="stack" style={{ gap: 6 }}>
+            {upcomingEvents.map((event) => (
+              <div key={event.id} className="stack" style={{ gap: 2 }}>
+                <strong>{event.title}</strong>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {new Date(event.startAt).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">{t('card.events.empty', 'No upcoming events')}</div>
+        )}
+      </div>
+      <div className="card soft">
+        <h3>{t('card.polls.title', 'Ongoing polls')}</h3>
+        {pollsLoading ? (
+          <div className="muted">{t('card.polls.loading', 'Loading…')}</div>
+        ) : pollsError ? (
+          <div className="badge negative">{pollsError}</div>
+        ) : ongoingPolls.length ? (
+          <div className="stack" style={{ gap: 6 }}>
+            {ongoingPolls.map((poll) => (
+              <div key={poll.id} className="stack" style={{ gap: 2 }}>
+                <strong>{poll.title}</strong>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {t('card.polls.ends', { date: new Date(poll.endAt).toLocaleString() })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">{t('card.polls.empty', 'No ongoing polls')}</div>
         )}
       </div>
       {/*

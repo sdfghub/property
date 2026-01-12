@@ -12,12 +12,12 @@ export class InviteController{
   @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
   @Post()
   createSystemInvite(@Body() body:any, @Req() req:any){
-    const { email, role, scopeType, scopeId } = body
+    const { email, role, scopeType, scopeId, beRoles } = body
     const inviterId = req?.user?.sub
     if (!inviterId) {
       throw new UnauthorizedException('Missing auth user')
     }
-    return this.invites.createInvite(email, role, scopeType, scopeId, inviterId)
+    return this.invites.createInvite(email, role, scopeType, scopeId, inviterId, beRoles)
   }
 
   @UseGuards(JwtAuthGuard,ScopesGuard)

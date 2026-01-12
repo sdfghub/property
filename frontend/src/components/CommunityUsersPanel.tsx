@@ -7,8 +7,18 @@ type PendingInvite = {
   id: string
   email: string
   role: string
+  beRoles?: string[]
   createdAt: string
   expiresAt: string
+}
+
+const BE_ROLES = ['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE'] as const
+
+type BeUser = {
+  userId: string
+  email: string
+  name?: string | null
+  roles: string[]
 }
 
 type BeRow = {
@@ -16,6 +26,7 @@ type BeRow = {
   code: string
   name: string
   responsibles: Array<{ userId: string; email: string; name?: string | null; assignmentId: string }>
+  users: BeUser[]
   pending: PendingInvite[]
 }
 
@@ -24,13 +35,13 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
   const { t } = useI18n()
   const [beRows, setBeRows] = React.useState<BeRow[]>([])
   const [beInviteEmail, setBeInviteEmail] = React.useState<Record<string, string>>({})
+  const [beInviteRoles, setBeInviteRoles] = React.useState<Record<string, string[]>>({})
   const [busyInvite, setBusyInvite] = React.useState(false)
   const [beSearch, setBeSearch] = React.useState('')
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({})
-  const [periods, setPeriods] = React.useState<Array<{ id: string; code: string }>>([])
-  const [periodCode, setPeriodCode] = React.useState('')
   const [loading, setLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
+  const [savingRoles, setSavingRoles] = React.useState<Record<string, boolean>>({})
 
   React.useEffect(() => {
     if (!communityId) return
@@ -38,15 +49,7 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
     setMessage(null)
 
     api
-      .get<Array<{ id: string; code: string }>>(`/communities/${communityId}/periods/closed`)
-      .then((rows) => {
-        setPeriods(rows)
-        if (rows.length) setPeriodCode(rows[0].code)
-      })
-      .catch((err: any) => setMessage(err?.message || 'Could not load periods'))
-
-    api
-      .get<Array<{ id: string; code: string; name: string; responsibles?: BeRow['responsibles']; pending?: PendingInvite[] }>>(
+      .get<Array<{ id: string; code: string; name: string; responsibles?: BeRow['responsibles']; pending?: PendingInvite[]; users?: BeUser[] }>>(
         `/communities/${communityId}/billing-entities/responsibles`,
       )
       .then((rows) =>
@@ -55,6 +58,7 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
             ...r,
             responsibles: r.responsibles ?? [],
             pending: r.pending ?? [],
+            users: r.users ?? [],
           })),
         ),
       )
@@ -68,17 +72,24 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
     setBusyInvite(true)
     setMessage(null)
     try {
+      const roles = beInviteRoles[beId]?.length ? beInviteRoles[beId] : ['EXPENSE_RESPONSIBLE']
       await api.post('/invites', {
         email: trimmedEmail,
         role: 'BILLING_ENTITY_USER',
         scopeType: 'BILLING_ENTITY',
         scopeId: beId,
+        beRoles: roles,
       })
       const fresh = await api.get<PendingInvite[]>(`/invites/billing-entity/${beId}/pending`)
       setBeRows((prev) => prev.map((be) => (be.id === beId ? { ...be, pending: fresh } : be)))
       setBeInviteEmail((prev) => ({ ...prev, [beId]: '' }))
+      setBeInviteRoles((prev) => ({ ...prev, [beId]: ['EXPENSE_RESPONSIBLE'] }))
       if (user?.email && refreshSession && user.email.toLowerCase() === trimmedEmail.toLowerCase()) {
-        await refreshSession()
+        try {
+          await refreshSession()
+        } catch {
+          // Ignore refresh errors; invite succeeded and roles will sync on next auth refresh.
+        }
       }
     } catch (err: any) {
       setMessage(err?.message || 'Could not invite responsible')
@@ -102,24 +113,30 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
     }
   }
 
+  async function updateUserRoles(beId: string, userId: string, roles: string[]) {
+    const key = `${beId}:${userId}`
+    setSavingRoles((prev) => ({ ...prev, [key]: true }))
+    setMessage(null)
+    try {
+      await api.patch(`/communities/${communityId}/billing-entities/${beId}/users/${userId}/roles`, { roles })
+      setBeRows((prev) =>
+        prev.map((be) => {
+          if (be.id !== beId) return be
+          const users = be.users
+            .map((u) => (u.userId === userId ? { ...u, roles } : u))
+            .filter((u) => u.roles.length > 0)
+          return { ...be, users }
+        }),
+      )
+    } catch (err: any) {
+      setMessage(err?.message || 'Could not update roles')
+    } finally {
+      setSavingRoles((prev) => ({ ...prev, [key]: false }))
+    }
+  }
+
   return (
     <div className="stack">
-      <div className="row" style={{ gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <label className="label">
-            <span>Period code</span>
-            <span className="muted">{t('be.periodClosedOnly')}</span>
-          </label>
-          <select className="input" value={periodCode} onChange={(e) => setPeriodCode(e.target.value)}>
-            {periods.map((p) => (
-              <option key={p.id} value={p.code}>
-                {p.code}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       <input
         className="input"
         placeholder={t('be.search')}
@@ -163,21 +180,43 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                     <>
                       <div className="stack">
                         <div className="row" style={{ justifyContent: 'space-between' }}>
-                          <h4>{t('admin.adminsTitle')}</h4>
-                          <div className="badge">{be.responsibles.length}</div>
+                          <h4>{t('be.usersTitle', 'Users')}</h4>
+                          <div className="badge">{be.users.length}</div>
                         </div>
-                        {be.responsibles.length === 0 ? (
-                          <div className="empty">{t('be.noResponsibles')}</div>
+                        {be.users.length === 0 ? (
+                          <div className="empty">{t('be.noUsers', 'No users yet.')}</div>
                         ) : (
                           <div className="list">
-                            {be.responsibles.map((r) => (
-                              <div key={r.assignmentId} className="list-item" style={{ cursor: 'default' }}>
-                                <div>
-                                  <strong>{r.email}</strong>
-                                  <div className="muted">{r.name ?? '—'}</div>
+                            {be.users.map((u) => {
+                              const key = `${be.id}:${u.userId}`
+                              const busy = !!savingRoles[key]
+                              return (
+                                <div key={u.userId} className="list-item" style={{ cursor: 'default' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <strong>{u.email}</strong>
+                                    <div className="muted">{u.name ?? '—'}</div>
+                                  </div>
+                                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                    {BE_ROLES.map((role) => (
+                                      <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                                        <input
+                                          type="checkbox"
+                                          disabled={busy}
+                                          checked={u.roles.includes(role)}
+                                          onChange={() => {
+                                            const next = u.roles.includes(role)
+                                              ? u.roles.filter((r) => r !== role)
+                                              : [...u.roles, role]
+                                            updateUserRoles(be.id, u.userId, next)
+                                          }}
+                                        />
+                                        <span>{role}</span>
+                                      </label>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -198,6 +237,26 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                           onChange={(e) => setBeInviteEmail((prev) => ({ ...prev, [be.id]: e.target.value }))}
                           required
                         />
+                        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                          {BE_ROLES.map((role) => (
+                            <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={(beInviteRoles[be.id] ?? ['EXPENSE_RESPONSIBLE']).includes(role)}
+                                onChange={() =>
+                                  setBeInviteRoles((prev) => {
+                                    const current = prev[be.id] ?? ['EXPENSE_RESPONSIBLE']
+                                    const next = current.includes(role)
+                                      ? current.filter((r) => r !== role)
+                                      : [...current, role]
+                                    return { ...prev, [be.id]: next }
+                                  })
+                                }
+                              />
+                              <span>{role}</span>
+                            </label>
+                          ))}
+                        </div>
                         <button className="btn secondary" type="submit" disabled={busyInvite}>
                           {busyInvite ? t('auth.sending') : t('admin.sendInvite')}
                         </button>
@@ -217,7 +276,9 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                                 <div>
                                   <strong>{p.email}</strong>
                                   <div className="muted">
-                                    {p.role} · exp {new Date(p.expiresAt).toLocaleDateString()}
+                                    {p.role}
+                                    {p.beRoles?.length ? ` · ${p.beRoles.join(', ')}` : ''}
+                                    {` · exp ${new Date(p.expiresAt).toLocaleDateString()}`}
                                   </div>
                                 </div>
                                 <button className="btn secondary" type="button" onClick={() => deleteBeInvite(be.id, p.id)} disabled={loading}>

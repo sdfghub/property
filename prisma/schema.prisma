@@ -72,6 +72,98 @@ enum NodeKind {
   SET
 }
 
+enum PollStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum TicketType {
+  INCIDENT
+  TASK
+}
+
+enum TicketStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELED
+  REOPENED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketTag {
+  OUTAGE
+  BREAKDOWN
+  LEAK
+  SAFETY
+  SECURITY
+  COMPLAINT
+  ACCESS
+  NOISE
+  CLEANLINESS
+  DAMAGE
+  PREVENTIVE_MAINTENANCE
+  INSPECTION
+  REPAIR
+  UPGRADE
+  CLEANING
+  VENDOR_VISIT
+  COMPLIANCE
+  METER_READING
+}
+
+enum TicketEventType {
+  STATUS_CHANGE
+  COMMENT
+  ASSIGNMENT
+  TAGS_UPDATED
+}
+
+enum AnnouncementAudienceType {
+  COMMUNITY
+  UNIT_GROUP
+}
+
+enum AnnouncementImpactTag {
+  WATER
+  HEAT
+  ELEVATOR
+  ELECTRICITY
+  ACCESS
+  OTHER
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+}
+
+enum NotificationSource {
+  TICKET
+  COMMUNICATION
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum InventoryAssetStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Community {
   id       String @id @map("id")
   code     String
@@ -106,6 +198,12 @@ model Community {
   BillTemplateInstance       BillTemplateInstance[]
   MeterEntryTemplate         MeterEntryTemplate[]
   MeterEntryTemplateInstance MeterEntryTemplateInstance[]
+  AllocationTrace            AllocationTrace[]
+  Event                      Event[]
+  Poll                       Poll[]
+  tickets                    Ticket[]
+  announcements              Announcement[]
+  inventoryAssets            InventoryAsset[]
 
   @@map("community")
 }
@@ -141,6 +239,7 @@ model Period {
   // AllocationLineDetail removed
   BillTemplateInstance       BillTemplateInstance[]
   MeterEntryTemplateInstance MeterEntryTemplateInstance[]
+  AllocationTrace            AllocationTrace[]
 
   @@unique([communityId, code])
   @@unique([communityId, seq])
@@ -162,6 +261,7 @@ model Unit {
   AllocationLine      AllocationLine[]
   // AllocationLineDetail removed
   BeLedgerEntryDetail BeLedgerEntryDetail[]
+  AllocationTrace     AllocationTrace[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -176,6 +276,7 @@ model UnitGroup {
 
   community Community         @relation(fields: [communityId], references: [id])
   members   UnitGroupMember[]
+  announcementAudienceGroups AnnouncementAudienceGroup[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -208,6 +309,7 @@ model BillingEntity {
 
   community Community             @relation(fields: [communityId], references: [id])
   members   BillingEntityMember[]
+  userRoles BillingEntityUserRole[]
   bills     Bill[]
   Payment   Payment[]
 
@@ -231,6 +333,28 @@ model BillingEntityMember {
   @@index([billingEntityId, startSeq, endSeq])
   @@index([unitId, startSeq, endSeq])
   @@map("billing_entity_member")
+}
+
+enum BillingEntityRole {
+  OWNER
+  RESIDENT
+  EXPENSE_RESPONSIBLE
+}
+
+model BillingEntityUserRole {
+  id              String            @id @default(cuid()) @map("id")
+  billingEntityId String            @map("billing_entity_id")
+  userId          String            @map("user_id")
+  role            BillingEntityRole @map("role")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@unique([billingEntityId, userId, role])
+  @@index([userId])
+  @@index([billingEntityId])
+  @@map("billing_entity_user_role")
 }
 
 model MeasureType {
@@ -388,14 +512,15 @@ model Expense {
   invoiceLineKey    String?           @map("invoice_line_key")
   weightVectorId    String?           @map("weight_vector_id")
 
-  community     Community        @relation(fields: [communityId], references: [id])
-  period        Period           @relation(fields: [periodId], references: [id])
-  expenseType   ExpenseType?     @relation(fields: [expenseTypeId], references: [id])
-  allocations   AllocationLine[]
-  weightVector  WeightVector?    @relation("ExpenseVector")
-  AllocationLog AllocationLog[]
-  BillLine      BillLine[]
-  ExpenseSplit  ExpenseSplit[]
+  community       Community         @relation(fields: [communityId], references: [id])
+  period          Period            @relation(fields: [periodId], references: [id])
+  expenseType     ExpenseType?      @relation(fields: [expenseTypeId], references: [id])
+  allocations     AllocationLine[]
+  weightVector    WeightVector?     @relation("ExpenseVector")
+  AllocationLog   AllocationLog[]
+  BillLine        BillLine[]
+  ExpenseSplit    ExpenseSplit[]
+  AllocationTrace AllocationTrace[]
 
   @@index([communityId, periodId])
   @@index([targetType, targetId])
@@ -454,11 +579,12 @@ model AllocationLine {
   amount         Decimal @map("amount") @db.Decimal(18, 4)
   meta           Json?   @map("meta")
 
-  community    Community     @relation(fields: [communityId], references: [id])
-  period       Period        @relation(fields: [periodId], references: [id])
-  expense      Expense       @relation(fields: [expenseId], references: [id])
-  unit         Unit          @relation(fields: [unitId], references: [id])
-  expenseSplit ExpenseSplit? @relation(fields: [expenseSplitId], references: [id])
+  community    Community        @relation(fields: [communityId], references: [id])
+  period       Period           @relation(fields: [periodId], references: [id])
+  expense      Expense          @relation(fields: [expenseId], references: [id])
+  unit         Unit             @relation(fields: [unitId], references: [id])
+  expenseSplit ExpenseSplit?    @relation(fields: [expenseSplitId], references: [id])
+  trace        AllocationTrace?
 
   @@unique([expenseId, unitId, expenseSplitId])
   @@index([communityId, periodId])
@@ -466,6 +592,33 @@ model AllocationLine {
   @@index([unitId, periodId])
   @@index([splitNodeId])
   @@map("allocation_line")
+}
+
+model AllocationTrace {
+  id               String   @id @default(cuid()) @map("id")
+  allocationLineId String   @unique @map("allocation_line_id")
+  communityId      String   @map("community_id")
+  periodId         String   @map("period_id")
+  expenseId        String   @map("expense_id")
+  unitId           String   @map("unit_id")
+  expenseSplitId   String?  @map("expense_split_id")
+  splitNodeId      String?  @map("split_node_id")
+  trace            Json     @map("trace")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  allocationLine AllocationLine @relation(fields: [allocationLineId], references: [id], onDelete: Cascade)
+  community      Community      @relation(fields: [communityId], references: [id])
+  period         Period         @relation(fields: [periodId], references: [id])
+  expense        Expense        @relation(fields: [expenseId], references: [id])
+  unit           Unit           @relation(fields: [unitId], references: [id])
+  expenseSplit   ExpenseSplit?  @relation(fields: [expenseSplitId], references: [id])
+
+  @@index([communityId, periodId])
+  @@index([expenseId])
+  @@index([unitId, periodId])
+  @@index([splitNodeId])
+  @@map("allocation_trace")
 }
 
 model SplitGroup {
@@ -528,12 +681,130 @@ model Program {
   defaultBucket   String?  @map("default_bucket")
   allocation      Json?    @map("allocation")
 
-  community       Community       @relation(fields: [communityId], references: [id])
+  community       Community        @relation(fields: [communityId], references: [id])
   programInvoices ProgramInvoice[]
 
   @@unique([communityId, code])
   @@index([communityId])
   @@map("program")
+}
+
+model Event {
+  id              String   @id @default(cuid()) @map("id")
+  communityId     String   @map("community_id")
+  title           String   @map("title")
+  description     String?  @map("description")
+  startAt         DateTime @map("start_at")
+  endAt           DateTime @map("end_at")
+  location        String?  @map("location")
+  attachments     Json?    @map("attachments")
+  visibility      String   @default("COMMUNITY") @map("visibility")
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id])
+  createdBy User      @relation(fields: [createdByUserId], references: [id])
+  rsvps     EventRsvp[]
+
+  @@index([communityId, startAt])
+  @@map("event")
+}
+
+model EventRsvp {
+  id        String   @id @default(cuid()) @map("id")
+  eventId   String   @map("event_id")
+  userId    String   @map("user_id")
+  status    String   @map("status") // 'GOING' | 'NOT_GOING'
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("event_rsvp")
+}
+
+model Poll {
+  id                 String     @id @default(cuid()) @map("id")
+  communityId        String     @map("community_id")
+  title              String     @map("title")
+  description        String?    @map("description")
+  status             PollStatus @default(DRAFT) @map("status")
+  allowsMultiple     Boolean    @default(false) @map("allows_multiple")
+  anonymized         Boolean    @default(false) @map("anonymized")
+  startAt            DateTime   @map("start_at")
+  endAt              DateTime   @map("end_at")
+  publishedResultsAt DateTime?  @map("published_results_at")
+  createdByUserId    String     @map("created_by_user_id")
+  approvedByUserId   String?    @map("approved_by_user_id")
+  rejectedByUserId   String?    @map("rejected_by_user_id")
+  rejectionReason    String?    @map("rejection_reason")
+  approvedAt         DateTime?  @map("approved_at")
+  rejectedAt         DateTime?  @map("rejected_at")
+  closedAt           DateTime?  @map("closed_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  community Community  @relation(fields: [communityId], references: [id])
+  createdBy User       @relation("PollCreatedBy", fields: [createdByUserId], references: [id])
+  approvedBy User?     @relation("PollApprovedBy", fields: [approvedByUserId], references: [id])
+  rejectedBy User?     @relation("PollRejectedBy", fields: [rejectedByUserId], references: [id])
+  options   PollOption[]
+  votes     PollVote[]
+  voters    PollVoter[]
+
+  @@index([communityId, status])
+  @@index([communityId, startAt, endAt])
+  @@map("poll")
+}
+
+model PollOption {
+  id     String @id @default(cuid()) @map("id")
+  pollId String @map("poll_id")
+  text   String @map("text")
+  order  Int    @default(0) @map("order")
+
+  poll  Poll      @relation(fields: [pollId], references: [id])
+  votes PollVote[]
+
+  @@unique([pollId, text])
+  @@index([pollId])
+  @@map("poll_option")
+}
+
+model PollVote {
+  id           String   @id @default(cuid()) @map("id")
+  pollId       String   @map("poll_id")
+  pollOptionId String   @map("poll_option_id")
+  userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  poll   Poll       @relation(fields: [pollId], references: [id])
+  option PollOption @relation(fields: [pollOptionId], references: [id])
+  user   User       @relation(fields: [userId], references: [id])
+
+  @@unique([pollId, userId, pollOptionId])
+  @@index([pollId, userId])
+  @@index([pollOptionId])
+  @@map("poll_vote")
+}
+
+model PollVoter {
+  id        String   @id @default(cuid()) @map("id")
+  pollId    String   @map("poll_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  poll Poll @relation(fields: [pollId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@map("poll_voter")
 }
 
 model AggregationRule {
@@ -579,12 +850,13 @@ model ExpenseSplit {
   basisCode     String?  @map("basis_code")
   meta          Json?    @map("meta")
 
-  community   Community        @relation(fields: [communityId], references: [id])
-  period      Period           @relation(fields: [periodId], references: [id])
-  expense     Expense          @relation(fields: [expenseId], references: [id])
-  parent      ExpenseSplit?    @relation("SplitParent", fields: [parentSplitId], references: [id])
-  children    ExpenseSplit[]   @relation("SplitParent")
-  allocations AllocationLine[]
+  community       Community         @relation(fields: [communityId], references: [id])
+  period          Period            @relation(fields: [periodId], references: [id])
+  expense         Expense           @relation(fields: [expenseId], references: [id])
+  parent          ExpenseSplit?     @relation("SplitParent", fields: [parentSplitId], references: [id])
+  children        ExpenseSplit[]    @relation("SplitParent")
+  allocations     AllocationLine[]
+  AllocationTrace AllocationTrace[]
 
   @@index([expenseId])
   @@index([parentSplitId])
@@ -950,18 +1222,33 @@ model BeStatement {
 }
 
 model User {
-  id            String           @id @default(cuid())
-  email         String           @unique
+  id            String             @id @default(cuid())
+  email         String             @unique
   name          String?
-  passwordHash  String?          @map("password_hash")
-  createdAt     DateTime         @default(now()) @map("created_at")
-  tokenVersion  Int              @default(0) @map("token_version")
+  passwordHash  String?            @map("password_hash")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  tokenVersion  Int                @default(0) @map("token_version")
   roles         RoleAssignment[]
+  billingEntityRoles BillingEntityUserRole[]
   invites       Invite[]
-  loginTokens   LoginToken[]
   refreshTokens RefreshToken[]
   oauthAccounts UserOAuthAccount[]
   pushTokens    PushToken[]
+  eventsCreated Event[]
+  pollsCreated  Poll[]             @relation("PollCreatedBy")
+  pollsApproved Poll[]             @relation("PollApprovedBy")
+  pollsRejected Poll[]             @relation("PollRejectedBy")
+  pollVotes     PollVote[]
+  pollVoters    PollVoter[]
+  eventRsvps    EventRsvp[]
+  ticketsCreated Ticket[]          @relation("TicketCreatedBy")
+  ticketsAssigned Ticket[]         @relation("TicketAssignee")
+  ticketEvents   TicketEvent[]
+  announcementsCreated Announcement[]
+  notifications Notification[]
+  notificationPreferences NotificationPreference[]
+  inventoryAssetsCreated InventoryAsset[]
+  inventoryRulesCreated InventoryMaintenanceRule[]
 
   @@map("user")
 }
@@ -1020,6 +1307,7 @@ model Invite {
   email      String
   role       Role
   userId     String?   @map("user_id")
+  beRoles    BillingEntityRole[] @default([]) @map("be_roles")
   scopeType  ScopeType @map("scope_type")
   scopeId    String?   @map("scope_id")
   invitedBy  String    @map("invited_by")
@@ -1030,19 +1318,6 @@ model Invite {
   user       User?     @relation(fields: [userId], references: [id])
 
   @@map("invite")
-}
-
-model LoginToken {
-  id        String    @id @default(cuid())
-  email     String
-  token     String    @unique
-  usedAt    DateTime? @map("used_at")
-  expiresAt DateTime? @map("expires_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  user      User?     @relation(fields: [userId], references: [id])
-  userId    String?   @map("user_id")
-
-  @@map("login_token")
 }
 
 model RefreshToken {
@@ -1062,17 +1337,229 @@ model RefreshToken {
 }
 
 model PushToken {
-  id         String   @id @default(cuid())
-  userId     String   @map("user_id")
-  token      String   @unique
-  platform   String   @default("WEB")
-  deviceInfo Json?    @map("device_info")
-  createdAt  DateTime @default(now()) @map("created_at")
-  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  token      String    @unique
+  platform   String    @default("WEB")
+  deviceInfo Json?     @map("device_info")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
   revokedAt  DateTime? @map("revoked_at")
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, revokedAt])
   @@map("push_token")
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  communityId String         @map("community_id")
+  type        TicketType
+  status      TicketStatus   @default(NEW)
+  priority    TicketPriority @default(MEDIUM)
+  title       String
+  description String?
+  createdById String         @map("created_by_id")
+  assigneeId  String?        @map("assignee_id")
+  sourceInventoryRuleId String? @map("source_inventory_rule_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id])
+  createdBy User      @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  assignee  User?     @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  sourceInventoryRule InventoryMaintenanceRule? @relation(fields: [sourceInventoryRuleId], references: [id])
+  tags      TicketTagMap[]
+  events    TicketEvent[]
+
+  @@index([communityId, status])
+  @@index([createdById])
+  @@index([assigneeId])
+  @@index([sourceInventoryRuleId])
+  @@map("ticket")
+}
+
+model TicketTagMap {
+  id       String    @id @default(cuid())
+  ticketId String    @map("ticket_id")
+  tag      TicketTag
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+
+  @@unique([ticketId, tag])
+  @@index([tag])
+  @@map("ticket_tag")
+}
+
+model TicketEvent {
+  id        String          @id @default(cuid())
+  ticketId  String          @map("ticket_id")
+  actorId   String          @map("actor_id")
+  type      TicketEventType
+  comment   String?
+  metadata  Json?
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  actor  User   @relation(fields: [actorId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_event")
+}
+
+model Announcement {
+  id           String                   @id @default(cuid())
+  communityId  String                   @map("community_id")
+  title        String
+  body         String
+  startsAt     DateTime?                @map("starts_at")
+  endsAt       DateTime?                @map("ends_at")
+  audienceType AnnouncementAudienceType @map("audience_type")
+  createdById  String                   @map("created_by_id")
+  createdAt    DateTime                 @default(now()) @map("created_at")
+
+  community      Community                   @relation(fields: [communityId], references: [id])
+  createdBy      User                        @relation(fields: [createdById], references: [id])
+  impactTags     AnnouncementImpactTagMap[]
+  audienceGroups AnnouncementAudienceGroup[]
+  targetRoles    AnnouncementTargetRole[]
+
+  @@index([communityId])
+  @@map("announcement")
+}
+
+model AnnouncementImpactTagMap {
+  id             String                @id @default(cuid())
+  announcementId String                @map("announcement_id")
+  tag            AnnouncementImpactTag
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+
+  @@unique([announcementId, tag])
+  @@map("announcement_impact_tag")
+}
+
+model AnnouncementAudienceGroup {
+  id             String @id @default(cuid())
+  announcementId String @map("announcement_id")
+  unitGroupId    String @map("unit_group_id")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+  unitGroup    UnitGroup   @relation(fields: [unitGroupId], references: [id])
+
+  @@unique([announcementId, unitGroupId])
+  @@index([unitGroupId])
+  @@map("announcement_audience_group")
+}
+
+model AnnouncementTargetRole {
+  id             String            @id @default(cuid())
+  announcementId String            @map("announcement_id")
+  role           BillingEntityRole @map("role")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+
+  @@unique([announcementId, role])
+  @@index([announcementId])
+  @@map("announcement_target_role")
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String             @map("user_id")
+  source    NotificationSource
+  sourceId  String?            @map("source_id")
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?          @map("read_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user       User                   @relation(fields: [userId], references: [id])
+  deliveries NotificationDelivery[]
+
+  @@index([userId, readAt])
+  @@map("notification")
+}
+
+model NotificationPreference {
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel])
+  @@map("notification_preference")
+}
+
+model NotificationDelivery {
+  id             String                    @id @default(cuid())
+  notificationId String                    @map("notification_id")
+  channel        NotificationChannel
+  status         NotificationDeliveryStatus @default(PENDING)
+  error          String?
+  sentAt         DateTime?                 @map("sent_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  @@index([notificationId])
+  @@map("notification_delivery")
+}
+
+model InventoryAsset {
+  id          String               @id @default(cuid())
+  communityId String               @map("community_id")
+  name        String
+  description String?
+  status      InventoryAssetStatus @default(ACTIVE)
+  metadata    Json?
+  createdById String               @map("created_by_id")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  community Community @relation(fields: [communityId], references: [id])
+  createdBy User      @relation(fields: [createdById], references: [id])
+  rules     InventoryMaintenanceRule[]
+
+  @@index([communityId])
+  @@map("inventory_asset")
+}
+
+model InventoryMaintenanceRule {
+  id          String    @id @default(cuid())
+  assetId     String    @map("asset_id")
+  title       String
+  description String?
+  intervalDays Int      @map("interval_days")
+  nextDueAt   DateTime  @map("next_due_at")
+  enabled     Boolean   @default(true)
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  asset      InventoryAsset @relation(fields: [assetId], references: [id])
+  createdBy  User           @relation(fields: [createdById], references: [id])
+  tags       InventoryRuleTagMap[]
+  tickets    Ticket[]
+
+  @@index([assetId, enabled])
+  @@index([nextDueAt])
+  @@map("inventory_maintenance_rule")
+}
+
+model InventoryRuleTagMap {
+  id     String    @id @default(cuid())
+  ruleId String    @map("rule_id")
+  tag    TicketTag
+
+  rule InventoryMaintenanceRule @relation(fields: [ruleId], references: [id])
+
+  @@unique([ruleId, tag])
+  @@map("inventory_rule_tag")
 }

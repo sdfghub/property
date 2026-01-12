@@ -281,8 +281,8 @@ select option {
 }
 
 .scope-drawer {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 10px;
   border-radius: 12px;
@@ -426,6 +426,11 @@ select option {
   font-size: 12px;
   border: 1px solid var(--border);
   color: var(--muted);
+}
+
+.scope-badge {
+  border: none;
+  font-size: 14px;
 }
 
 .badge.positive {

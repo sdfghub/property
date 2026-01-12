@@ -4,6 +4,8 @@ import admin from 'firebase-admin'
 import fs from 'fs'
 
 type PushPayload = { title?: string; body?: string; url?: string; token?: string }
+type PushSendPayload = { title?: string; body?: string; url?: string }
+const DEFAULT_DEV_FCM_PATH = 'property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json'
 
 @Injectable()
 export class PushService {
@@ -18,6 +20,11 @@ export class PushService {
       creds = JSON.parse(json)
     } else if (path) {
       creds = JSON.parse(fs.readFileSync(path, 'utf8'))
+    } else if (process.env.NODE_ENV !== 'production') {
+      const fallbackPath = `${process.cwd()}/${DEFAULT_DEV_FCM_PATH}`
+      if (fs.existsSync(fallbackPath)) {
+        creds = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
+      }
     }
     if (!creds) {
       throw new ForbiddenException('FCM service account not configured')
@@ -97,5 +104,26 @@ export class PushService {
 
     const messageId = await app.messaging().send(message)
     return { ok: true, messageId }
+  }
+
+  async sendToTokens(tokens: string[], input: PushSendPayload) {
+    const app = this.ensureFirebase()
+    const title = input.title || 'Notification'
+    const body = input.body || ''
+    const url = input.url || undefined
+
+    const results = await Promise.allSettled(
+      tokens.map((token) =>
+        app.messaging().send({
+          token,
+          notification: { title, body },
+          data: url ? { url } : undefined,
+          webpush: url ? { fcmOptions: { link: url } } : undefined,
+        }),
+      ),
+    )
+
+    const errors = results.filter((r) => r.status === 'rejected')
+    return { ok: errors.length === 0, sent: results.length, failed: errors.length }
   }
 }
