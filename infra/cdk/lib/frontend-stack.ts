@@ -5,11 +5,16 @@ import { AllowedMethods, CachedMethods, Distribution, OriginAccessIdentity, Pric
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager'
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
+interface FrontendStackProps extends cdk.StackProps {
+  domainName?: string
+  certArn?: string
+}
+
 export class FrontendStack extends cdk.Stack {
   public readonly bucket: Bucket
   public readonly distribution: Distribution
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: FrontendStackProps) {
     super(scope, id, props)
 
     this.bucket = new Bucket(this, 'FrontendBucket', {
@@ -22,8 +27,8 @@ export class FrontendStack extends cdk.Stack {
     const oai = new OriginAccessIdentity(this, 'FrontendOai')
     this.bucket.grantRead(oai)
 
-    const certArn = process.env.FRONTEND_CERT_ARN || this.node.tryGetContext('frontendCertArn')
-    const domainValue = process.env.FRONTEND_DOMAIN || this.node.tryGetContext('frontendDomain')
+    const certArn = props?.certArn || process.env.FRONTEND_CERT_ARN || this.node.tryGetContext('frontendCertArn')
+    const domainValue = props?.domainName || process.env.FRONTEND_DOMAIN || this.node.tryGetContext('frontendDomain')
     const domainNames = domainValue
       ? String(domainValue)
           .split(',')

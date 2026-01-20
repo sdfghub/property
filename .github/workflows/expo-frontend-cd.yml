@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
 env:
   AWS_REGION: eu-central-1
-  STACK_NAME: PropertyExpenses-Frontend
-  FRONTEND_CERT_ARN: ${{ vars.FRONTEND_CERT_ARN }}
-  FRONTEND_DOMAIN: ${{ vars.FRONTEND_DOMAIN }}
+  STACK_NAME: PropertyExpenses-Frontend-Expo
+  EXPO_FRONTEND_CERT_ARN: ${{ vars.EXPO_FRONTEND_CERT_ARN }}
+  EXPO_FRONTEND_DOMAIN: ${{ vars.EXPO_FRONTEND_DOMAIN }}
   EXPO_PUBLIC_API_BASE: ${{ vars.EXPO_PUBLIC_API_BASE }}
   FRONTEND_API_BASE: ${{ vars.FRONTEND_API_BASE }}
   API_DOMAIN: ${{ vars.API_DOMAIN }}
@@ -31,7 +31,7 @@ jobs:
       - name: Deploy frontend stack
         run: |
           cd infra/cdk
-          FRONTEND_CERT_ARN=${FRONTEND_CERT_ARN} FRONTEND_DOMAIN="${FRONTEND_DOMAIN}" npx cdk deploy ${STACK_NAME} --require-approval never
+          EXPO_FRONTEND_CERT_ARN=${EXPO_FRONTEND_CERT_ARN} EXPO_FRONTEND_DOMAIN="${EXPO_FRONTEND_DOMAIN}" npx cdk deploy ${STACK_NAME} --require-approval never
       - name: Resolve API base
         run: |
           if [ -n "${EXPO_PUBLIC_API_BASE}" ]; then

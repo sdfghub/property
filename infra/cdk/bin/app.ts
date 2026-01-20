@@ -22,4 +22,13 @@ new AppStack(app, 'PropertyExpenses-App', {
   db: data.db,
   dbSecurityGroup: data.dbSecurityGroup,
 })
-new FrontendStack(app, 'PropertyExpenses-Frontend', { env })
+new FrontendStack(app, 'PropertyExpenses-Frontend', {
+  env,
+  domainName: process.env.FRONTEND_DOMAIN || app.node.tryGetContext('frontendDomain'),
+  certArn: process.env.FRONTEND_CERT_ARN || app.node.tryGetContext('frontendCertArn'),
+})
+new FrontendStack(app, 'PropertyExpenses-Frontend-Expo', {
+  env,
+  domainName: process.env.EXPO_FRONTEND_DOMAIN || app.node.tryGetContext('expoFrontendDomain'),
+  certArn: process.env.EXPO_FRONTEND_CERT_ARN || app.node.tryGetContext('expoFrontendCertArn'),
+})
