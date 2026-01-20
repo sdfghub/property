@@ -15,12 +15,17 @@ export class MePaymentController {
   @Post()
   async checkout(@Req() req: any, @Body() body: any) {
     const userId: string = req.user?.id ?? req.user?.sub
-    const lines = Array.isArray(body?.lines) ? body.lines : null
+    type PaymentLine = { billingEntityId?: string; amount?: number; bucket?: string; unitId?: string }
+    type AllocationSpec = { amount: number; bucket?: string; unitId?: string; billingEntityId?: string }
+
+    const lines: PaymentLine[] | null = Array.isArray(body?.lines) ? body.lines : null
     if (!lines?.length) {
       throw new BadRequestException('lines are required')
     }
 
-    const beIds = Array.from(new Set(lines.map((line: any) => line?.billingEntityId).filter(Boolean)))
+    const beIds = Array.from(
+      new Set(lines.map((line) => line?.billingEntityId).filter((id): id is string => typeof id === 'string' && id.length > 0)),
+    )
     if (!beIds.length) {
       throw new BadRequestException('billingEntityId is required for each line')
     }
@@ -34,12 +39,9 @@ export class MePaymentController {
       throw new ForbiddenException('User is not allowed to pay for one or more billing entities')
     }
 
-    const byBe = new Map<
-      string,
-      { communityId: string; amount: number; allocationSpec: Array<{ amount: number; bucket?: string; unitId?: string; billingEntityId?: string }> }
-    >()
+    const byBe = new Map<string, { communityId: string; amount: number; allocationSpec: AllocationSpec[] }>()
 
-    lines.forEach((line: any, idx: number) => {
+    lines.forEach((line, idx: number) => {
       const billingEntityId = line?.billingEntityId
       const amount = Number(line?.amount ?? 0)
       if (!billingEntityId) {
@@ -52,7 +54,7 @@ export class MePaymentController {
       if (!communityId) {
         throw new ForbiddenException('User is not allowed to pay for one or more billing entities')
       }
-      const entry = byBe.get(billingEntityId) ?? { communityId, amount: 0, allocationSpec: [] }
+      const entry = byBe.get(billingEntityId) ?? { communityId, amount: 0, allocationSpec: [] as AllocationSpec[] }
       entry.amount += amount
       entry.allocationSpec.push({
         amount,
