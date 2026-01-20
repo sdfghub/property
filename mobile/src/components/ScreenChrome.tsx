@@ -15,7 +15,14 @@ type ScreenChromeProps = {
   children: React.ReactNode
 }
 
-export function ScreenChrome({ title, activeSection, breadcrumb, onScopeChange, onNavigateSection, children }: ScreenChromeProps) {
+export function ScreenChrome({
+  title,
+  activeSection,
+  breadcrumb,
+  onScopeChange,
+  onNavigateSection,
+  children,
+}: ScreenChromeProps) {
   const { activeRole, roles, logout } = useAuth()
   const beScope = useBeScope()
   const navigation = useNavigation<any>()
@@ -59,7 +66,7 @@ export function ScreenChrome({ title, activeSection, breadcrumb, onScopeChange, 
               <Text style={styles.backButtonIcon}>←</Text>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Main', { section: 'Dashboard' })}>
+          <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Main', { section: 'My Dashboard' })}>
             <Text style={styles.homeButtonIcon}>⌂</Text>
           </TouchableOpacity>
         </View>
@@ -72,7 +79,7 @@ export function ScreenChrome({ title, activeSection, breadcrumb, onScopeChange, 
         </TouchableOpacity>
         <View style={styles.menuPanel}>
           <Text style={styles.menuTitle}>Mă ocup eu</Text>
-          {['Dashboard', 'Notifications', 'Communications', 'Expenses', 'Programs', 'Events', 'Polls'].map((item) => {
+          {['Dashboard', 'Community Dashboard', 'My Dashboard', 'Notifications', 'Communications', 'Expenses', 'Programs', 'Events', 'Polls'].map((item) => {
             const isActive = currentSection === item
             return (
               <TouchableOpacity

@@ -1,9 +1,7 @@
 import React from 'react'
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
-  ScrollView,
   Switch,
   Text,
   TouchableOpacity,
@@ -12,6 +10,10 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { useAuth } from '@shared/auth/useAuth'
 import type { PeriodRef } from '@shared/api/types'
+import { CartPanel } from '../components/cart/CartPanel'
+import { BeDashboard } from '../components/dashboard/BeDashboard'
+import { CommunityDashboard } from '../components/dashboard/CommunityDashboard'
+import { GlobalDashboard } from '../components/dashboard/GlobalDashboard'
 import { ScreenChrome } from '../components/ScreenChrome'
 import { useBeScope } from '../contexts/BeScopeContext'
 import { styles } from '../styles/appStyles'
@@ -25,14 +27,24 @@ type AggregateRow = {
   splitGroupCode?: string
   splitGroupName?: string
 }
+type DueTotals = {
+  dueStart: number
+  charges: number
+  payments: number
+  adjustments: number
+  dueEnd: number
+}
 
 export function MainScreen() {
   const { api, activeRole, roles, logout } = useAuth()
   const navigation = useNavigation<any>()
   const route = useRoute<any>()
   const routeParams = route?.params as { section?: string; periodCode?: string } | undefined
-  const [section, setSection] = React.useState<string>(routeParams?.section || 'Dashboard')
+  const initialSection = routeParams?.section || 'My Dashboard'
+  const [section, setSection] = React.useState<string>(initialSection)
   const isDashboardView = section === 'Dashboard'
+  const isCommunityDashboardView = section === 'Community Dashboard'
+  const isGlobalDashboardView = section === 'My Dashboard'
   const isExpensesView = section === 'Expenses'
   const isProgramsView = section === 'Programs'
   const isPollsView = section === 'Polls'
@@ -53,6 +65,8 @@ export function MainScreen() {
   const [expandedDetailLoading, setExpandedDetailLoading] = React.useState(false)
   const [statement, setStatement] = React.useState<{ periodCode: string; dueStart: number; charges: number; currency?: string } | null>(null)
   const [previousPeriodCode, setPreviousPeriodCode] = React.useState<string | null>(null)
+  const [previousClosedStatement, setPreviousClosedStatement] = React.useState<{ periodCode: string; dueEnd: number; currency?: string } | null>(null)
+  const [beLiveTotals, setBeLiveTotals] = React.useState<{ dueStart: number; charges: number; payments: number; adjustments: number; dueEnd: number } | null>(null)
   const [statementDetail, setStatementDetail] = React.useState<{ statement: any; ledgerEntries: any[] } | null>(null)
   const [statementDetailOpen, setStatementDetailOpen] = React.useState(false)
   const [events, setEvents] = React.useState<any[]>([])
@@ -78,6 +92,24 @@ export function MainScreen() {
   const [announcements, setAnnouncements] = React.useState<any[]>([])
   const [announcementsLoading, setAnnouncementsLoading] = React.useState(false)
   const [announcementsMessage, setAnnouncementsMessage] = React.useState<string | null>(null)
+  const [globalDue, setGlobalDue] = React.useState<{
+    totals: { live: DueTotals; previousClosed: DueTotals }
+    communities: any[]
+  } | null>(null)
+  const [globalDueLoading, setGlobalDueLoading] = React.useState(false)
+  const [globalDueMessage, setGlobalDueMessage] = React.useState<string | null>(null)
+  const [communityDue, setCommunityDue] = React.useState<{
+    live: { period: any | null; totals: DueTotals; billingEntities: any[]; previousClosed: { period: any | null; totals: DueTotals } | null }
+  } | null>(null)
+  const [communityDueLoading, setCommunityDueLoading] = React.useState(false)
+  const [communityDueMessage, setCommunityDueMessage] = React.useState<string | null>(null)
+  const [selectedCommunityId, setSelectedCommunityId] = React.useState<string | null>(null)
+  const [initializingDashboard, setInitializingDashboard] = React.useState(initialSection === 'My Dashboard')
+  const [cartLines, setCartLines] = React.useState<Array<{ billingEntityId: string; bucket?: string | null; amount: number; label: string }>>([])
+  const [cartPulse, setCartPulse] = React.useState(false)
+  const [cartOpen, setCartOpen] = React.useState(false)
+  const [cartMessage, setCartMessage] = React.useState<string | null>(null)
+  const [cartSubmitting, setCartSubmitting] = React.useState(false)
   const [refreshKey] = React.useState(0)
   const { beMetaMap, setBeMeta } = beScope
   const periodTotal = React.useMemo(() => rows.reduce((sum, row) => sum + Number(row.amount || 0), 0), [rows])
@@ -89,9 +121,28 @@ export function MainScreen() {
 
   React.useEffect(() => {
     if (routeParams?.section && routeParams.section !== section) {
+      if (routeParams.section === 'My Dashboard') {
+        setInitializingDashboard(true)
+      }
       setSection(routeParams.section)
     }
   }, [routeParams?.section, section])
+
+  React.useEffect(() => {
+    if (selectedCommunityId) return
+    if (beMetaMap[beId]?.communityId) {
+      setSelectedCommunityId(beMetaMap[beId]?.communityId ?? null)
+      return
+    }
+    const communityIds = Object.keys(beScope.communityMap || {})
+    if (communityIds.length) setSelectedCommunityId(communityIds[0])
+  }, [beId, beMetaMap, beScope.communityMap, selectedCommunityId])
+
+  React.useEffect(() => {
+    if (section !== 'My Dashboard') {
+      setInitializingDashboard(false)
+    }
+  }, [section])
 
   React.useEffect(() => {
     if (!beId || !isExpensesView) return
@@ -222,8 +273,6 @@ export function MainScreen() {
     if (!beId || !isDashboardView) return
     let active = true
     setStatementLoading(true)
-    setEventsLoading(true)
-    setPollsLoading(true)
     setProgramsLoading(true)
     setMessage(null)
     api
@@ -232,6 +281,15 @@ export function MainScreen() {
         if (!active) return
         const period = data?.period
         setPreviousPeriodCode(data?.previousPeriod?.code ?? null)
+        if (data?.previousClosedStatement && data?.previousPeriod?.code) {
+          setPreviousClosedStatement({
+            periodCode: data.previousPeriod.code,
+            dueEnd: Number(data.previousClosedStatement.dueEnd || 0),
+            currency: data.previousClosedStatement.currency || 'RON',
+          })
+        } else {
+          setPreviousClosedStatement(null)
+        }
         const stmt = data?.statement
         if (period?.code) {
           if (stmt) {
@@ -251,8 +309,17 @@ export function MainScreen() {
           statement: stmt || null,
           ledgerEntries: data?.ledgerEntries || [],
         })
-        setEvents(Array.isArray(data?.events) ? data.events : [])
-        setPolls(Array.isArray(data?.polls) ? data.polls : [])
+        if (data?.live?.totals) {
+          setBeLiveTotals({
+            dueStart: Number(data.live.totals.dueStart || 0),
+            charges: Number(data.live.totals.charges || 0),
+            payments: Number(data.live.totals.payments || 0),
+            adjustments: Number(data.live.totals.adjustments || 0),
+            dueEnd: Number(data.live.totals.dueEnd || 0),
+          })
+        } else {
+          setBeLiveTotals(null)
+        }
         setProgramBuckets(data?.programBuckets || {})
         if (data?.be?.id) {
           setBeMeta(data.be.id, { name: data.be.name || data.be.code || data.be.id, communityId: data.be.communityId })
@@ -264,8 +331,6 @@ export function MainScreen() {
       .finally(() => {
         if (active) {
           setStatementLoading(false)
-          setEventsLoading(false)
-          setPollsLoading(false)
           setProgramsLoading(false)
         }
       })
@@ -274,7 +339,223 @@ export function MainScreen() {
     }
   }, [api, beId, isDashboardView, setBeMeta, refreshKey])
 
-  const communityId = beMetaMap[beId]?.communityId
+  const communityIdForBe = beMetaMap[beId]?.communityId || null
+  const communityId = isCommunityDashboardView ? selectedCommunityId || communityIdForBe : communityIdForBe
+
+  const cartTotal = React.useMemo(
+    () => cartLines.reduce((sum, line) => sum + Number(line.amount || 0), 0),
+    [cartLines],
+  )
+  const cartCount = cartLines.length
+  const cartKeys = React.useMemo(
+    () => new Set(cartLines.map((line) => `${line.billingEntityId}::${line.bucket || 'ALL'}`)),
+    [cartLines],
+  )
+  const isInCart = React.useCallback(
+    (billingEntityId: string, bucket?: string | null) => {
+      if (cartKeys.has(`${billingEntityId}::ALL`)) return true
+      return cartKeys.has(`${billingEntityId}::${bucket || 'ALL'}`)
+    },
+    [cartKeys],
+  )
+
+  const pulseCart = React.useCallback(() => {
+    setCartPulse(true)
+    setTimeout(() => setCartPulse(false), 450)
+  }, [])
+
+  const addCartLine = React.useCallback(
+    (line: { billingEntityId: string; bucket?: string | null; amount: number; label: string }) => {
+      setCartLines((prev) => {
+        const key = `${line.billingEntityId}::${line.bucket || 'ALL'}`
+        const hasParent = prev.some((row) => `${row.billingEntityId}::${row.bucket || 'ALL'}` === `${line.billingEntityId}::ALL`)
+        if (hasParent && line.bucket) {
+          return prev
+        }
+        if (prev.some((row) => `${row.billingEntityId}::${row.bucket || 'ALL'}` === key)) {
+          return prev
+        }
+        if (!line.bucket) {
+          const filtered = prev.filter((row) => row.billingEntityId !== line.billingEntityId)
+          return [...filtered, line]
+        }
+        return [...prev, line]
+      })
+      pulseCart()
+    },
+    [pulseCart],
+  )
+
+  const removeCartLine = React.useCallback((index: number) => {
+    setCartLines((prev) => prev.filter((_, i) => i !== index))
+  }, [])
+
+  const clearCart = React.useCallback(() => {
+    setCartLines([])
+    setCartMessage(null)
+    setCartOpen(false)
+  }, [])
+
+  const submitCart = React.useCallback(async () => {
+    if (!cartLines.length) return
+    setCartSubmitting(true)
+    setCartMessage(null)
+    try {
+      const lines = cartLines.map((line) => ({
+        billingEntityId: line.billingEntityId,
+        amount: Number(line.amount || 0),
+        bucket: line.bucket ?? undefined,
+      }))
+      await api.post('/me/payments', {
+        currency: 'RON',
+        lines,
+      })
+      clearCart()
+    } catch (err: any) {
+      setCartMessage(err?.message || 'Failed to submit cart')
+    } finally {
+      setCartSubmitting(false)
+    }
+  }, [api, cartLines, clearCart])
+
+  const addGlobalTotals = React.useCallback(async () => {
+    if (!globalDue?.communities?.length) {
+      setCartMessage('No communities available to add.')
+      return
+    }
+    setCartMessage(null)
+    try {
+      const communityIds = globalDue.communities
+        .map((row: any) => row?.community?.id)
+        .filter(Boolean) as string[]
+      if (!communityIds.length) {
+        setCartMessage('No communities available to add.')
+        return
+      }
+      const results = await Promise.all(
+        communityIds.map((communityId) => api.get<any>(`/me/communities/${communityId}/dashboard`)),
+      )
+      results.forEach((data) => {
+        const items = Array.isArray(data?.live?.billingEntities) ? data.live.billingEntities : []
+        items.forEach((row: any) => {
+          const due = Number(row.dueEnd || 0)
+          if (due <= 0) return
+          if (isInCart(row.billingEntityId)) return
+          const label = beMetaMap[row.billingEntityId]?.name || row.billingEntityId
+          addCartLine({
+            billingEntityId: row.billingEntityId,
+            amount: due,
+            label,
+          })
+        })
+      })
+    } catch (err: any) {
+      setCartMessage(err?.message || 'Failed to add totals')
+    }
+  }, [addCartLine, api, beMetaMap, globalDue?.communities, isInCart])
+
+  React.useEffect(() => {
+    if (!isGlobalDashboardView) return
+    let active = true
+    setGlobalDueLoading(true)
+    setGlobalDueMessage(null)
+    api
+      .get<any>('/me/dashboard')
+      .then((data) => {
+        if (!active) return
+        const next = {
+          totals: {
+            live: data?.totals?.live || { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0 },
+            previousClosed:
+              data?.totals?.previousClosed || { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0 },
+          },
+          communities: Array.isArray(data?.communities) ? data.communities : [],
+        }
+        setGlobalDue(next)
+      })
+      .catch((err: any) => {
+        if (active) setGlobalDueMessage(err?.message || 'Could not load dashboard')
+      })
+      .finally(() => {
+        if (active) {
+          setGlobalDueLoading(false)
+          setInitializingDashboard(false)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [api, isGlobalDashboardView, refreshKey])
+
+  React.useEffect(() => {
+    if (!isCommunityDashboardView || !communityId) return
+    let active = true
+    setCommunityDueLoading(true)
+    setCommunityDueMessage(null)
+    api
+      .get<any>(`/me/communities/${communityId}/dashboard`)
+      .then((data) => {
+        if (!active) return
+        setCommunityDue({
+          live: {
+            period: data?.live?.period ?? null,
+            totals: data?.live?.totals || { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0 },
+            billingEntities: Array.isArray(data?.live?.billingEntities) ? data.live.billingEntities : [],
+            previousClosed: data?.live?.previousClosed ?? null,
+          },
+        })
+      })
+      .catch((err: any) => {
+        if (active) setCommunityDueMessage(err?.message || 'Could not load community dashboard')
+      })
+      .finally(() => {
+        if (active) setCommunityDueLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [api, communityId, isCommunityDashboardView, refreshKey])
+
+  React.useEffect(() => {
+    if (!isCommunityDashboardView || !communityId) return
+    let active = true
+    setEventsLoading(true)
+    setPollsLoading(true)
+    const now = Date.now()
+    Promise.all([
+      api.get<any[]>(`/communities/${communityId}/events`),
+      api.get<any[]>(`/communities/${communityId}/polls`),
+    ])
+      .then(([eventRows, pollRows]) => {
+        if (!active) return
+        const upcomingEvents = (eventRows || [])
+          .filter((event: any) => new Date(event.endAt).getTime() >= now)
+          .sort((a: any, b: any) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+          .slice(0, 4)
+        const ongoingPolls = (pollRows || [])
+          .filter((poll: any) => {
+            const startAt = new Date(poll.startAt).getTime()
+            const endAt = new Date(poll.endAt).getTime()
+            return poll.status === 'APPROVED' && !poll.closedAt && now >= startAt && now <= endAt
+          })
+          .slice(0, 4)
+        setEvents(upcomingEvents)
+        setPolls(ongoingPolls)
+      })
+      .catch(() => {
+        if (!active) return
+        setEvents([])
+        setPolls([])
+      })
+      .finally(() => {
+        if (!active) return
+        setEventsLoading(false)
+        setPollsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [api, communityId, isCommunityDashboardView, refreshKey])
 
   React.useEffect(() => {
     if (!communityId || !isEventsView) return
@@ -372,7 +653,7 @@ export function MainScreen() {
     }
   }
 
-  if (!beId) {
+  if (!beId && !isGlobalDashboardView && !isCommunityDashboardView) {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>No billing entity assigned</Text>
@@ -384,22 +665,115 @@ export function MainScreen() {
     )
   }
 
-  const title = section
+  const communityLabel = selectedCommunityId
+    ? beScope.communityMap?.[selectedCommunityId]?.name ||
+      beScope.communityMap?.[selectedCommunityId]?.code ||
+      selectedCommunityId
+    : null
+  const title = initializingDashboard
+    ? 'Loading'
+    : isCommunityDashboardView && communityLabel
+      ? communityLabel
+      : section
   return (
-    <ScreenChrome
-      title={title}
-      activeSection={section}
-      onScopeChange={() => {
-        setSelected(null)
-        setRows([])
-      }}
-      onNavigateSection={(next) => {
-        setSection(next)
-        navigation.setParams({ section: next })
-      }}
-    >
+      <ScreenChrome
+        title={title}
+        activeSection={section}
+        onScopeChange={() => {
+          setSelected(null)
+          setRows([])
+        }}
+        onNavigateSection={(next) => {
+          setSection(next)
+          navigation.setParams({ section: next })
+        }}
+      >
       {message ? <Text style={styles.error}>{message}</Text> : null}
-      {isExpensesView ? (
+      {cartCount > 0 ? (
+        <TouchableOpacity
+          style={[styles.cartFloating, cartPulse && styles.cartButtonPulse]}
+          onPress={() => setCartOpen((open) => !open)}
+        >
+          <Text style={styles.cartButtonText}>{cartTotal.toFixed(2)}</Text>
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{cartCount}</Text>
+          </View>
+        </TouchableOpacity>
+      ) : null}
+      <CartPanel
+        open={cartOpen}
+        lines={cartLines}
+        total={cartTotal}
+        submitting={cartSubmitting}
+        message={cartMessage}
+        beMetaMap={beMetaMap}
+        onRemove={removeCartLine}
+        onClear={clearCart}
+        onSubmit={submitCart}
+      />
+      {initializingDashboard ? (
+        <View style={styles.centered}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading…</Text>
+        </View>
+      ) : isGlobalDashboardView ? (
+        <GlobalDashboard
+          loading={globalDueLoading}
+          message={globalDueMessage}
+          totals={globalDue?.totals ?? null}
+          communities={globalDue?.communities ?? []}
+          onAddTotal={addGlobalTotals}
+          onCommunityPress={(id) => {
+            setSelectedCommunityId(id)
+            setSection('Community Dashboard')
+            navigation.setParams({ section: 'Community Dashboard' })
+          }}
+          formatMoney={formatMoney}
+        />
+      ) : isCommunityDashboardView ? (
+        <CommunityDashboard
+          loading={communityDueLoading}
+          message={communityDueMessage}
+          live={
+            communityDue?.live ?? {
+              period: null,
+              totals: { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0 },
+              billingEntities: [],
+              previousClosed: null,
+            }
+          }
+          beMetaMap={beMetaMap}
+          onBePress={(targetBeId) => {
+            beScope.setSelectedBeId(targetBeId)
+            setSection('Dashboard')
+            navigation.setParams({ section: 'Dashboard' })
+          }}
+          onBeAdd={(targetBeId, amount, label) =>
+            addCartLine({ billingEntityId: targetBeId, amount, label })
+          }
+          onAddAll={(rows) =>
+            rows.forEach((row: any) => {
+              const due = Number(row.dueEnd || 0)
+              if (due <= 0) return
+              if (isInCart(row.billingEntityId)) return
+              const label = beMetaMap[row.billingEntityId]?.name || row.billingEntityId
+              addCartLine({
+                billingEntityId: row.billingEntityId,
+                amount: due,
+                label,
+              })
+            })
+          }
+          events={events}
+          polls={polls}
+          eventsLoading={eventsLoading}
+          pollsLoading={pollsLoading}
+          onEventPress={(id) => navigation.navigate('EventDetail', { eventId: id })}
+          onPollPress={(id) => navigation.navigate('PollDetail', { pollId: id })}
+          formatMoney={formatMoney}
+          isInCart={isInCart}
+        />
+      ) : isExpensesView ? (
         <FlatList
           data={rows}
           keyExtractor={(_, index) => `${tab}:${index}`}
@@ -579,196 +953,41 @@ export function MainScreen() {
           }}
         />
       ) : isDashboardView ? (
-        <ScrollView contentContainerStyle={styles.dashboardStack}>
-          <View style={styles.dashboardCard}>
-            <Text style={styles.cardTitle}>Last closed period</Text>
-            {statementLoading ? (
-              <View style={styles.cardLoading}>
-                <ActivityIndicator />
-                <Text style={styles.muted}>Loading statement…</Text>
-              </View>
-            ) : statement ? (
-              <>
-                <Text style={styles.cardValue}>{statement.periodCode}</Text>
-                <View style={[styles.cardRow, styles.cardRowInline]}>
-                  <Text style={styles.cardSubtle}>Starting balance:</Text>
-                  {previousPeriodCode && statementDetail?.statement && Number(statementDetail.statement.dueEnd || 0) !== 0 ? (
-                    <TouchableOpacity
-                      style={styles.valueButton}
-                      onPress={() =>
-                        navigation.navigate('StatementDetail', {
-                          beId,
-                          periodCode: previousPeriodCode,
-                          programBuckets,
-                        })
-                      }
-                    >
-                      <Text style={[styles.valueButtonText, statement.dueStart <= 0 ? styles.balanceGood : styles.balanceBad]}>
-                        {statement.dueStart.toFixed(2)} {statement.currency || 'RON'}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={[styles.cardSubtle, statement.dueStart <= 0 ? styles.balanceGood : styles.balanceBad]}>
-                      {statement.dueStart.toFixed(2)} {statement.currency || 'RON'}
-                    </Text>
-                  )}
-                </View>
-                <View style={[styles.cardRow, styles.cardRowInline]}>
-                  <Text style={styles.cardSubtle}>Charges this period:</Text>
-                  <TouchableOpacity
-                    style={styles.valueButton}
-                    onPress={() => setStatementDetailOpen((prev) => !prev)}
-                  >
-                    <Text style={styles.valueButtonText}>
-                      {statement.charges.toFixed(2)} {statement.currency || 'RON'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.cardRow, styles.cardRowInline]}>
-                  <Text style={styles.cardSubtle}>Statement:</Text>
-                  <TouchableOpacity
-                    style={styles.valueButton}
-                    onPress={() =>
-                      navigation.navigate('StatementDetail', {
-                        beId,
-                        periodCode: statement.periodCode,
-                        programBuckets,
-                      })
-                    }
-                  >
-                    <Text style={styles.valueButtonText}>View</Text>
-                  </TouchableOpacity>
-                </View>
-                {statementDetailOpen ? (
-                  <View style={styles.statementDetail}>
-                    {statementDetail?.ledgerEntries?.length ? (
-                      statementDetail.ledgerEntries
-                        .filter((entry: any) => entry.kind === 'CHARGE')
-                        .map((entry: any) => {
-                          const program = programBuckets[entry.bucket || '']
-                          const label = program?.name
-                            ? program.name
-                            : program?.code
-                              ? program.code
-                              : entry.bucket === 'ALLOCATED_EXPENSE'
-                                ? 'Allocated'
-                                : String(entry.bucket || 'Charge')
-                          const onPress =
-                            entry.bucket === 'ALLOCATED_EXPENSE' && statement?.periodCode
-                              ? () => navigation.navigate('Main', { section: 'Expenses', periodCode: statement.periodCode })
-                              : program?.id
-                                ? () => navigation.navigate('ProgramDetail', { programId: program.id })
-                                : null
-                          return (
-                            <TouchableOpacity key={entry.id} style={styles.statementRow} onPress={onPress} disabled={!onPress}>
-                              <View style={styles.statementRowHeader}>
-                                <Text style={styles.statementRowTitle}>{label}</Text>
-                                <Text style={styles.statementRowAmount}>{formatMoney(entry.amount, entry.currency)}</Text>
-                              </View>
-                            </TouchableOpacity>
-                          )
-                        })
-                    ) : (
-                      <Text style={styles.muted}>No charges.</Text>
-                    )}
-                  </View>
-                ) : null}
-                {statementDetail?.statement ? (
-                  <View style={styles.statementSummary}>
-                    <Text style={styles.cardSubtle}>
-                      Payments: {formatMoney(statementDetail.statement.payments, statementDetail.statement.currency)}
-                    </Text>
-                    <Text style={styles.cardSubtle}>
-                      Adjustments: {formatMoney(statementDetail.statement.adjustments, statementDetail.statement.currency)}
-                    </Text>
-                    <Text style={styles.cardSubtle}>
-                      Due end: {formatMoney(statementDetail.statement.dueEnd, statementDetail.statement.currency)}
-                    </Text>
-                    {Number(statementDetail.statement.dueEnd || 0) > 0 ? (
-                      <TouchableOpacity style={styles.paymentButton} onPress={() => Alert.alert('Coming soon', 'Payments are coming soon.')}>
-                        <Text style={styles.paymentButtonText}>Pay balance</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <Text style={styles.muted}>No closed periods yet.</Text>
-            )}
-          </View>
-
-          <View style={styles.dashboardCard}>
-            <Text style={styles.cardTitle}>Upcoming events</Text>
-            {eventsLoading ? (
-              <View style={styles.cardLoading}>
-                <ActivityIndicator />
-                <Text style={styles.muted}>Loading events…</Text>
-              </View>
-            ) : events.length ? (
-              events.map((event) => (
-                <TouchableOpacity
-                  key={event.id}
-                  style={styles.cardRow}
-                  onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}
-                >
-                  <View style={styles.pollRowTitle}>
-                    <View
-                      style={[
-                        styles.pollStatusPill,
-                        event.rsvpStatus === 'GOING'
-                          ? styles.pollStatusPillOk
-                          : event.rsvpStatus === 'NOT_GOING'
-                            ? styles.pollStatusPillNo
-                            : styles.pollStatusPillWarn,
-                      ]}
-                    >
-                      <Text style={styles.pollStatusPillText}>
-                        {event.rsvpStatus === 'GOING'
-                          ? 'Going'
-                          : event.rsvpStatus === 'NOT_GOING'
-                            ? 'Not going'
-                            : 'RSVP'}
-                      </Text>
-                    </View>
-                    <Text style={styles.cardRowTitle}>{event.title}</Text>
-                  </View>
-                  <Text style={styles.cardRowMeta}>{formatDate(event.startAt)}</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.muted}>No upcoming events.</Text>
-            )}
-          </View>
-
-          <View style={styles.dashboardCard}>
-            <Text style={styles.cardTitle}>Active polls</Text>
-            {pollsLoading ? (
-              <View style={styles.cardLoading}>
-                <ActivityIndicator />
-                <Text style={styles.muted}>Loading polls…</Text>
-              </View>
-            ) : polls.length ? (
-              polls.map((poll) => (
-                <TouchableOpacity
-                  key={poll.id}
-                  style={styles.cardRow}
-                  onPress={() => navigation.navigate('PollDetail', { pollId: poll.id })}
-                >
-                  <View style={styles.pollRowTitle}>
-                    <View style={[styles.pollStatusPill, poll.userVoted ? styles.pollStatusPillOk : styles.pollStatusPillWarn]}>
-                      <Text style={styles.pollStatusPillText}>{poll.userVoted ? 'Voted' : 'Vote'}</Text>
-                    </View>
-                    <Text style={styles.cardRowTitle}>{poll.title}</Text>
-                  </View>
-                  {poll.userVoted ? <Text style={styles.cardRowMeta}>Your vote: {formatVoteSummary(poll)}</Text> : null}
-                  <Text style={styles.cardRowMeta}>Ends {formatDate(poll.endAt)}</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text style={styles.muted}>No active polls.</Text>
-            )}
-          </View>
-        </ScrollView>
+        <BeDashboard
+          beId={beId}
+          statementLoading={statementLoading}
+          statement={statement}
+          previousPeriodCode={previousPeriodCode}
+          previousClosedStatement={previousClosedStatement}
+          liveTotals={beLiveTotals}
+          statementDetail={statementDetail}
+          statementDetailOpen={statementDetailOpen}
+          setStatementDetailOpen={(next) => setStatementDetailOpen(next)}
+          programBuckets={programBuckets}
+          onNavigateStatement={(periodCode) =>
+            navigation.navigate('StatementDetail', { beId, periodCode, programBuckets })
+          }
+          onNavigateProgram={(programId) => navigation.navigate('ProgramDetail', { programId })}
+          onNavigateExpenses={(periodCode) => navigation.navigate('Main', { section: 'Expenses', periodCode })}
+          onAddBalance={() => {
+            const dueEnd = Number(statementDetail?.statement?.dueEnd || 0)
+            if (dueEnd <= 0) return
+            addCartLine({
+              billingEntityId: beId,
+              amount: dueEnd,
+              label: 'Balance',
+            })
+          }}
+          onAddBucket={(bucket, amount, label) =>
+            addCartLine({
+              billingEntityId: beId,
+              bucket,
+              amount,
+              label,
+            })
+          }
+          isInCart={isInCart}
+        />
       ) : isProgramsView ? (
         <>
           {programsMessage ? <Text style={styles.error}>{programsMessage}</Text> : null}

@@ -3,6 +3,7 @@ import { Injectable, BadRequestException, ConflictException, Logger } from '@nes
 import { PrismaService } from '../user/prisma.service'
 import { AllocationService } from '../billing/allocation.service'
 import { PaymentService } from '../billing/payment.service'
+import { ensureLedgerEntryDetail } from '../billing/ledger-detail.util'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 type CloseStage = 'CLOSE_PREP' | 'CLOSE_FINAL'
@@ -621,11 +622,25 @@ export class PeriodService {
           await tx.beLedgerEntryDetail.createMany({
             data: Array.from(byUnit.entries()).map(([unitId, v]) => ({
               ledgerEntryId: le.id,
+              communityId: le.communityId,
+              periodId: le.periodId,
+              billingEntityId: le.billingEntityId,
+              kind: le.kind,
+              bucket: le.bucket,
+              currency: le.currency,
+              refType: le.refType,
+              refId: le.refId,
               unitId,
               amount: v.amount,
               meta: v.meta,
             })),
             skipDuplicates: true,
+          })
+        } else {
+          await ensureLedgerEntryDetail(tx, le, amt, {
+            synthetic: true,
+            reason: 'no-unit',
+            bucket,
           })
         }
       }

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
+import { ensureLedgerEntryDetail } from './ledger-detail.util'
 
 type UpsertVendorInput = { vendorId?: string; vendorName?: string; taxId?: string; iban?: string }
 
@@ -196,7 +197,7 @@ export class VendorInvoiceService {
     if (!program || !invoice) return
     const bucket = program.defaultBucket || `PROGRAM:${program.id}`
     const amount = data.amount ?? (invoice.gross ? Number(invoice.gross) : 0)
-    await this.prisma.beLedgerEntry.upsert({
+    const entry = await this.prisma.beLedgerEntry.upsert({
       where: {
         communityId_periodId_billingEntityId_refType_refId_bucket: {
           communityId,
@@ -222,6 +223,13 @@ export class VendorInvoiceService {
         refId: `${program.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
         bucket,
       },
+    })
+    await ensureLedgerEntryDetail(this.prisma, entry, amount, {
+      synthetic: true,
+      reason: 'program-spend',
+      programId: program.id,
+      invoiceId: invoice.id,
+      portionKey: data.portionKey ?? 'default',
     })
   }
 

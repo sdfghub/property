@@ -70,14 +70,25 @@ async function main() {
     })
   }
 
-  // find open charges for BE, ordered FIFO
-  const charges: Array<{ id: string; remaining: number; createdAt: Date; bucket: string }> = await prisma.$queryRawUnsafe(
+  const rows: Array<{
+    chargeId: string
+    chargeCreatedAt: Date
+    chargeBucket: string
+    detailId: string
+    unitId?: string | null
+    detailAmount: number
+    chargeApplied: number
+  }> = await prisma.$queryRawUnsafe(
     `
-    SELECT le.id,
-           (le.amount - COALESCE(app.paid,0))::numeric AS remaining,
-           le.created_at AS "createdAt",
-           le.bucket
+    SELECT le.id AS "chargeId",
+           le.created_at AS "chargeCreatedAt",
+           le.bucket AS "chargeBucket",
+           d.id AS "detailId",
+           d.unit_id AS "unitId",
+           d.amount::numeric AS "detailAmount",
+           COALESCE(app.paid,0)::numeric AS "chargeApplied"
     FROM be_ledger_entry le
+    JOIN be_ledger_entry_detail d ON d.ledger_entry_id = le.id
     LEFT JOIN (
       SELECT charge_id, SUM(amount) AS paid
       FROM payment_application
@@ -87,20 +98,80 @@ async function main() {
       AND le.billing_entity_id = $2
       AND le.kind = 'CHARGE'
       AND (le.amount - COALESCE(app.paid,0)) > 0
-    ORDER BY le.created_at ASC
+    ORDER BY le.created_at ASC, d.id ASC
     `,
     args.communityId,
     be.id,
   )
 
+  const byCharge = new Map<
+    string,
+    {
+      chargeId: string
+      chargeCreatedAt: Date
+      chargeBucket: string
+      chargeApplied: number
+      details: Array<{ detailId: string; unitId?: string | null; detailAmount: number }>
+    }
+  >()
+  for (const r of rows) {
+    const existing = byCharge.get(r.chargeId)
+    if (existing) {
+      existing.details.push({
+        detailId: r.detailId,
+        unitId: r.unitId,
+        detailAmount: Number(r.detailAmount),
+      })
+    } else {
+      byCharge.set(r.chargeId, {
+        chargeId: r.chargeId,
+        chargeCreatedAt: r.chargeCreatedAt,
+        chargeBucket: r.chargeBucket,
+        chargeApplied: Number(r.chargeApplied),
+        details: [
+          {
+            detailId: r.detailId,
+            unitId: r.unitId,
+            detailAmount: Number(r.detailAmount),
+          },
+        ],
+      })
+    }
+  }
+  const charges = Array.from(byCharge.values()).sort(
+    (a, b) => a.chargeCreatedAt.getTime() - b.chargeCreatedAt.getTime(),
+  )
+
   let remaining = args.amount
-  const applications: Array<{ paymentId: string; chargeId: string; amount: number }> = []
+  const applications: Array<{ paymentId: string; chargeId: string; amount: number; spec: any }> = []
   for (const c of charges) {
     if (remaining <= 0) break
-    const apply = Math.min(remaining, Number(c.remaining))
-    if (apply > 0) {
-      applications.push({ paymentId: payment.id, chargeId: c.id, amount: apply })
-      remaining -= apply
+    let appliedToCharge = c.chargeApplied
+    for (const d of c.details) {
+      if (remaining <= 0) break
+      const detailAmount = Number(d.detailAmount)
+      const alreadyApplied = Math.min(detailAmount, appliedToCharge)
+      const detailRemaining = Math.max(0, detailAmount - alreadyApplied)
+      appliedToCharge = Math.max(0, appliedToCharge - detailAmount)
+      if (detailRemaining <= 0) continue
+      const apply = Math.min(remaining, detailRemaining)
+      if (apply > 0) {
+        applications.push({
+          paymentId: payment.id,
+          chargeId: c.chargeId,
+          amount: apply,
+          spec: {
+            source: 'AUTO_DETAIL',
+            paymentId: payment.id,
+            chargeId: c.chargeId,
+            detailId: d.detailId,
+            unitId: d.unitId ?? null,
+            bucket: c.chargeBucket ?? null,
+            amount: apply,
+          },
+        })
+        remaining -= apply
+      }
     }
   }
 

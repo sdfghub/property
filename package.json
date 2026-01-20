@@ -28,7 +28,9 @@
     "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts",
     "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts",
     "wipe:community": "ts-node --transpile-only src/scripts/wipe-community.ts",
-    "make:system-admin": "ts-node --transpile-only src/scripts/make-system-admin.ts"
+    "make:system-admin": "ts-node --transpile-only src/scripts/make-system-admin.ts",
+    "reset:user-password": "ts-node --transpile-only src/scripts/reset-user-password.ts",
+    "backfill:ledger-details": "ts-node --transpile-only src/scripts/backfill-ledger-details.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

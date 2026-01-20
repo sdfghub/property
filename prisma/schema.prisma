@@ -1135,6 +1135,14 @@ model BeOpeningBalance {
 model BeLedgerEntryDetail {
   id            String  @id @default(cuid()) @map("id")
   ledgerEntryId String  @map("ledger_entry_id")
+  communityId   String  @map("community_id")
+  periodId      String  @map("period_id")
+  billingEntityId String @map("billing_entity_id")
+  kind          String  @map("kind")
+  bucket        String  @map("bucket")
+  currency      String  @default("RON") @map("currency")
+  refType       String? @map("ref_type")
+  refId         String? @map("ref_id")
   unitId        String? @map("unit_id")
   amount        Decimal @map("amount") @db.Decimal(18, 4)
   meta          Json?   @map("meta")
@@ -1143,6 +1151,9 @@ model BeLedgerEntryDetail {
   unit   Unit?         @relation(fields: [unitId], references: [id])
 
   @@index([ledgerEntryId])
+  @@index([communityId, periodId, billingEntityId], map: "be_ledger_entry_detail_community_id_period_id_billing_entit_idx")
+  @@index([communityId, bucket])
+  @@index([communityId, kind])
   @@index([unitId])
   @@map("be_ledger_entry_detail")
 }
@@ -1180,12 +1191,21 @@ model Payment {
   ts              DateTime @default(now()) @map("ts")
   method          String?  @map("method")
   refId           String?  @unique @map("ref_id")
+  status          String   @default("POSTED") @map("status")
+  provider        String?  @map("provider")
+  providerRef     String?  @map("provider_ref")
+  providerMeta    Json?    @map("provider_meta")
+  allocationSpec  Json?    @map("allocation_spec")
+  confirmedAt     DateTime? @map("confirmed_at")
+  canceledAt      DateTime? @map("canceled_at")
 
   community    Community            @relation(fields: [communityId], references: [id])
   billing      BillingEntity        @relation(fields: [billingEntityId], references: [id])
   applications PaymentApplication[]
 
   @@index([communityId, billingEntityId])
+  @@index([status], map: "payment_status_idx")
+  @@index([providerRef], map: "payment_provider_ref_idx")
   @@map("payment")
 }
 
@@ -1194,6 +1214,7 @@ model PaymentApplication {
   paymentId String   @map("payment_id")
   chargeId  String   @map("charge_id")
   amount    Decimal  @map("amount") @db.Decimal(18, 4)
+  spec      Json?    @map("spec")
   createdAt DateTime @default(now()) @map("created_at")
 
   payment Payment       @relation(fields: [paymentId], references: [id])
