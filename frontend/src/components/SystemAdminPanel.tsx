@@ -36,6 +36,13 @@ export function SystemAdminPanel() {
   const [createBusy, setCreateBusy] = React.useState(false)
   const [createMessage, setCreateMessage] = React.useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = React.useState(false)
+  const [pushUserId, setPushUserId] = React.useState('')
+  const [pushTitle, setPushTitle] = React.useState('')
+  const [pushBody, setPushBody] = React.useState('')
+  const [pushUrl, setPushUrl] = React.useState('')
+  const [pushBusy, setPushBusy] = React.useState(false)
+  const [pushMessage, setPushMessage] = React.useState<string | null>(null)
+  const [pushOk, setPushOk] = React.useState<boolean | null>(null)
   const communityLoadRef = React.useRef<string | null>(null)
   const adminLoadRef = React.useRef<string | null>(null)
 
@@ -196,6 +203,29 @@ export function SystemAdminPanel() {
       setCreateMessage(err?.message || t('admin.createError'))
     } finally {
       setCreateBusy(false)
+    }
+  }
+
+  async function sendTestPush(e: React.FormEvent) {
+    e.preventDefault()
+    if (!pushUserId) return
+    setPushBusy(true)
+    setPushMessage(null)
+    setPushOk(null)
+    try {
+      await api.post('/push-tokens/admin-test-send', {
+        userId: pushUserId.trim(),
+        title: pushTitle.trim() || undefined,
+        body: pushBody.trim() || undefined,
+        url: pushUrl.trim() || undefined,
+      })
+      setPushMessage(t('push.test.success', 'Test sent'))
+      setPushOk(true)
+    } catch (err: any) {
+      setPushMessage(err?.message || t('push.test.error', 'Failed to send test push.'))
+      setPushOk(false)
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -405,6 +435,43 @@ export function SystemAdminPanel() {
         ) : (
           <div className="empty">{t('communities.empty')}</div>
         )}
+      </div>
+
+      <div className="card">
+        <h2>{t('push.test.title', 'Test push')}</h2>
+        <p className="muted">{t('push.test.subtitle', 'Send a test notification to a user id')}</p>
+        <form className="stack" onSubmit={sendTestPush}>
+          <input
+            className="input"
+            placeholder={t('push.test.userId', 'User id')}
+            value={pushUserId}
+            onChange={(e) => setPushUserId(e.target.value)}
+            required
+          />
+          <input
+            className="input"
+            placeholder={t('push.test.title.placeholder', 'Title (optional)')}
+            value={pushTitle}
+            onChange={(e) => setPushTitle(e.target.value)}
+          />
+          <textarea
+            className="input"
+            placeholder={t('push.test.body.placeholder', 'Body (optional)')}
+            value={pushBody}
+            onChange={(e) => setPushBody(e.target.value)}
+            rows={3}
+          />
+          <input
+            className="input"
+            placeholder={t('push.test.url.placeholder', 'URL (optional)')}
+            value={pushUrl}
+            onChange={(e) => setPushUrl(e.target.value)}
+          />
+          <button className="btn" type="submit" disabled={pushBusy}>
+            {pushBusy ? t('push.test.sending', 'Sending…') : t('push.test.cta', 'Send test push')}
+          </button>
+          {pushMessage && <span className={`badge ${pushOk ? 'positive' : 'negative'}`}>{pushMessage}</span>}
+        </form>
       </div>
     </div>
   )

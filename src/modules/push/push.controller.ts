@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { PushService } from './push.service'
 
@@ -33,6 +33,21 @@ export class PushController {
   testSend(@Req() req: any, @Body() body: any) {
     const userId: string = req.user?.id ?? req.user?.sub
     return this.svc.sendTest(userId, {
+      token: body.token,
+      title: body.title,
+      body: body.body,
+      url: body.url,
+    })
+  }
+
+  @Post('admin-test-send')
+  adminTestSend(@Req() req: any, @Body() body: any) {
+    const roles = Array.isArray(req.user?.roles) ? req.user.roles : []
+    const isAdmin = roles.some((r: any) => r.role === 'SYSTEM_ADMIN')
+    if (!isAdmin) throw new ForbiddenException('Admin permissions required')
+    const targetUserId: string = body?.userId
+    if (!targetUserId || typeof targetUserId !== 'string') throw new ForbiddenException('User required')
+    return this.svc.sendTestToUser(targetUserId, {
       token: body.token,
       title: body.title,
       body: body.body,

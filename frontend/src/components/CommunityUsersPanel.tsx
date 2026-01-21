@@ -30,6 +30,8 @@ type BeRow = {
   pending: PendingInvite[]
 }
 
+type PushStatus = { status: 'success' | 'error'; message: string }
+
 export function CommunityUsersPanel({ communityId }: { communityId: string }) {
   const { api, user, refreshSession } = useAuth()
   const { t } = useI18n()
@@ -42,6 +44,8 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
   const [loading, setLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const [savingRoles, setSavingRoles] = React.useState<Record<string, boolean>>({})
+  const [pushSending, setPushSending] = React.useState<Record<string, boolean>>({})
+  const [pushStatus, setPushStatus] = React.useState<Record<string, PushStatus | null>>({})
 
   React.useEffect(() => {
     if (!communityId) return
@@ -135,6 +139,25 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
     }
   }
 
+  async function sendTestPush(userId: string) {
+    setPushSending((prev) => ({ ...prev, [userId]: true }))
+    setPushStatus((prev) => ({ ...prev, [userId]: null }))
+    try {
+      await api.post('/push-tokens/admin-test-send', { userId })
+      setPushStatus((prev) => ({
+        ...prev,
+        [userId]: { status: 'success', message: t('push.test.success', 'Test sent') },
+      }))
+    } catch (err: any) {
+      setPushStatus((prev) => ({
+        ...prev,
+        [userId]: { status: 'error', message: err?.message || t('push.test.error', 'Failed to send test push.') },
+      }))
+    } finally {
+      setPushSending((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
   return (
     <div className="stack">
       <input
@@ -190,6 +213,8 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                             {be.users.map((u) => {
                               const key = `${be.id}:${u.userId}`
                               const busy = !!savingRoles[key]
+                              const isSending = !!pushSending[u.userId]
+                              const status = pushStatus[u.userId]
                               return (
                                 <div key={u.userId} className="list-item" style={{ cursor: 'default' }}>
                                   <div style={{ flex: 1 }}>
@@ -213,6 +238,21 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                                         <span>{role}</span>
                                       </label>
                                     ))}
+                                    <button
+                                      className="btn ghost small"
+                                      type="button"
+                                      onClick={() => sendTestPush(u.userId)}
+                                      disabled={isSending}
+                                    >
+                                      {isSending
+                                        ? t('push.test.sending', 'Sending…')
+                                        : t('push.test.cta', 'Send test push')}
+                                    </button>
+                                    {status && (
+                                      <span className={`badge ${status.status === 'success' ? 'positive' : 'negative'}`}>
+                                        {status.message}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               )
