@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards, Delete, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Post, Req, UseGuards, Delete, UploadedFile, UseInterceptors } from '@nestjs/common'
 type UploadedFile = { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }
 import { TemplateService } from './template.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
@@ -134,6 +134,29 @@ export class TemplateController {
     @Req() req: any,
   ) {
     return this.templates.downloadMeterTemplateAttachment(communityId, periodCode, code, req.user?.roles ?? [], id)
+  }
+
+  @Get('periods/:periodCode/meter-templates/:code/csv')
+  downloadMeterTemplateCsv(
+    @Param('communityId') communityId: string,
+    @Param('periodCode') periodCode: string,
+    @Param('code') code: string,
+    @Req() req: any,
+  ) {
+    return this.templates.exportMeterTemplateCsv(communityId, periodCode, code, req.user?.roles ?? [])
+  }
+
+  @Post('periods/:periodCode/meter-templates/:code/csv')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMeterTemplateCsv(
+    @Param('communityId') communityId: string,
+    @Param('periodCode') periodCode: string,
+    @Param('code') code: string,
+    @UploadedFile() file: UploadedFile,
+    @Req() req: any,
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('Missing CSV file')
+    return this.templates.importMeterTemplateCsv(communityId, periodCode, code, req.user?.roles ?? [], file)
   }
 
   @Get('periods/:periodCode/meters/:meterId')

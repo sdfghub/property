@@ -1,6 +1,6 @@
 import React from 'react'
 import { StatusBar } from 'expo-status-bar'
-import { ActivityIndicator, SafeAreaView, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, SafeAreaView, Text, TouchableOpacity, View } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { AuthProvider } from '@shared/auth/useAuth'
 import { authStorage, hydrateAuthStorage } from './src/authStorage'
@@ -39,6 +39,19 @@ export default function App() {
     }
   }, [])
 
+  const handlePushCta = async () => {
+    try {
+      const requested = await Notifications.requestPermissionsAsync()
+      if (requested.status === 'granted') {
+        setPushStatus('granted')
+        return
+      }
+      await Linking.openSettings()
+    } catch {
+      // Ignore; the banner already communicates the state.
+    }
+  }
+
   if (!hydrated) {
     return (
       <SafeAreaView style={styles.centered}>
@@ -54,7 +67,12 @@ export default function App() {
         <StatusBar style="dark" />
         {pushStatus === 'denied' ? (
           <View style={styles.pushBanner}>
-            <Text style={styles.pushBannerText}>Enable notifications to get reminders about polls and events.</Text>
+            <View style={styles.pushBannerRow}>
+              <Text style={styles.pushBannerText}>Enable notifications to get reminders about polls and events.</Text>
+              <TouchableOpacity style={styles.pushBannerButton} onPress={handlePushCta}>
+                <Text style={styles.pushBannerButtonText}>Enable</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
         <AppNavigator />

@@ -605,9 +605,27 @@ export const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
+  pushBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   pushBannerText: {
+    flex: 1,
     fontSize: 12,
     color: '#1f2937',
+    fontWeight: '600',
+  },
+  pushBannerButton: {
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  pushBannerButtonText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '600',
   },
   optionRowSelected: {

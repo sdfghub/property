@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 type UploadedFile = { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }
 import { PrismaService } from '../user/prisma.service'
 
@@ -243,12 +243,10 @@ export class TemplateService {
     })
 
     // Reopening any template moves the period back to OPEN (idempotent)
-    if (nextState !== 'CLOSED') {
-      await this.prisma.period.update({
-        where: { id: period.id },
-        data: { status: 'OPEN', preparedAt: null, closedAt: null },
-      })
-    }
+    await this.prisma.period.update({
+      where: { id: period.id },
+      data: { status: 'OPEN', preparedAt: null, closedAt: null },
+    })
     return res
   }
 
@@ -492,12 +490,10 @@ export class TemplateService {
     })
 
     // Reopening any template moves the period back to OPEN (idempotent)
-    if (nextState !== 'CLOSED') {
-      await this.prisma.period.update({
-        where: { id: period.id },
-        data: { status: 'OPEN', preparedAt: null, closedAt: null },
-      })
-    }
+    await this.prisma.period.update({
+      where: { id: period.id },
+      data: { status: 'OPEN', preparedAt: null, closedAt: null },
+    })
     return res
   }
 
@@ -544,6 +540,175 @@ export class TemplateService {
     attachmentId: string,
   ) {
     return this.downloadAttachment('METER', communityRef, periodCode, templateCode, roles, attachmentId)
+  }
+
+  async exportMeterTemplateCsv(communityRef: string, periodCode: string, templateCode: string, roles: RoleAssignment[]) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const period = await this.getPeriod(communityId, periodCode)
+    const { items } = await this.resolveMeterTemplateItems(communityId, periodCode, templateCode)
+    const meterIds = items.map((it) => it.meterId).filter(Boolean) as string[]
+    const pmRepo: any = (this.prisma as any).periodMeasure
+    const currentMap = new Map<string, number>()
+    const prevMap = new Map<string, number>()
+    if (pmRepo && meterIds.length) {
+      const current = await pmRepo.findMany({
+        where: { communityId, periodId: period.id, meterId: { in: meterIds } },
+        select: { meterId: true, value: true },
+      })
+      current.forEach((row: any) => currentMap.set(row.meterId, Number(row.value)))
+      if (period.seq > 0) {
+        const prev = await this.prisma.period.findUnique({
+          where: { communityId_seq: { communityId, seq: period.seq - 1 } },
+          select: { id: true },
+        })
+        if (prev?.id) {
+          const prevRows = await pmRepo.findMany({
+            where: { communityId, periodId: prev.id, meterId: { in: meterIds } },
+            select: { meterId: true, value: true },
+          })
+          prevRows.forEach((row: any) => prevMap.set(row.meterId, Number(row.value)))
+        }
+      }
+    }
+    const header = ['meterId', 'value', 'previousValue', 'label', 'unitCode', 'typeCode']
+    const lines = [header.join(',')]
+    items.forEach((it) => {
+      const row = [
+        it.meterId,
+        currentMap.has(it.meterId) ? String(currentMap.get(it.meterId)) : '',
+        prevMap.has(it.meterId) ? String(prevMap.get(it.meterId)) : '',
+        it.label || '',
+        it.unitCode || '',
+        it.typeCode || '',
+      ].map(this.escapeCsv)
+      lines.push(row.join(','))
+    })
+    const csv = lines.join('\n')
+    const dataBase64 = Buffer.from(csv, 'utf8').toString('base64')
+    return {
+      fileName: `meters-${templateCode}-${periodCode}.csv`,
+      contentType: 'text/csv',
+      size: csv.length,
+      data: dataBase64,
+    }
+  }
+
+  async importMeterTemplateCsv(
+    communityRef: string,
+    periodCode: string,
+    templateCode: string,
+    roles: RoleAssignment[],
+    file: UploadedFile,
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('Missing CSV file')
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const period = await this.getPeriod(communityId, periodCode)
+    const { template, items, meterById, keyByMeterId, itemLabelByKey } = await this.resolveMeterTemplateItems(
+      communityId,
+      periodCode,
+      templateCode,
+    )
+    const csv = file.buffer.toString('utf8')
+    const rows = this.parseCsv(csv)
+    if (!rows.length) throw new BadRequestException('Empty CSV')
+    const header = rows[0].map((h) => h.trim().toLowerCase())
+    const meterIdIdx = header.findIndex((h) => h === 'meterid' || h === 'meter_id' || h === 'meter id')
+    const valueIdx = header.findIndex((h) => h === 'value')
+    if (meterIdIdx < 0 || valueIdx < 0) throw new BadRequestException('CSV must include meterId and value columns')
+    const expectedMeterIds = new Set(items.map((it) => it.meterId))
+    const valuesByMeterId = new Map<string, number>()
+    const ignored: Array<{ meterId: string; reason: string }> = []
+    for (let i = 1; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (!row || !row.length) continue
+      const meterId = String(row[meterIdIdx] ?? '').trim()
+      if (!meterId) continue
+      if (!expectedMeterIds.has(meterId)) {
+        ignored.push({ meterId, reason: 'Unknown meterId for template' })
+        continue
+      }
+      const rawValue = String(row[valueIdx] ?? '').trim()
+      if (!rawValue) continue
+      const valueNum = Number(rawValue)
+      if (Number.isNaN(valueNum)) {
+        ignored.push({ meterId, reason: 'Invalid numeric value' })
+        continue
+      }
+      valuesByMeterId.set(meterId, valueNum)
+    }
+    if (!valuesByMeterId.size) throw new BadRequestException('No valid meter values found in CSV')
+    const pmRepo: any = (this.prisma as any).periodMeasure
+    if (!pmRepo) throw new NotFoundException('Meter readings not supported')
+    let imported = 0
+    for (const [meterId, valueNum] of valuesByMeterId.entries()) {
+      const meter = meterById.get(meterId)
+      if (!meter) {
+        ignored.push({ meterId, reason: 'Meter not found' })
+        continue
+      }
+      const scopeType = meter.scopeType as any
+      const scopeId = scopeType === 'COMMUNITY' ? communityId : meter.scopeCode
+      const key = keyByMeterId.get(meterId)
+      const provenance = {
+        templateCode,
+        templateName: (template as any)?.template?.name ?? templateCode,
+        itemKey: key || meterId,
+        itemLabel: (key ? itemLabelByKey.get(key) : null) ?? meterId,
+      }
+      await pmRepo.upsert({
+        where: {
+          communityId_periodId_scopeType_scopeId_typeCode: {
+            communityId,
+            periodId: period.id,
+            scopeType,
+            scopeId,
+            typeCode: meter.typeCode,
+          },
+        },
+        update: { value: valueNum, origin: 'METER', estimated: false, meterId, provenance },
+        create: {
+          communityId,
+          periodId: period.id,
+          scopeType,
+          scopeId,
+          typeCode: meter.typeCode,
+          origin: 'METER',
+          value: valueNum,
+          estimated: false,
+          meterId,
+          provenance,
+        },
+      })
+      imported += 1
+    }
+    const valuesByKey: Record<string, number> = {}
+    for (const [meterId, valueNum] of valuesByMeterId.entries()) {
+      const key = keyByMeterId.get(meterId)
+      if (!key) continue
+      valuesByKey[key] = valueNum
+    }
+    const allHaveValues = items.every((it) => valuesByMeterId.has(it.meterId))
+    const nextState: 'NEW' | 'FILLED' | 'CLOSED' = allHaveValues ? 'FILLED' : 'NEW'
+    const instRepo: any = (this.prisma as any).meterEntryTemplateInstance
+    if (!instRepo) throw new NotFoundException('Meter template instances not supported')
+    await instRepo.upsert({
+      where: { communityId_periodId_templateId: { communityId, periodId: period.id, templateId: template.id } },
+      update: { state: nextState, values: valuesByKey },
+      create: { communityId, periodId: period.id, templateId: template.id, state: nextState, values: valuesByKey },
+    })
+    await this.prisma.period.update({
+      where: { id: period.id },
+      data: { status: 'OPEN', preparedAt: null, closedAt: null },
+    })
+    return {
+      ok: true,
+      imported,
+      ignored,
+      expected: items.length,
+      state: nextState,
+    }
   }
 
   // Meter list + readings
@@ -774,5 +939,127 @@ export class TemplateService {
       size: existing.size ?? undefined,
       data: dataBase64,
     }
+  }
+
+  private escapeCsv(value: string) {
+    const needsQuote = /[",\n\r]/.test(value)
+    if (!needsQuote) return value
+    return `"${value.replace(/"/g, '""')}"`
+  }
+
+  private parseCsv(text: string) {
+    const rows: string[][] = []
+    let row: string[] = []
+    let field = ''
+    let inQuotes = false
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            field += '"'
+            i += 1
+          } else {
+            inQuotes = false
+          }
+        } else {
+          field += ch
+        }
+        continue
+      }
+      if (ch === '"') {
+        inQuotes = true
+        continue
+      }
+      if (ch === ',') {
+        row.push(field)
+        field = ''
+        continue
+      }
+      if (ch === '\n') {
+        row.push(field)
+        rows.push(row)
+        row = []
+        field = ''
+        continue
+      }
+      if (ch === '\r') {
+        if (text[i + 1] === '\n') i += 1
+        row.push(field)
+        rows.push(row)
+        row = []
+        field = ''
+        continue
+      }
+      field += ch
+    }
+    if (field.length || row.length) {
+      row.push(field)
+      rows.push(row)
+    }
+    return rows
+  }
+
+  private async resolveMeterTemplateItems(communityId: string, periodCode: string, templateCode: string) {
+    const repo: any = (this.prisma as any).meterEntryTemplate
+    if (!repo) throw new NotFoundException('Meter templates not supported')
+    const template = await repo.findUnique({
+      where: { communityId_code: { communityId, code: templateCode } },
+    })
+    if (!template) throw new NotFoundException('Meter template not found')
+    const rawItems: any[] = Array.isArray((template as any)?.template?.items) ? (template as any).template.items : []
+    const meterRepo: any = (this.prisma as any).meter
+    if (!meterRepo) throw new NotFoundException('Meter model not available')
+    const unitCodes = await this.prisma.unit.findMany({ where: { communityId }, select: { code: true } })
+    const scopeUnitCodes = unitCodes.map((u) => u.code)
+    const meters = await meterRepo.findMany({
+      where: {
+        origin: { not: 'DERIVED' },
+        OR: [
+          { scopeType: 'COMMUNITY', scopeCode: communityId },
+          { scopeType: 'UNIT', scopeCode: { in: scopeUnitCodes } },
+        ],
+      },
+    })
+    const meterById = new Map<string, any>()
+    meters.forEach((m: any) => meterById.set(m.meterId, m))
+    const items: Array<{ key: string; meterId: string; label?: string; unitCode?: string | null; typeCode?: string | null }> = []
+    const keyByMeterId = new Map<string, string>()
+    const itemLabelByKey = new Map<string, string>()
+    rawItems.forEach((item: any) => {
+      if (item.kind !== 'meter') return
+      if (item.typeCode && !item.meterId) {
+        meters
+          .filter((mx: any) => mx.typeCode === item.typeCode)
+          .forEach((m: any) => {
+            const key = `${item.key}:${m.meterId}`
+            const label = item.label || m.notes || m.meterId
+            items.push({
+              key,
+              meterId: m.meterId,
+              label,
+              unitCode: m.scopeType === 'UNIT' ? m.scopeCode : null,
+              typeCode: m.typeCode,
+            })
+            keyByMeterId.set(m.meterId, key)
+            itemLabelByKey.set(key, label)
+          })
+        return
+      }
+      const meterId = item.meterId
+      if (!meterId) return
+      const meter = meterById.get(meterId)
+      const label = item.label || meter?.notes || meterId
+      items.push({
+        key: item.key,
+        meterId,
+        label,
+        unitCode: meter?.scopeType === 'UNIT' ? meter.scopeCode : null,
+        typeCode: meter?.typeCode ?? item.typeCode ?? null,
+      })
+      keyByMeterId.set(meterId, item.key)
+      itemLabelByKey.set(item.key, label)
+    })
+    return { template, items, meterById, keyByMeterId, itemLabelByKey }
   }
 }
