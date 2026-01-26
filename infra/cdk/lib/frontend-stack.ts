@@ -3,7 +3,7 @@ import { Construct } from 'constructs'
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3'
 import { AllowedMethods, CachedMethods, Distribution, OriginAccessIdentity, PriceClass } from 'aws-cdk-lib/aws-cloudfront'
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager'
-import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
+import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 interface FrontendStackProps extends cdk.StackProps {
   domainName?: string
@@ -38,7 +38,7 @@ export class FrontendStack extends cdk.Stack {
 
     this.distribution = new Distribution(this, 'FrontendDistribution', {
       defaultBehavior: {
-        origin: new S3Origin(this.bucket, { originAccessIdentity: oai }),
+        origin: S3BucketOrigin.withOriginAccessIdentity(this.bucket, { originAccessIdentity: oai }),
         allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: CachedMethods.CACHE_GET_HEAD_OPTIONS,
       },

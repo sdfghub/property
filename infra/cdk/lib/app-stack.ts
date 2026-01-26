@@ -6,12 +6,10 @@ import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction } from 'aw
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager'
 import { Vpc, SecurityGroup, Peer, Port, SubnetType, CfnSecurityGroupIngress } from 'aws-cdk-lib/aws-ec2'
 import { Repository } from 'aws-cdk-lib/aws-ecr'
-import { DatabaseInstance } from 'aws-cdk-lib/aws-rds'
 import { StringParameter } from 'aws-cdk-lib/aws-ssm'
 
 interface Props extends cdk.StackProps {
   vpc: Vpc
-  db: DatabaseInstance
   dbSecurityGroup: SecurityGroup
 }
 
