@@ -44,14 +44,14 @@ type Props = {
   lastClosedSummary?: any | null
   onLoadLastClosedSummary?: () => void
   communityId?: string
-  programs?: any[]
+  funds?: any[]
   invoices?: any[]
   invoicesLoading?: boolean
   invoicesError?: string | null
   onReloadInvoices?: () => void
   onLinkInvoice?: (
     invoiceId: string,
-    programId: string,
+    fundId: string,
     amount?: number | null,
     portionKey?: string | null,
     newInvoicePayload?: any,
@@ -59,7 +59,7 @@ type Props = {
   dashboardData?: DashboardData | null
   dashboardLoading?: boolean
   dashboardError?: string | null
-  onEnsurePrograms?: () => void
+  onEnsureFunds?: () => void
   onEnsureInvoices?: () => void
 }
 
@@ -85,7 +85,7 @@ export function OverviewTab({
   lastClosedSummary,
   onLoadLastClosedSummary,
   onAddInvoice,
-  programs = [],
+  funds = [],
   invoices = [],
   invoicesLoading,
   invoicesError,
@@ -94,13 +94,13 @@ export function OverviewTab({
   dashboardData,
   dashboardLoading,
   dashboardError,
-  onEnsurePrograms,
+  onEnsureFunds,
   onEnsureInvoices,
 }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [linkInvoiceId, setLinkInvoiceId] = React.useState('')
-  const [linkProgramId, setLinkProgramId] = React.useState('')
+  const [linkFundId, setLinkFundId] = React.useState('')
   const [linkAmount, setLinkAmount] = React.useState('')
   const [linkPortionKey, setLinkPortionKey] = React.useState('')
   const [linkBusy, setLinkBusy] = React.useState(false)
@@ -142,9 +142,9 @@ export function OverviewTab({
 
   React.useEffect(() => {
     if (!showInvoiceForm && !showNewInvoice) return
-    onEnsurePrograms?.()
+    onEnsureFunds?.()
     onEnsureInvoices?.()
-  }, [onEnsurePrograms, onEnsureInvoices, showInvoiceForm, showNewInvoice])
+  }, [onEnsureFunds, onEnsureInvoices, showInvoiceForm, showNewInvoice])
 
   React.useEffect(() => {
     if (typeof dashboardLoading === 'boolean') {
@@ -213,7 +213,7 @@ export function OverviewTab({
   const canLink =
     !!onLinkInvoice &&
     !!linkInvoiceId &&
-    !!linkProgramId &&
+    !!linkFundId &&
     editablePeriod?.period?.status === 'OPEN'
 
   const handleLink = async (e: React.FormEvent) => {
@@ -223,20 +223,163 @@ export function OverviewTab({
     try {
       await onLinkInvoice(
         linkInvoiceId,
-        linkProgramId,
+        linkFundId,
         linkAmount ? Number(linkAmount) : null,
         linkPortionKey || null,
       )
       setLinkAmount('')
       setLinkPortionKey('')
+      setLinkFundId('')
     } finally {
       setLinkBusy(false)
     }
   }
   return (
-    <div className="grid three">
-      <div className="card soft">
-        <h3>{t('card.period.title')}</h3>
+    <div className="stack ops-board">
+      <div className="card ops-card ops-strip">
+        <div className="stack" style={{ gap: 6 }}>
+          <div className="ops-title">{t('card.period.title') || 'Period'}</div>
+          {editablePeriod?.period ? (
+            <>
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0 }}>Period {editablePeriod.period.code}</h3>
+                <span className={`ops-chip ${editablePeriod.period.status === 'CLOSED' ? 'success' : editablePeriod.period.status === 'PREPARED' ? 'info' : 'warn'}`}>
+                  {t(editablePeriod.period.status)}
+                </span>
+              </div>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <span className="ops-chip info">
+                  {t('card.period.metersStatus', {
+                    closed: editablePeriod.meters?.closed ?? 0,
+                    total: editablePeriod.meters?.total ?? 0,
+                  })}
+                </span>
+                <span className="ops-chip info">
+                  {t('card.period.billsStatus', {
+                    closed: editablePeriod.bills?.closed ?? 0,
+                    total: editablePeriod.bills?.total ?? 0,
+                  })}
+                </span>
+                {lastClosed?.code ? (
+                  <span className="ops-chip">
+                    {t('card.period.lastClosed') || 'Last closed'}: {lastClosed.code}
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="muted">{t('card.period.noActive') || 'No active period'}</div>
+          )}
+        </div>
+        <div className="stack" style={{ gap: 8, alignItems: 'flex-end' }}>
+          {editablePeriod?.period?.status === 'OPEN' && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={() => {
+                  setShowCustomForm(false)
+                  setShowMeterTemplates(false)
+                  setShowBillTemplates(false)
+                  setShowInvoiceForm((v) => !v)
+                }}
+              >
+                {showInvoiceForm
+                  ? t('payments.hideForm', 'Hide invoice form')
+                  : t('card.period.addInvoice', 'Add invoice & link to fund')}
+              </button>
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={() => {
+                  setShowInvoiceForm(false)
+                  setShowMeterTemplates(false)
+                  setShowBillTemplates(false)
+                  setShowCustomForm((v) => !v)
+                }}
+              >
+                {t('card.period.addCustomExpense', 'Add custom expense')}
+              </button>
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={() => {
+                  setShowInvoiceForm(false)
+                  setShowCustomForm(false)
+                  setShowBillTemplates(false)
+                  setShowMeterTemplates((v) => !v)
+                }}
+                style={{
+                  background: showMeterTemplates ? 'rgba(26,115,232,0.08)' : undefined,
+                  borderColor: showMeterTemplates ? 'rgba(26,115,232,0.4)' : undefined,
+                }}
+              >
+                {t('card.period.metersStatus', {
+                  closed: editablePeriod.meters?.closed ?? 0,
+                  total: editablePeriod.meters?.total ?? 0,
+                })}
+              </button>
+              <button
+                className="btn secondary small"
+                type="button"
+                onClick={() => {
+                  setShowInvoiceForm(false)
+                  setShowCustomForm(false)
+                  setShowMeterTemplates(false)
+                  setShowBillTemplates((v) => !v)
+                }}
+                style={{
+                  background: showBillTemplates ? 'rgba(26,115,232,0.08)' : undefined,
+                  borderColor: showBillTemplates ? 'rgba(26,115,232,0.4)' : undefined,
+                }}
+              >
+                {t('card.period.billsStatus', {
+                  closed: editablePeriod.bills?.closed ?? 0,
+                  total: editablePeriod.bills?.total ?? 0,
+                })}
+              </button>
+              {onReloadInvoices && showInvoiceForm && (
+                <button className="btn ghost small" type="button" onClick={onReloadInvoices} disabled={!!invoicesLoading}>
+                  {t('payments.reload', 'Reload')}
+                </button>
+              )}
+            </div>
+          )}
+          {(editablePeriod?.canClose || editablePeriod?.canPrepare || editablePeriod?.period?.status === 'PREPARED') && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {editablePeriod?.canPrepare && onPrepare && (
+                <button className="btn primary small" type="button" onClick={onPrepare} disabled={busy === 'prepare'}>
+                  {busy === 'prepare' ? t('common.loading') || 'Working…' : t('card.period.prepare') || 'Prepare period'}
+                </button>
+              )}
+              {editablePeriod?.canClose && onClose && (
+                <button className="btn primary small" type="button" onClick={onClose} disabled={busy === 'close'}>
+                  {busy === 'close' ? t('common.loading') || 'Working…' : t('card.period.close') || 'Close period'}
+                </button>
+              )}
+              {editablePeriod?.period?.status === 'PREPARED' && onRecompute && (
+                <button className="btn secondary small" type="button" onClick={onRecompute} disabled={busy === 'prepare'}>
+                  {busy === 'prepare' ? t('common.loading') || 'Working…' : t('card.period.recompute') || 'Rerun allocations'}
+                </button>
+              )}
+              {editablePeriod?.period?.status === 'PREPARED' && onReopenPrepared && (
+                <button className="btn secondary small" type="button" onClick={onReopenPrepared} disabled={busy === 'reopen'}>
+                  {busy === 'reopen' ? t('common.loading') || 'Working…' : t('card.period.reopen') || 'Reopen period'}
+                </button>
+              )}
+              {editablePeriod?.period?.status === 'PREPARED' && !summary && onLoadSummary && (
+                <button className="btn secondary small" type="button" onClick={onLoadSummary} disabled={summaryLoading}>
+                  {summaryLoading ? t('common.loading') || 'Loading…' : t('card.period.loadSummary', 'Load summary')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="grid two">
+        <div className="stack">
+          <div className="card ops-card">
+          <h3>{t('card.period.title')}</h3>
         {editablePeriod?.period ? (
           <div className="stack" style={{ gap: 6, marginTop: 6 }}>
             <div className="row" style={{ gap: 8, alignItems: 'center' }}>
@@ -246,81 +389,10 @@ export function OverviewTab({
             {/* <div className="muted">{t('card.period.subtitle')}</div>*/}
             {editablePeriod.period.status === 'OPEN' && (
               <div className="stack" style={{ gap: 6 }}>
-                <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    className="btn secondary small"
-                    type="button"
-                    onClick={() => {
-                      setShowCustomForm(false)
-                      setShowMeterTemplates(false)
-                      setShowBillTemplates(false)
-                      setShowInvoiceForm((v) => !v)
-                    }}
-                  >
-                    {showInvoiceForm
-                      ? t('payments.hideForm', 'Hide invoice form')
-                      : t('card.period.addInvoice', 'Add invoice & link to program')}
-                  </button>
-                  <button
-                    className="btn secondary small"
-                    type="button"
-                    onClick={() => {
-                      setShowInvoiceForm(false)
-                      setShowMeterTemplates(false)
-                      setShowBillTemplates(false)
-                      setShowCustomForm((v) => !v)
-                    }}
-                  >
-                    {t('card.period.addCustomExpense', 'Add custom expense')}
-                  </button>
-                  <button
-                    className="btn secondary small"
-                    type="button"
-                    onClick={() => {
-                      setShowInvoiceForm(false)
-                      setShowCustomForm(false)
-                      setShowBillTemplates(false)
-                      setShowMeterTemplates((v) => !v)
-                    }}
-                    style={{
-                      background: showMeterTemplates ? 'rgba(43,212,213,0.15)' : undefined,
-                      borderColor: showMeterTemplates ? 'rgba(43,212,213,0.5)' : undefined,
-                    }}
-                  >
-                    {t('card.period.metersStatus', {
-                      closed: editablePeriod.meters?.closed ?? 0,
-                      total: editablePeriod.meters?.total ?? 0,
-                    })}
-                  </button>
-                  <button
-                    className="btn secondary small"
-                    type="button"
-                    onClick={() => {
-                      setShowInvoiceForm(false)
-                      setShowCustomForm(false)
-                      setShowMeterTemplates(false)
-                      setShowBillTemplates((v) => !v)
-                    }}
-                    style={{
-                      background: showBillTemplates ? 'rgba(43,212,213,0.15)' : undefined,
-                      borderColor: showBillTemplates ? 'rgba(43,212,213,0.5)' : undefined,
-                    }}
-                  >
-                    {t('card.period.billsStatus', {
-                      closed: editablePeriod.bills?.closed ?? 0,
-                      total: editablePeriod.bills?.total ?? 0,
-                    })}
-                  </button>
-                  {onReloadInvoices && showInvoiceForm && (
-                    <button className="btn ghost small" type="button" onClick={onReloadInvoices} disabled={!!invoicesLoading}>
-                      {t('payments.reload', 'Reload')}
-                    </button>
-                  )}
-                  {showInvoiceForm && invoicesLoading && <span className="muted">{t('communities.loading', 'Loading...')}</span>}
-                  {showInvoiceForm && invoicesError && <span className="badge negative">{invoicesError}</span>}
-                </div>
             {showInvoiceForm && (
               <div className="stack" style={{ gap: 6 }}>
+                    {invoicesLoading && <span className="muted">{t('communities.loading', 'Loading...')}</span>}
+                    {invoicesError && <span className="badge negative">{invoicesError}</span>}
                     <form className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }} onSubmit={handleLink}>
                       <button
                         className="btn ghost small"
@@ -409,17 +481,17 @@ export function OverviewTab({
                           </option>
                         ))}
                       </select>
-                      Selecteaza programul din care s-a efectuat plata
+                      Selecteaza fondul din care s-a efectuat plata
                       <select
                         className="input"
                         style={{ minWidth: 180 }}
-                        value={linkProgramId}
-                        onChange={(e) => setLinkProgramId(e.target.value)}
+                        value={linkFundId}
+                        onChange={(e) => setLinkFundId(e.target.value)}
                       >
-                        <option value="">{t('programs.select', 'Select program')}</option>
-                        {programs.map((p: any) => (
-                          <option key={p.id || p.code} value={p.id}>
-                            {p.name || p.code}
+                        <option value="">{t('funds.select', 'Select fund')}</option>
+                        {funds.map((f: any) => (
+                          <option key={f.id || f.code} value={f.id}>
+                            {f.name || f.code}
                           </option>
                         ))}
                       </select>
@@ -435,12 +507,12 @@ export function OverviewTab({
                       <input
                         className="input"
                         style={{ width: 120 }}
-                        placeholder={t('programs.portionKey', 'Portion key')}
+                        placeholder={t('funds.portionKey', 'Portion key')}
                         value={linkPortionKey}
                         onChange={(e) => setLinkPortionKey(e.target.value)}
                       />
                       <button className="btn primary small" type="submit" disabled={!canLink || linkBusy}>
-                        {linkBusy ? t('common.loading') || 'Working…' : t('programs.linkInvoice', 'Link invoice')}
+                        {linkBusy ? t('common.loading') || 'Working…' : t('funds.linkInvoice', 'Link invoice')}
                       </button>
                     </form>
                   </div>
@@ -631,9 +703,9 @@ export function OverviewTab({
                       {(inv.vendor?.name || inv.vendorName || inv.number || inv.id) as string}{' '}
                       {inv.gross ? `— ${inv.gross} ${inv.currency || ''}` : ''}
                       {inv.status ? ` (${inv.status})` : ''}
-                      {inv.programInvoices?.length
-                        ? ` · ${t('programs.label', 'Programs')}: ${inv.programInvoices
-                            .map((pl: any) => pl.program?.name || pl.program?.code || pl.programId)
+                      {inv.fundInvoices?.length
+                        ? ` · ${t('funds.label', 'Funds')}: ${inv.fundInvoices
+                            .map((fl: any) => fl.fund?.name || fl.fund?.code || fl.fundId)
                             .join(', ')}`
                         : ''}
                     </li>
@@ -668,40 +740,6 @@ export function OverviewTab({
               )*/}
             </div>
             <hr/>
-            {(editablePeriod.canClose || editablePeriod.canPrepare || editablePeriod.period?.status === 'PREPARED') && (
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                {editablePeriod.canPrepare && onPrepare && (
-                  <button className="btn primary small" type="button" onClick={onPrepare} disabled={busy === 'prepare'}>
-                    {busy === 'prepare' ? t('common.loading') || 'Working…' : t('card.period.prepare') || 'Prepare period'}
-                  </button>
-                )}
-                {editablePeriod.canClose && onClose && (
-                  <button className="btn primary small" type="button" onClick={onClose} disabled={busy === 'close'}>
-                    {busy === 'close' ? t('common.loading') || 'Working…' : t('card.period.close') || 'Close period'}
-                  </button>
-                )}
-                {editablePeriod.period?.status === 'PREPARED' && onRecompute && (
-                  <button className="btn secondary small" type="button" onClick={onRecompute} disabled={busy === 'prepare'}>
-                    {busy === 'prepare' ? t('common.loading') || 'Working…' : t('card.period.recompute') || 'Rerun allocations'}
-                  </button>
-                )}
-                {editablePeriod.period?.status === 'PREPARED' && onReopenPrepared && (
-                  <button className="btn tertiary small" type="button" onClick={onReopenPrepared} disabled={busy === 'reopen'}>
-                    {busy === 'reopen' ? t('common.loading') || 'Working…' : t('card.period.reopen') || 'Reopen period'}
-                  </button>
-                )}
-              </div>
-            )}
-            {editablePeriod.period?.status === 'PREPARED' && !summary && onLoadSummary && (
-              <button
-                className="btn secondary small"
-                type="button"
-                onClick={onLoadSummary}
-                disabled={summaryLoading}
-              >
-                {summaryLoading ? t('common.loading') || 'Loading…' : t('card.period.loadSummary', 'Load summary')}
-              </button>
-            )}
             {summaryLoading && <div className="muted">{t('common.loading') || 'Loading…'}</div>}
             {summaryError && <div className="badge negative">{summaryError}</div>}
             {summary && editablePeriod.period?.status === 'PREPARED' && (
@@ -737,7 +775,7 @@ export function OverviewTab({
         </div>
         */}
       </div>
-      <div className="card soft">
+      <div className="card ops-card">
         <div className="muted">{t('card.period.prevNext')}</div>
         {lastClosed ? (
           <div className="stack" style={{ marginTop: 6 }}>
@@ -777,7 +815,9 @@ export function OverviewTab({
           <div className="muted" style={{ marginTop: 6 }}>{t('card.period.noClosed') || 'No closed periods'}</div>
         )}
       </div>
-      <div className="card soft">
+        </div>
+        <div className="stack">
+          <div className="card ops-card">
         <h3>{t('card.tasks.title', 'Upcoming tasks')}</h3>
         {ticketsLoading ? (
           <div className="muted">{t('card.tasks.loading', 'Loading…')}</div>
@@ -796,7 +836,7 @@ export function OverviewTab({
           <div className="muted">{t('card.tasks.empty', 'No upcoming tasks')}</div>
         )}
       </div>
-      <div className="card soft">
+      <div className="card ops-card">
         <h3>{t('card.incidents.title', 'Active incidents')}</h3>
         {ticketsLoading ? (
           <div className="muted">{t('card.incidents.loading', 'Loading…')}</div>
@@ -815,7 +855,7 @@ export function OverviewTab({
           <div className="muted">{t('card.incidents.empty', 'No active incidents')}</div>
         )}
       </div>
-      <div className="card soft">
+      <div className="card ops-card">
         <h3>{t('card.events.title', 'Upcoming events')}</h3>
         {eventsLoading ? (
           <div className="muted">{t('card.events.loading', 'Loading…')}</div>
@@ -836,7 +876,7 @@ export function OverviewTab({
           <div className="muted">{t('card.events.empty', 'No upcoming events')}</div>
         )}
       </div>
-      <div className="card soft">
+      <div className="card ops-card">
         <h3>{t('card.polls.title', 'Ongoing polls')}</h3>
         {pollsLoading ? (
           <div className="muted">{t('card.polls.loading', 'Loading…')}</div>
@@ -857,8 +897,10 @@ export function OverviewTab({
           <div className="muted">{t('card.polls.empty', 'No ongoing polls')}</div>
         )}
       </div>
+        </div>
+      </div>
       {/*
-      <div className="card soft">
+      <div className="card ops-card">
         <div className="muted">{t('card.financials.label')}</div>
         <h3>{t('card.financials.title')}</h3>
         <p className="muted">{t('card.financials.subtitle')}</p>
@@ -868,7 +910,7 @@ export function OverviewTab({
           <li>{t('card.financials.balance')}</li>
         </ul>
       </div>
-      <div className="card soft">
+      <div className="card ops-card">
         <div className="muted">{t('card.quick.label')}</div>
         <h3>{t('card.quick.title')}</h3>
         <p className="muted">{t('card.quick.subtitle')}</p>

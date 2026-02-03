@@ -5,7 +5,7 @@ export type CommunityDefJson = {
   name: string
   period: { code: string; start?: string; end?: string }
   groups?: GroupDef[]
-  buckets?: Array<{ code: string; name?: string; programCode?: string; expenseTypeCodes?: string[]; splitGroupCodes?: string[]; splitNodeIds?: string[]; priority?: number }>
+  buckets?: Array<{ code: string; name?: string; fundCode?: string; expenseTypeCodes?: string[]; splitGroupCodes?: string[]; splitNodeIds?: string[]; priority?: number }>
   splitGroups?: Array<{ code: string; name?: string; splitIds: string[]; order?: number }>
   structure?: StructureRow[]
   allocationRules?: Array<{
@@ -37,6 +37,16 @@ export type CommunityDefJson = {
   expenseSplits?: any[]
   aggregations?: Array<{ targetType: string; unitTypes: string[]; residualType?: string }>
   derivedMeters?: Array<{ scopeType?: 'COMMUNITY'|'GROUP'|'UNIT'; sourceType: string; subtractTypes: string[]; targetType: string; origin?: 'METER'|'DECLARATION'|'ADMIN'|'DERIVED' }>
+  accounts?: Array<{
+    code: string
+    name: string
+    type: 'BANK' | 'PETTY'
+    currency?: string
+    openingBalance?: number
+    openingPeriodCode?: string
+    status?: string
+    notes?: any
+  }>
 }
 
 export type StructureRow = {
@@ -56,7 +66,7 @@ export type CommunityImportPlan = {
   periodStart?: string
   periodEnd?: string
   groups: GroupDef[]
-  buckets?: Array<{ code: string; name?: string; programCode?: string; expenseTypeCodes?: string[]; splitGroupCodes?: string[]; splitNodeIds?: string[]; priority?: number }>
+  buckets?: Array<{ code: string; name?: string; fundCode?: string; expenseTypeCodes?: string[]; splitGroupCodes?: string[]; splitNodeIds?: string[]; priority?: number }>
   splitGroups?: Array<{ code: string; name?: string; splitIds: string[]; order?: number }>
   rules: Array<{ code: string; method: string; name?: string; params?: any }>
   expenseTypes: Array<{ code: string; name: string; ruleCode: string; currency?: string; params?: any; splitTemplate?: any }>
@@ -69,4 +79,14 @@ export type CommunityImportPlan = {
   meters?: Array<{ scopeType: 'UNIT'|'GROUP'|'COMMUNITY'; scopeCode: string; typeCode: string; meterId: string; origin?: string }>
   aggregations?: Array<{ targetType: string; unitTypes: string[]; residualType?: string }>
   derivedMeters?: Array<{ scopeType?: 'COMMUNITY'|'GROUP'|'UNIT'; sourceType: string; subtractTypes: string[]; targetType: string; origin?: string }>
+  accounts?: Array<{
+    code: string
+    name: string
+    type: 'BANK' | 'PETTY'
+    currency?: string
+    openingBalance?: number
+    openingPeriodCode?: string
+    status?: string
+    notes?: any
+  }>
 }

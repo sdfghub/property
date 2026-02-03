@@ -46,7 +46,7 @@ export function MainScreen() {
   const isCommunityDashboardView = section === 'Community Dashboard'
   const isGlobalDashboardView = section === 'My Dashboard'
   const isExpensesView = section === 'Expenses'
-  const isProgramsView = section === 'Programs'
+  const isFundsView = section === 'Funds'
   const isPollsView = section === 'Polls'
   const isEventsView = section === 'Events'
   const isNotificationsView = section === 'Notifications'
@@ -72,16 +72,16 @@ export function MainScreen() {
   const [events, setEvents] = React.useState<any[]>([])
   const [eventList, setEventList] = React.useState<any[]>([])
   const [polls, setPolls] = React.useState<any[]>([])
-  const [programBuckets, setProgramBuckets] = React.useState<Record<string, { id: string; code: string; name: string }>>({})
-  const [programList, setProgramList] = React.useState<any[]>([])
+  const [fundBuckets, setFundBuckets] = React.useState<Record<string, { id: string; code: string; name: string }>>({})
+  const [fundList, setFundList] = React.useState<any[]>([])
   const [pollList, setPollList] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(false)
   const [statementLoading, setStatementLoading] = React.useState(false)
   const [eventsLoading, setEventsLoading] = React.useState(false)
   const [pollsLoading, setPollsLoading] = React.useState(false)
-  const [programsLoading, setProgramsLoading] = React.useState(false)
+  const [fundsLoading, setFundsLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
-  const [programsMessage, setProgramsMessage] = React.useState<string | null>(null)
+  const [fundsMessage, setFundsMessage] = React.useState<string | null>(null)
   const [pollsMessage, setPollsMessage] = React.useState<string | null>(null)
   const [eventsMessage, setEventsMessage] = React.useState<string | null>(null)
   const [notifications, setNotifications] = React.useState<any[]>([])
@@ -273,7 +273,7 @@ export function MainScreen() {
     if (!beId || !isDashboardView) return
     let active = true
     setStatementLoading(true)
-    setProgramsLoading(true)
+    setFundsLoading(true)
     setMessage(null)
     api
       .get<any>(`/communities/be/${beId}/dashboard`)
@@ -320,7 +320,7 @@ export function MainScreen() {
         } else {
           setBeLiveTotals(null)
         }
-        setProgramBuckets(data?.programBuckets || {})
+        setFundBuckets(data?.fundBuckets || {})
         if (data?.be?.id) {
           setBeMeta(data.be.id, { name: data.be.name || data.be.code || data.be.id, communityId: data.be.communityId })
         }
@@ -331,7 +331,7 @@ export function MainScreen() {
       .finally(() => {
         if (active) {
           setStatementLoading(false)
-          setProgramsLoading(false)
+          setFundsLoading(false)
         }
       })
     return () => {
@@ -577,15 +577,15 @@ export function MainScreen() {
   }, [isExpensesView, routeParams?.periodCode, selected])
 
   React.useEffect(() => {
-    if (!communityId || !isProgramsView) return
-    setProgramsLoading(true)
-    setProgramsMessage(null)
+    if (!communityId || !isFundsView) return
+    setFundsLoading(true)
+    setFundsMessage(null)
     api
-      .get<any[]>(`/communities/${communityId}/programs`)
-      .then((rows) => setProgramList(rows))
-      .catch((err: any) => setProgramsMessage(err?.message || 'Could not load programs'))
-      .finally(() => setProgramsLoading(false))
-  }, [api, communityId, isProgramsView, refreshKey])
+      .get<any[]>(`/communities/${communityId}/funds`)
+      .then((rows) => setFundList(rows))
+      .catch((err: any) => setFundsMessage(err?.message || 'Could not load funds'))
+      .finally(() => setFundsLoading(false))
+  }, [api, communityId, isFundsView, refreshKey])
 
   React.useEffect(() => {
     if (!communityId || !isPollsView) return
@@ -963,11 +963,11 @@ export function MainScreen() {
           statementDetail={statementDetail}
           statementDetailOpen={statementDetailOpen}
           setStatementDetailOpen={(next) => setStatementDetailOpen(next)}
-          programBuckets={programBuckets}
+          fundBuckets={fundBuckets}
           onNavigateStatement={(periodCode) =>
-            navigation.navigate('StatementDetail', { beId, periodCode, programBuckets })
+            navigation.navigate('StatementDetail', { beId, periodCode, fundBuckets })
           }
-          onNavigateProgram={(programId) => navigation.navigate('ProgramDetail', { programId })}
+          onNavigateFund={(fundId) => navigation.navigate('FundDetail', { fundId })}
           onNavigateExpenses={(periodCode) => navigation.navigate('Main', { section: 'Expenses', periodCode })}
           onAddBalance={() => {
             const dueEnd = Number(statementDetail?.statement?.dueEnd || 0)
@@ -988,29 +988,29 @@ export function MainScreen() {
           }
           isInCart={isInCart}
         />
-      ) : isProgramsView ? (
+      ) : isFundsView ? (
         <>
-          {programsMessage ? <Text style={styles.error}>{programsMessage}</Text> : null}
+          {fundsMessage ? <Text style={styles.error}>{fundsMessage}</Text> : null}
           <View style={styles.sectionTopSpacer} />
           {!communityId ? (
             <View style={styles.listCard}>
-              <Text style={styles.muted}>Select a billing entity to see programs.</Text>
+              <Text style={styles.muted}>Select a billing entity to see funds.</Text>
             </View>
-          ) : programsLoading ? (
+          ) : fundsLoading ? (
             <View style={styles.centered}>
               <ActivityIndicator />
-              <Text style={styles.muted}>Loading programs…</Text>
+              <Text style={styles.muted}>Loading funds…</Text>
             </View>
           ) : (
             <FlatList
-              data={programList}
+              data={fundList}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.expensesListContent}
               ItemSeparatorComponent={() => <View style={styles.expenseSeparator} />}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.expenseRowCard}
-                  onPress={() => navigation.navigate('ProgramDetail', { programId: item.id })}
+                  onPress={() => navigation.navigate('FundDetail', { fundId: item.id })}
                 >
                   <Text style={styles.rowLabel}>{item.name || item.code}</Text>
                   <Text style={styles.rowAmount}>{formatMoney(item.balance, 'RON')}</Text>

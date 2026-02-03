@@ -25,21 +25,30 @@ export class VendorInvoiceController {
     return this.svc.updateInvoice(communityId, id, body)
   }
 
-  @Post(':id/program-links')
-  linkProgram(
+  @Post(':id/fund-links')
+  linkFund(
     @Param('communityId') communityId: string,
     @Param('id') invoiceId: string,
-    @Body() body: { programId: string; amount?: number; portionKey?: string; notes?: any },
+    @Body() body: { fundId: string; amount?: number; portionKey?: string; notes?: any },
   ) {
-    return this.svc.linkProgram(communityId, invoiceId, body)
+    return this.svc.linkFund(communityId, invoiceId, body)
   }
 
-  @Post(':id/program-links/remove')
-  unlinkProgram(
+  @Post(':id/fund-links/remove')
+  unlinkFund(
     @Param('communityId') communityId: string,
     @Param('id') invoiceId: string,
-    @Body() body: { programId: string; portionKey?: string },
+    @Body() body: { fundId: string; portionKey?: string },
   ) {
-    return this.svc.unlinkProgram(communityId, invoiceId, body.programId, body.portionKey ?? null)
+    return this.svc.unlinkFund(communityId, invoiceId, body.fundId, body.portionKey ?? null)
+  }
+
+  @Post(':id/payments')
+  pay(
+    @Param('communityId') communityId: string,
+    @Param('id') invoiceId: string,
+    @Body() body: any,
+  ) {
+    return this.svc.createVendorPayment(communityId, invoiceId, body)
   }
 }

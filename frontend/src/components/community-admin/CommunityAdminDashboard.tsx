@@ -8,8 +8,9 @@ import { CommunityExpensesPanel } from '../CommunityExpensesPanel'
 import { CommunityMetersPanel } from '../CommunityMetersPanel'
 import { PeriodAdmin } from '../PeriodAdmin'
 import { OverviewTab } from './OverviewTab'
+import { CommandFinanceDashboard } from './CommandFinanceDashboard'
 import { ConfigTab } from './ConfigTab'
-import { ProgramsTab } from './ProgramsTab'
+import { FundsTab } from './FundsTab'
 import { EventsTab } from './EventsTab'
 import { PollsTab } from './PollsTab'
 import { NotificationsTab } from './NotificationsTab'
@@ -18,10 +19,11 @@ import { InventoryTab } from './InventoryTab'
 
 export type CommunityAdminTabKey =
   | 'overview'
+  | 'commandFinance'
   | 'config'
   | 'meters'
   | 'expenses'
-  | 'programs'
+  | 'funds'
   | 'events'
   | 'polls'
   | 'communications'
@@ -57,8 +59,8 @@ export function CommunityAdminDashboard({
   const [configJson, setConfigJson] = React.useState<any>(null)
   const [configError, setConfigError] = React.useState<string | null>(null)
   const [metersConfig, setMetersConfig] = React.useState<any | null>(null)
-  const [programs, setPrograms] = React.useState<any[]>([])
-  const [programError, setProgramError] = React.useState<string | null>(null)
+  const [funds, setFunds] = React.useState<any[]>([])
+  const [fundError, setFundError] = React.useState<string | null>(null)
   const [editablePeriod, setEditablePeriod] = React.useState<{
     period?: { code: string; status: string }
     meters?: { total: number; closed: number; open?: string[] }
@@ -76,11 +78,12 @@ export function CommunityAdminDashboard({
   const [paymentsError, setPaymentsError] = React.useState<string | null>(null)
   const [paymentsLoading, setPaymentsLoading] = React.useState(false)
   const [showPaymentForm, setShowPaymentForm] = React.useState(false)
+  const [periodActionError, setPeriodActionError] = React.useState<string | null>(null)
   const [navCollapsed, setNavCollapsed] = React.useState(false)
   const [dashboardData, setDashboardData] = React.useState<any | null>(null)
   const [dashboardLoading, setDashboardLoading] = React.useState(false)
   const [dashboardError, setDashboardError] = React.useState<string | null>(null)
-  const [programsLoadedFor, setProgramsLoadedFor] = React.useState<string | null>(null)
+  const [fundsLoadedFor, setFundsLoadedFor] = React.useState<string | null>(null)
   const [invoicesLoadedFor, setInvoicesLoadedFor] = React.useState<string | null>(null)
   const [newPayment, setNewPayment] = React.useState({
     billingEntityId: '',
@@ -100,7 +103,8 @@ export function CommunityAdminDashboard({
       label: t('nav.core') || 'Core',
       items: [
         { key: 'overview', label: t('tab.overview') || 'Overview' },
-        { key: 'programs', label: t('tab.programs') || 'Programs' },
+        { key: 'commandFinance', label: t('tab.commandFinance') || 'Command + Finance' },
+        { key: 'funds', label: t('tab.funds') || 'Funds' },
         { key: 'events', label: t('tab.events') || 'Events' },
         { key: 'polls', label: t('tab.polls') || 'Polls' },
         { key: 'communications', label: t('tab.communications') || 'Communications' },
@@ -189,16 +193,16 @@ export function CommunityAdminDashboard({
       .finally(() => setPaymentsLoading(false))
   }, [communityCode])
 
-  const refreshPrograms = React.useCallback(() => {
+  const refreshFunds = React.useCallback(() => {
     if (!communityCode) return Promise.resolve()
-    setProgramError(null)
-    return fetch(`${API_BASE}/community-programs/${communityCode}`)
+    setFundError(null)
+    return fetch(`${API_BASE}/community-funds/${communityCode}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text())
         return res.json()
       })
-      .then((rows) => setPrograms(Array.isArray(rows) ? rows : []))
-      .catch((err) => setProgramError(err?.message || 'Failed to load programs'))
+      .then((rows) => setFunds(Array.isArray(rows) ? rows : []))
+      .catch((err) => setFundError(err?.message || 'Failed to load funds'))
   }, [communityCode])
 
   const refreshEditable = React.useCallback(() => {
@@ -281,7 +285,7 @@ export function CommunityAdminDashboard({
   React.useEffect(() => {
     if (!communityCode) return
     setConfigError(null)
-    setProgramError(null)
+    setFundError(null)
     setPaymentsError(null)
   }, [communityCode])
 
@@ -326,18 +330,18 @@ export function CommunityAdminDashboard({
   }, [activeTab, communityCode, fetchPayments])
 
   React.useEffect(() => {
-    if (!communityCode || activeTab !== 'programs') return
-    if (programsLoadedFor === communityCode) return
-    setProgramsLoadedFor(communityCode)
-    refreshPrograms()
-  }, [activeTab, communityCode, programsLoadedFor, refreshPrograms])
+    if (!communityCode || activeTab !== 'funds') return
+    if (fundsLoadedFor === communityCode) return
+    setFundsLoadedFor(communityCode)
+    refreshFunds()
+  }, [activeTab, communityCode, fundsLoadedFor, refreshFunds])
 
-  const ensureProgramsLoaded = React.useCallback(() => {
+  const ensureFundsLoaded = React.useCallback(() => {
     if (!communityCode) return
-    if (programsLoadedFor === communityCode) return
-    setProgramsLoadedFor(communityCode)
-    refreshPrograms()
-  }, [communityCode, programsLoadedFor, refreshPrograms])
+    if (fundsLoadedFor === communityCode) return
+    setFundsLoadedFor(communityCode)
+    refreshFunds()
+  }, [communityCode, fundsLoadedFor, refreshFunds])
 
   const ensureInvoicesLoaded = React.useCallback(() => {
     if (!communityCode) return
@@ -381,11 +385,13 @@ export function CommunityAdminDashboard({
     if (!communityId || !editablePeriod?.period?.code) return
     try {
       setMessage(null)
+      setPeriodActionError(null)
       setBusy('prepare')
       await api.post(`/communities/${communityId}/periods/${editablePeriod.period.code}/prepare`)
       await Promise.all([refreshEditable(), refreshClosed()])
     } catch (err: any) {
       setMessage(err?.message || 'Failed to prepare period')
+      setPeriodActionError(err?.message || 'Failed to prepare period')
     } finally {
       setBusy(null)
     }
@@ -395,11 +401,13 @@ export function CommunityAdminDashboard({
     if (!communityId || !editablePeriod?.period?.code) return
     try {
       setMessage(null)
+      setPeriodActionError(null)
       setBusy('close')
       await api.post(`/communities/${communityId}/periods/${editablePeriod.period.code}/approve`)
       await Promise.all([refreshEditable(), refreshClosed()])
     } catch (err: any) {
       setMessage(err?.message || 'Failed to close period')
+      setPeriodActionError(err?.message || 'Failed to close period')
     } finally {
       setBusy(null)
     }
@@ -541,7 +549,7 @@ export function CommunityAdminDashboard({
                   onGoStatements={() => setActiveTab('statements')}
                   lastClosedSummary={lastClosedSummary}
                   onLoadLastClosedSummary={loadLastClosedSummary}
-                  programs={programs}
+                  funds={funds}
                   invoices={overviewInv}
                   invoicesLoading={overviewInvLoading}
                   invoicesError={overviewInvError}
@@ -549,9 +557,9 @@ export function CommunityAdminDashboard({
                   dashboardData={dashboardData}
                   dashboardLoading={dashboardLoading}
                   dashboardError={dashboardError}
-                  onEnsurePrograms={ensureProgramsLoaded}
+                  onEnsureFunds={ensureFundsLoaded}
                   onEnsureInvoices={ensureInvoicesLoaded}
-                  onLinkInvoice={async (invoiceId, programId, amount, portionKey, newInvoicePayload?: any) => {
+                  onLinkInvoice={async (invoiceId, fundId, amount, portionKey, newInvoicePayload?: any) => {
                     // If invoiceId is a sentinel, create invoice first
                     let targetInvoiceId = invoiceId
                     if (invoiceId === '__create__' && newInvoicePayload) {
@@ -564,9 +572,9 @@ export function CommunityAdminDashboard({
                       })
                       targetInvoiceId = created?.id || created?.invoiceId || created?.invoice?.id || null
                     }
-                    if (targetInvoiceId && programId) {
-                      await api.post(`/communities/${communityCode}/invoices/${targetInvoiceId}/program-links`, {
-                        programId,
+                    if (targetInvoiceId && fundId) {
+                      await api.post(`/communities/${communityCode}/invoices/${targetInvoiceId}/fund-links`, {
+                        fundId,
                         amount: amount ?? undefined,
                         portionKey: portionKey ?? undefined,
                       })
@@ -574,6 +582,17 @@ export function CommunityAdminDashboard({
                     await loadOverviewInvoices()
                     return targetInvoiceId
                   }}
+                />
+              )}
+              {activeTab === 'commandFinance' && (
+                <CommandFinanceDashboard
+                  communityCode={communityCode}
+                  onNavigate={(tab) => setActiveTab(tab)}
+                  onPrepare={handlePrepare}
+                  onClose={handleClose}
+                  onReopen={() => handleReopen(editablePeriod?.period?.code || null)}
+                  onCreatePeriod={handleCreatePeriod}
+                  periodError={periodActionError}
                 />
               )}
 
@@ -609,12 +628,12 @@ export function CommunityAdminDashboard({
                 />
               )}
 
-              {activeTab === 'programs' && (
-                <ProgramsTab
-                  programs={programs}
-                  programError={programError}
+              {activeTab === 'funds' && (
+                <FundsTab
+                  funds={funds}
+                  fundError={fundError}
                   communityCode={communityCode}
-                  onRefreshPrograms={refreshPrograms}
+                  onRefreshFunds={refreshFunds}
                 />
               )}
               {activeTab === 'events' && <EventsTab communityCode={communityCode} />}

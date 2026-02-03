@@ -1,4 +1,4 @@
-import { PrismaClient, SeriesOrigin, SeriesScope, Role, ScopeType } from '@prisma/client'
+import { PrismaClient, SeriesOrigin, SeriesScope, Role, ScopeType, CashTxDirection, CashTxKind, CashTxStatus } from '@prisma/client'
 import { CommunityImportPlan } from './types'
 const prisma = new PrismaClient()
 const INT4_MAX = 2147483647
@@ -17,6 +17,8 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     periodMeasures: 0,
     meters: 0,
     measureTypes: 0,
+    accounts: 0,
+    cashTx: 0,
   }
 
   // community + period (use id and code from plan)
@@ -243,41 +245,75 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     }
   }
 
-  // buckets (ledger/reporting)
- if (Array.isArray(plan.buckets)) {
-   const repo: any = (prisma as any).bucketRule
-   if (repo?.upsert) {
-     for (const b of plan.buckets) {
-       await repo.upsert({
-          where: { communityId_code: { communityId, code: b.code } },
+  // pre-fetch referenced periods by code for membership ranges and cash account opening balances
+  const periodByCode = new Map<string,{id:string,seq:number,startDate:Date}>()
+  async function getPeriod(code?: string){ if(!code) return undefined; if(periodByCode.has(code)) return periodByCode.get(code)!;
+    const p = await prisma.period.findUnique({ where: { communityId_code: { communityId, code } } }); if(!p) throw new Error(`Period ${code} missing`)
+    const v={id:p.id,seq:p.seq,startDate:p.startDate}; periodByCode.set(code,v); return v;
+  }
+
+  // cash accounts + opening balances
+  if (Array.isArray(plan.accounts)) {
+    for (const a of plan.accounts) {
+      const account = await prisma.cashAccount.upsert({
+        where: { communityId_code: { communityId, code: a.code } },
+        update: {
+          name: a.name,
+          type: a.type as any,
+          currency: a.currency ?? 'RON',
+          status: a.status ?? 'ACTIVE',
+          notes: a.notes ?? null,
+        },
+        create: {
+          communityId,
+          code: a.code,
+          name: a.name,
+          type: a.type as any,
+          currency: a.currency ?? 'RON',
+          status: a.status ?? 'ACTIVE',
+          notes: a.notes ?? null,
+        },
+      })
+      stats.accounts += 1
+
+      const openingBalance = typeof a.openingBalance === 'number' ? a.openingBalance : 0
+      if (openingBalance !== 0) {
+        const openingPeriodCode = a.openingPeriodCode ?? plan.periodCode
+        const p = await getPeriod(openingPeriodCode)
+        if (!p) throw new Error(`Period ${openingPeriodCode} missing for opening balance`)
+        const direction = openingBalance >= 0 ? CashTxDirection.IN : CashTxDirection.OUT
+        const amount = Math.abs(openingBalance)
+        const refType = 'OPENING_BALANCE'
+        const refId = `${account.id}:${openingPeriodCode}`
+        await prisma.cashTx.upsert({
+          where: { communityId_refType_refId_direction: { communityId, refType, refId, direction } },
           update: {
-            name: b.name ?? b.code,
-            programCode: b.programCode ?? null,
-            expenseTypeCodes: b.expenseTypeCodes ?? [],
-            splitGroupCodes: b.splitGroupCodes ?? [],
-            splitNodeIds: b.splitNodeIds ?? [],
-            priority: b.priority ?? 1,
+            accountId: account.id,
+            amount,
+            currency: a.currency ?? 'RON',
+            direction,
+            kind: CashTxKind.ADJUSTMENT,
+            status: CashTxStatus.POSTED,
+            ts: p.startDate,
+            memo: 'Opening balance',
           },
           create: {
             communityId,
-            code: b.code,
-            name: b.name ?? b.code,
-            programCode: b.programCode ?? null,
-            expenseTypeCodes: b.expenseTypeCodes ?? [],
-            splitGroupCodes: b.splitGroupCodes ?? [],
-            splitNodeIds: b.splitNodeIds ?? [],
-            priority: b.priority ?? 1,
+            accountId: account.id,
+            amount,
+            currency: a.currency ?? 'RON',
+            direction,
+            kind: CashTxKind.ADJUSTMENT,
+            status: CashTxStatus.POSTED,
+            ts: p.startDate,
+            refType,
+            refId,
+            memo: 'Opening balance',
           },
         })
+        stats.cashTx += 1
       }
     }
-  }
-
-  // pre-fetch referenced periods by code for membership ranges
-  const periodByCode = new Map<string,{id:string,seq:number}>()
-  async function getPeriod(code?: string){ if(!code) return undefined; if(periodByCode.has(code)) return periodByCode.get(code)!;
-    const p = await prisma.period.findUnique({ where: { communityId_code: { communityId, code } } }); if(!p) throw new Error(`Period ${code} missing`)
-    const v={id:p.id,seq:p.seq}; periodByCode.set(code,v); return v;
   }
 
   // memberships
@@ -331,11 +367,8 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     stats.periodMeasures += 1
   }
 
+  const result = { ok: true, communityId, periodId: period.id, stats }
   // eslint-disable-next-line no-console
-  console.log(JSON.stringify({
-    ok: true,
-    communityId,
-    periodId: period.id,
-    stats
-  }, null, 2))
+  console.log(JSON.stringify(result, null, 2))
+  return result
 }

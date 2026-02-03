@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Req, Get, Param, Delete, UnauthorizedException } from '@nestjs/common'
+import { Body, Controller, Post, UseGuards, Req, Get, Param, Delete, UnauthorizedException, ForbiddenException } from '@nestjs/common'
 import { InviteService } from './invite.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
@@ -7,6 +7,16 @@ import { ScopesGuard } from '../../common/guards/scopes.guard'
 @Controller('invites')
 export class InviteController{
   constructor(private readonly invites:InviteService){}
+
+  private isSystemAdmin(roles: Array<{ role: string; scopeType: string }>) {
+    return roles.some((r) => r.role === 'SYSTEM_ADMIN' && r.scopeType === 'SYSTEM')
+  }
+
+  private isCommunityAdmin(roles: Array<{ role: string; scopeType: string; scopeId?: string | null }>, communityId: string) {
+    return roles.some(
+      (r) => r.role === 'COMMUNITY_ADMIN' && r.scopeType === 'COMMUNITY' && r.scopeId && r.scopeId === communityId,
+    )
+  }
 
   @UseGuards(JwtAuthGuard,ScopesGuard)
   @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
@@ -18,6 +28,23 @@ export class InviteController{
       throw new UnauthorizedException('Missing auth user')
     }
     return this.invites.createInvite(email, role, scopeType, scopeId, inviterId, beRoles)
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('community/:communityId')
+  createCommunityInvite(@Param('communityId') communityId: string, @Body() body: any, @Req() req: any) {
+    const { email, role } = body
+    const inviterId = req?.user?.sub
+    if (!inviterId) throw new UnauthorizedException('Missing auth user')
+    const roles = Array.isArray(req?.user?.roles) ? req.user.roles : []
+    if (!this.isSystemAdmin(roles) && !this.isCommunityAdmin(roles, communityId)) {
+      throw new ForbiddenException('Community admin required')
+    }
+    const normalizedRole = (role || 'COMMUNITY_ADMIN') as any
+    if (normalizedRole !== 'COMMUNITY_ADMIN') {
+      throw new ForbiddenException('Only COMMUNITY_ADMIN invites are supported here')
+    }
+    return this.invites.createInvite(email, 'COMMUNITY_ADMIN', 'COMMUNITY', communityId, inviterId)
   }
 
   @UseGuards(JwtAuthGuard,ScopesGuard)

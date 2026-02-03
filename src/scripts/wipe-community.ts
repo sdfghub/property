@@ -11,38 +11,40 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
   const { keepExternalRefs = false, keepVendors = true, keepInvoices = true } = opts
 
   // Gather ids needed for FK-based deletes
-  const [periods, units, groups, bes, sets, vectors, series, bills, invoices, ledgerEntries, payments] = await Promise.all([
+  const [periods, units, groups, bes, series, bills, invoices, vendorPayments, ledgerEntries, communityLedgerEntries, fundLedgerEntries, payments, charges] = await Promise.all([
     prisma.period.findMany({ where: { communityId }, select: { id: true } }),
     prisma.unit.findMany({ where: { communityId }, select: { id: true } }),
     prisma.unitGroup.findMany({ where: { communityId }, select: { id: true } }),
     prisma.billingEntity.findMany({ where: { communityId }, select: { id: true } }),
-    prisma.expenseTargetSet.findMany({ where: { communityId }, select: { id: true } }),
-    prisma.weightVector.findMany({ where: { communityId }, select: { id: true } }),
     prisma.measureSeries.findMany({ where: { communityId }, select: { id: true } }),
     prisma.bill.findMany({ where: { communityId }, select: { id: true } }),
     prisma.vendorInvoice.findMany({ where: { communityId }, select: { id: true } }),
+    prisma.vendorPayment.findMany({ where: { communityId }, select: { id: true } }),
     prisma.beLedgerEntry.findMany({ where: { communityId }, select: { id: true } }),
+    prisma.communityLedgerEntry.findMany({ where: { communityId }, select: { id: true } }),
+    prisma.fundLedgerEntry.findMany({ where: { communityId }, select: { id: true } }),
     prisma.payment.findMany({ where: { communityId }, select: { id: true } }),
+    prisma.communityCharge.findMany({ where: { communityId }, select: { id: true } }),
   ])
 
   const periodIds = periods.map(x => x.id)
   const unitIds   = units.map(x => x.id)
   const groupIds  = groups.map(x => x.id)
   const beIds     = bes.map(x => x.id)
-  const setIds    = sets.map(x => x.id)
-  const vectorIds = vectors.map(x => x.id)
   const seriesIds = series.map(x => x.id)
   const billIds   = bills.map(x => x.id)
   const invIds    = invoices.map(x => x.id)
   const ledgerEntryIds = ledgerEntries.map(x => x.id)
+  const communityLedgerEntryIds = communityLedgerEntries.map(x => x.id)
+  const fundLedgerEntryIds = fundLedgerEntries.map(x => x.id)
   const paymentIds = payments.map(x => x.id)
+  const vendorPaymentIds = vendorPayments.map(x => x.id)
+  const chargeIds = charges.map(x => x.id)
 
-  const traceRepo = (prisma as any).allocationTrace
   const ops = [
-    traceRepo?.deleteMany ? traceRepo.deleteMany({ where: { communityId } }) : null,
-    prisma.allocationLog.deleteMany({ where: { communityId } }),
-
     // Allocation/billing outputs first
+    prisma.communityChargeLine.deleteMany({ where: { chargeId: { in: chargeIds } } }),
+    prisma.communityCharge.deleteMany({ where: { id: { in: chargeIds } } }),
     prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: ledgerEntryIds } } }),
     prisma.paymentApplication.deleteMany({
       where: {
@@ -53,28 +55,26 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
       },
     }),
     prisma.beLedgerEntry.deleteMany({ where: { id: { in: ledgerEntryIds } } }),
+    prisma.communityLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: communityLedgerEntryIds } } }),
+    prisma.communityLedgerEntry.deleteMany({ where: { id: { in: communityLedgerEntryIds } } }),
+    prisma.fundLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: fundLedgerEntryIds } } }),
+    prisma.fundLedgerEntry.deleteMany({ where: { id: { in: fundLedgerEntryIds } } }),
     prisma.payment.deleteMany({ where: { id: { in: paymentIds } } }),
+    prisma.vendorPaymentApplication?.deleteMany({
+      where: { paymentId: { in: vendorPaymentIds } },
+    }),
+    prisma.vendorPayment.deleteMany({ where: { id: { in: vendorPaymentIds } } }),
     prisma.beStatement.deleteMany({ where: { communityId } }),
     prisma.beOpeningBalance.deleteMany({ where: { communityId } }),
+    prisma.communityStatement.deleteMany({ where: { communityId } }),
+    prisma.communityOpeningBalance.deleteMany({ where: { communityId } }),
     prisma.billLine.deleteMany({ where: { billId: { in: billIds } } }),
     prisma.bill.deleteMany({ where: { id: { in: billIds } } }),
     prisma.invoiceSplit.deleteMany({ where: { invoiceId: { in: invIds } } }),
-    prisma.allocationLine.deleteMany({ where: { communityId } }),
-
-    // Expenses, weights, rules
-    prisma.weightItem.deleteMany({ where: { vectorId: { in: vectorIds } } }),
-    prisma.weightVector.deleteMany({ where: { id: { in: vectorIds } } }),
-    prisma.expenseSplit.deleteMany({ where: { communityId } }),
-    prisma.expense.deleteMany({ where: { communityId } }),
     prisma.expenseType.deleteMany({ where: { communityId } }),
     prisma.allocationRule.deleteMany({ where: { communityId } }),
-    prisma.bucketRule.deleteMany({ where: { communityId } }),
     prisma.splitGroupMember.deleteMany({ where: { splitGroup: { communityId } } }),
     prisma.splitGroup.deleteMany({ where: { communityId } }),
-
-    // Expense target sets
-    prisma.expenseTargetMember.deleteMany({ where: { setId: { in: setIds } } }),
-    prisma.expenseTargetSet.deleteMany({ where: { id: { in: setIds } } }),
 
     // Measures (period snapshots + raw series)
     prisma.periodMeasure.deleteMany({ where: { communityId } }),

@@ -23,8 +23,8 @@ npm run db:flush -- --yes --preserve-users
 echo "🏗️  Importing community ${COMMUNITY_CODE}..."
 npm run import:community -- "$DATA"
 
-echo "📁 Importing programs..."
-npm run import:programs -- "$DATA/programs.json" "$COMMUNITY_CODE"
+echo "📁 Importing funds..."
+npm run import:funds -- "$DATA/funds.json" "$COMMUNITY_CODE"
 
 echo "💰 Importing opening balances..."
 npm run import:opening -- "$DATA/opening-balances.csv"

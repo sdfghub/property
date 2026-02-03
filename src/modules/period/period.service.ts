@@ -4,6 +4,7 @@ import { PrismaService } from '../user/prisma.service'
 import { AllocationService } from '../billing/allocation.service'
 import { PaymentService } from '../billing/payment.service'
 import { ensureLedgerEntryDetail } from '../billing/ledger-detail.util'
+import { ensureFundLedgerEntryDetail } from '../billing/fund-ledger-detail.util'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 type CloseStage = 'CLOSE_PREP' | 'CLOSE_FINAL'
@@ -128,6 +129,7 @@ export class PeriodService {
       // reapply payments against freshly staged charges
       this.log('[PAY] reapplying payments during prepare', { communityId, period: period.id })
       await this.paymentService.reapplyForPeriod(tx, communityId, period.id)
+      await this.computeCommunityStatements(tx, communityId, period.id)
 
       // move to PREPARED
       await tx.period.update({
@@ -143,14 +145,33 @@ export class PeriodService {
     if (period.status !== 'PREPARED') throw new BadRequestException('Period must be PREPARED to approve')
 
     return this.prisma.$transaction(async (tx) => {
+      // cleanup any previous finalize attempts to avoid unique conflicts
+      await tx.beLedgerEntryDetail.deleteMany({
+        where: { ledger: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id } },
+      })
+      await tx.communityLedgerEntryDetail.deleteMany({
+        where: { ledger: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id } },
+      })
+      await tx.beLedgerEntry.deleteMany({
+        where: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id },
+      })
+      await tx.communityLedgerEntry.deleteMany({
+        where: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id },
+      })
+
       // promote ledger rows to FINAL
       await tx.beLedgerEntry.updateMany({
+        where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
+        data: { refType: 'CLOSE_FINAL' },
+      })
+      await tx.communityLedgerEntry.updateMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
         data: { refType: 'CLOSE_FINAL' },
       })
 
       // ensure statements exist/updated (idempotent)
       await this.computeStatements(tx, communityId, period.id)
+      await this.computeCommunityStatements(tx, communityId, period.id)
 
       // roll-forward opening balances to next period
       const next = await this.nextPeriodId(tx, communityId, period.seq)
@@ -175,6 +196,22 @@ export class PeriodService {
               billingEntityId: s.billingEntityId,
               amount: s.dueEnd,
               currency: s.currency,
+            },
+          })
+        }
+        const communityStatement = await tx.communityStatement.findUnique({
+          where: { communityId_periodId: { communityId, periodId: period.id } },
+          select: { currency: true, dueEnd: true },
+        })
+        if (communityStatement) {
+          await tx.communityOpeningBalance.upsert({
+            where: { communityId_periodId: { communityId, periodId: next } },
+            update: { amount: communityStatement.dueEnd, currency: communityStatement.currency },
+            create: {
+              communityId,
+              periodId: next,
+              amount: communityStatement.dueEnd,
+              currency: communityStatement.currency,
             },
           })
         }
@@ -221,24 +258,24 @@ export class PeriodService {
       `
       WITH expected AS (
         SELECT
-          COALESCE(et.code, 'custom') AS expense_type,
-          SUM(e.allocatable_amount)::numeric AS expected
-        FROM expense e
-        JOIN period p ON p.id = e.period_id
-        LEFT JOIN expense_type et ON et.id = e.expense_type_id
-        WHERE e.community_id = $1 AND p.code = $2
-        GROUP BY COALESCE(et.code, 'custom')
+          COALESCE(cc.allocation_snapshot->>'expenseType', 'custom') AS expense_type,
+          SUM(cc.amount)::numeric AS expected
+        FROM community_charge cc
+        WHERE cc.community_id = $1
+          AND cc.period_id = $2
+          AND cc.source_type = 'EXPENSE'
+        GROUP BY COALESCE(cc.allocation_snapshot->>'expenseType', 'custom')
       ),
       allocated AS (
         SELECT
-          COALESCE(et.code, 'custom') AS expense_type,
-          COALESCE(SUM(al.amount), 0)::numeric AS allocated
-        FROM expense e
-        JOIN period p ON p.id = e.period_id
-        LEFT JOIN expense_type et ON et.id = e.expense_type_id
-        LEFT JOIN allocation_line al ON al.expense_id = e.id
-        WHERE e.community_id = $1 AND p.code = $2
-        GROUP BY COALESCE(et.code, 'custom')
+          COALESCE(ccl.meta->>'expenseType', 'custom') AS expense_type,
+          COALESCE(SUM(ccl.amount), 0)::numeric AS allocated
+        FROM community_charge_line ccl
+        JOIN community_charge cc ON cc.id = ccl.charge_id
+        WHERE ccl.community_id = $1
+          AND ccl.period_id = $2
+          AND cc.source_type = 'EXPENSE'
+        GROUP BY COALESCE(ccl.meta->>'expenseType', 'custom')
       )
       SELECT
         COALESCE(expected.expense_type, allocated.expense_type) AS expense_type,
@@ -250,23 +287,23 @@ export class PeriodService {
       ORDER BY expense_type;
     `,
       communityId,
-      periodCode,
+      period.id,
     )
 
-    const beBuckets = await this.prisma.$queryRawUnsafe(
+    const beFundTotals = await this.prisma.$queryRawUnsafe(
       `
       SELECT be.code AS "beCode",
              be.id   AS "beId",
              be.name AS "beName",
              be."order" AS "beOrder",
-             le.bucket,
+             le.fund_id AS "fundId",
              SUM(le.amount)::numeric AS amount
       FROM be_ledger_entry le
       JOIN billing_entity be ON be.id = le.billing_entity_id
       WHERE le.community_id = $1 AND le.period_id = $2
         AND le.ref_type IN ($3, $4)
-      GROUP BY be.id, be.code, be.name, be.order, le.bucket
-      ORDER BY be.order ASC, be.code ASC, le.bucket ASC;
+      GROUP BY be.id, be.code, be.name, be.order, le.fund_id
+      ORDER BY be.order ASC, be.code ASC, le.fund_id ASC;
       `,
       communityId,
       period.id,
@@ -278,7 +315,7 @@ export class PeriodService {
       period,
       statements,
       allocations,
-      beBuckets,
+      beFundTotals,
     }
   }
 
@@ -292,6 +329,17 @@ export class PeriodService {
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
       })
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
+      const communityEntries = await tx.communityLedgerEntry.findMany({
+        where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
+        select: { id: true },
+      })
+      if (communityEntries.length) {
+        await tx.communityLedgerEntryDetail.deleteMany({
+          where: { ledgerEntryId: { in: communityEntries.map((e) => e.id) } },
+        })
+        await tx.communityLedgerEntry.deleteMany({ where: { id: { in: communityEntries.map((e) => e.id) } } })
+      }
+      await tx.communityStatement.deleteMany({ where: { communityId, periodId: period.id } })
 
       // back to OPEN
       await tx.period.update({
@@ -339,6 +387,17 @@ export class PeriodService {
         })
       }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
+      const communityEntries = await tx.communityLedgerEntry.findMany({
+        where: { communityId, periodId: period.id, refType: refTypeToClean, refId: period.id },
+        select: { id: true },
+      })
+      if (communityEntries.length) {
+        await tx.communityLedgerEntryDetail.deleteMany({
+          where: { ledgerEntryId: { in: communityEntries.map((e) => e.id) } },
+        })
+        await tx.communityLedgerEntry.deleteMany({ where: { id: { in: communityEntries.map((e) => e.id) } } })
+      }
+      await tx.communityStatement.deleteMany({ where: { communityId, periodId: period.id } })
 
       // NOTE: we do NOT delete opening balances in the next period that were explicitly imported.
       // On next approve, roll-forward upsert will overwrite system-produced openings anyway.
@@ -387,19 +446,11 @@ export class PeriodService {
   }
 
   private async recomputeAllocations(communityId: string, period: { id: string; seq: number; code: string }) {
-    // Idempotent: allocationService.createExpense clears prior allocations for the same expenseType/period
-    const expenses = await this.prisma.expense.findMany({
-      where: { communityId, periodId: period.id, expenseTypeId: { not: null } },
-      select: { id: true, description: true, allocatableAmount: true, currency: true, expenseTypeId: true },
+    const charges = await this.prisma.communityCharge.findMany({
+      where: { communityId, periodId: period.id, sourceType: 'EXPENSE' },
+      select: { id: true },
     })
-    for (const exp of expenses) {
-      await this.allocationService.createExpense(communityId, period, {
-        description: exp.description,
-        amount: Number(exp.allocatableAmount),
-        currency: exp.currency || 'RON',
-        expenseTypeId: exp.expenseTypeId ?? undefined,
-      })
-    }
+    if (charges.length) return
   }
 
   private async postChargesForStage(
@@ -409,7 +460,11 @@ export class PeriodService {
     stage: CloseStage,
   ) {
     const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true } })
-    const rules = await tx.bucketRule.findMany({ where: { communityId }, orderBy: { priority: 'asc' } })
+    const existingCharges = await tx.communityCharge.findMany({
+      where: { communityId, periodId, status: 'ACTIVE' },
+      include: { lines: true },
+    })
+    const hasChargeLines = existingCharges.some((c) => c.lines.length)
     const splitGroups = await tx.splitGroupMember.findMany({
       where: { splitGroup: { communityId } },
       select: { splitNodeId: true, splitGroupId: true, splitGroup: { select: { code: true } } },
@@ -422,58 +477,35 @@ export class PeriodService {
       groupByNode.set(g.splitNodeId, arr)
     })
 
-    const allocations: Array<{ beId: string; unitId: string; amount: number; expenseType?: string | null; splitNodeId?: string | null }> =
-      await tx.$queryRawUnsafe(
-        `
-        SELECT bem.billing_entity_id AS "beId",
-               al.unit_id             AS "unitId",
-               al.amount::numeric     AS amount,
-               et.code                AS "expenseType",
-               al.split_node_id       AS "splitNodeId"
-        FROM allocation_line al
-        JOIN billing_entity_member bem ON bem.unit_id = al.unit_id
-        JOIN period p ON p.id = al.period_id
-        LEFT JOIN expense e ON e.id = al.expense_id
-        LEFT JOIN expense_type et ON et.id = e.expense_type_id
-        WHERE al.community_id = $1 AND al.period_id = $2
-          AND bem.start_seq <= p.seq AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-        `,
-        communityId,
-        periodId,
-      )
+    const beFundTotals = new Map<string, Map<string, number>>() // beId -> fundId -> amount
+    const detailMap = new Map<string, Map<string, { amount: number; meta?: any }>>() // beId::fundId -> unitId -> detail
+    const fundTotals = new Map<string, number>() // fundId -> amount
 
-    const bucketed = new Map<string, Map<string, number>>() // beId -> bucket -> amount
-    const detailMap = new Map<string, Map<string, { amount: number; meta?: any }>>() // beId::bucket -> unitId -> detail
-    const resolveBucket = (expType?: string | null, splitNodeId?: string | null): string => {
-      const groupCodes = splitNodeId ? groupByNode.get(splitNodeId) ?? [] : []
-      for (const r of rules) {
-        if (r.programCode) continue
-        if (r.expenseTypeCodes && expType && (r.expenseTypeCodes as any[]).includes(expType)) return r.code
-        if (r.splitNodeIds && splitNodeId && (r.splitNodeIds as any[]).includes(splitNodeId)) return r.code
-        if (r.splitGroupCodes && groupCodes.length) {
-          const set = new Set(r.splitGroupCodes as any[])
-          if (groupCodes.some((c) => set.has(c))) return r.code
+    if (hasChargeLines) {
+      for (const charge of existingCharges) {
+        const fundId = charge.fundId
+        for (const line of charge.lines) {
+          const byFund = beFundTotals.get(line.billingEntityId) ?? new Map<string, number>()
+          byFund.set(fundId, (byFund.get(fundId) ?? 0) + Number(line.amount))
+          beFundTotals.set(line.billingEntityId, byFund)
+
+          const dk = `${line.billingEntityId}::${fundId}`
+          const byUnit = detailMap.get(dk) ?? new Map<string, { amount: number; meta?: any }>()
+          const entry = byUnit.get(line.unitId) ?? { amount: 0, meta: line.meta }
+          entry.amount += Number(line.amount)
+          byUnit.set(line.unitId, entry)
+          detailMap.set(dk, byUnit)
+
+          if (charge.fundId) {
+            fundTotals.set(charge.fundId, (fundTotals.get(charge.fundId) ?? 0) + Number(line.amount))
+          }
         }
       }
-      return 'ALLOCATED_EXPENSE'
     }
 
-    for (const a of allocations) {
-      const bucket = resolveBucket(a.expenseType, a.splitNodeId ?? undefined)
-      const byBucket = bucketed.get(a.beId) ?? new Map<string, number>()
-      byBucket.set(bucket, (byBucket.get(bucket) ?? 0) + Number(a.amount))
-      bucketed.set(a.beId, byBucket)
-      const dk = `${a.beId}::${bucket}`
-      const byUnit = detailMap.get(dk) ?? new Map<string, { amount: number; meta?: any }>()
-      const entry = byUnit.get(a.unitId) ?? { amount: 0, meta: { source: 'ALLOC', expenseType: a.expenseType, splitNodeId: a.splitNodeId } }
-      entry.amount += Number(a.amount)
-      byUnit.set(a.unitId, entry)
-      detailMap.set(dk, byUnit)
-    }
-
-    // Program contributions (per-period target split by rule)
-    const programs = await tx.program.findMany({ where: { communityId } })
-    if (programs.length) {
+    // Fund contributions (per-period target split by rule)
+    const funds = await tx.fund.findMany({ where: { communityId } })
+    if (funds.length) {
       const periodSeq = period?.seq ?? 0
       const periodSeqByCode = new Map<string, number>()
       const seedPeriods = await tx.period.findMany({
@@ -503,7 +535,7 @@ export class PeriodService {
         map.set(m.scopeId, Number(m.value))
         measureByType.set(m.typeCode, map)
       }
-      for (const proj of programs) {
+      for (const proj of funds) {
         if (!proj.startPeriodCode) continue
         const startSeq = periodSeqByCode.get(proj.startPeriodCode)
         if (startSeq === undefined) continue
@@ -569,53 +601,128 @@ export class PeriodService {
         }
         const totalWeight = Array.from(weights.values()).reduce((s, v) => s + v, 0)
         if (totalWeight <= 0) continue
-        const bucketCode = proj.defaultBucket ?? `PROGRAM:${proj.code}`
+        const fundId = proj.id
+        const fundLines: Array<{ unitId: string; beId: string; amount: number; meta?: any }> = []
+        let fundTotal = 0
         eligibleUnits.forEach((u) => {
           const beId = unitBe.get(u.id)
           if (!beId) return
           const w = weights.get(u.id) ?? 0
           const share = w / totalWeight
           const amt = amount * share
-          const beBuckets = bucketed.get(beId) ?? new Map<string, number>()
-          beBuckets.set(bucketCode, (beBuckets.get(bucketCode) ?? 0) + amt)
-          bucketed.set(beId, beBuckets)
-          const dk = `${beId}::${bucketCode}`
+          fundTotal += amt
+          fundLines.push({
+            unitId: u.id,
+            beId,
+            amount: amt,
+            meta: { source: 'FUND', fundCode: proj.code },
+          })
+          const beTotals = beFundTotals.get(beId) ?? new Map<string, number>()
+          beTotals.set(fundId, (beTotals.get(fundId) ?? 0) + amt)
+          beFundTotals.set(beId, beTotals)
+          fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + amt)
+          const dk = `${beId}::${fundId}`
           const byUnit = detailMap.get(dk) ?? new Map<string, { amount: number; meta?: any }>()
-          const entry = byUnit.get(u.id) ?? { amount: 0, meta: { source: 'PROGRAM', programCode: proj.code } }
+          const entry = byUnit.get(u.id) ?? { amount: 0, meta: { source: 'FUND', fundCode: proj.code } }
           entry.amount += amt
           byUnit.set(u.id, entry)
           detailMap.set(dk, byUnit)
         })
+        if (fundLines.length) {
+          const fundCharge = await tx.communityCharge.upsert({
+            where: {
+              communityId_periodId_sourceType_sourceId_sourceKey_fundId: {
+                communityId,
+                periodId,
+                sourceType: 'FUND',
+                sourceId: proj.id,
+                sourceKey: `offset:${offset}`,
+                fundId,
+              },
+            },
+            update: {
+              amount: fundTotal,
+              currency: proj.currency || 'RON',
+              allocationStrategy: method,
+              allocationSnapshot: {
+                method,
+                basis,
+                periodSeq,
+                offset,
+                amount: fundTotal,
+              },
+              status: 'ACTIVE',
+              fundId: proj.id,
+              meta: { source: 'FUND', fundCode: proj.code, offset },
+            },
+            create: {
+              communityId,
+              periodId,
+              fundId: proj.id,
+              sourceType: 'FUND',
+              sourceId: proj.id,
+              sourceKey: `offset:${offset}`,
+              amount: fundTotal,
+              currency: proj.currency || 'RON',
+              allocationStrategy: method,
+              allocationSnapshot: {
+                method,
+                basis,
+                periodSeq,
+                offset,
+                amount: fundTotal,
+              },
+              status: 'ACTIVE',
+              meta: { source: 'FUND', fundCode: proj.code, offset },
+            },
+          })
+          await tx.communityChargeLine.deleteMany({ where: { chargeId: fundCharge.id } })
+          await tx.communityChargeLine.createMany({
+            data: fundLines.map((line) => ({
+              chargeId: fundCharge.id,
+              communityId,
+              periodId,
+              billingEntityId: line.beId,
+              unitId: line.unitId,
+              amount: line.amount,
+              meta: line.meta,
+            })),
+            skipDuplicates: true,
+          })
+        }
       }
     }
 
-    for (const [beId, buckets] of bucketed.entries()) {
-      for (const [bucket, amt] of buckets.entries()) {
+    const communityFundTotals = new Map<string, number>()
+    for (const [beId, fundIds] of beFundTotals.entries()) {
+      for (const [fundId, amt] of fundIds.entries()) {
+        communityFundTotals.set(fundId, (communityFundTotals.get(fundId) ?? 0) + amt)
         const le = await tx.beLedgerEntry.upsert({
           where: {
-            communityId_periodId_billingEntityId_refType_refId_bucket: {
+            communityId_periodId_billingEntityId_refType_refId_fundId: {
               communityId,
               periodId,
               billingEntityId: beId,
               refType: stage,
               refId: periodId,
-              bucket,
+              fundId,
             },
           },
-          update: { amount: amt, bucket },
+          update: { amount: amt, fundId },
           create: {
             communityId,
             periodId,
             billingEntityId: beId,
             kind: 'CHARGE',
+            lane: 'ACCRUAL',
             amount: amt,
             currency: 'RON',
             refType: stage,
             refId: periodId,
-            bucket,
+            fundId,
           },
         })
-        const dk = `${beId}::${bucket}`
+        const dk = `${beId}::${fundId}`
         const byUnit = detailMap.get(dk)
         if (byUnit && byUnit.size) {
           await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: le.id } })
@@ -626,7 +733,7 @@ export class PeriodService {
               periodId: le.periodId,
               billingEntityId: le.billingEntityId,
               kind: le.kind,
-              bucket: le.bucket,
+              fundId: le.fundId,
               currency: le.currency,
               refType: le.refType,
               refId: le.refId,
@@ -640,10 +747,85 @@ export class PeriodService {
           await ensureLedgerEntryDetail(tx, le, amt, {
             synthetic: true,
             reason: 'no-unit',
-            bucket,
+            fundId,
           })
         }
       }
+    }
+
+    for (const [fundId, amt] of communityFundTotals.entries()) {
+      const cle = await tx.communityLedgerEntry.upsert({
+        where: {
+          communityId_periodId_refType_refId_fundId_kind: {
+            communityId,
+            periodId,
+            refType: stage,
+            refId: periodId,
+            fundId,
+            kind: 'REVENUE',
+          },
+        },
+        update: { amount: amt, fundId },
+        create: {
+          communityId,
+          periodId,
+          kind: 'REVENUE',
+          lane: 'ACCRUAL',
+          amount: amt,
+          currency: 'RON',
+          refType: stage,
+          refId: periodId,
+          fundId,
+        },
+      })
+      await tx.communityLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: cle.id } })
+      await tx.communityLedgerEntryDetail.create({
+        data: {
+          ledgerEntryId: cle.id,
+          communityId: cle.communityId,
+          periodId: cle.periodId,
+          kind: cle.kind,
+          fundId: cle.fundId,
+          currency: cle.currency,
+          refType: cle.refType,
+          refId: cle.refId,
+          amount: amt,
+          meta: { synthetic: true, reason: 'fundId-total' },
+        },
+      })
+    }
+
+    for (const [fundId, amt] of fundTotals.entries()) {
+      const ple = await tx.fundLedgerEntry.upsert({
+        where: {
+          communityId_fundId_periodId_refType_refId_kind: {
+            communityId,
+            fundId,
+            periodId,
+            refType: stage,
+            refId: periodId,
+            kind: 'REVENUE',
+          },
+        },
+        update: { amount: amt, fundId },
+        create: {
+          communityId,
+          fundId,
+          periodId,
+          kind: 'REVENUE',
+          lane: 'ACCRUAL',
+          amount: amt,
+          currency: 'RON',
+          refType: stage,
+          refId: periodId,
+        },
+      })
+      await tx.fundLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: ple.id } })
+      await ensureFundLedgerEntryDetail(tx, ple, amt, {
+        synthetic: true,
+        reason: 'fund-total',
+        fundId,
+      })
     }
   }
 
@@ -691,15 +873,15 @@ export class PeriodService {
       const [chargesAgg, paymentsAgg, adjustmentsAgg] = await Promise.all([
         tx.beLedgerEntry.aggregate({
           _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'CHARGE' },
+          where: { communityId, periodId, billingEntityId: be.id, kind: 'CHARGE', lane: 'ACCRUAL' },
         }),
         tx.beLedgerEntry.aggregate({
           _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'PAYMENT' },
+          where: { communityId, periodId, billingEntityId: be.id, kind: 'PAYMENT', lane: 'CASH' },
         }),
         tx.beLedgerEntry.aggregate({
           _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'ADJUSTMENT' },
+          where: { communityId, periodId, billingEntityId: be.id, kind: 'ADJUSTMENT', lane: 'ACCRUAL' },
         }),
       ])
 
@@ -742,6 +924,73 @@ export class PeriodService {
     }
   }
 
+  private async computeCommunityStatements(tx: TxOrClient, communityId: string, periodId: string) {
+    const period = await tx.period.findUnique({
+      where: { id: periodId },
+      select: { seq: true },
+    })
+    const previousPeriod = await tx.period.findFirst({
+      where: { communityId, seq: { lt: period?.seq ?? 0 } },
+      orderBy: { seq: 'desc' },
+      select: { id: true },
+    })
+    const previousStatement = previousPeriod
+      ? await tx.communityStatement.findUnique({
+          where: { communityId_periodId: { communityId, periodId: previousPeriod.id } },
+          select: { dueEnd: true, currency: true },
+        })
+      : null
+    const opening = await tx.communityOpeningBalance.findUnique({
+      where: { communityId_periodId: { communityId, periodId } },
+      select: { amount: true, currency: true },
+    })
+
+    const [chargesAgg, paymentsAgg, adjustmentsAgg] = await Promise.all([
+      tx.communityLedgerEntry.aggregate({
+        _sum: { amount: true },
+        where: { communityId, periodId, kind: 'REVENUE', lane: 'ACCRUAL' },
+      }),
+      tx.communityLedgerEntry.aggregate({
+        _sum: { amount: true },
+        where: { communityId, periodId, kind: 'PAYMENT', lane: 'CASH' },
+      }),
+      tx.communityLedgerEntry.aggregate({
+        _sum: { amount: true },
+        where: { communityId, periodId, kind: { in: ['ADJUSTMENT', 'FUND_SPEND'] }, lane: 'ACCRUAL' },
+      }),
+    ])
+
+    const dueStart = Number(previousStatement?.dueEnd ?? opening?.amount ?? 0)
+    const charges = Number(chargesAgg._sum.amount ?? 0)
+    const payments = Number(paymentsAgg._sum.amount ?? 0)
+    const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
+    const dueEnd = dueStart + charges - payments + adjustments
+
+    await this.recomputeCommunityRunningDue(tx, communityId, periodId, dueStart)
+
+    await tx.communityStatement.upsert({
+      where: { communityId_periodId: { communityId, periodId } },
+      update: {
+        dueStart,
+        charges,
+        payments,
+        adjustments,
+        dueEnd,
+        currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
+      },
+      create: {
+        communityId,
+        periodId,
+        dueStart,
+        charges,
+        payments,
+        adjustments,
+        dueEnd,
+        currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
+      },
+    })
+  }
+
   private async recomputeRunningDue(
     tx: TxOrClient,
     communityId: string,
@@ -760,6 +1009,29 @@ export class PeriodService {
       const delta = entry.kind === 'PAYMENT' ? -Number(entry.amount) : Number(entry.amount)
       running += delta
       await tx.beLedgerEntry.update({
+        where: { id: entry.id },
+        data: { runningDue: running },
+      })
+    }
+  }
+
+  private async recomputeCommunityRunningDue(
+    tx: TxOrClient,
+    communityId: string,
+    periodId: string,
+    openingDue: number,
+  ) {
+    const entries = await tx.communityLedgerEntry.findMany({
+      where: { communityId, periodId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, amount: true, kind: true },
+    })
+
+    let running = openingDue
+    for (const entry of entries) {
+      const delta = entry.kind === 'PAYMENT' ? -Number(entry.amount) : Number(entry.amount)
+      running += delta
+      await tx.communityLedgerEntry.update({
         where: { id: entry.id },
         data: { runningDue: running },
       })

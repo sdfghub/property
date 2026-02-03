@@ -12,13 +12,10 @@
     "allocate": "ts-node --transpile-only src/cli/allocate.ts",
     "serve": "node dist/server.js",
     "prestart": "prisma generate && prisma migrate deploy",
-    "import": "ts-node --transpile-only scripts/import-community.ts",
     "start": "node dist/server.js",
     "import:community": "ts-node --transpile-only src/scripts/import-community.ts",
     "import:bill-templates": "ts-node --transpile-only src/scripts/import-bill-templates.ts",
-    "import:expense": "ts-node --transpile-only src/scripts/import-expense.ts",
-    "import:programs": "ts-node --transpile-only src/scripts/import-programs.ts",
-    "add:expense": "ts-node src/scripts/add-expense.ts",
+    "import:funds": "ts-node --transpile-only src/scripts/import-funds.ts",
     "import:meters": "ts-node --transpile-only src/scripts/import-meters.ts",
     "import:meter-templates": "ts-node --transpile-only src/scripts/import-meter-templates.ts",
     "db:flush": "ts-node --transpile-only src/scripts/flush-db.ts",
@@ -30,7 +27,9 @@
     "wipe:community": "ts-node --transpile-only src/scripts/wipe-community.ts",
     "make:system-admin": "ts-node --transpile-only src/scripts/make-system-admin.ts",
     "reset:user-password": "ts-node --transpile-only src/scripts/reset-user-password.ts",
-    "backfill:ledger-details": "ts-node --transpile-only src/scripts/backfill-ledger-details.ts"
+    "backfill:ledger-details": "ts-node --transpile-only src/scripts/backfill-ledger-details.ts",
+    "api:smoke": "ts-node --transpile-only src/scripts/api-smoke-test.ts",
+    "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

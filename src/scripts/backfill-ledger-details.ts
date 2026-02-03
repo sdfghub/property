@@ -7,7 +7,7 @@ async function main() {
     id: string
     amount: any
     kind: string
-    bucket: string
+    fund_id: string | null
     community_id: string
     period_id: string
     billing_entity_id: string
@@ -19,7 +19,7 @@ async function main() {
     SELECT le.id,
            le.amount,
            le.kind,
-           le.bucket,
+           le.fund_id,
            le.community_id,
            le.period_id,
            le.billing_entity_id,
@@ -43,12 +43,12 @@ async function main() {
     periodId: r.period_id,
     billingEntityId: r.billing_entity_id,
     kind: r.kind,
-    bucket: r.bucket,
+    fundId: r.fund_id,
     currency: r.currency || 'RON',
     refType: r.ref_type,
     refId: r.ref_id,
     amount: r.amount,
-    meta: { synthetic: true, reason: 'backfill', kind: r.kind, bucket: r.bucket },
+    meta: { synthetic: true, reason: 'backfill', kind: r.kind, fundId: r.fund_id },
   }))
 
   const chunkSize = 500

@@ -4,8 +4,14 @@
     "name": "Factura apa",
     "template": {
       "title": "Apa",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Apa" }
+      },
       "items": [
-        { "key": "water", "label": "Cost apa", "kind": "expense", "expenseTypeCode": "WATER" }
+        { "key": "water", "label": "Cost apa", "kind": "charge", "expenseTypeCode": "WATER" }
       ]
     },
     "order": 1
@@ -15,8 +21,14 @@
     "name": "Factura gaz",
     "template": {
       "title": "Gaz",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Gaz" }
+      },
       "items": [
-        { "key": "gas", "label": "Cost gaz", "kind": "expense", "expenseTypeCode": "GAS" }
+        { "key": "gas", "label": "Cost gaz", "kind": "charge", "expenseTypeCode": "GAS" }
       ]
     },
     "order": 2

@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { ChargeSourceType, SeriesOrigin, SeriesScope } from '@prisma/client'
 type UploadedFile = { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }
 import { PrismaService } from '../user/prisma.service'
+import { AllocationService } from './allocation.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 type TemplateKind = 'BILL' | 'METER'
@@ -10,7 +12,7 @@ type BillTemplateDto = {
   order?: number
   startPeriodCode?: string | null
   endPeriodCode?: string | null
-  template: { title?: string; items?: any[] }
+  template: { title?: string; items?: any[]; output?: any }
 }
 type MeterTemplateDto = {
   code: string
@@ -23,7 +25,10 @@ type MeterTemplateDto = {
 
 @Injectable()
 export class TemplateService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly allocator: AllocationService,
+  ) {}
 
   private async ensureCommunityId(ref: string) {
     const c = await this.prisma.community.findFirst({ where: { OR: [{ id: ref }, { code: ref }] }, select: { id: true } })
@@ -160,6 +165,70 @@ export class TemplateService {
     return { count: templates.length, codes: templates.map((t) => t.code) }
   }
 
+  async upsertBillTemplate(communityRef: string, roles: RoleAssignment[], body: any) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const [tpl] = this.normalizeBillTemplates([body])
+    this.ensureTemplateCodes([tpl], 'bill')
+    if (!tpl.template || typeof tpl.template !== 'object') {
+      throw new ForbiddenException(`Bill template ${tpl.code} must include a template object`)
+    }
+    const repo: any = (this.prisma as any).billTemplate
+    if (!repo) throw new NotFoundException('Bill templates not supported')
+    const saved = await repo.upsert({
+      where: { communityId_code: { communityId, code: tpl.code } },
+      update: {
+        name: tpl.name,
+        order: tpl.order ?? null,
+        startPeriodCode: tpl.startPeriodCode ?? null,
+        endPeriodCode: tpl.endPeriodCode ?? null,
+        template: tpl.template,
+      },
+      create: {
+        communityId,
+        code: tpl.code,
+        name: tpl.name,
+        order: tpl.order ?? null,
+        startPeriodCode: tpl.startPeriodCode ?? null,
+        endPeriodCode: tpl.endPeriodCode ?? null,
+        template: tpl.template,
+      },
+    })
+    return { ok: true, template: saved }
+  }
+
+  async upsertMeterTemplate(communityRef: string, roles: RoleAssignment[], body: any) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const [tpl] = this.normalizeMeterTemplates([body])
+    this.ensureTemplateCodes([tpl], 'meter')
+    if (!tpl.template || typeof tpl.template !== 'object') {
+      throw new ForbiddenException(`Meter template ${tpl.code} must include a template object`)
+    }
+    const repo: any = (this.prisma as any).meterEntryTemplate
+    if (!repo) throw new NotFoundException('Meter templates not supported')
+    const saved = await repo.upsert({
+      where: { communityId_code: { communityId, code: tpl.code } },
+      update: {
+        name: tpl.name,
+        order: tpl.order ?? null,
+        startPeriodCode: tpl.startPeriodCode ?? null,
+        endPeriodCode: tpl.endPeriodCode ?? null,
+        template: tpl.template,
+      },
+      create: {
+        communityId,
+        code: tpl.code,
+        name: tpl.name,
+        order: tpl.order ?? null,
+        startPeriodCode: tpl.startPeriodCode ?? null,
+        endPeriodCode: tpl.endPeriodCode ?? null,
+        template: tpl.template,
+      },
+    })
+    return { ok: true, template: saved }
+  }
+
   // ----- Bill templates -----
   async listBillTemplates(communityRef: string, periodCode: string, roles: RoleAssignment[]) {
     const communityId = await this.ensureCommunityId(communityRef)
@@ -187,14 +256,52 @@ export class TemplateService {
           where: { communityId, periodId: period?.id, templateId: { in: templates.map((t: any) => t.id) } },
         })
       : []
-    const expenseRepo: any = (this.prisma as any).expense
+    const chargeRepo: any = (this.prisma as any).communityCharge
     const pmRepo: any = (this.prisma as any).periodMeasure
-    const expenses = expenseRepo
-      ? await expenseRepo.findMany({
-          where: { communityId, periodId: period?.id },
-          select: { allocatableAmount: true, expenseType: { select: { code: true } }, description: true },
+    const invoiceRepo: any = (this.prisma as any).vendorInvoice
+    const instIds = instances.map((i: any) => i.id)
+    const invoices = invoiceRepo && instIds.length
+      ? await invoiceRepo.findMany({
+          where: { communityId, templateInstanceId: { in: instIds } },
+          select: { id: true, templateInstanceId: true },
         })
       : []
+    const invoiceByInstanceId = new Map<string, string>()
+    for (const inv of invoices) {
+      if (inv.templateInstanceId) invoiceByInstanceId.set(inv.templateInstanceId, inv.id)
+    }
+    const sourcePairs = instances.map((inst: any) => {
+      const invoiceId = invoiceByInstanceId.get(inst.id)
+      if (invoiceId) return { sourceType: 'VENDOR_INVOICE', sourceId: invoiceId }
+      return { sourceType: 'TEMPLATE', sourceId: inst.id }
+    })
+    const templateCharges = chargeRepo && sourcePairs.length
+      ? await chargeRepo.findMany({
+          where: {
+            communityId,
+            periodId: period?.id,
+            OR: sourcePairs.map((s) => ({ sourceType: s.sourceType, sourceId: s.sourceId })),
+          },
+          select: { amount: true, sourceType: true, sourceId: true, sourceKey: true },
+        })
+      : []
+    const chargeTotals = new Map<string, number>()
+    for (const charge of templateCharges) {
+      const key = `${charge.sourceType}:${charge.sourceId}:${charge.sourceKey ?? 'default'}`
+      chargeTotals.set(key, (chargeTotals.get(key) ?? 0) + Number(charge.amount))
+    }
+    const expenseCharges = chargeRepo
+      ? await chargeRepo.findMany({
+          where: { communityId, periodId: period?.id, sourceType: 'EXPENSE' },
+          select: { amount: true, allocationSnapshot: true },
+        })
+      : []
+    const expenseTotals = new Map<string, number>()
+    for (const charge of expenseCharges) {
+      const expType = (charge.allocationSnapshot as any)?.expenseType
+      if (!expType) continue
+      expenseTotals.set(expType, (expenseTotals.get(expType) ?? 0) + Number(charge.amount))
+    }
     const meters = pmRepo
       ? await pmRepo.findMany({
           where: { communityId, periodId: period?.id, scopeType: 'COMMUNITY' },
@@ -204,17 +311,26 @@ export class TemplateService {
     return templates.map((tpl: any) => {
       const body: any = tpl.template
       const items: any[] = Array.isArray(body?.items) ? body.items : []
-      const values: Record<string, any> = {}
+      const inst = instances.find((i: any) => i.templateId === tpl.id)
+      const values: Record<string, any> = { ...(inst?.values ?? {}) }
       items.forEach((it) => {
-        if (it.kind === 'expense') {
-          const e = expenses.find((ex: any) => ex.expenseType?.code === it.expenseTypeCode)
-          if (e?.allocatableAmount != null) values[it.key] = Number(e.allocatableAmount)
+        if (it.kind === 'charge') {
+          const invoiceId = inst ? invoiceByInstanceId.get(inst.id) : null
+          const sourceType = invoiceId ? 'VENDOR_INVOICE' : 'TEMPLATE'
+          const sourceId = invoiceId ?? inst?.id
+          if (sourceId) {
+            const key = `${sourceType}:${sourceId}:${it.key ?? 'default'}`
+            const total = chargeTotals.get(key)
+            if (total != null && values[it.key] == null) values[it.key] = total
+          }
+        } else if (it.kind === 'expense') {
+          const total = expenseTotals.get(it.expenseTypeCode)
+          if (total != null) values[it.key] = total
         } else if (it.kind === 'meter') {
           const m = meters.find((mx: any) => mx.meterId === it.meterId)
           if (m?.value != null) values[it.key] = Number(m.value)
         }
       })
-      const inst = instances.find((i: any) => i.templateId === tpl.id)
       return { ...tpl, state: inst?.state ?? 'NEW', template: { ...body, items, values } }
     })
   }
@@ -231,7 +347,10 @@ export class TemplateService {
     const period = await this.prisma.period.findUnique({ where: { communityId_code: { communityId, code: periodCode } } })
     if (!period) throw new NotFoundException('Period not found')
     const repo: any = (this.prisma as any).billTemplate
-    const tpl = await repo.findUnique({ where: { communityId_code: { communityId, code: templateCode } }, select: { id: true } })
+    const tpl = await repo.findUnique({
+      where: { communityId_code: { communityId, code: templateCode } },
+      select: { id: true, code: true, name: true, template: true },
+    })
     if (!tpl) throw new NotFoundException('Bill template not found')
     const instRepo: any = (this.prisma as any).billTemplateInstance
     if (!instRepo) throw new NotFoundException('Bill template instances not supported')
@@ -242,12 +361,167 @@ export class TemplateService {
       create: { communityId, periodId: period.id, templateId: tpl.id, state: nextState, values: payload.values ?? null },
     })
 
+    if (nextState === 'SUBMITTED') {
+      await this.applyBillTemplateSubmission(communityId, period.id, periodCode, tpl as any, res as any, (res as any)?.values ?? {})
+    }
+
     // Reopening any template moves the period back to OPEN (idempotent)
     await this.prisma.period.update({
       where: { id: period.id },
       data: { status: 'OPEN', preparedAt: null, closedAt: null },
     })
     return res
+  }
+
+  private async applyBillTemplateSubmission(
+    communityId: string,
+    periodId: string,
+    periodCode: string,
+    template: { id: string; code: string; name: string; template: any },
+    instance: { id: string; values?: any },
+    values: Record<string, any>,
+  ) {
+    const body: any = template.template || {}
+    const items: any[] = Array.isArray(body?.items) ? body.items : []
+    const output: any = body?.output || {}
+    const mode = (output?.mode || 'CHARGES_ONLY') as string
+    const vendorCfg: any = output?.vendor || {}
+    const invoiceCfg: any = output?.invoice || {}
+
+    const valueFor = (key?: string | null) => (key ? (values as any)?.[key] : undefined)
+
+    const chargeItems = items.filter((it) => it.kind === 'charge' || it.kind === 'expense')
+    const totalAmount = chargeItems.reduce((sum, it) => {
+      const key = it.amountKey || it.key
+      const val = Number(valueFor(key))
+      return Number.isFinite(val) ? sum + val : sum
+    }, 0)
+
+    let sourceType: ChargeSourceType = ChargeSourceType.TEMPLATE
+    let sourceId = instance.id
+
+    if (mode === 'VENDOR_INVOICE') {
+      const vendorId = await this.resolveVendorId(communityId, vendorCfg, values)
+      const issueDateVal = valueFor(invoiceCfg.issueDateKey) ?? invoiceCfg.issueDate ?? null
+      const issueDate = issueDateVal ? new Date(issueDateVal) : null
+      const serviceStartPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceStartPeriodKey))
+      const serviceEndPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceEndPeriodKey))
+      const currency = valueFor(invoiceCfg.currencyKey) ?? invoiceCfg.currency ?? output.currency ?? 'RON'
+      const net = valueFor(invoiceCfg.netKey) ?? invoiceCfg.net ?? null
+      const vat = valueFor(invoiceCfg.vatKey) ?? invoiceCfg.vat ?? null
+      const gross = valueFor(invoiceCfg.grossKey) ?? invoiceCfg.gross ?? totalAmount ?? null
+      const invoice = await this.prisma.vendorInvoice.upsert({
+        where: { templateInstanceId: instance.id },
+        update: {
+          vendorId,
+          number: valueFor(invoiceCfg.numberKey) ?? invoiceCfg.number ?? null,
+          issueDate,
+          serviceStartPeriodId,
+          serviceEndPeriodId,
+          currency,
+          net,
+          vat,
+          gross,
+          source: 'INTERNAL',
+          provenance: { templateCode: template.code, templateName: template.name },
+        },
+        create: {
+          communityId,
+          vendorId,
+          templateInstanceId: instance.id,
+          number: valueFor(invoiceCfg.numberKey) ?? invoiceCfg.number ?? null,
+          issueDate,
+          serviceStartPeriodId,
+          serviceEndPeriodId,
+          currency,
+          net,
+          vat,
+          gross,
+          source: 'INTERNAL',
+          provenance: { templateCode: template.code, templateName: template.name },
+        },
+      })
+      sourceType = ChargeSourceType.VENDOR_INVOICE
+      sourceId = invoice.id
+    }
+
+    const period = await this.prisma.period.findUnique({
+      where: { id: periodId },
+      select: { id: true, seq: true, code: true },
+    })
+    if (!period) throw new NotFoundException('Period not found')
+
+    for (const item of chargeItems) {
+      const chargeCfg = item.kind === 'charge' ? item.charge ?? item : item
+      const key = item.amountKey || item.key
+      const rawVal = valueFor(key)
+      const amount = Number(rawVal)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+      const fundCode = chargeCfg.fundCode ?? output.fundCode ?? 'EXPENSES'
+      const fundId = fundCode ? await this.resolveFundId(communityId, fundCode) : null
+      const expenseTypeCode = chargeCfg.expenseTypeCode ?? item.expenseTypeCode ?? null
+      const description = chargeCfg.description ?? item.label ?? item.name ?? item.key ?? template.name
+      const currency = chargeCfg.currency ?? valueFor(chargeCfg.currencyKey) ?? output.currency ?? 'RON'
+      await this.allocator.createExpense(communityId, period, {
+        description,
+        amount,
+        currency,
+        expenseTypeCode: expenseTypeCode ?? undefined,
+        sourceType,
+        sourceId,
+        sourceKey: item.key,
+        fundId: fundId ?? undefined,
+      })
+    }
+  }
+
+  private async resolveVendorId(communityId: string, vendorCfg: any, values: Record<string, any>) {
+    if (vendorCfg?.vendorId) {
+      const vendor = await this.prisma.vendor.findUnique({ where: { id: vendorCfg.vendorId, communityId } })
+      if (!vendor) throw new NotFoundException('Vendor not found')
+      return vendor.id
+    }
+    const name = (vendorCfg?.nameKey ? values?.[vendorCfg.nameKey] : vendorCfg?.name) ?? null
+    if (!name) return null
+    const existing = await this.prisma.vendor.findFirst({
+      where: { communityId, name },
+      select: { id: true },
+    })
+    if (existing) return existing.id
+    const created = await this.prisma.vendor.create({
+      data: {
+        communityId,
+        name,
+        taxId: (vendorCfg?.taxIdKey ? values?.[vendorCfg.taxIdKey] : vendorCfg?.taxId) ?? null,
+        iban: (vendorCfg?.ibanKey ? values?.[vendorCfg.ibanKey] : vendorCfg?.iban) ?? null,
+      },
+      select: { id: true },
+    })
+    return created.id
+  }
+
+  private async resolvePeriodIdFromValue(communityId: string, value: any) {
+    if (!value) return null
+    if (typeof value !== 'string') return null
+    const byCode = await this.prisma.period.findUnique({
+      where: { communityId_code: { communityId, code: value } },
+      select: { id: true },
+    })
+    if (byCode) return byCode.id
+    const byId = await this.prisma.period.findFirst({
+      where: { id: value, communityId },
+      select: { id: true },
+    })
+    return byId?.id ?? null
+  }
+
+  private async resolveFundId(communityId: string, fundCode: string) {
+    const fund = await this.prisma.fund.findUnique({
+      where: { communityId_code: { communityId, code: fundCode } },
+      select: { id: true },
+    })
+    if (!fund) throw new NotFoundException(`Fund ${fundCode} not found`)
+    return fund.id
   }
 
   async listBillTemplateAttachments(communityRef: string, periodCode: string, templateCode: string, roles: RoleAssignment[]) {
@@ -781,11 +1055,17 @@ export class TemplateService {
     const meter: any = await (this.prisma as any).meter.findUnique({ where: { meterId: input.meterId } })
     if (!meter) throw new NotFoundException('Meter not found')
     const scopeType = meter.scopeType as any
-    const scopeId = scopeType === 'COMMUNITY' ? communityId : meter.scopeCode
+    let scopeId = meter.scopeCode
+    if (scopeType === 'COMMUNITY') {
+      scopeId = communityId
+    } else if (scopeType === 'UNIT') {
+      const unitIdMap = await this.prisma.unit.findMany({ where: { communityId }, select: { code: true, id: true } })
+      scopeId = unitIdMap.find((u) => u.code === meter.scopeCode)?.id ?? meter.scopeCode
+    }
     const origin = (input.origin as any) ?? 'METER'
     const valueNum = input.value as any
     if (valueNum === undefined || valueNum === null || valueNum === '') throw new ForbiddenException('Invalid meter value')
-    return (this.prisma as any).periodMeasure.upsert({
+    const pm = await (this.prisma as any).periodMeasure.upsert({
       where: {
         communityId_periodId_scopeType_scopeId_typeCode: {
           communityId,
@@ -813,6 +1093,180 @@ export class TemplateService {
         meterId: meter.meterId,
       },
     })
+    await this.recomputeAggregationsAndDerived(communityId, period.id)
+    return pm
+  }
+
+  private async upsertPeriodMeasure(
+    communityId: string,
+    periodId: string,
+    scopeType: SeriesScope,
+    scopeId: string,
+    typeCode: string,
+    origin: SeriesOrigin,
+    value: number,
+    meterId?: string,
+  ) {
+    const resolvedMeterId = meterId ?? `${typeCode}-${scopeId}`
+    await this.prisma.periodMeasure.upsert({
+      where: {
+        communityId_periodId_scopeType_scopeId_typeCode: {
+          communityId,
+          periodId,
+          scopeType,
+          scopeId,
+          typeCode,
+        },
+      },
+      update: { value, origin, meterId: resolvedMeterId },
+      create: {
+        communityId,
+        periodId,
+        scopeType,
+        scopeId,
+        typeCode,
+        origin,
+        value,
+        meterId: resolvedMeterId,
+      },
+    })
+  }
+
+  private async recomputeAggregationsAndDerived(communityId: string, periodId: string) {
+    const aggRules = await (this.prisma as any).aggregationRule.findMany({
+      where: { communityId },
+      select: { targetType: true, unitTypes: true, residualType: true },
+    })
+    for (const agg of aggRules || []) {
+      const unitMeasures = await this.prisma.periodMeasure.findMany({
+        where: {
+          communityId,
+          periodId,
+          scopeType: SeriesScope.UNIT,
+          typeCode: { in: agg.unitTypes || [] },
+        },
+        select: { scopeId: true, value: true, typeCode: true },
+      })
+      if (!unitMeasures.length) continue
+      const communityTotal = await this.prisma.periodMeasure.findUnique({
+        where: {
+          communityId_periodId_scopeType_scopeId_typeCode: {
+            communityId,
+            periodId,
+            scopeType: SeriesScope.COMMUNITY,
+            scopeId: communityId,
+            typeCode: agg.targetType,
+          },
+        },
+      })
+      if (!communityTotal) continue
+      const byUnit = new Map<string, number>()
+      const basisByUnit = new Map<string, number>()
+      const byTypeCommunity = new Map<string, number>()
+      unitMeasures.forEach((m) => {
+        const val = Number(m.value)
+        byUnit.set(m.scopeId, (byUnit.get(m.scopeId) ?? 0) + val)
+        if (m.typeCode === agg.targetType) {
+          basisByUnit.set(m.scopeId, (basisByUnit.get(m.scopeId) ?? 0) + val)
+        }
+        byTypeCommunity.set(m.typeCode, (byTypeCommunity.get(m.typeCode) ?? 0) + val)
+      })
+      const sumUnits = Array.from(byUnit.values()).reduce((s, v) => s + v, 0)
+      if (sumUnits <= 0) continue
+      const sumBasis = Array.from(basisByUnit.values()).reduce((s, v) => s + v, 0)
+      const totalCommunity = Number(communityTotal.value)
+      const residual = totalCommunity - sumUnits
+      const basisMap = sumBasis > 0 ? basisByUnit : byUnit
+      const basisTotal = sumBasis > 0 ? sumBasis : sumUnits
+      for (const [unitId] of byUnit.entries()) {
+        const basisVal = basisMap.get(unitId) ?? 0
+        const share = basisVal / basisTotal
+        const adj = residual * share
+        if (agg.residualType) {
+          await this.upsertPeriodMeasure(
+            communityId,
+            periodId,
+            SeriesScope.UNIT,
+            unitId,
+            agg.residualType,
+            SeriesOrigin.DERIVED,
+            adj,
+            `${agg.residualType}-${unitId}`,
+          )
+        }
+      }
+      if (agg.residualType) {
+        await this.upsertPeriodMeasure(
+          communityId,
+          periodId,
+          SeriesScope.COMMUNITY,
+          communityId,
+          agg.residualType,
+          SeriesOrigin.DERIVED,
+          residual,
+          `${agg.residualType}-${communityId}`,
+        )
+      }
+      for (const [type, sum] of byTypeCommunity.entries()) {
+        if (type === agg.targetType) continue
+        await this.upsertPeriodMeasure(
+          communityId,
+          periodId,
+          SeriesScope.COMMUNITY,
+          communityId,
+          type,
+          SeriesOrigin.DERIVED,
+          sum,
+          `${type}-${communityId}`,
+        )
+      }
+    }
+
+    const derivedRules = await (this.prisma as any).derivedMeterRule.findMany({
+      where: { communityId },
+      select: { scopeType: true, sourceType: true, subtractTypes: true, targetType: true, origin: true },
+    })
+    for (const r of derivedRules || []) {
+      const scopeType = (r.scopeType as SeriesScope) ?? SeriesScope.COMMUNITY
+      const scopeId = scopeType === SeriesScope.COMMUNITY ? communityId : communityId
+      const source = await this.prisma.periodMeasure.findUnique({
+        where: {
+          communityId_periodId_scopeType_scopeId_typeCode: {
+            communityId,
+            periodId,
+            scopeType,
+            scopeId,
+            typeCode: r.sourceType,
+          },
+        },
+      })
+      if (!source) continue
+      let remainder = Number(source.value)
+      const subtractTypes = Array.isArray(r.subtractTypes) ? r.subtractTypes : []
+      if (subtractTypes.length) {
+        const subs = await this.prisma.periodMeasure.findMany({
+          where: {
+            communityId,
+            periodId,
+            scopeType,
+            scopeId,
+            typeCode: { in: subtractTypes as string[] },
+          },
+          select: { value: true },
+        })
+        remainder -= subs.reduce((s, m) => s + Number(m.value), 0)
+      }
+      await this.upsertPeriodMeasure(
+        communityId,
+        periodId,
+        scopeType,
+        scopeId,
+        r.targetType,
+        (r.origin as SeriesOrigin) ?? SeriesOrigin.DERIVED,
+        remainder,
+        `${r.targetType}-${scopeId}`,
+      )
+    }
   }
 
   private async getPeriod(communityRef: string, periodCode: string) {

@@ -1,35 +1,35 @@
 type TxClient = any
 
-type LedgerEntryLike = {
+type FundLedgerEntryLike = {
   id: string
   communityId: string
-  periodId: string
-  billingEntityId: string
-  kind: string
   fundId: string
+  periodId: string
+  kind: string
+  lane?: string
   currency: string | null
   refType: string | null
   refId: string | null
 }
 
-export async function ensureLedgerEntryDetail(
+export async function ensureFundLedgerEntryDetail(
   client: TxClient,
-  entry: LedgerEntryLike,
+  entry: FundLedgerEntryLike,
   amount: number,
   meta?: Record<string, any>,
 ) {
-  const count = await (client as any).beLedgerEntryDetail.count({
+  const count = await (client as any).fundLedgerEntryDetail.count({
     where: { ledgerEntryId: entry.id },
   })
   if (count > 0) return
-  await (client as any).beLedgerEntryDetail.create({
+  await (client as any).fundLedgerEntryDetail.create({
     data: {
       ledgerEntryId: entry.id,
       communityId: entry.communityId,
-      periodId: entry.periodId,
-      billingEntityId: entry.billingEntityId,
-      kind: entry.kind,
       fundId: entry.fundId,
+      periodId: entry.periodId,
+      kind: entry.kind,
+      lane: (entry as any).lane ?? 'ACCRUAL',
       currency: entry.currency || 'RON',
       refType: entry.refType,
       refId: entry.refId,

@@ -13,7 +13,7 @@ import { MailModule } from './modules/mail/mail.module'
 import { CommunityModule } from './modules/community/community.module'
 import { PeriodModule } from './modules/period/period.module'
 import { BeFinancialsModule } from './modules/be-financials/be-financials.module'
-import { ProgramModule } from './modules/program/program.module'
+import { FundModule } from './modules/fund/fund.module'
 import { PushModule } from './modules/push/push.module'
 import { EngagementModule } from './modules/engagement/engagement.module'
 import { TicketingModule } from './modules/ticketing/ticketing.module'
@@ -44,7 +44,7 @@ class HealthController {
     CommunityModule,
     PeriodModule,
     BeFinancialsModule,
-    ProgramModule,
+    FundModule,
     PushModule,
     EngagementModule,
     TicketingModule,

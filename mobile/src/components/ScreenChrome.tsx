@@ -79,7 +79,7 @@ export function ScreenChrome({
         </TouchableOpacity>
         <View style={styles.menuPanel}>
           <Text style={styles.menuTitle}>Mă ocup eu</Text>
-          {['Dashboard', 'Community Dashboard', 'My Dashboard', 'Notifications', 'Communications', 'Expenses', 'Programs', 'Events', 'Polls'].map((item) => {
+          {['Dashboard', 'Community Dashboard', 'My Dashboard', 'Notifications', 'Communications', 'Expenses', 'Funds', 'Events', 'Polls'].map((item) => {
             const isActive = currentSection === item
             return (
               <TouchableOpacity

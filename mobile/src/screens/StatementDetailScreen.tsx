@@ -8,7 +8,7 @@ import { useBeScope } from '../contexts/BeScopeContext'
 import { styles } from '../styles/appStyles'
 import { formatDate, formatMoney } from '../utils/formatters'
 
-type ProgramBucketMap = Record<string, { id: string; code: string; name: string }>
+type FundBucketMap = Record<string, { id: string; code: string; name: string }>
 
 export function StatementDetailScreen() {
   const { api } = useAuth()
@@ -17,11 +17,11 @@ export function StatementDetailScreen() {
   const { setBeMeta, beMetaMap } = useBeScope()
   const beId = route?.params?.beId as string | undefined
   const periodCode = route?.params?.periodCode as string | undefined
-  const initialBuckets = (route?.params?.programBuckets as ProgramBucketMap | undefined) ?? {}
+  const initialBuckets = (route?.params?.fundBuckets as FundBucketMap | undefined) ?? {}
   const [detail, setDetail] = React.useState<any | null>(null)
   const [previousPeriodCode, setPreviousPeriodCode] = React.useState<string | null>(null)
-  const [programBuckets, setProgramBuckets] = React.useState<ProgramBucketMap>(initialBuckets)
-  const [programBucketsLoaded, setProgramBucketsLoaded] = React.useState<boolean>(
+  const [fundBuckets, setFundBuckets] = React.useState<FundBucketMap>(initialBuckets)
+  const [fundBucketsLoaded, setFundBucketsLoaded] = React.useState<boolean>(
     Object.keys(initialBuckets).length > 0,
   )
   const [loading, setLoading] = React.useState(false)
@@ -60,26 +60,26 @@ export function StatementDetailScreen() {
   }, [api, beId, periodCode])
 
   React.useEffect(() => {
-    if (!communityId || programBucketsLoaded) return
+    if (!communityId || fundBucketsLoaded) return
     api
-      .get<any[]>(`/communities/${communityId}/programs`)
+      .get<any[]>(`/communities/${communityId}/funds`)
       .then((rows) => {
-        const next: ProgramBucketMap = {}
-        rows.forEach((prog: any) => {
-          if (prog?.bucket) next[prog.bucket] = { id: prog.id, code: prog.code, name: prog.name }
+        const next: FundBucketMap = {}
+        rows.forEach((fund: any) => {
+          if (fund?.bucket) next[fund.bucket] = { id: fund.id, code: fund.code, name: fund.name }
         })
-        setProgramBuckets(next)
-        setProgramBucketsLoaded(true)
+        setFundBuckets(next)
+        setFundBucketsLoaded(true)
       })
       .catch(() => {
-        setProgramBucketsLoaded(true)
+        setFundBucketsLoaded(true)
         // leave as-is; fallback to bucket labels
       })
-  }, [api, communityId, programBucketsLoaded])
+  }, [api, communityId, fundBucketsLoaded])
 
   React.useEffect(() => {
     if (!communityId) return
-    setProgramBucketsLoaded(Object.keys(initialBuckets).length > 0)
+    setFundBucketsLoaded(Object.keys(initialBuckets).length > 0)
   }, [communityId, initialBuckets])
 
   const statement = detail?.statement
@@ -110,7 +110,7 @@ export function StatementDetailScreen() {
                     navigation.push('StatementDetail', {
                       beId,
                       periodCode: previousPeriodCode,
-                      programBuckets,
+                      fundBuckets,
                     })
                   }
                 >
@@ -130,11 +130,11 @@ export function StatementDetailScreen() {
             <Text style={styles.cardTitle}>Ledger entries</Text>
             {ledgerEntries.length ? (
               ledgerEntries.map((entry: any) => {
-                const program = programBuckets[entry.bucket || '']
-                const label = program?.name
-                  ? program.name
-                  : program?.code
-                    ? program.code
+                const fund = fundBuckets[entry.bucket || '']
+                const label = fund?.name
+                  ? fund.name
+                  : fund?.code
+                    ? fund.code
                     : entry.bucket === 'ALLOCATED_EXPENSE'
                       ? 'Allocated'
                       : String(entry.bucket || entry.kind || 'Entry')

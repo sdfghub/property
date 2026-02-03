@@ -1,14 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { BillingPeriodLookupService } from '../billing/period-lookup.service'
-import { AllocationTraceService } from '../billing/allocation-trace.service'
 
 @Injectable()
 export class BeFinancialsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly periodLookup: BillingPeriodLookupService,
-    private readonly allocationTrace: AllocationTraceService,
   ) {}
 
   private async getBe(beId: string) {
@@ -36,17 +34,17 @@ export class BeFinancialsService {
         u.id   AS "unitId",
         u.code AS "unitCode",
         u.code AS "unitName",
-        SUM(al.amount)::numeric AS amount
+        SUM(ccl.amount)::numeric AS amount
       FROM p
       JOIN billing_entity_member bem
         ON bem.billing_entity_id = p.be_id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      JOIN allocation_line al
-        ON al.unit_id = bem.unit_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
-      JOIN unit u ON u.id = al.unit_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = bem.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
+      JOIN unit u ON u.id = ccl.unit_id
       GROUP BY u.id, u.code
       ORDER BY u.code
       `,
@@ -76,18 +74,18 @@ export class BeFinancialsService {
         sg.code AS "splitGroupCode",
         sg.name AS "splitGroupName",
         sg."order" AS "splitGroupOrder",
-        SUM(al.amount)::numeric AS amount
+        SUM(ccl.amount)::numeric AS amount
       FROM p
       JOIN billing_entity_member bem
         ON bem.billing_entity_id = p.be_id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      JOIN allocation_line al
-        ON al.unit_id = bem.unit_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = bem.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
       JOIN split_group_member sgm
-        ON sgm.split_node_id = al.split_node_id
+        ON sgm.split_node_id = (ccl.meta->>'splitNodeId')
       JOIN split_group sg
         ON sg.id = sgm.split_group_id
        AND sg.community_id = p.community_id
@@ -125,19 +123,19 @@ export class BeFinancialsService {
         sg.code AS "splitGroupCode",
         sg.name AS "splitGroupName",
         sg."order" AS "splitGroupOrder",
-        SUM(al.amount)::numeric AS amount
+        SUM(ccl.amount)::numeric AS amount
       FROM p
       JOIN billing_entity_member bem
         ON bem.billing_entity_id = p.be_id
        AND bem.unit_id = p.unit_id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      JOIN allocation_line al
-        ON al.unit_id = p.unit_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = p.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
       JOIN split_group_member sgm
-        ON sgm.split_node_id = al.split_node_id
+        ON sgm.split_node_id = (ccl.meta->>'splitNodeId')
       JOIN split_group sg
         ON sg.id = sgm.split_group_id
        AND sg.community_id = p.community_id
@@ -171,20 +169,20 @@ export class BeFinancialsService {
         u.id   AS "unitId",
         u.code AS "unitCode",
         u.code AS "unitName",
-        SUM(al.amount)::numeric AS amount
+        SUM(ccl.amount)::numeric AS amount
       FROM p
       JOIN split_group_member sgm
         ON sgm.split_group_id = p.split_group_id
-      JOIN allocation_line al
-        ON al.split_node_id = sgm.split_node_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
+      JOIN community_charge_line ccl
+        ON (ccl.meta->>'splitNodeId') = sgm.split_node_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
       JOIN billing_entity_member bem
-        ON bem.unit_id = al.unit_id
+        ON bem.unit_id = ccl.unit_id
        AND bem.billing_entity_id = p.be_id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      JOIN unit u ON u.id = al.unit_id
+      JOIN unit u ON u.id = ccl.unit_id
       GROUP BY u.id, u.code
       ORDER BY u.code;
       `,
@@ -221,16 +219,16 @@ export class BeFinancialsService {
                $6::text AS split_group_id
       )
       SELECT
-        al.id AS "allocationId",
-        al.amount,
-        al.split_node_id AS "splitNodeId",
-        es.id AS "expenseSplitId",
-        es.parent_split_id AS "parentSplitId",
-        at.trace AS "allocationTrace",
-        e.id AS "expenseId",
-        e.description AS "expenseDescription",
-        e.allocatable_amount AS "expenseAmount",
-        et.code AS "expenseTypeCode",
+        ccl.id AS "allocationId",
+        ccl.amount,
+        ccl.meta->>'splitNodeId' AS "splitNodeId",
+        NULL::text AS "expenseSplitId",
+        NULL::text AS "parentSplitId",
+        NULL::json AS "allocationTrace",
+        CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS "expenseId",
+        cc.meta->>'description' AS "expenseDescription",
+        cc.amount AS "expenseAmount",
+        ccl.meta->>'expenseType' AS "expenseTypeCode",
         u.id AS "unitId",
         u.code AS "unitCode",
         u.code AS "unitName",
@@ -243,22 +241,19 @@ export class BeFinancialsService {
        AND bem.unit_id = p.unit_id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      JOIN allocation_line al
-        ON al.unit_id = p.unit_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = p.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
+      JOIN community_charge cc ON cc.id = ccl.charge_id
       JOIN split_group_member sgm
-        ON sgm.split_node_id = al.split_node_id
+        ON sgm.split_node_id = (ccl.meta->>'splitNodeId')
        AND sgm.split_group_id = p.split_group_id
       JOIN split_group sg
         ON sg.id = sgm.split_group_id
        AND sg.community_id = p.community_id
-      JOIN unit u ON u.id = al.unit_id
-      JOIN expense e ON e.id = al.expense_id
-      JOIN expense_type et ON et.id = e.expense_type_id
-      LEFT JOIN allocation_trace at ON at.allocation_line_id = al.id
-      LEFT JOIN expense_split es ON es.id = al.expense_split_id
-      ORDER BY e.description, et.code, al.id;
+      JOIN unit u ON u.id = ccl.unit_id
+      ORDER BY expenseDescription, expenseTypeCode, ccl.id;
       `,
       be.communityId,
       period.id,
@@ -273,14 +268,12 @@ export class BeFinancialsService {
       ? { id: splitGroup.id, code: splitGroup.code, name: splitGroup.name }
       : { id: splitGroupId }
 
-    const rowsWithTrail = await this.allocationTrace.withSplitTrail(rows, { communityId: be.communityId })
-
     return {
       be,
       period: { id: period.id, code: period.code },
       unit: unitPayload,
       splitGroup: sgPayload,
-      rows: rowsWithTrail,
+      rows,
     }
   }
 
@@ -303,16 +296,16 @@ export class BeFinancialsService {
                $5::text AS split_group_id
       )
       SELECT
-        al.id AS "allocationId",
-        al.amount,
-        al.split_node_id AS "splitNodeId",
-        es.id AS "expenseSplitId",
-        es.parent_split_id AS "parentSplitId",
-        at.trace AS "allocationTrace",
-        e.id AS "expenseId",
-        e.description AS "expenseDescription",
-        e.allocatable_amount AS "expenseAmount",
-        et.code AS "expenseTypeCode",
+        ccl.id AS "allocationId",
+        ccl.amount,
+        ccl.meta->>'splitNodeId' AS "splitNodeId",
+        NULL::text AS "expenseSplitId",
+        NULL::text AS "parentSplitId",
+        NULL::json AS "allocationTrace",
+        CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS "expenseId",
+        cc.meta->>'description' AS "expenseDescription",
+        cc.amount AS "expenseAmount",
+        ccl.meta->>'expenseType' AS "expenseTypeCode",
         u.id AS "unitId",
         u.code AS "unitCode",
         u.code AS "unitName",
@@ -320,22 +313,19 @@ export class BeFinancialsService {
         sg.code AS "splitGroupCode",
         sg.name AS "splitGroupName"
       FROM p
-      JOIN allocation_line al
-        ON al.unit_id = p.unit_id
-       AND al.period_id = p.period_id
-       AND al.community_id = p.community_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = p.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
+      JOIN community_charge cc ON cc.id = ccl.charge_id
       JOIN split_group_member sgm
-        ON sgm.split_node_id = al.split_node_id
+        ON sgm.split_node_id = (ccl.meta->>'splitNodeId')
        AND sgm.split_group_id = p.split_group_id
       JOIN split_group sg
         ON sg.id = sgm.split_group_id
        AND sg.community_id = p.community_id
-      JOIN unit u ON u.id = al.unit_id
-      JOIN expense e ON e.id = al.expense_id
-      JOIN expense_type et ON et.id = e.expense_type_id
-      LEFT JOIN allocation_trace at ON at.allocation_line_id = al.id
-      LEFT JOIN expense_split es ON es.id = al.expense_split_id
-      ORDER BY e.description, et.code, al.id;
+      JOIN unit u ON u.id = ccl.unit_id
+      ORDER BY expenseDescription, expenseTypeCode, ccl.id;
       `,
       communityId,
       period.id,
@@ -344,14 +334,12 @@ export class BeFinancialsService {
       splitGroupId,
     )
 
-    const rowsWithTrail = await this.allocationTrace.withSplitTrail(rows, { communityId })
-
     return {
       communityId,
       period: { id: period.id, code: period.code },
       unit: unit || { id: unitId },
       splitGroup: splitGroup || { id: splitGroupId },
-      rows: rowsWithTrail,
+      rows,
     }
   }
 }

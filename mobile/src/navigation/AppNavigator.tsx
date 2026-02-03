@@ -8,7 +8,7 @@ import { AppState, Platform } from 'react-native'
 import { BeScopeProvider } from '../contexts/BeScopeContext'
 import { LoginScreen } from '../screens/LoginScreen'
 import { MainScreen } from '../screens/MainScreen'
-import { ProgramDetailScreen } from '../screens/ProgramDetailScreen'
+import { FundDetailScreen } from '../screens/FundDetailScreen'
 import { PollDetailScreen } from '../screens/PollDetailScreen'
 import { EventDetailScreen } from '../screens/EventDetailScreen'
 import { StatementDetailScreen } from '../screens/StatementDetailScreen'
@@ -87,7 +87,7 @@ export function AppNavigator() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={MainScreen} />
-          <Stack.Screen name="ProgramDetail" component={ProgramDetailScreen} />
+          <Stack.Screen name="FundDetail" component={FundDetailScreen} />
           <Stack.Screen name="PollDetail" component={PollDetailScreen} />
           <Stack.Screen name="EventDetail" component={EventDetailScreen} />
           <Stack.Screen name="StatementDetail" component={StatementDetailScreen} />

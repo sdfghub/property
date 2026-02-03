@@ -73,7 +73,7 @@ async function main() {
   const rows: Array<{
     chargeId: string
     chargeCreatedAt: Date
-    chargeBucket: string
+    chargeFundId: string
     detailId: string
     unitId?: string | null
     detailAmount: number
@@ -82,7 +82,7 @@ async function main() {
     `
     SELECT le.id AS "chargeId",
            le.created_at AS "chargeCreatedAt",
-           le.bucket AS "chargeBucket",
+           le.fund_id AS "chargeFundId",
            d.id AS "detailId",
            d.unit_id AS "unitId",
            d.amount::numeric AS "detailAmount",
@@ -109,7 +109,7 @@ async function main() {
     {
       chargeId: string
       chargeCreatedAt: Date
-      chargeBucket: string
+      chargeFundId: string
       chargeApplied: number
       details: Array<{ detailId: string; unitId?: string | null; detailAmount: number }>
     }
@@ -126,7 +126,7 @@ async function main() {
       byCharge.set(r.chargeId, {
         chargeId: r.chargeId,
         chargeCreatedAt: r.chargeCreatedAt,
-        chargeBucket: r.chargeBucket,
+      chargeFundId: r.chargeFundId,
         chargeApplied: Number(r.chargeApplied),
         details: [
           {
@@ -166,7 +166,7 @@ async function main() {
             chargeId: c.chargeId,
             detailId: d.detailId,
             unitId: d.unitId ?? null,
-            bucket: c.chargeBucket ?? null,
+            fundId: c.chargeFundId ?? null,
             amount: apply,
           },
         })

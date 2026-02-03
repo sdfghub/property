@@ -8,7 +8,6 @@ type Row = {
   communityId: string
   periodCode: string
   unitCode: string
-  bucket: string
   amount: number
   currency?: string
 }
@@ -20,8 +19,8 @@ function usage(msg?: string): never {
 Usage:
   npm run import:opening:units -- <file>
 
-File format (CSV): communityId,periodCode,unitCode,bucket,amount,currency
-File format (JSON): [{ communityId, periodCode, unitCode, bucket, amount, currency }]
+File format (CSV): communityId,periodCode,unitCode,amount,currency
+File format (JSON): [{ communityId, periodCode, unitCode, amount, currency }]
 `)
   process.exit(msg ? 1 : 0)
 }
@@ -37,13 +36,12 @@ function parseFile(file: string): Row[] {
   const lines = content.split(/\r?\n/).filter(Boolean)
   const rows: Row[] = []
   for (const line of lines) {
-    const [communityId, periodCode, unitCode, bucket, amountStr, currency] = line.split(',').map((s) => s.trim())
-    if (!communityId || !periodCode || !unitCode || !bucket || !amountStr) continue
+    const [communityId, periodCode, unitCode, amountStr, currency] = line.split(',').map((s) => s.trim())
+    if (!communityId || !periodCode || !unitCode || !amountStr) continue
     rows.push({
       communityId,
       periodCode,
       unitCode,
-      bucket,
       amount: Number(amountStr),
       currency,
     })

@@ -13,9 +13,9 @@ type BeDashboardProps = {
   statementDetail: { statement: any; ledgerEntries: any[] } | null
   statementDetailOpen: boolean
   setStatementDetailOpen: (next: boolean) => void
-  programBuckets: Record<string, { id: string; code: string; name: string }>
+  fundBuckets: Record<string, { id: string; code: string; name: string }>
   onNavigateStatement: (periodCode: string) => void
-  onNavigateProgram: (programId: string) => void
+  onNavigateFund: (fundId: string) => void
   onNavigateExpenses: (periodCode: string) => void
   onAddBalance: () => void
   onAddBucket: (bucket: string, amount: number, label: string) => void
@@ -32,9 +32,9 @@ export function BeDashboard({
   statementDetail,
   statementDetailOpen,
   setStatementDetailOpen,
-  programBuckets,
+  fundBuckets,
   onNavigateStatement,
-  onNavigateProgram,
+  onNavigateFund,
   onNavigateExpenses,
   onAddBalance,
   onAddBucket,
@@ -121,19 +121,19 @@ export function BeDashboard({
                   statementDetail.ledgerEntries
                     .filter((entry: any) => entry.kind === 'CHARGE')
                     .map((entry: any) => {
-                      const program = programBuckets[entry.bucket || '']
-                      const label = program?.name
-                        ? program.name
-                        : program?.code
-                          ? program.code
+                      const fund = fundBuckets[entry.bucket || '']
+                      const label = fund?.name
+                        ? fund.name
+                        : fund?.code
+                          ? fund.code
                           : entry.bucket === 'ALLOCATED_EXPENSE'
                             ? 'Allocated'
                             : String(entry.bucket || 'Charge')
                     const onPress =
                       entry.bucket === 'ALLOCATED_EXPENSE' && statement?.periodCode
                         ? () => onNavigateExpenses(statement.periodCode)
-                        : program?.id
-                          ? () => onNavigateProgram(program.id)
+                        : fund?.id
+                          ? () => onNavigateFund(fund.id)
                           : null
                     return (
                       <TouchableOpacity key={entry.id} style={styles.statementRow} onPress={onPress} disabled={!onPress}>

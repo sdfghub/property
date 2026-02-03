@@ -15,8 +15,8 @@ export class MePaymentController {
   @Post()
   async checkout(@Req() req: any, @Body() body: any) {
     const userId: string = req.user?.id ?? req.user?.sub
-    type PaymentLine = { billingEntityId?: string; amount?: number; bucket?: string; unitId?: string }
-    type AllocationSpec = { amount: number; bucket?: string; unitId?: string; billingEntityId?: string }
+    type PaymentLine = { billingEntityId?: string; amount?: number; fundId?: string; unitId?: string }
+    type AllocationSpec = { amount: number; fundId?: string; unitId?: string; billingEntityId?: string }
 
     const lines: PaymentLine[] | null = Array.isArray(body?.lines) ? body.lines : null
     if (!lines?.length) {
@@ -58,7 +58,7 @@ export class MePaymentController {
       entry.amount += amount
       entry.allocationSpec.push({
         amount,
-        bucket: line?.bucket ?? undefined,
+        fundId: line?.fundId ?? undefined,
         unitId: line?.unitId ?? undefined,
         billingEntityId,
       })

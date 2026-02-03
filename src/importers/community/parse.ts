@@ -139,6 +139,7 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
     meters: def.meters ?? [],
     derivedMeters: def.derivedMeters ?? [],
     aggregations: def.aggregations ?? [],
+    accounts: def.accounts ?? [],
     units,
     beOrders,
     memberships,

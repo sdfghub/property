@@ -4,122 +4,188 @@
     "name": "Factură apă",
     "template": {
       "title": "Aquatim",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Aquatim" }
+      },
       "items": [
         { "key": "meterTotal", "label": "Consum de apa", "kind": "meter", "meterId": "METER-WATER-TOTAL" },
-        { "key": "water", "label": "Cost total apa + canal", "kind": "expense", "expenseTypeCode": "WATER" },
-        { "key": "rain", "label": "Cost apa meteorica", "kind": "expense", "expenseTypeCode": "RAIN_WATER" }
+        { "key": "water", "label": "Cost total apa + canal", "kind": "charge", "expenseTypeCode": "WATER" },
+        { "key": "rain", "label": "Cost apa meteorica", "kind": "charge", "expenseTypeCode": "RAIN_WATER" }
       ]
     },
     "order": 1
-  },  
+  },
   {
     "code": "GAS-BILL",
     "name": "Factură gaz",
     "template": {
       "title": "Eon",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Eon" }
+      },
       "items": [
-        { "key": "gas", "label": "Cost gaz", "kind": "expense", "expenseTypeCode": "GAS" }
+        { "key": "gas", "label": "Cost gaz", "kind": "charge", "expenseTypeCode": "GAS" }
       ]
     },
     "order": 2
-  },  
+  },
   {
     "code": "ELECTRICITY-BILL",
     "name": "Factură curent",
     "template": {
       "title": "Hidroelectrica",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Hidroelectrica" }
+      },
       "items": [
-        { "key": "electricity", "label": "Cost curent", "kind": "expense", "expenseTypeCode": "ELECTRICITY" }
+        { "key": "electricity", "label": "Cost curent", "kind": "charge", "expenseTypeCode": "ELECTRICITY" }
       ]
     },
     "order": 2.5
-  },  
+  },
   {
     "code": "ADMIN-BILL",
     "name": "Factură Administrare",
     "template": {
       "title": "Imo smth",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Imo smth" }
+      },
       "items": [
-        { "key": "admin", "label": "Servicii administrare", "kind": "expense", "expenseTypeCode": "ADMIN" }
+        { "key": "admin", "label": "Servicii administrare", "kind": "charge", "expenseTypeCode": "ADMIN" }
       ]
     },
     "order": 3
-  },  
+  },
   {
     "code": "CENZOR-BILL",
     "name": "Cheltuieli cenzorat",
     "template": {
       "title": "Cost cenzori",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Cost cenzori" }
+      },
       "items": [
-        { "key": "cenzor", "label": "Servicii cenzorat", "kind": "expense", "expenseTypeCode": "CENZOR" }
+        { "key": "cenzor", "label": "Servicii cenzorat", "kind": "charge", "expenseTypeCode": "CENZOR" }
       ]
     },
     "order": 4
-  },  
+  },
   {
     "code": "LIVIU-BILL",
     "name": "Ingrijitor cladire",
     "template": {
       "title": "Cost ingrijitor",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Cost ingrijitor" }
+      },
       "items": [
-        { "key": "liviu-cost", "label": "Indemnizatie", "kind": "expense", "expenseTypeCode": "LIVIU" },
-        { "key": "liviu-transport", "label": "Decont abonament transport", "kind": "expense", "expenseTypeCode": "LIVIU-TRANSPORT" }
+        { "key": "liviu-cost", "label": "Indemnizatie", "kind": "charge", "expenseTypeCode": "LIVIU" },
+        { "key": "liviu-transport", "label": "Decont abonament transport", "kind": "charge", "expenseTypeCode": "LIVIU-TRANSPORT" }
       ]
     },
     "order": 5
-  },  
+  },
   {
     "code": "BANK-BILL",
     "name": "Costuri bancare",
     "template": {
       "title": "Costuri bancare",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Costuri bancare" }
+      },
       "items": [
-        { "key": "bank-commission", "label": "Comisionane bancare", "kind": "expense", "expenseTypeCode": "BANK" }
+        { "key": "bank-commission", "label": "Comisionane bancare", "kind": "charge", "expenseTypeCode": "BANK" }
       ]
     },
     "order": 6
-  },  
+  },
   {
     "code": "COMM-BILL",
     "name": "Comunicare",
     "template": {
       "title": "Comunicare",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Comunicare" }
+      },
       "items": [
-        { "key": "comm-vodafone", "label": "Abonament Vodafone interfon", "kind": "expense", "expenseTypeCode": "VODAFONE" },
-        { "key": "comm-rcsrds", "label": "Abonament RCS/RDS lift", "kind": "expense", "expenseTypeCode": "RCSRDS" }
+        { "key": "comm-vodafone", "label": "Abonament Vodafone interfon", "kind": "charge", "expenseTypeCode": "VODAFONE" },
+        { "key": "comm-rcsrds", "label": "Abonament RCS/RDS lift", "kind": "charge", "expenseTypeCode": "RCSRDS" }
       ]
     },
     "order": 7
-  },  
+  },
   {
     "code": "GARBAGE-BILL",
     "name": "Salubritate",
     "template": {
       "title": "Salubritate",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Salubritate" }
+      },
       "items": [
-        { "key": "garbage", "label": "Servicii RETIM", "kind": "expense", "expenseTypeCode": "GARBAGE" }
+        { "key": "garbage", "label": "Servicii RETIM", "kind": "charge", "expenseTypeCode": "GARBAGE" }
       ]
     },
     "order": 8
-  },  
+  },
   {
     "code": "SECURITY-BILL",
     "name": "Securitate",
     "template": {
       "title": "Securitate",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Securitate" }
+      },
       "items": [
-        { "key": "cctv", "label": "Mentenanta sistem CCTV", "kind": "expense", "expenseTypeCode": "CCTV-MAINTENANCE" }
+        { "key": "cctv", "label": "Mentenanta sistem CCTV", "kind": "charge", "expenseTypeCode": "CCTV-MAINTENANCE" }
       ]
     },
     "order": 8
-  },  
+  },
   {
     "code": "ELEVATOR-BILL",
     "name": "Lifturi",
     "template": {
       "title": "Lifturi",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": { "name": "Lifturi" }
+      },
       "items": [
-        { "key": "elevator-maintenance", "label": "Mentenanta lifturi", "kind": "expense", "expenseTypeCode": "ELEVATOR" }
+        { "key": "elevator-maintenance", "label": "Mentenanta lifturi", "kind": "charge", "expenseTypeCode": "ELEVATOR" }
       ]
     },
     "order": 9

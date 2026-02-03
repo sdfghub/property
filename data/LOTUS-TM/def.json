@@ -1,6 +1,7 @@
 {
   "id": "LOTUS-TM",
   "name": "Lotus Residence",
+  "expenseFundCode": "EXPENSES",
   "period": {
     "code": "2025-09",
     "start": "2025-09-01",
@@ -3461,26 +3462,22 @@
       ]
     }
   ],
-  "buckets": [
+  "accounts": [
     {
-      "code": "ALLOCATED_EXPENSE",
-      "name": "Allocated expenses",
-      "expenseTypeCodes": [
-        "GAS",
-        "ELECTRICITY",
-        "WATER",
-        "GARBAGE",
-        "RAIN_WATER"
-      ],
-      "priority": 1
+      "code": "BANK_MAIN",
+      "name": "Cont bancar principal",
+      "type": "BANK",
+      "currency": "RON",
+      "openingBalance": 1234,
+      "openingPeriodCode": "2025-09"
     },
     {
-      "code": "COMMON_ELECTRICITY",
-      "name": "Common electricity",
-      "splitGroupCodes": [
-        "ELEC_HYDRO_TOTAL"
-      ],
-      "priority": 2
+      "code": "PETTY_CASH",
+      "name": "Casa",
+      "type": "PETTY",
+      "currency": "RON",
+      "openingBalance": 532,
+      "openingPeriodCode": "2025-09"
     }
   ]
 }

@@ -16,45 +16,52 @@ fi
 SNAPSHOT_FILE="${SNAPSHOT_FILE:-/tmp/property-expenses-db-snapshot}"
 
 DB_SNAPSHOT_ID="${DB_SNAPSHOT_ID:-}"
-if [ "${DB_SNAPSHOT_ID}" = "" ] && [ -f "${SNAPSHOT_FILE}" ]; then
-  DB_SNAPSHOT_ID="$(cat "${SNAPSHOT_FILE}")"
-fi
-
-if [ "${DB_SNAPSHOT_ID}" = "" ]; then
-  echo "DB_SNAPSHOT_ID is required (or set SNAPSHOT_FILE with a saved snapshot id)" >&2
-  exit 1
-fi
-
+data_stack_exists="0"
 if aws cloudformation describe-stacks --stack-name "PropertyExpenses-Data" --region "${AWS_REGION}" >/dev/null 2>&1; then
-  echo "PropertyExpenses-Data stack already exists; restore aborted." >&2
-  exit 1
+  data_stack_exists="1"
+else
+  if [ "${DB_SNAPSHOT_ID}" = "" ] && [ -f "${SNAPSHOT_FILE}" ]; then
+    DB_SNAPSHOT_ID="$(cat "${SNAPSHOT_FILE}")"
+  fi
+  if [ "${DB_SNAPSHOT_ID}" = "" ]; then
+    echo "DB_SNAPSHOT_ID is required (or set SNAPSHOT_FILE with a saved snapshot id)" >&2
+    exit 1
+  fi
+  existing_ids="$(aws rds describe-db-instances \
+    --region "${AWS_REGION}" \
+    --query "DBInstances[?contains(DBInstanceIdentifier, 'propertyexpenses')].DBInstanceIdentifier" \
+    --output text)"
+  if [ "${existing_ids}" != "" ]; then
+    echo "Found existing RDS instance(s): ${existing_ids}" >&2
+    echo "Restore aborted. A previous shutdown likely did not finish." >&2
+    exit 1
+  fi
 fi
 
-existing_ids="$(aws rds describe-db-instances \
-  --region "${AWS_REGION}" \
-  --query "DBInstances[?contains(DBInstanceIdentifier, 'propertyexpenses')].DBInstanceIdentifier" \
-  --output text)"
-if [ "${existing_ids}" != "" ]; then
-  echo "Found existing RDS instance(s): ${existing_ids}" >&2
-  echo "Restore aborted. A previous shutdown likely did not finish." >&2
-  exit 1
+if [ "${data_stack_exists}" = "1" ]; then
+  echo "🏗️  Deploying CDK stacks (reusing existing PropertyExpenses-Data)"
+else
+  echo "🏗️  Deploying CDK stacks from snapshot ${DB_SNAPSHOT_ID}"
 fi
-
-echo "🏗️  Deploying CDK stacks from snapshot ${DB_SNAPSHOT_ID}"
 pushd infra/cdk >/dev/null
 if [ ! -d node_modules ]; then
   npm ci
 fi
 npm run build
-npx cdk deploy \
-  PropertyExpenses-Network \
-  PropertyExpenses-Data \
-  PropertyExpenses-Access \
-  PropertyExpenses-App \
-  PropertyExpenses-Frontend \
-  PropertyExpenses-Frontend-Expo \
-  --require-approval never \
-  -c dbSnapshotId="${DB_SNAPSHOT_ID}"
+deploy_args=(
+  "PropertyExpenses-Network"
+  "PropertyExpenses-Data"
+  "PropertyExpenses-Access"
+  "PropertyExpenses-App"
+  "PropertyExpenses-Frontend"
+  "PropertyExpenses-Frontend-Expo"
+  "--require-approval"
+  "never"
+)
+if [ "${data_stack_exists}" != "1" ]; then
+  deploy_args+=("-c" "dbSnapshotId=${DB_SNAPSHOT_ID}")
+fi
+npx cdk deploy "${deploy_args[@]}"
 popd >/dev/null
 
 db_instance_id="$(aws cloudformation list-stack-resources \

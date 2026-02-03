@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { ensureLedgerEntryDetail } from './ledger-detail.util'
+import { ensureCommunityLedgerEntryDetail } from './community-ledger-detail.util'
+import { ensureFundLedgerEntryDetail } from './fund-ledger-detail.util'
 
 type TxClient = any
 type PaymentAllocationSpec = {
@@ -9,7 +11,7 @@ type PaymentAllocationSpec = {
   chargeId: string
   detailId: string
   unitId?: string | null
-  bucket?: string | null
+  fundId?: string | null
   billingEntityId?: string | null
   lineIndex?: number | null
   amount: number
@@ -17,7 +19,7 @@ type PaymentAllocationSpec = {
 type AllocationSpecLine = {
   amount: number
   billingEntityId?: string
-  bucket?: string
+  fundId?: string
   unitId?: string
 }
 
@@ -44,6 +46,7 @@ export class PaymentService {
              p.billing_entity_id AS "billingEntityId",
              be.name           AS "billingEntityName",
              be.code           AS "billingEntityCode",
+             p.account_id      AS "accountId",
              p.amount,
              p.currency,
              p.ts,
@@ -65,7 +68,7 @@ export class PaymentService {
       LEFT JOIN LATERAL (
         SELECT json_agg(json_build_object(
                    'amount', pa.amount,
-                   'bucket', le.bucket,
+                   'fundId', le.fund_id,
                    'chargeId', le.id,
                    'periodId', le.period_id,
                    'refType', le.ref_type,
@@ -112,14 +115,14 @@ export class PaymentService {
     communityId: string,
     billingEntityId: string,
     allowedChargeIds?: string[],
-    filters?: { bucket?: string; unitId?: string },
+    filters?: { fundId?: string; unitId?: string },
     excludedChargeIds?: string[],
   ) {
     return client.$queryRawUnsafe(
       `
       SELECT le.id AS "chargeId",
              le.created_at AS "chargeCreatedAt",
-             le.bucket AS "chargeBucket",
+             le.fund_id AS "chargeFundId",
              d.id AS "detailId",
              d.unit_id AS "unitId",
              d.amount::numeric AS "detailAmount",
@@ -140,22 +143,22 @@ export class PaymentService {
             ? `AND le.id::text = ANY($3::text[])`
             : ''
         }
-        ${filters?.bucket ? `AND d.bucket = ${allowedChargeIds?.length ? '$4' : '$3'}` : ''}
+        ${filters?.fundId ? `AND d.fund_id = ${allowedChargeIds?.length ? '$4' : '$3'}` : ''}
         ${
           filters?.unitId
-            ? `AND d.unit_id = ${allowedChargeIds?.length ? (filters?.bucket ? '$5' : '$4') : filters?.bucket ? '$4' : '$3'}`
+            ? `AND d.unit_id = ${allowedChargeIds?.length ? (filters?.fundId ? '$5' : '$4') : filters?.fundId ? '$4' : '$3'}`
             : ''
         }
         ${excludedChargeIds && excludedChargeIds.length ? `AND le.id::text <> ALL(${
           allowedChargeIds?.length
-            ? filters?.bucket
+            ? filters?.fundId
               ? filters?.unitId
                 ? '$6'
                 : '$5'
               : filters?.unitId
                 ? '$5'
                 : '$4'
-            : filters?.bucket
+            : filters?.fundId
               ? filters?.unitId
                 ? '$5'
                 : '$4'
@@ -168,7 +171,7 @@ export class PaymentService {
       communityId,
       billingEntityId,
       ...(allowedChargeIds && allowedChargeIds.length ? [allowedChargeIds] : []),
-      ...(filters?.bucket ? [filters.bucket] : []),
+      ...(filters?.fundId ? [filters.fundId] : []),
       ...(filters?.unitId ? [filters.unitId] : []),
       ...(excludedChargeIds && excludedChargeIds.length ? [excludedChargeIds] : []),
     )
@@ -179,14 +182,14 @@ export class PaymentService {
     amount: number,
     paymentId: string,
     source: 'AUTO_DETAIL' | 'SPEC',
-    specMeta?: { bucket?: string | null; unitId?: string | null; billingEntityId?: string | null; lineIndex?: number },
+    specMeta?: { fundId?: string | null; unitId?: string | null; billingEntityId?: string | null; lineIndex?: number },
   ) {
     const byCharge = new Map<
       string,
       {
         chargeId: string
         chargeCreatedAt: Date
-        chargeBucket: string
+        chargeFundId: string
         chargeApplied: number
         details: Array<{ detailId: string; unitId?: string | null; detailAmount: number }>
       }
@@ -203,7 +206,7 @@ export class PaymentService {
         byCharge.set(r.chargeId, {
           chargeId: r.chargeId,
           chargeCreatedAt: r.chargeCreatedAt,
-          chargeBucket: r.chargeBucket,
+          chargeFundId: r.chargeFundId,
           chargeApplied: Number(r.chargeApplied),
           details: [
             {
@@ -244,7 +247,7 @@ export class PaymentService {
               chargeId: c.chargeId,
               detailId: d.detailId,
               unitId: d.unitId ?? null,
-              bucket: specMeta?.bucket ?? c.chargeBucket ?? null,
+              fundId: specMeta?.fundId ?? c.chargeFundId ?? null,
               amount: apply,
               billingEntityId: specMeta?.billingEntityId ?? null,
               lineIndex: specMeta?.lineIndex ?? null,
@@ -282,11 +285,11 @@ export class PaymentService {
         communityId,
         lineBeId,
         allowedChargeIds,
-        { bucket: line.bucket, unitId: line.unitId },
+        { fundId: line.fundId, unitId: line.unitId },
         Array.from(coveredChargeIds),
       )
       const res = this.buildAppsFromDetails(detailRows, lineAmount, paymentId, 'SPEC', {
-        bucket: line.bucket ?? null,
+        fundId: line.fundId ?? null,
         unitId: line.unitId ?? null,
         billingEntityId: lineBeId ?? null,
         lineIndex: idx,
@@ -321,8 +324,8 @@ export class PaymentService {
         beIds.add(line.billingEntityId)
       }
       if (line.unitId) unitIds.add(line.unitId)
-      if (line.bucket != null && typeof line.bucket !== 'string') {
-        throw new BadRequestException(`allocationSpec[${idx}].bucket must be a string`)
+      if (line.fundId != null && typeof line.fundId !== 'string') {
+        throw new BadRequestException(`allocationSpec[${idx}].fundId must be a string`)
       }
     })
     if (total - amount > 0.01) {
@@ -356,7 +359,7 @@ export class PaymentService {
       periodId: string
       billingEntityId: string
       kind: string
-      bucket: string
+      fundId: string
       currency: string | null
       refType: string | null
       refId: string | null
@@ -406,7 +409,7 @@ export class PaymentService {
         periodId: entry.periodId,
         billingEntityId: entry.billingEntityId,
         kind: entry.kind,
-        bucket: entry.bucket,
+        fundId: entry.fundId,
         currency: entry.currency || 'RON',
         refType: entry.refType,
         refId: entry.refId,
@@ -418,6 +421,120 @@ export class PaymentService {
         },
       },
     })
+  }
+
+  private async replaceCommunityPaymentLedger(
+    client: TxClient,
+    entry: {
+      communityId: string
+      periodId: string
+      kind: string
+      fundId: string
+      currency: string | null
+      refType: string | null
+      refId: string | null
+    },
+    paymentId: string,
+    fundIdTotals: Map<string | null, number>,
+  ) {
+    const existing = await (client as any).communityLedgerEntry.findMany({
+      where: { communityId: entry.communityId, refType: 'PAYMENT', refId: paymentId },
+      select: { id: true },
+    })
+    if (existing.length) {
+      await (client as any).communityLedgerEntryDetail.deleteMany({
+        where: { ledgerEntryId: { in: existing.map((e: { id: string }) => e.id) } },
+      })
+      await (client as any).communityLedgerEntry.deleteMany({
+        where: { id: { in: existing.map((e: { id: string }) => e.id) } },
+      })
+    }
+    for (const [fundId, amount] of fundIdTotals.entries()) {
+      const cle = await (client as any).communityLedgerEntry.create({
+        data: {
+          communityId: entry.communityId,
+          periodId: entry.periodId,
+          kind: 'PAYMENT',
+          lane: 'CASH',
+          amount,
+          currency: entry.currency || 'RON',
+          refType: 'PAYMENT',
+          refId: paymentId,
+          fundId,
+        },
+      })
+      await ensureCommunityLedgerEntryDetail(client, cle, amount, {
+        synthetic: true,
+        reason: 'payment',
+        paymentId,
+        fundId,
+      })
+    }
+  }
+
+  private buildCommunityPaymentFundTotals(
+    apps: Array<{ amount: number; spec?: any }>,
+    remaining: number,
+  ) {
+    const totals = new Map<string | null, number>()
+    for (const app of apps) {
+      const fundId = app.spec?.fundId ?? null
+      totals.set(fundId, (totals.get(fundId) ?? 0) + Number(app.amount))
+    }
+    if (remaining > 0) {
+      totals.set(null, (totals.get(null) ?? 0) + remaining)
+    }
+    return totals
+  }
+
+  private async replaceFundPaymentLedger(
+    client: TxClient,
+    entry: {
+      communityId: string
+      periodId: string
+      currency: string | null
+    },
+    paymentId: string,
+    apps: Array<{ amount: number; spec?: any }>,
+  ) {
+    const fundTotals = new Map<string, number>()
+    for (const app of apps) {
+      const fundId = app.spec?.fundId ?? null
+      if (!fundId) continue
+      fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + Number(app.amount))
+    }
+    const existing = await (client as any).fundLedgerEntry.findMany({
+      where: { communityId: entry.communityId, refType: 'PAYMENT', refId: paymentId },
+      select: { id: true },
+    })
+    if (existing.length) {
+      await (client as any).fundLedgerEntryDetail.deleteMany({
+        where: { ledgerEntryId: { in: existing.map((e: { id: string }) => e.id) } },
+      })
+      await (client as any).fundLedgerEntry.deleteMany({
+        where: { id: { in: existing.map((e: { id: string }) => e.id) } },
+      })
+    }
+    for (const [fundId, amount] of fundTotals.entries()) {
+      const ple = await (client as any).fundLedgerEntry.create({
+        data: {
+          communityId: entry.communityId,
+          fundId,
+          periodId: entry.periodId,
+          kind: 'PAYMENT',
+          lane: 'CASH',
+          amount,
+          currency: entry.currency || 'RON',
+          refType: 'PAYMENT',
+          refId: paymentId,
+        },
+      })
+      await ensureFundLedgerEntryDetail(client, ple, amount, {
+        synthetic: true,
+        reason: 'payment',
+        paymentId,
+      })
+    }
   }
 
   private async applyPayment(
@@ -465,7 +582,7 @@ export class PaymentService {
             periodId: true,
             billingEntityId: true,
             kind: true,
-            bucket: true,
+            fundId: true,
             currency: true,
             refType: true,
             refId: true,
@@ -495,7 +612,7 @@ export class PaymentService {
             periodId: paymentLedgerEntry.periodId,
             billingEntityId: paymentLedgerEntry.billingEntityId,
             kind: paymentLedgerEntry.kind,
-            bucket: paymentLedgerEntry.bucket,
+            fundId: paymentLedgerEntry.fundId,
             currency: paymentLedgerEntry.currency,
             refType: paymentLedgerEntry.refType,
             refId: paymentLedgerEntry.refId,
@@ -508,6 +625,9 @@ export class PaymentService {
     }
     if (paymentLedgerEntry) {
       await this.upsertUnallocatedPaymentDetail(client, paymentLedgerEntry, paymentIdStr, amount)
+      const fundIdTotals = this.buildCommunityPaymentFundTotals(apps, remaining)
+      await this.replaceCommunityPaymentLedger(client, paymentLedgerEntry, paymentIdStr, fundIdTotals)
+      await this.replaceFundPaymentLedger(client, paymentLedgerEntry, paymentIdStr, apps)
     }
     return { applied: amount - remaining, remaining }
   }
@@ -533,7 +653,7 @@ export class PaymentService {
         billingEntityId,
         refType: 'PAYMENT',
         refId: paymentId,
-        bucket: 'PAYMENT',
+        fundId: null,
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
@@ -551,13 +671,13 @@ export class PaymentService {
   ) {
     const entry = await this.prisma.beLedgerEntry.upsert({
       where: {
-        communityId_periodId_billingEntityId_refType_refId_bucket: {
+        communityId_periodId_billingEntityId_refType_refId_fundId: {
           communityId,
           periodId,
           billingEntityId,
           refType: 'PAYMENT',
           refId: paymentId,
-          bucket: 'PAYMENT',
+          fundId: null,
         },
       },
       update: { amount, currency },
@@ -566,11 +686,12 @@ export class PaymentService {
         periodId,
         billingEntityId,
         kind: 'PAYMENT',
+        lane: 'CASH',
         amount,
         currency,
         refType: 'PAYMENT',
         refId: paymentId,
-        bucket: 'PAYMENT',
+        fundId: null,
       },
     })
     await ensureLedgerEntryDetail(this.prisma, entry, amount, {
@@ -578,6 +699,12 @@ export class PaymentService {
       reason: 'payment',
       paymentId,
     })
+    await this.replaceCommunityPaymentLedger(
+      this.prisma,
+      entry,
+      String(paymentId),
+      new Map([['PAYMENT', amount]]),
+    )
     return entry.id
   }
 
@@ -588,6 +715,7 @@ export class PaymentService {
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount must be positive')
     const periodId = await this.latestPeriodId(communityId)
+    const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : null
 
     // idempotent on refId if provided
     let payment = body.refId
@@ -607,6 +735,7 @@ export class PaymentService {
         data: {
           communityId,
           billingEntityId: beId,
+          accountId: accountId ?? undefined,
           amount,
           currency: body.currency || 'RON',
           ts: body.ts ? new Date(body.ts) : undefined,
@@ -620,6 +749,7 @@ export class PaymentService {
         data: {
           communityId,
           billingEntityId: beId,
+          accountId: accountId ?? null,
           amount,
           currency: body.currency || 'RON',
           ts: body.ts ? new Date(body.ts) : undefined,
@@ -632,6 +762,7 @@ export class PaymentService {
     }
 
     await this.upsertPaymentLedger(communityId, periodId, beId, payment.id, amount, body.currency || 'RON')
+    await this.upsertCashTxForPayment(communityId, payment as any)
 
     if (body.applyMode === 'none') {
       return { payment, applied: 0, remaining: amount }
@@ -657,10 +788,12 @@ export class PaymentService {
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount must be positive')
     const allocationSpec = Array.isArray(body.allocationSpec) ? body.allocationSpec : null
     await this.validateAllocationSpec(communityId, beId, allocationSpec, amount)
+    const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : null
     const payment = await (this.prisma as any).payment.create({
       data: {
         communityId,
         billingEntityId: beId,
+        accountId,
         amount,
         currency: body.currency || 'RON',
         ts: body.ts ? new Date(body.ts) : undefined,
@@ -694,6 +827,7 @@ export class PaymentService {
 
     const allocationSpec = Array.isArray(body.allocationSpec) ? body.allocationSpec : payment.allocationSpec
     await this.validateAllocationSpec(communityId, payment.billingEntityId, allocationSpec as any, Number(payment.amount))
+    const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : payment.accountId ?? null
     const updated = await (this.prisma as any).payment.update({
       where: { id: payment.id },
       data: {
@@ -703,6 +837,7 @@ export class PaymentService {
         providerMeta: body.providerMeta ?? payment.providerMeta ?? null,
         allocationSpec,
         confirmedAt: new Date(),
+        accountId,
       },
     })
 
@@ -714,6 +849,7 @@ export class PaymentService {
       Number(payment.amount),
       payment.currency || 'RON',
     )
+    await this.upsertCashTxForPayment(communityId, updated as any)
     await (this.prisma as any).paymentApplication.deleteMany({ where: { paymentId: payment.id } })
     const { applied, remaining } = await this.applyPayment(
       this.prisma,
@@ -801,5 +937,49 @@ export class PaymentService {
         }
       }
     }
+  }
+
+  private async upsertCashTxForPayment(
+    communityId: string,
+    payment: { id: string; accountId?: string | null; amount: any; currency: string; ts?: Date | null; method?: string | null },
+  ) {
+    if (!payment.accountId) return
+    await this.prisma.cashTx.upsert({
+      where: {
+        communityId_refType_refId_direction: {
+          communityId,
+          refType: 'BE_PAYMENT',
+          refId: payment.id,
+          direction: 'IN',
+        },
+      },
+      update: {
+        accountId: payment.accountId,
+        amount: payment.amount,
+        currency: payment.currency || 'RON',
+        ts: payment.ts ?? new Date(),
+        kind: 'PAYMENT',
+        status: 'POSTED',
+      },
+      create: {
+        communityId,
+        accountId: payment.accountId,
+        amount: payment.amount,
+        currency: payment.currency || 'RON',
+        ts: payment.ts ?? new Date(),
+        direction: 'IN',
+        kind: 'PAYMENT',
+        status: 'POSTED',
+        refType: 'BE_PAYMENT',
+        refId: payment.id,
+        memo: payment.method ?? null,
+      },
+    })
+  }
+
+  private async ensureCashAccount(communityId: string, accountId: string) {
+    const account = await this.prisma.cashAccount.findFirst({ where: { id: accountId, communityId }, select: { id: true } })
+    if (!account) throw new NotFoundException('Cash account not found')
+    return account.id
   }
 }

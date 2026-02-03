@@ -7,6 +7,17 @@ const prisma = new PrismaClient()
 type TemplateItem =
   | { key: string; label: string; kind: 'meter'; meterId: string }
   | { key: string; label: string; kind: 'expense'; expenseTypeCode: string; description?: string; currency?: string }
+  | {
+      key: string
+      label: string
+      kind: 'charge'
+      charge?: { fundCode?: string; expenseTypeCode?: string; description?: string; currency?: string; amountKey?: string }
+      fundCode?: string
+      expenseTypeCode?: string
+      description?: string
+      currency?: string
+      amountKey?: string
+    }
 
 type BillTemplateDto = {
   code: string
@@ -14,7 +25,7 @@ type BillTemplateDto = {
   order?: number
   startPeriodCode?: string | null
   endPeriodCode?: string | null
-  template: { title: string; items: TemplateItem[] }
+  template: { title: string; items: TemplateItem[]; output?: any }
 }
 
 async function main() {

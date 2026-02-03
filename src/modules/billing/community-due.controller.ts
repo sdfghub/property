@@ -12,13 +12,13 @@ export class CommunityDueController {
   currentDue(
     @Param('communityId') communityId: string,
     @Query('beId') beId: string | undefined,
-    @Query('bucket') bucket: string | undefined,
+    @Query('fundId') fundId: string | undefined,
     @Query('unitId') unitId: string | undefined,
     @Req() req: any,
   ) {
     return this.beQueries.getCurrentDue(
       communityId,
-      { beId, bucket, unitId },
+      { beId, fundId, unitId },
       req.user?.roles ?? [],
       req.user?.sub ?? req.user?.id,
     )

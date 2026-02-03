@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { AllocationMethod } from '@prisma/client'
+import { AllocationMethod, ChargeSourceType, Prisma } from '@prisma/client'
+import { randomUUID } from 'crypto'
 import { PrismaService } from '../user/prisma.service'
 
 type PeriodRef = { id: string; seq: number; code: string }
@@ -76,6 +77,11 @@ export class AllocationService {
       amount: number
       currency?: string
       expenseTypeId?: string
+      expenseTypeCode?: string
+      sourceType?: ChargeSourceType
+      sourceId?: string
+      sourceKey?: string | null
+      fundId?: string | null
       allocationMethod?: string
       allocationParams?: any
       splits?: any[]
@@ -87,59 +93,27 @@ export class AllocationService {
     if (typeof input.amount !== 'number' || Number.isNaN(input.amount)) {
       throw new ForbiddenException('Amount required')
     }
-    if (input.expenseTypeId) {
-      const type = await this.prisma.expenseType.findFirst({ where: { id: input.expenseTypeId, communityId } })
-      if (!type) throw new NotFoundException('Expense type not found for community')
-    }
-
-    const existing = input.expenseTypeId
-      ? await this.prisma.expense.findFirst({
-          where: { periodId: period.id, communityId, expenseTypeId: input.expenseTypeId },
-          select: { id: true },
-        })
-      : null
-
-    let expId: string
-    if (existing) {
-      expId = existing.id
-      // previously logged; no console logging now
-      const vectors = await this.prisma.weightVector.findMany({ where: { expenseId: expId }, select: { id: true } })
-      if (vectors.length) {
-        await this.prisma.weightItem.deleteMany({ where: { vectorId: { in: vectors.map((v) => v.id) } } })
-        await this.prisma.weightVector.deleteMany({ where: { id: { in: vectors.map((v) => v.id) } } })
-      }
-      await this.prisma.allocationLine.deleteMany({ where: { expenseId: expId } })
-      const detailRepo: any = (this.prisma as any).allocationLineDetail
-      if (detailRepo?.deleteMany) {
-        await detailRepo.deleteMany({ where: { expenseId: expId } })
-      }
-      await this.prisma.expense.update({
-        where: { id: expId },
-        data: {
-          description: input.description,
-          allocatableAmount: input.amount,
-          currency: input.currency || 'RON',
-        },
-      })
-    } else {
-      const created = await this.prisma.expense.create({
-        data: {
+    let expenseTypeCode: string | null = input.expenseTypeCode ?? null
+    if (input.expenseTypeId || input.expenseTypeCode) {
+      const type = await this.prisma.expenseType.findFirst({
+        where: {
           communityId,
-          periodId: period.id,
-          description: input.description,
-          allocatableAmount: input.amount,
-          currency: input.currency || 'RON',
-          targetType: 'COMMUNITY',
-          targetId: communityId,
-          expenseTypeId: input.expenseTypeId ?? null,
+          ...(input.expenseTypeId ? { id: input.expenseTypeId } : {}),
+          ...(input.expenseTypeCode ? { code: input.expenseTypeCode } : {}),
         },
-        select: { id: true },
+        select: { id: true, code: true, params: true },
       })
-      expId = created.id
+      if (!type) throw new NotFoundException('Expense type not found for community')
+      expenseTypeCode = type.code
+      input.expenseTypeId = type.id
     }
+
+    const sourceId = input.sourceId || randomUUID()
+    const sourceType = input.sourceType ?? ChargeSourceType.EXPENSE
+    const sourceKey = input.sourceKey ?? 'default'
 
     const meterLabels = await this.getMeterLabelMap(communityId, period.id)
-    const traceRepo: any = (this.prisma as any).allocationTrace
+    // allocation_trace is tied to allocation_line/expense; skip when using charges
 
     const getSplitName = (node: any) => {
       return (
@@ -229,7 +203,7 @@ export class AllocationService {
         generatedAt: new Date().toISOString(),
         origin: inputTrace.origin,
         expense: {
-          id: expId,
+          id: sourceId,
           description: input.description,
           allocatableAmount: input.amount,
           currency: input.currency || 'RON',
@@ -268,94 +242,60 @@ export class AllocationService {
       }
     }
 
-    const writeTrace = async (payload: {
+    const writeTrace = async (_payload: {
       allocationLineId: string
       unitId: string
       expenseSplitId?: string | null
       splitNodeId?: string | null
       trace: any
     }) => {
-      if (!traceRepo?.upsert) return
-      await traceRepo.upsert({
-        where: { allocationLineId: payload.allocationLineId },
-        update: {
-          trace: payload.trace,
-          expenseSplitId: payload.expenseSplitId ?? null,
-          splitNodeId: payload.splitNodeId ?? null,
-        },
-        create: {
-          allocationLineId: payload.allocationLineId,
-          communityId,
-          periodId: period.id,
-          expenseId: expId,
-          unitId: payload.unitId,
-          expenseSplitId: payload.expenseSplitId ?? null,
-          splitNodeId: payload.splitNodeId ?? null,
-          trace: payload.trace,
-        },
-      })
+      return
     }
 
     let splitsToUse = input.splits
-    const splitRepo = (this.prisma as any).expenseSplit
-    if ((!splitsToUse || !splitsToUse.length) && splitRepo?.findMany) {
-      const existingSplits = await splitRepo.findMany({
-        where: { expenseId: expId },
-        select: {
-          id: true,
-          parentSplitId: true,
-          share: true,
-          amount: true,
-          basisType: true,
-          basisCode: true,
-          meta: true,
-        },
-      })
-      if (existingSplits.length) {
-        const byId = new Map<string, any>()
-        for (const s of existingSplits) {
-          const meta = (s.meta as any) ?? {}
-          const basis =
-            meta.basis ??
-            meta?.allocation?.basis ??
-            (s.basisType || s.basisCode ? { type: s.basisType, code: s.basisCode } : undefined)
-          const derivedShare = meta.derivedShare ?? meta.derived_share
-          const node: any = {
-            ...meta,
-            share: meta.share ?? (derivedShare == null && s.share != null ? Number(s.share) : undefined),
-            derivedShare,
-            allocation: meta.allocation ?? meta.alloc,
-            basis,
-            _existingSplitId: s.id,
-            _parentSplitId: s.parentSplitId ?? null,
-            _storedMeta: meta,
-          }
-          delete node.children
-          byId.set(s.id, node)
-        }
-        const roots: any[] = []
-        for (const node of byId.values()) {
-          const parentId = node._parentSplitId
-          if (parentId && byId.has(parentId)) {
-            const parent = byId.get(parentId)
-            if (!parent.children) parent.children = []
-            parent.children.push(node)
-          } else {
-            roots.push(node)
-          }
-        }
-        splitsToUse = roots
-      }
-    }
     if ((!splitsToUse || !splitsToUse.length) && input.expenseTypeId) {
-      const et = await this.prisma.expenseType.findUnique({ where: { id: input.expenseTypeId }, select: { params: true } })
+      const et = await this.prisma.expenseType.findUnique({
+        where: { id: input.expenseTypeId },
+        select: { params: true, code: true },
+      })
+      if (et?.code) expenseTypeCode = et.code
       const tmpl: any = (et?.params as any)?.splitTemplate
       if (tmpl) splitsToUse = Array.isArray(tmpl) ? tmpl : tmpl.splits ?? []
     }
 
-    if (splitsToUse && Array.isArray(splitsToUse) && splitsToUse.length) {
-      const allocationLineRepo: any = (this.prisma as any).allocationLine
+    const beMemberships = await this.prisma.billingEntityMember.findMany({
+      where: {
+        billingEntity: { communityId },
+        startSeq: { lte: period.seq },
+        OR: [{ endSeq: null }, { endSeq: { gte: period.seq } }],
+      },
+      select: { unitId: true, billingEntityId: true },
+    })
+    const unitBe = new Map<string, string>()
+    beMemberships.forEach((m) => unitBe.set(m.unitId, m.billingEntityId))
 
+    const resolveFundId = async (expType?: string | null): Promise<string> => {
+      if (!expType) throw new ForbiddenException('expenseTypeCode required to resolve fund')
+      const exp = await this.prisma.expenseType.findUnique({
+        where: { code_communityId: { code: expType, communityId } },
+        select: { params: true },
+      })
+      const fundCode = (exp?.params as any)?.fundCode
+      if (!fundCode) throw new ForbiddenException(`Expense type ${expType} missing fundCode`)
+      const fund = await this.prisma.fund.findUnique({
+        where: { communityId_code: { communityId, code: fundCode } },
+        select: { id: true },
+      })
+      if (!fund?.id) throw new ForbiddenException(`Fund ${fundCode} not found`)
+      return fund.id
+    }
+
+    const defaultFundId = await resolveFundId(expenseTypeCode)
+
+    const linesByFund = new Map<string, Array<{ unitId: string; beId: string; amount: number; meta?: any }>>()
+    const splitNodeIdsByFund = new Map<string, Set<string>>()
+
+    if (splitsToUse && Array.isArray(splitsToUse) && splitsToUse.length) {
       const resolveShares = async (siblings: any[]) => {
         const explicit = siblings.filter((s) => typeof s.share === 'number')
         const remainder = siblings.filter((s) => s.derivedShare === 'remainder')
@@ -363,19 +303,36 @@ export class AllocationService {
         for (const s of siblings.filter((s) => s.derivedShare && s.derivedShare !== 'remainder')) {
           const d = s.derivedShare
           if (d.totalMeterId && d.partMeterId) {
-            const total = await this.getMeterValue(d.totalMeterId, period.id, communityId)
-            const part = await this.getMeterValue(d.partMeterId, period.id, communityId)
-            if (total <= 0) throw new ForbiddenException(`Total meter ${d.totalMeterId} is zero`)
-            s._resolvedShare = part / total
-            s._derivedMeters = {
-              totalMeterId: d.totalMeterId,
-              partMeterId: d.partMeterId,
-              totalValue: total,
-              partValue: part,
-              totalMeterLabel: meterLabels.get(d.totalMeterId) || null,
-              partMeterLabel: meterLabels.get(d.partMeterId) || null,
+            try {
+              const total = await this.getMeterValue(d.totalMeterId, period.id, communityId)
+              const part = await this.getMeterValue(d.partMeterId, period.id, communityId)
+              if (total <= 0) throw new ForbiddenException(`Total meter ${d.totalMeterId} is zero`)
+              s._resolvedShare = part / total
+              s._derivedMeters = {
+                totalMeterId: d.totalMeterId,
+                partMeterId: d.partMeterId,
+                totalValue: total,
+                partValue: part,
+                totalMeterLabel: meterLabels.get(d.totalMeterId) || null,
+                partMeterLabel: meterLabels.get(d.partMeterId) || null,
+              }
+              derivedSum += s._resolvedShare
+            } catch (err: any) {
+              const msg = String(err?.message || '')
+              if (msg.includes('Missing measure for meter')) {
+                s._resolvedShare = 0
+                s._derivedMeters = {
+                  totalMeterId: d.totalMeterId,
+                  partMeterId: d.partMeterId,
+                  totalValue: 0,
+                  partValue: 0,
+                  totalMeterLabel: meterLabels.get(d.totalMeterId) || null,
+                  partMeterLabel: meterLabels.get(d.partMeterId) || null,
+                }
+              } else {
+                throw err
+              }
             }
-            derivedSum += s._resolvedShare
           } else {
             throw new ForbiddenException('Derived share missing meter definition')
           }
@@ -393,6 +350,28 @@ export class AllocationService {
         if (remainder.length > 1) throw new ForbiddenException('Only one remainder split allowed')
         const remaining = 1 - sum
         if (remaining < -1e-6) throw new ForbiddenException('No remaining share for remainder')
+        if (remainder.length === 0 && remaining > 1e-6) {
+          const explicitSum = explicit.reduce((acc, s) => acc + Number(s.share || 0), 0)
+          if (derivedSum > 0) {
+            const scale = (1 - explicitSum) / derivedSum
+            siblings.forEach((s: any) => {
+              if (s._resolvedShare != null) s._resolvedShare = Number(s._resolvedShare) * scale
+            })
+            derivedSum = siblings.reduce((acc: number, s: any) => (s._resolvedShare ? acc + s._resolvedShare : acc), 0)
+          } else {
+            const derivedTargets = siblings.filter((s: any) => s.derivedShare)
+            const targetCount = derivedTargets.length
+            if (targetCount === 0) {
+              throw new ForbiddenException('No remainder and no derived shares to absorb remaining allocation')
+            }
+            const per = remaining / targetCount
+            derivedTargets.forEach((s: any) => {
+              s._resolvedShare = (Number(s._resolvedShare) || 0) + per
+            })
+            derivedSum = siblings.reduce((acc: number, s: any) => (s._resolvedShare ? acc + s._resolvedShare : acc), 0)
+          }
+          sum = explicitSum + derivedSum
+        }
         explicit.forEach((s) => (s._resolvedShare = Number(s.share)))
         if (remainder.length === 1) remainder[0]._resolvedShare = remaining
       }
@@ -431,7 +410,16 @@ export class AllocationService {
       const allocateLeaf = async (leaf: any, amount: number, splitId: string, splitTrail: any[]) => {
         const alloc = { ...(leaf.allocation ?? {}) }
         if (alloc.ruleCode && !alloc.method) {
-          const rule = await this.prisma.allocationRule.findUnique({ where: { id: `${alloc.ruleCode}-${communityId}` } })
+          let rule = await this.prisma.allocationRule.findUnique({ where: { id: String(alloc.ruleCode) } })
+          if (!rule) {
+            const where: any = { communityId, method: String(alloc.ruleCode) }
+            if (alloc.params !== undefined && alloc.params !== null) {
+              where.params = { equals: alloc.params }
+            } else {
+              where.OR = [{ params: { equals: Prisma.JsonNull } }, { params: { equals: {} } }]
+            }
+            rule = await this.prisma.allocationRule.findFirst({ where })
+          }
           if (!rule) throw new ForbiddenException(`Allocation rule ${alloc.ruleCode} missing`)
           alloc.method = rule.method as any
           alloc.params = { ...(rule.params as any) }
@@ -443,7 +431,6 @@ export class AllocationService {
         if (!units.length) throw new ForbiddenException('No units in basis for allocation')
         const perUnit: Record<string, { weight: number; amount: number }> = {}
         const weightsObj = alloc.weights || alloc.values
-        const allocationLineRepo: any = (this.prisma as any).allocationLine
         if (weightsObj && typeof weightsObj === 'object') {
           const entries = Object.entries(weightsObj as Record<string, any>)
           const total = entries.reduce((s, [, v]) => s + Number(v || 0), 0)
@@ -468,21 +455,23 @@ export class AllocationService {
               displayKey: display.displayKey,
               displayParams: display.displayParams,
             }
-            const line = await allocationLineRepo.upsert({
-              where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: splitId } },
-              update: { amount: { increment: amt }, meta, splitNodeId: leaf?.id ?? null },
-              create: {
-                communityId,
-                periodId: period.id,
-                expenseId: expId,
-                unitId: unit.id,
-                expenseSplitId: splitId,
-                amount: amt,
-                splitNodeId: leaf?.id ?? null,
-                meta,
-              },
-              select: { id: true },
-            })
+            const beId = unitBe.get(unit.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: leaf?.id ?? null,
+              allocation: { method, basis, weightSource: 'explicit' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: unit.id, beId, amount: amt, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            if (leaf?.id) {
+              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
+              set.add(leaf.id)
+              splitNodeIdsByFund.set(fundId, set)
+            }
             const trailWithAlloc = attachAllocationInfo(splitTrail, {
               method,
               weightSource: 'explicit',
@@ -504,7 +493,7 @@ export class AllocationService {
               allocationConfig: normalizeAllocationConfig(alloc),
             })
             await writeTrace({
-              allocationLineId: line.id,
+              allocationLineId: 'n/a',
               unitId: unit.id,
               expenseSplitId: splitId,
               splitNodeId: leaf?.id ?? null,
@@ -514,7 +503,7 @@ export class AllocationService {
           await this.logAllocation(
             communityId,
             period.id,
-            expId,
+            sourceId,
             'Allocating split leaf with explicit weights',
             {
               splitId,
@@ -552,21 +541,23 @@ export class AllocationService {
             displayKey: display.displayKey,
             displayParams: display.displayParams,
           }
-            const line = await allocationLineRepo.upsert({
-              where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: splitId } },
-              update: { amount: { increment: per }, meta, splitNodeId: leaf?.id ?? null },
-              create: {
-                communityId,
-                periodId: period.id,
-                expenseId: expId,
-                unitId: u.id,
-                expenseSplitId: splitId,
-                amount: per,
-                splitNodeId: leaf?.id ?? null,
-                meta,
-              },
-              select: { id: true },
-            })
+            const beId = unitBe.get(u.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: leaf?.id ?? null,
+              allocation: { method, basis, weightSource: 'equal' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            if (leaf?.id) {
+              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
+              set.add(leaf.id)
+              splitNodeIdsByFund.set(fundId, set)
+            }
             const trailWithAlloc = attachAllocationInfo(splitTrail, {
               method,
               weightSource: 'equal',
@@ -588,7 +579,7 @@ export class AllocationService {
               allocationConfig: normalizeAllocationConfig(alloc),
             })
             await writeTrace({
-              allocationLineId: line.id,
+              allocationLineId: 'n/a',
               unitId: u.id,
               expenseSplitId: splitId,
               splitNodeId: leaf?.id ?? null,
@@ -598,7 +589,7 @@ export class AllocationService {
           await this.logAllocation(
             communityId,
             period.id,
-            expId,
+            sourceId,
             'Allocating split leaf equally',
             {
               splitId,
@@ -616,13 +607,171 @@ export class AllocationService {
           where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode },
           select: { scopeId: true, value: true, meterId: true },
         })
+        if (!measures.length) {
+          const per = amount / units.length
+          for (const u of units) {
+            perUnit[u.code] = { weight: 1 / units.length, amount: per }
+            const display = this.formatDisplay(
+              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal-fallback', splitNode: leaf },
+              { description: input.description, amount: per, meterLabels },
+            )
+            const meta = {
+              allocationMethod: method,
+              basis: basis ?? null,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              splitNode: leaf,
+              display: display.display,
+              displayKey: display.displayKey,
+              displayParams: display.displayParams,
+            }
+            const beId = unitBe.get(u.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: leaf?.id ?? null,
+              allocation: { method, basis, weightSource: 'equal-fallback' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            if (leaf?.id) {
+              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
+              set.add(leaf.id)
+              splitNodeIdsByFund.set(fundId, set)
+            }
+            const trailWithAlloc = attachAllocationInfo(splitTrail, {
+              method,
+              weightSource: 'equal-fallback',
+              basis,
+            })
+            const trace = buildTrace({
+              origin: 'split',
+              unit: { id: u.id, code: u.code },
+              amount: per,
+              method,
+              basis,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              splitId,
+              splitNodeId: leaf?.id ?? null,
+              splitTrail: trailWithAlloc,
+              ruleCode: alloc.ruleCode ?? null,
+              allocationParams: alloc.params ?? null,
+              allocationConfig: normalizeAllocationConfig(alloc),
+            })
+            await writeTrace({
+              allocationLineId: 'n/a',
+              unitId: u.id,
+              expenseSplitId: splitId,
+              splitNodeId: leaf?.id ?? null,
+              trace,
+            })
+          }
+          await this.logAllocation(
+            communityId,
+            period.id,
+            sourceId,
+            'Allocating split leaf equally (no measures)',
+            {
+              splitId,
+              perUnit,
+              totalAmount: amount,
+            },
+            input.description,
+          )
+          return
+        }
         const byUnit = new Map<string, { value: number; meterId?: string | null }>()
         measures.forEach((m) => byUnit.set(m.scopeId, { value: Number(m.value), meterId: m.meterId }))
+        let missingMeasure = false
         const total = units.reduce((s, u) => {
           const val = byUnit.get(u.id)?.value
-          if (val === undefined || val === null) throw new ForbiddenException(`Missing measure ${typeCode} for unit ${u.code}`)
+          if (val === undefined || val === null) {
+            missingMeasure = true
+            return s
+          }
           return s + val
         }, 0)
+        if (missingMeasure) {
+          const per = amount / units.length
+          for (const u of units) {
+            perUnit[u.code] = { weight: 1 / units.length, amount: per }
+            const display = this.formatDisplay(
+              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal-fallback', splitNode: leaf },
+              { description: input.description, amount: per, meterLabels },
+            )
+            const meta = {
+              allocationMethod: method,
+              basis: basis ?? null,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              splitNode: leaf,
+              display: display.display,
+              displayKey: display.displayKey,
+              displayParams: display.displayParams,
+            }
+            const beId = unitBe.get(u.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: leaf?.id ?? null,
+              allocation: { method, basis, weightSource: 'equal-fallback' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            if (leaf?.id) {
+              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
+              set.add(leaf.id)
+              splitNodeIdsByFund.set(fundId, set)
+            }
+            const trailWithAlloc = attachAllocationInfo(splitTrail, {
+              method,
+              weightSource: 'equal-fallback',
+              basis,
+            })
+            const trace = buildTrace({
+              origin: 'split',
+              unit: { id: u.id, code: u.code },
+              amount: per,
+              method,
+              basis,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              splitId,
+              splitNodeId: leaf?.id ?? null,
+              splitTrail: trailWithAlloc,
+              ruleCode: alloc.ruleCode ?? null,
+              allocationParams: alloc.params ?? null,
+              allocationConfig: normalizeAllocationConfig(alloc),
+            })
+            await writeTrace({
+              allocationLineId: 'n/a',
+              unitId: u.id,
+              expenseSplitId: splitId,
+              splitNodeId: leaf?.id ?? null,
+              trace,
+            })
+          }
+          await this.logAllocation(
+            communityId,
+            period.id,
+            sourceId,
+            'Allocating split leaf equally (missing measures)',
+            {
+              splitId,
+              perUnit,
+              totalAmount: amount,
+            },
+            input.description,
+          )
+          return
+        }
         if (total <= 0) throw new ForbiddenException(`Total ${typeCode} is zero for allocation`)
 
         for (const u of units) {
@@ -657,21 +806,23 @@ export class AllocationService {
             displayKey: display.displayKey,
             displayParams: display.displayParams,
           }
-          const line = await allocationLineRepo.upsert({
-            where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: splitId } },
-            update: { amount: { increment: amt }, meta, splitNodeId: leaf?.id ?? null },
-            create: {
-              communityId,
-              periodId: period.id,
-              expenseId: expId,
-              unitId: u.id,
-              expenseSplitId: splitId,
-              amount: amt,
-              splitNodeId: leaf?.id ?? null,
-              meta,
-            },
-            select: { id: true },
-          })
+          const beId = unitBe.get(u.id)
+          if (!beId) continue
+          const fundId = defaultFundId
+          const lineMeta = {
+            source: 'ALLOC',
+            expenseType: expenseTypeCode,
+            splitNodeId: leaf?.id ?? null,
+            allocation: { method, basis, weightSource: typeCode, unitMeasure: val, totalMeasure: total },
+          }
+          const fundLines = linesByFund.get(fundId) ?? []
+          fundLines.push({ unitId: u.id, beId, amount: amt, meta: lineMeta })
+          linesByFund.set(fundId, fundLines)
+          if (leaf?.id) {
+            const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
+            set.add(leaf.id)
+            splitNodeIdsByFund.set(fundId, set)
+          }
           const trailWithAlloc = attachAllocationInfo(splitTrail, {
             method,
             weightSource: typeCode,
@@ -696,7 +847,7 @@ export class AllocationService {
             allocationConfig: normalizeAllocationConfig(alloc),
           })
           await writeTrace({
-            allocationLineId: line.id,
+            allocationLineId: 'n/a',
             unitId: u.id,
             expenseSplitId: splitId,
             splitNodeId: leaf?.id ?? null,
@@ -706,7 +857,7 @@ export class AllocationService {
         await this.logAllocation(
           communityId,
           period.id,
-          expId,
+          sourceId,
           `Allocating split leaf using ${typeCode}`,
           {
             splitId,
@@ -740,23 +891,6 @@ export class AllocationService {
         }
       }
 
-      const buildSplitMeta = (node: any, splitAmount: number) => {
-        const base: any = { ...(node._storedMeta ?? node) }
-        delete base._storedMeta
-        delete base._existingSplitId
-        delete base._parentSplitId
-        delete base._resolvedShare
-        const display = this.formatDisplay(
-          {
-            allocationMethod: (node.allocation as any)?.method,
-            basis: (node.allocation as any)?.basis ?? node.basis,
-            splitNode: node,
-          },
-          { description: input.description, amount: splitAmount, meterLabels },
-        )
-        return { ...base, display }
-      }
-
       const processSplits = async (nodes: any[], amount: number, parentId: string | null, trail: any[]) => {
         await resolveShares(nodes)
         for (const node of nodes) {
@@ -764,36 +898,8 @@ export class AllocationService {
           if (share == null) throw new ForbiddenException('Split share missing')
           const splitAmount = amount * Number(share)
           const basis = (node.allocation as any)?.basis ?? node.basis
-          const meta = buildSplitMeta(node, splitAmount)
           let splitId = node._existingSplitId
-          if (splitId) {
-            await splitRepo.update({
-              where: { id: splitId },
-              data: {
-                parentSplitId: parentId,
-                share: share,
-                amount: splitAmount,
-                basisType: basis?.type ?? null,
-                basisCode: basis?.code ?? null,
-                meta,
-              },
-            })
-          } else {
-            const split = await splitRepo.create({
-              data: {
-                communityId,
-                periodId: period.id,
-                expenseId: expId,
-                parentSplitId: parentId,
-                share: share,
-                amount: splitAmount,
-                basisType: basis?.type ?? null,
-                basisCode: basis?.code ?? null,
-                meta,
-              },
-            })
-            splitId = split.id
-          }
+          if (!splitId) splitId = randomUUID()
           const trailEntry = buildSplitTrailEntry(node, splitId, splitAmount, Number(share), basis, amount)
           const nextTrail = trail.concat(trailEntry)
           if (node.children && node.children.length) {
@@ -805,7 +911,19 @@ export class AllocationService {
       }
 
       await processSplits(splitsToUse, input.amount, null, [])
-      return { ok: true, id: expId }
+      const charges = await this.persistChargesFromLines(communityId, period.id, {
+        sourceId,
+        sourceType,
+        sourceKey,
+        fundId: input.fundId ?? null,
+        currency: input.currency || 'RON',
+        description: input.description,
+        allocationStrategy: 'EXPENSE_SPLITS',
+        expenseTypeCode,
+        splitNodeIdsByFund,
+        linesByFund,
+      })
+      return { ok: true, id: sourceId, charges }
     }
 
     if (!input.allocationMethod) {
@@ -817,25 +935,7 @@ export class AllocationService {
 
     if (input.allocationMethod) {
       const method = input.allocationMethod as AllocationMethod
-      await this.logAllocation(communityId, period.id, expId, `One-off allocation method=${method}`, undefined, input.description)
-      const rule = await this.prisma.allocationRule.create({
-        data: {
-          communityId,
-          method,
-          params: input.allocationParams ?? null,
-        },
-        select: { id: true },
-      })
-      await this.prisma.weightVector.create({
-        data: {
-          communityId,
-          periodId: period.id,
-          ruleId: rule.id,
-          scopeType: 'COMMUNITY',
-          scopeId: communityId,
-          expenseId: expId,
-        },
-      })
+      await this.logAllocation(communityId, period.id, sourceId, `One-off allocation method=${method}`, undefined, input.description)
       const precomputed = input.allocationParams?.perUnit || input.allocationParams?.allocations
       if (Array.isArray(precomputed) && precomputed.length) {
         const perUnit: Record<string, { weight: number; amount: number }> = {}
@@ -865,20 +965,18 @@ export class AllocationService {
             displayKey: display.displayKey,
             displayParams: display.displayParams,
           }
-          const line = await this.prisma.allocationLine.upsert({
-            where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: null as any } },
-            update: { amount, meta },
-            create: {
-              communityId,
-              periodId: period.id,
-              expenseId: expId,
-              unitId: unit.id,
-              expenseSplitId: null,
-              amount,
-              meta,
-            },
-            select: { id: true },
-          })
+          const beId = unitBe.get(unit.id)
+          if (!beId) continue
+          const fundId = defaultFundId
+          const lineMeta = {
+            source: 'ALLOC',
+            expenseType: expenseTypeCode,
+            splitNodeId: null,
+            allocation: { method, weightSource: 'explicit' },
+          }
+          const fundLines = linesByFund.get(fundId) ?? []
+          fundLines.push({ unitId: unit.id, beId, amount, meta: lineMeta })
+          linesByFund.set(fundId, fundLines)
           const trace = buildTrace({
             origin: 'one-off',
             unit: { id: unit.id, code: unit.code },
@@ -886,11 +984,10 @@ export class AllocationService {
             method,
             weight,
             weightSource: 'explicit',
-            ruleId: rule.id,
             allocationParams: input.allocationParams ?? null,
           })
           await writeTrace({
-            allocationLineId: line.id,
+            allocationLineId: 'n/a',
             unitId: unit.id,
             expenseSplitId: null,
             splitNodeId: null,
@@ -900,7 +997,7 @@ export class AllocationService {
         await this.logAllocation(
           communityId,
           period.id,
-          expId,
+          sourceId,
           'Allocating using precomputed per-unit amounts',
           {
             totalAmount: input.amount,
@@ -908,7 +1005,19 @@ export class AllocationService {
           },
           input.description,
         )
-        return { ok: true, id: expId }
+        const charges = await this.persistChargesFromLines(communityId, period.id, {
+          sourceId,
+          sourceType,
+          sourceKey,
+          fundId: input.fundId ?? null,
+          currency: input.currency || 'RON',
+          description: input.description,
+          allocationStrategy: method,
+          expenseTypeCode,
+          splitNodeIdsByFund,
+          linesByFund,
+        })
+        return { ok: true, id: sourceId, charges }
       }
 
       const weights = input.allocationParams?.weights || input.allocationParams?.values
@@ -942,20 +1051,18 @@ export class AllocationService {
             displayKey: display.displayKey,
             displayParams: display.displayParams,
           }
-          const line = await this.prisma.allocationLine.upsert({
-            where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: unit.id, expenseSplitId: null as any } },
-            update: { amount, meta },
-            create: {
-              communityId,
-              periodId: period.id,
-              expenseId: expId,
-              unitId: unit.id,
-              expenseSplitId: null,
-              amount,
-              meta,
-            },
-            select: { id: true },
-          })
+          const beId = unitBe.get(unit.id)
+          if (!beId) continue
+          const fundId = defaultFundId
+          const lineMeta = {
+            source: 'ALLOC',
+            expenseType: expenseTypeCode,
+            splitNodeId: null,
+            allocation: { method, weightSource: 'explicit' },
+          }
+          const fundLines = linesByFund.get(fundId) ?? []
+          fundLines.push({ unitId: unit.id, beId, amount, meta: lineMeta })
+          linesByFund.set(fundId, fundLines)
           const trace = buildTrace({
             origin: 'one-off',
             unit: { id: unit.id, code: unit.code },
@@ -963,11 +1070,10 @@ export class AllocationService {
             method,
             weight: share,
             weightSource: 'explicit',
-            ruleId: rule.id,
             allocationParams: input.allocationParams ?? null,
           })
           await writeTrace({
-            allocationLineId: line.id,
+            allocationLineId: 'n/a',
             unitId: unit.id,
             expenseSplitId: null,
             splitNodeId: null,
@@ -977,7 +1083,7 @@ export class AllocationService {
         await this.logAllocation(
           communityId,
           period.id,
-          expId,
+          sourceId,
           'Allocating using provided weights',
           {
             totalWeight: total,
@@ -996,17 +1102,135 @@ export class AllocationService {
         else throw new ForbiddenException(`Allocation method ${method} requires explicit weights`)
 
         const units = await this.prisma.unit.findMany({ where: { communityId }, select: { id: true, code: true } })
+        const perUnit: Record<string, { weight: number; amount: number }> = {}
         const measures = await this.prisma.periodMeasure.findMany({
           where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode },
           select: { scopeId: true, value: true },
         })
+        if (!measures.length) {
+          const per = Number(input.amount) / units.length
+          for (const u of units) {
+            const amount = per
+            perUnit[u.code] = { weight: 1 / units.length, amount }
+            const meta = {
+              allocationMethod: method,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              display: this.formatDisplay(
+                { allocationMethod: method, weight: 1 / units.length, weightSource: 'equal-fallback' },
+                { description: input.description, amount, meterLabels },
+              ),
+            }
+            const beId = unitBe.get(u.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: null,
+              allocation: { method, weightSource: 'equal-fallback' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: u.id, beId, amount, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            const trace = buildTrace({
+              origin: 'one-off',
+              unit: { id: u.id, code: u.code },
+              amount,
+              method,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              allocationParams: input.allocationParams ?? null,
+            })
+            await writeTrace({
+              allocationLineId: 'n/a',
+              unitId: u.id,
+              expenseSplitId: null,
+              splitNodeId: null,
+              trace,
+            })
+          }
+          await this.logAllocation(
+            communityId,
+            period.id,
+            sourceId,
+            'Allocating equally (no measures)',
+            {
+              units: units.length,
+              perUnit,
+              totalAmount: input.amount,
+            },
+            input.description,
+          )
+          return
+        }
         const byUnit = new Map(measures.map((m) => [m.scopeId, Number(m.value)]))
-        const perUnit: Record<string, { weight: number; amount: number }> = {}
+        let missingMeasure = false
         const total = units.reduce((s, u) => {
           const val = byUnit.get(u.id)
-          if (val === undefined || val === null) throw new ForbiddenException(`Missing measure ${typeCode} for unit ${u.code}`)
+          if (val === undefined || val === null) {
+            missingMeasure = true
+            return s
+          }
           return s + val
         }, 0)
+        if (missingMeasure) {
+          const per = Number(input.amount) / units.length
+          for (const u of units) {
+            const amount = per
+            perUnit[u.code] = { weight: 1 / units.length, amount }
+            const meta = {
+              allocationMethod: method,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              display: this.formatDisplay(
+                { allocationMethod: method, weight: 1 / units.length, weightSource: 'equal-fallback' },
+                { description: input.description, amount, meterLabels },
+              ),
+            }
+            const beId = unitBe.get(u.id)
+            if (!beId) continue
+            const fundId = defaultFundId
+            const lineMeta = {
+              source: 'ALLOC',
+              expenseType: expenseTypeCode,
+              splitNodeId: null,
+              allocation: { method, weightSource: 'equal-fallback' },
+            }
+            const fundLines = linesByFund.get(fundId) ?? []
+            fundLines.push({ unitId: u.id, beId, amount, meta: lineMeta })
+            linesByFund.set(fundId, fundLines)
+            const trace = buildTrace({
+              origin: 'one-off',
+              unit: { id: u.id, code: u.code },
+              amount,
+              method,
+              weight: 1 / units.length,
+              weightSource: 'equal-fallback',
+              allocationParams: input.allocationParams ?? null,
+            })
+            await writeTrace({
+              allocationLineId: 'n/a',
+              unitId: u.id,
+              expenseSplitId: null,
+              splitNodeId: null,
+              trace,
+            })
+          }
+          await this.logAllocation(
+            communityId,
+            period.id,
+            sourceId,
+            'Allocating equally (missing measures)',
+            {
+              units: units.length,
+              perUnit,
+              totalAmount: input.amount,
+            },
+            input.description,
+          )
+          return
+        }
         if (total <= 0) throw new ForbiddenException(`Total ${typeCode} is zero for allocation`)
 
         for (const u of units) {
@@ -1025,20 +1249,18 @@ export class AllocationService {
               { description: input.description, amount, meterLabels },
             ),
           }
-          const line = await this.prisma.allocationLine.upsert({
-            where: { expenseId_unitId_expenseSplitId: { expenseId: expId, unitId: u.id, expenseSplitId: null as any } },
-            update: { amount, meta },
-            create: {
-              communityId,
-              periodId: period.id,
-              expenseId: expId,
-              unitId: u.id,
-              expenseSplitId: null,
-              amount,
-              meta,
-            },
-            select: { id: true },
-          })
+          const beId = unitBe.get(u.id)
+          if (!beId) continue
+          const fundId = defaultFundId
+          const lineMeta = {
+            source: 'ALLOC',
+            expenseType: expenseTypeCode,
+            splitNodeId: null,
+            allocation: { method, weightSource: typeCode, unitMeasure: val, totalMeasure: total },
+          }
+          const fundLines = linesByFund.get(fundId) ?? []
+          fundLines.push({ unitId: u.id, beId, amount, meta: lineMeta })
+          linesByFund.set(fundId, fundLines)
           const trace = buildTrace({
             origin: 'one-off',
             unit: { id: u.id, code: u.code },
@@ -1048,18 +1270,17 @@ export class AllocationService {
             weightSource: typeCode,
             unitMeasure: val,
             totalMeasure: total,
-            ruleId: rule.id,
             allocationParams: input.allocationParams ?? null,
           })
           await writeTrace({
-            allocationLineId: line.id,
+            allocationLineId: 'n/a',
             unitId: u.id,
             expenseSplitId: null,
             splitNodeId: null,
             trace,
           })
         }
-        await this.logAllocation(communityId, period.id, expId, `Allocating using ${typeCode} measures`, {
+        await this.logAllocation(communityId, period.id, sourceId, `Allocating using ${typeCode} measures`, {
           typeCode,
           totalMeasure: total,
           units: units.length,
@@ -1068,7 +1289,19 @@ export class AllocationService {
         })
       }
     }
-    return { ok: true, id: expId }
+    const charges = await this.persistChargesFromLines(communityId, period.id, {
+      sourceId,
+      sourceType,
+      sourceKey,
+      fundId: input.fundId ?? null,
+      currency: input.currency || 'RON',
+      description: input.description,
+      allocationStrategy: input.allocationMethod ?? 'UNKNOWN',
+      expenseTypeCode,
+      splitNodeIdsByFund,
+      linesByFund,
+    })
+    return { ok: true, id: sourceId, charges }
   }
 
   private mapToObj(map: Map<string, number>) {
@@ -1173,31 +1406,95 @@ export class AllocationService {
   }
 
   private async logAllocation(
+    _communityId: string,
+    _periodId: string,
+    _expenseId: string,
+    _message: string,
+    _details?: any,
+    _expenseDesc?: string,
+  ) {
+    return
+  }
+
+  private async persistChargesFromLines(
     communityId: string,
     periodId: string,
-    expenseId: string,
-    message: string,
-    details?: any,
-    expenseDesc?: string,
+    input: {
+      sourceType?: ChargeSourceType
+      sourceId: string
+      sourceKey?: string | null
+      fundId?: string | null
+      currency: string
+      description: string
+      allocationStrategy: string
+      expenseTypeCode?: string | null
+      splitNodeIdsByFund: Map<string, Set<string>>
+      linesByFund: Map<string, Array<{ unitId: string; beId: string; amount: number; meta?: any }>>
+    },
   ) {
-    let name = expenseDesc
-    if (!name) {
-      const exp = await this.prisma.expense.findUnique({ where: { id: expenseId }, select: { description: true } })
-      name = exp?.description
-    }
-    const label = name ? `${name} (id=${expenseId})` : expenseId
-    try {
-      await (this.prisma as any).allocationLog.create({
-        data: {
+    const sourceType = input.sourceType ?? ChargeSourceType.EXPENSE
+    const sourceKey = input.sourceKey ?? 'default'
+    const results: Array<{ fundId: string; chargeId: string }> = []
+    for (const [fundIdKey, lines] of input.linesByFund.entries()) {
+      const amount = lines.reduce((s, l) => s + Number(l.amount || 0), 0)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+      const charge = await this.prisma.communityCharge.upsert({
+        where: {
+          communityId_periodId_sourceType_sourceId_sourceKey_fundId: {
+            communityId,
+            periodId,
+            sourceType,
+            sourceId: input.sourceId,
+            sourceKey,
+            fundId: fundIdKey,
+          },
+        },
+        update: {
+          amount,
+          currency: input.currency || 'RON',
+          allocationStrategy: input.allocationStrategy,
+          allocationSnapshot: {
+            expenseType: input.expenseTypeCode ?? null,
+            splitNodeIds: Array.from(input.splitNodeIdsByFund.get(fundIdKey) ?? []),
+          },
+          status: 'ACTIVE',
+          meta: { description: input.description },
+          fundId: fundIdKey,
+        },
+        create: {
           communityId,
           periodId,
-          expenseId,
-          message,
-          details: details ?? null,
+          fundId: fundIdKey,
+          sourceType,
+          sourceId: input.sourceId,
+          sourceKey,
+          amount,
+          currency: input.currency || 'RON',
+          allocationStrategy: input.allocationStrategy,
+          allocationSnapshot: {
+            expenseType: input.expenseTypeCode ?? null,
+            splitNodeIds: Array.from(input.splitNodeIdsByFund.get(fundIdKey) ?? []),
+          },
+          status: 'ACTIVE',
+          meta: { description: input.description },
         },
+        select: { id: true },
       })
-    } catch (err) {
-      // swallow logging issues
+      await this.prisma.communityChargeLine.deleteMany({ where: { chargeId: charge.id } })
+      await this.prisma.communityChargeLine.createMany({
+        data: lines.map((line) => ({
+          chargeId: charge.id,
+          communityId,
+          periodId,
+          billingEntityId: line.beId,
+          unitId: line.unitId,
+          amount: line.amount,
+          meta: line.meta,
+        })),
+        skipDuplicates: true,
+      })
+      results.push({ fundId: fundIdKey, chargeId: charge.id })
     }
+    return results
   }
 }

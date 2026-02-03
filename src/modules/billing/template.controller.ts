@@ -15,6 +15,16 @@ export class TemplateController {
     return this.templates.listBillTemplates(communityId, periodCode, req.user?.roles ?? [])
   }
 
+  @Post('periods/:periodCode/bill-templates')
+  upsertBillTemplate(
+    @Param('communityId') communityId: string,
+    @Param('periodCode') _periodCode: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    return this.templates.upsertBillTemplate(communityId, req.user?.roles ?? [], body)
+  }
+
   @Post('periods/:periodCode/bill-templates/:code/state')
   saveBillTemplateState(
     @Param('communityId') communityId: string,
@@ -76,6 +86,16 @@ export class TemplateController {
   @Get('periods/:periodCode/meter-templates')
   listMeterTemplates(@Param('communityId') communityId: string, @Param('periodCode') periodCode: string, @Req() req: any) {
     return this.templates.listMeterTemplates(communityId, periodCode, req.user?.roles ?? [])
+  }
+
+  @Post('periods/:periodCode/meter-templates')
+  upsertMeterTemplate(
+    @Param('communityId') communityId: string,
+    @Param('periodCode') _periodCode: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    return this.templates.upsertMeterTemplate(communityId, req.user?.roles ?? [], body)
   }
 
   @Post('periods/:periodCode/meter-templates/:code/state')

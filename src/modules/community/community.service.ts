@@ -389,10 +389,6 @@ export class CommunityService {
           where: { group: { communityId: community.id } },
           select: { groupId: true, unitId: true, startSeq: true, endSeq: true },
         }),
-        this.prisma.bucketRule.findMany({
-          where: { communityId: community.id },
-          orderBy: { priority: 'asc' },
-        }),
         this.prisma.allocationRule.findMany({
           where: { communityId: community.id },
           orderBy: { id: 'asc' },
@@ -448,14 +444,14 @@ export class CommunityService {
         }),
       ])
 
-      const billingEntitiesRaw = results[8]
+      const billingEntitiesRaw = results[7]
       const beCodeById = new Map<string, string>()
       ;(billingEntitiesRaw as any[]).forEach((be: any) => {
         if (be && be.id) beCodeById.set(be.id, be.code ?? '')
       })
 
-      const beMemberships = results[10] as Array<{ unitId: string; billingEntityId: string }>
-      const meters = results[11] as Array<{ meterId: string; name?: string | null; notes?: string | null }>
+      const beMemberships = results[9] as Array<{ unitId: string; billingEntityId: string }>
+      const meters = results[10] as Array<{ meterId: string; name?: string | null; notes?: string | null }>
       const beByUnit = new Map<string, string[]>()
       const unitCodeById = new Map<string, string>()
       rawUnits.forEach((u: any) => unitCodeById.set(u.id, u.code))
@@ -482,11 +478,10 @@ export class CommunityService {
       }))
       const unitGroups = results[1]
       const unitGroupMembers = results[2]
-      const bucketRules = results[3]
-      const allocationRules = results[4]
-      const expenseTypes = results[5] as Array<{ params?: any }>
-      const splitGroups = results[6]
-      const splitGroupMembers = results[7]
+      const allocationRules = results[3]
+      const expenseTypes = results[4] as Array<{ params?: any }>
+      const splitGroups = results[5]
+      const splitGroupMembers = results[6]
       const billingEntities = (billingEntitiesRaw as any[]).map((be: any, idx: number) => ({
         id: be.id,
         code: be.code,
@@ -494,7 +489,7 @@ export class CommunityService {
         order: (be.order ?? idx) + 1,
         units: membersByBe.get(be.id) ?? [],
       }))
-      const beRespPending = results[9] as any
+      const beRespPending = results[8] as any
 
       const splitNodeNamesMap = (() => {
         const splitNodes = new Map<string, string>()
@@ -517,7 +512,6 @@ export class CommunityService {
         units,
         unitGroups,
         unitGroupMembers,
-        bucketRules,
         allocationRules,
         expenseSplits: expenseTypes.map((et) => {
           const template: any = (et.params as any)?.splitTemplate
@@ -575,13 +569,13 @@ export class CommunityService {
     }
   }
 
-  async listPrograms(communityCode: string) {
+  async listFunds(communityCode: string) {
     const community = await this.prisma.community.findFirst({
       where: { code: communityCode },
       select: { id: true },
     })
     if (!community) return null
-    return this.prisma.program.findMany({
+    return this.prisma.fund.findMany({
       where: { communityId: community.id },
       orderBy: { code: 'asc' },
     })

@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../user/prisma.service'
 import { BillingPeriodLookupService } from './period-lookup.service'
 import { EngagementService } from '../engagement/engagement.service'
-import { ProgramService } from '../program/program.service'
+import { FundService } from '../fund/fund.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
@@ -12,7 +12,7 @@ export class BeQueryService {
     private readonly prisma: PrismaService,
     private readonly periodLookup: BillingPeriodLookupService,
     private readonly engagement: EngagementService,
-    private readonly programs: ProgramService,
+    private readonly funds: FundService,
   ) {}
 
   private async getBeById(beId: string) {
@@ -62,12 +62,12 @@ export class BeQueryService {
 
   async getCurrentDue(
     communityRef: string,
-    filters: { beId?: string; bucket?: string; unitId?: string },
+    filters: { beId?: string; fundId?: string; unitId?: string },
     roles: RoleAssignment[],
     userId?: string,
   ) {
     const communityId = await this.periodLookup.resolveCommunityId(communityRef)
-    const hasFilters = !!(filters.bucket || filters.unitId)
+    const hasFilters = !!(filters.fundId || filters.unitId)
     const accessibleBeIds = await this.listAccessibleBeIds(communityId, roles, userId)
     if (!accessibleBeIds.length) {
       throw new ForbiddenException('No billing entities for this user in community')
@@ -122,7 +122,7 @@ export class BeQueryService {
     communityId: string,
     periodId: string,
     beIds: string[],
-    filters: { bucket?: string; unitId?: string },
+    filters: { fundId?: string; unitId?: string },
   ) {
     const period = await this.prisma.period.findUnique({
       where: { id: periodId },
@@ -139,9 +139,9 @@ export class BeQueryService {
     communityId: string,
     period: { id: string; seq: number },
     beIds: string[],
-    filters: { bucket?: string; unitId?: string },
+    filters: { fundId?: string; unitId?: string },
   ) {
-    const hasFilters = !!(filters.bucket || filters.unitId)
+    const hasFilters = !!(filters.fundId || filters.unitId)
     const sums: Array<{ billing_entity_id: string; kind: string; total: any }> = await this.prisma.$queryRawUnsafe(
       `
       SELECT billing_entity_id, kind, SUM(amount)::numeric AS total
@@ -149,14 +149,14 @@ export class BeQueryService {
       WHERE community_id = $1
         AND period_id = $2
         AND billing_entity_id = ANY($3)
-        ${filters.bucket ? 'AND bucket = $4' : ''}
-        ${filters.unitId ? `AND unit_id = ${filters.bucket ? '$5' : '$4'}` : ''}
+        ${filters.fundId ? 'AND fund_id = $4' : ''}
+        ${filters.unitId ? `AND unit_id = ${filters.fundId ? '$5' : '$4'}` : ''}
       GROUP BY billing_entity_id, kind
     `,
       communityId,
       period.id,
       beIds,
-      ...(filters.bucket ? [filters.bucket] : []),
+      ...(filters.fundId ? [filters.fundId] : []),
       ...(filters.unitId ? [filters.unitId] : []),
     )
 
@@ -232,16 +232,17 @@ export class BeQueryService {
         be.id,
         be.code,
         be.name,
-        COALESCE(SUM(al.amount), 0)::numeric AS total_amount
+        COALESCE(SUM(ccl.amount), 0)::numeric AS total_amount
       FROM billing_entity be
       JOIN p ON TRUE
       LEFT JOIN billing_entity_member bem
         ON bem.billing_entity_id = be.id
        AND bem.start_seq <= p.seq
        AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      LEFT JOIN allocation_line al
-        ON al.unit_id = bem.unit_id
-       AND al.period_id = p.period_id
+      LEFT JOIN community_charge_line ccl
+        ON ccl.unit_id = bem.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
       WHERE be.community_id = p.community_id
       GROUP BY be.id, be.code, be.name
       ORDER BY be.code
@@ -272,13 +273,14 @@ export class BeQueryService {
       SELECT
         u.id AS unit_id,
         u.code AS unit_code,
-        COALESCE(SUM(al.amount), 0)::numeric AS unit_amount
+        COALESCE(SUM(ccl.amount), 0)::numeric AS unit_amount
       FROM billing_entity_member bem
       JOIN p ON TRUE
       JOIN unit u ON u.id = bem.unit_id
-      LEFT JOIN allocation_line al
-        ON al.unit_id = bem.unit_id
-       AND al.period_id = p.period_id
+      LEFT JOIN community_charge_line ccl
+        ON ccl.unit_id = bem.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
       WHERE bem.billing_entity_id = p.be_id
         AND bem.start_seq <= p.seq
         AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
@@ -304,27 +306,27 @@ export class BeQueryService {
     const lines = await this.prisma.$queryRawUnsafe<any[]>(`
       WITH p AS (SELECT $1::text AS community_id, $2::int AS seq, $3::text AS period_id, $4::text AS be_id)
       SELECT
-        al.id AS allocation_id,
-        al.amount,
+        ccl.id AS allocation_id,
+        ccl.amount,
         u.id AS unit_id,
         u.code AS unit_code,
-        e.id AS expense_id,
-        e.description AS expense_description,
-        et.code AS expense_type_code,
-        e.currency,
-        e.allocatable_amount
+        CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS expense_id,
+        cc.meta->>'description' AS expense_description,
+        ccl.meta->>'expenseType' AS expense_type_code,
+        cc.currency AS currency,
+        cc.amount AS allocatable_amount
       FROM billing_entity_member bem
       JOIN p ON TRUE
       JOIN unit u ON u.id = bem.unit_id
-      JOIN allocation_line al
-        ON al.unit_id = bem.unit_id
-       AND al.period_id = p.period_id
-      JOIN expense e ON e.id = al.expense_id
-      JOIN expense_type et ON et.id = e.expense_type_id
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = bem.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
+      JOIN community_charge cc ON cc.id = ccl.charge_id
       WHERE bem.billing_entity_id = p.be_id
         AND bem.start_seq <= p.seq
         AND (bem.end_seq IS NULL OR bem.end_seq >= p.seq)
-      ORDER BY u.code, e.description
+      ORDER BY u.code, expense_description
     `, communityId, period.seq, period.id, be.id);
 
     return { period, be, lines };
@@ -353,19 +355,22 @@ export class BeQueryService {
     const lines = await this.prisma.$queryRawUnsafe<any[]>(`
       WITH p AS (SELECT $1::text AS community_id, $2::int AS seq, $3::text AS period_id, $4::text AS be_id, $5::text AS unit_id)
       SELECT
-        al.id               AS allocation_id,
-        al.amount,
-        e.id                AS expense_id,
-        e.description       AS expense_description,
-        et.code             AS expense_type_code,
-        e.currency,
-        e.allocatable_amount
-      FROM allocation_line al
-      JOIN expense e       ON e.id = al.expense_id
-      JOIN expense_type et ON et.id = e.expense_type_id
-      WHERE al.period_id = $1 AND al.unit_id = $5
-      ORDER BY e.description
-    `, period.id, unit.id);
+        ccl.id AS allocation_id,
+        ccl.amount,
+        CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS expense_id,
+        cc.meta->>'description' AS expense_description,
+        ccl.meta->>'expenseType' AS expense_type_code,
+        cc.currency AS currency,
+        cc.amount AS allocatable_amount
+      FROM p
+      JOIN community_charge_line ccl
+        ON ccl.unit_id = p.unit_id
+       AND ccl.period_id = p.period_id
+       AND ccl.community_id = p.community_id
+      JOIN community_charge cc ON cc.id = ccl.charge_id
+      WHERE ccl.period_id = p.period_id AND ccl.unit_id = p.unit_id
+      ORDER BY expense_description
+    `, communityId, period.seq, period.id, be.id, unit.id);
 
     const total = lines.reduce((s,l)=> s + Number(l.amount), 0);
 
@@ -379,29 +384,28 @@ export class BeQueryService {
 
     const lines = await this.prisma.$queryRawUnsafe<any[]>(`
       SELECT
-        al.id AS allocation_id,
-        al.amount,
+        ccl.id AS allocation_id,
+        ccl.amount,
         u.id AS unit_id,
         u.code AS unit_code,
-        e.id AS expense_id,
-        e.description AS expense_description,
-        et.code AS expense_type_code,
-        e.currency,
-        e.allocatable_amount
-      FROM allocation_line al
-      JOIN unit u ON u.id = al.unit_id
-      JOIN expense e ON e.id = al.expense_id
-      JOIN expense_type et ON et.id = e.expense_type_id
-      WHERE al.period_id = $1
-        AND al.community_id = $2
+        CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS expense_id,
+        cc.meta->>'description' AS expense_description,
+        ccl.meta->>'expenseType' AS expense_type_code,
+        cc.currency AS currency,
+        cc.amount AS allocatable_amount
+      FROM community_charge_line ccl
+      JOIN community_charge cc ON cc.id = ccl.charge_id
+      JOIN unit u ON u.id = ccl.unit_id
+      WHERE ccl.period_id = $1
+        AND ccl.community_id = $2
         AND EXISTS (
           SELECT 1 FROM billing_entity_member bem
            WHERE bem.billing_entity_id = $3
-             AND bem.unit_id = al.unit_id
+             AND bem.unit_id = ccl.unit_id
              AND bem.start_seq <= $4
              AND (bem.end_seq IS NULL OR bem.end_seq >= $4)
         )
-      ORDER BY u.code, e.description
+      ORDER BY u.code, expense_description
     `, period.id, be.communityId, be.id, period.seq);
 
     return { period, be, lines }
@@ -433,36 +437,33 @@ export class BeQueryService {
       }),
       this.prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          al.id AS allocation_id,
-          al.amount,
+          ccl.id AS allocation_id,
+          ccl.amount,
           u.id AS unit_id,
           u.code AS unit_code,
-          e.id AS expense_id,
-          e.description AS expense_description,
-          et.code AS expense_type_code,
-          e.currency,
-          e.allocatable_amount,
-          al.split_node_id,
-          at.trace AS allocation_trace,
+          CASE WHEN cc.source_type = 'EXPENSE' THEN cc.source_id ELSE NULL END AS expense_id,
+          cc.meta->>'description' AS expense_description,
+          ccl.meta->>'expenseType' AS expense_type_code,
+          cc.currency,
+          cc.amount AS allocatable_amount,
+          ccl.meta->>'splitNodeId' AS split_node_id,
           sg.id AS split_group_id,
           sg.name AS split_group_name
-        FROM allocation_line al
-        JOIN unit u ON u.id = al.unit_id
-        JOIN expense e ON e.id = al.expense_id
-        JOIN expense_type et ON et.id = e.expense_type_id
-        LEFT JOIN allocation_trace at ON at.allocation_line_id = al.id
-        LEFT JOIN split_group_member sgm ON sgm.split_node_id = al.split_node_id
+        FROM community_charge_line ccl
+        JOIN community_charge cc ON cc.id = ccl.charge_id
+        JOIN unit u ON u.id = ccl.unit_id
+        LEFT JOIN split_group_member sgm ON sgm.split_node_id = (ccl.meta->>'splitNodeId')
         LEFT JOIN split_group sg ON sg.id = sgm.split_group_id
-        WHERE al.period_id = $1
-          AND al.community_id = $2
+        WHERE ccl.period_id = $1
+          AND ccl.community_id = $2
           AND EXISTS (
             SELECT 1 FROM billing_entity_member bem
              WHERE bem.billing_entity_id = $3
-               AND bem.unit_id = al.unit_id
+               AND bem.unit_id = ccl.unit_id
                AND bem.start_seq <= $4
                AND (bem.end_seq IS NULL OR bem.end_seq >= $4)
           )
-        ORDER BY u.code, e.description
+        ORDER BY u.code, expense_description
       `, period.id, be.communityId, be.id, period.seq),
       this.prisma.splitGroup.findMany({ where: { communityId: be.communityId }, orderBy: [{ order: 'asc' }, { code: 'asc' }] }),
       this.prisma.splitGroupMember.findMany({
@@ -492,17 +493,12 @@ export class BeQueryService {
     splitGroups.forEach((g: any) => collectNodes(g.params as any))
     expenseTypes.forEach((et: any) => collectNodes(et.params as any))
 
-    const allocations = (allocationsRaw || []).map((a: any) => {
-      const trail = (a.allocation_trace as any)?.split?.trail ?? null
-      const last = Array.isArray(trail) && trail.length ? trail[trail.length - 1] : null
-      const traceName = last?.name || last?.id || null
-      return {
-        ...a,
-        split_name: traceName ?? (a.split_node_id ? splitNodeNames[a.split_node_id] || null : null),
-        split_group_id: a.split_group_id,
-        split_group_name: a.split_group_name,
-      }
-    })
+    const allocations = (allocationsRaw || []).map((a: any) => ({
+      ...a,
+      split_name: a.split_node_id ? splitNodeNames[a.split_node_id] || null : null,
+      split_group_id: a.split_group_id,
+      split_group_name: a.split_group_name,
+    }))
 
     return { be, period, statement, ledgerEntries, allocations, splitGroups, splitGroupMembers, splitNodeNames }
   }
@@ -593,10 +589,10 @@ export class BeQueryService {
       })
     }
 
-    const [events, polls, programs] = await Promise.all([
+    const [events, polls, funds] = await Promise.all([
       this.engagement.listEvents(be.communityId, userId ?? '', roles),
       this.engagement.listPolls(be.communityId, userId ?? '', roles),
-      this.programs.listBalances(be.communityId),
+      this.funds.listBalances(be.communityId),
     ])
 
     const now = Date.now()
@@ -612,9 +608,9 @@ export class BeQueryService {
       })
       .slice(0, 3)
 
-    const programBuckets = (programs || []).reduce<Record<string, { id: string; code: string; name: string }>>(
+    const fundById = (funds || []).reduce<Record<string, { id: string; code: string; name: string }>>(
       (acc, prog: any) => {
-        if (prog?.bucket) acc[prog.bucket] = { id: prog.id, code: prog.code, name: prog.name }
+        if (prog?.id) acc[prog.id] = { id: prog.id, code: prog.code, name: prog.name }
         return acc
       },
       {},
@@ -638,8 +634,8 @@ export class BeQueryService {
       ledgerEntries,
       events: upcomingEvents,
       polls: ongoingPolls,
-      programs,
-      programBuckets,
+      funds,
+      fundById,
     }
   }
 
