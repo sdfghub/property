@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 const tables = [
+  'penalty_bucket_period',
+  'penalty_bucket',
   'bill_line',
   'bill',
   'invoice_split',
