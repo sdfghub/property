@@ -112,8 +112,11 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
     // Periods
     prisma.period.deleteMany({ where: { id: { in: periodIds } } }),
 
-    // Optional documents & vendors
+    // Optional documents & vendors. Drop order matters: clear everything that FKs to the invoice
+    // (fund allocations, docs — invoice splits + vendor-payment applications are already cleared above)
+    // before the invoices themselves.
     ...(keepInvoices ? [] : [
+      prisma.fundInvoice.deleteMany({ where: { invoiceId: { in: invIds } } }),
       prisma.vendorInvoiceDoc.deleteMany({ where: { invoiceId: { in: invIds } } }),
       prisma.vendorInvoice.deleteMany({ where: { id: { in: invIds } } }),
     ]),
@@ -135,6 +138,11 @@ function usage(msg?: string): never {
 
 Usage:
   npm run wipe:community -- <communityId> [--keep-external-refs] [--keep-vendors] [--keep-invoices]
+                                          [--drop-invoices] [--drop-vendors] [--all]
+
+By default vendor invoices and vendors are KEPT (they are real financial records). Pass
+--drop-invoices to also delete this community's vendor invoices (+ their docs/fund links), and
+--drop-vendors to delete its vendors. --all is shorthand for --drop-invoices --drop-vendors.
 `)
   process.exit(msg ? 1 : 0)
 }
@@ -148,6 +156,9 @@ function parseArgs(argv: string[]) {
     if (a === '--keep-external-refs') opts.keepExternalRefs = true
     else if (a === '--keep-vendors') opts.keepVendors = true
     else if (a === '--keep-invoices') opts.keepInvoices = true
+    else if (a === '--drop-invoices') opts.keepInvoices = false
+    else if (a === '--drop-vendors') opts.keepVendors = false
+    else if (a === '--all') { opts.keepInvoices = false; opts.keepVendors = false }
     else usage(`Unknown arg: ${a}`)
   }
   return { communityId, opts }
