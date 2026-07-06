@@ -2,11 +2,6 @@ import React from 'react'
 import type { CommunityAdminTabKey } from './CommunityAdminDashboard'
 import { useAuth } from '../../hooks/useAuth'
 
-type FundSummary = {
-  name: string
-  balance: string
-  trend?: string
-}
 
 const fallbackBlockingItems = [
   { label: 'Meters open', value: '—', tone: 'warning' },

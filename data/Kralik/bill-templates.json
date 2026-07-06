@@ -1,0 +1,274 @@
+[
+  {
+    "code": "BILL_APA_RECE",
+    "name": "Factură Apa Rece - Aquatim",
+    "order": 1,
+    "template": {
+      "title": "Aquatim",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "Aquatim"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "apa_rece",
+          "label": "Factură Apa Rece - Aquatim",
+          "kind": "charge",
+          "expenseTypeCode": "APA_RECE",
+          "expenseSplitId": "SPLIT_APA_RECE"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_APA_METEO",
+    "name": "Factură Apa Meteo - Aquatim",
+    "order": 2,
+    "template": {
+      "title": "Aquatim",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "Aquatim"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "apa_meteo",
+          "label": "Factură Apa Meteo - Aquatim",
+          "kind": "charge",
+          "expenseTypeCode": "APA_METEO",
+          "expenseSplitId": "SPLIT_APA_METEO"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_CURENT_SCARA",
+    "name": "Factură Curent Scara - PPC",
+    "order": 3,
+    "template": {
+      "title": "PPC",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "PPC"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "curent_scara",
+          "label": "Factură Curent Scara - PPC",
+          "kind": "charge",
+          "expenseTypeCode": "CURENT_SCARA",
+          "expenseSplitId": "SPLIT_CURENT_SCARA"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_SALUBRITATE",
+    "name": "Factură Salubritate - Retim",
+    "order": 4,
+    "template": {
+      "title": "Retim",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "Retim"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "salubritate",
+          "label": "Factură Salubritate - Retim",
+          "kind": "charge",
+          "expenseTypeCode": "SALUBRITATE",
+          "expenseSplitId": "SPLIT_SALUBRITATE"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_CURATENIE",
+    "name": "Factură Curatenie - RICH CLLEAN",
+    "order": 5,
+    "template": {
+      "title": "RICH CLLEAN",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "RICH CLLEAN"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "curatenie",
+          "label": "Factură Curatenie - RICH CLLEAN",
+          "kind": "charge",
+          "expenseTypeCode": "CURATENIE",
+          "expenseSplitId": "SPLIT_CURATENIE"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_ADMINISTRARE",
+    "name": "Factură Administrare - RUSAVIT",
+    "order": 6,
+    "template": {
+      "title": "RUSAVIT",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "RUSAVIT"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "administrare",
+          "label": "Factură Administrare - RUSAVIT",
+          "kind": "charge",
+          "expenseTypeCode": "ADMINISTRARE",
+          "expenseSplitId": "SPLIT_ADMINISTRARE"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_COMISION_BANCA",
+    "name": "Factură Comision Banca - Libra",
+    "order": 7,
+    "template": {
+      "title": "Libra",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "Libra"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "comision_banca",
+          "label": "Factură Comision Banca - Libra",
+          "kind": "charge",
+          "expenseTypeCode": "COMISION_BANCA",
+          "expenseSplitId": "SPLIT_COMISION_BANCA"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BILL_INTERFON",
+    "name": "Factură Interfon - Schmidt",
+    "order": 8,
+    "template": {
+      "title": "Schmidt",
+      "output": {
+        "mode": "VENDOR_INVOICE",
+        "fundCode": "EXPENSES",
+        "currency": "RON",
+        "vendor": {
+          "name": "Schmidt"
+        },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
+      },
+      "items": [
+        {
+          "key": "interfon",
+          "label": "Factură Interfon - Schmidt",
+          "kind": "charge",
+          "expenseTypeCode": "INTERFON",
+          "expenseSplitId": "SPLIT_INTERFON"
+        }
+      ]
+    }
+  }
+]

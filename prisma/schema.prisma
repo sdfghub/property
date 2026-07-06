@@ -200,6 +200,8 @@ model Community {
   code     String
   name     String @map("name")
   timezone String @default("Europe/Bucharest") @map("timezone")
+  penaltyGraceDays Int @default(30) @map("penalty_grace_days")
+  features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
 
   periods                    Period[]
   units                      Unit[]
@@ -249,6 +251,7 @@ model Period {
   code        String       @map("code")
   startDate   DateTime     @map("start_date")
   endDate     DateTime     @map("end_date")
+  dueDate     DateTime?    @map("due_date")
   seq         Int          @map("seq")
   timezone    String       @default("Europe/Bucharest") @map("timezone")
   status      PeriodStatus @default(OPEN)
@@ -281,6 +284,7 @@ model Unit {
   BillingEntityMember BillingEntityMember[]
   BeLedgerEntryDetail BeLedgerEntryDetail[]
   CommunityChargeLine CommunityChargeLine[]
+  BeOpeningBalance     BeOpeningBalance[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -606,6 +610,8 @@ model Fund {
   CommunityCharge       CommunityCharge[]
   BeLedgerEntry         BeLedgerEntry[]
   BeLedgerEntryDetail   BeLedgerEntryDetail[]
+  BeOpeningBalance      BeOpeningBalance[]
+  CashTx               CashTx[]
 
   @@unique([communityId, code])
   @@index([communityId])
@@ -1071,12 +1077,70 @@ model BeOpeningBalance {
   communityId     String   @map("community_id")
   periodId        String   @map("period_id")
   billingEntityId String   @map("billing_entity_id")
+  fundId          String?  @map("fund_id")
+  unitId          String?  @map("unit_id")
   amount          Decimal  @default(0) @map("amount")
   currency        String   @default("RON") @map("currency")
+  // Aging support for migrated arrears: kind separates carried principal vs penalty; dueDate is the
+  // bucket's scadență (null => treat as already past-due); originKey makes multiple aged buckets per
+  // (unit,fund) uniquely keyable (non-null, e.g. an origin period code, "TOTAL", or "PEN:<srcFund>").
+  dueDate         DateTime? @map("due_date")
+  kind            String   @default("PRINCIPAL") @map("kind")
+  originKey       String   @default("TOTAL") @map("origin_key")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  @@unique([communityId, periodId, billingEntityId])
+  fund Fund? @relation(fields: [fundId], references: [id])
+  unit Unit? @relation(fields: [unitId], references: [id])
+
+  @@unique([communityId, periodId, billingEntityId, fundId, unitId, kind, originKey])
+  @@index([communityId, fundId])
+  @@index([communityId, unitId])
   @@map("be_opening_balance")
+}
+
+// ---------- Stateful penalty aging ledger ----------
+// One durable bucket per penalizable due (a period charge, or a migrated PRINCIPAL opening).
+// Penalty is a path-dependent accrual: each period advances the bucket from its last committed
+// state (see PenaltyBucketPeriod), never re-derived from aggregates.
+model PenaltyBucket {
+  id                String   @id @default(cuid())
+  communityId       String   @map("community_id")
+  billingEntityId   String   @map("billing_entity_id")
+  fundId            String   @map("fund_id")          // source fund whose principal this is
+  targetFundId      String   @map("target_fund_id")   // resolved penaltyFundCode (earmark)
+  originKey         String   @map("origin_key")       // 'period:<periodId>' | migrated opening originKey
+  dueDate           DateTime? @map("due_date")        // scadență (null => already past-due)
+  firstPenalDay     DateTime @map("first_penal_day")  // dueDate + graceDays + 1
+  principalOriginal Decimal  @map("principal_original") // cap base
+  seedPenaltyAccrued Decimal @default(0) @map("seed_penalty_accrued") // carried penalty at cutover (cap headroom baseline)
+  status            String   @default("OPEN") @map("status") // OPEN | SETTLED
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  periods PenaltyBucketPeriod[]
+
+  @@unique([communityId, billingEntityId, fundId, originKey])
+  @@index([communityId, status])
+  @@map("penalty_bucket")
+}
+
+// One row per period a bucket is advanced — the committed (frozen-at-close) state + audit trail.
+// Committed state of a bucket = its highest periodSeq row with status COMMITTED.
+model PenaltyBucketPeriod {
+  id                 String   @id @default(cuid())
+  bucketId           String   @map("bucket_id")
+  periodId           String   @map("period_id")
+  periodSeq          Int      @map("period_seq")
+  principalRemaining Decimal  @map("principal_remaining")
+  penaltyAccrued     Decimal  @map("penalty_accrued")   // cumulative on this bucket through this period
+  penaltyPosted      Decimal  @map("penalty_posted")    // increment charged this period
+  status             String   @default("PROVISIONAL") @map("status") // PROVISIONAL | COMMITTED
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  bucket PenaltyBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+
+  @@unique([bucketId, periodId])
+  @@index([bucketId, periodSeq])
+  @@map("penalty_bucket_period")
 }
 
 // ---------- Ledger (charges, payments, adjustments) ----------
@@ -1185,6 +1249,7 @@ model CashTx {
   id          String          @id @default(cuid()) @map("id")
   communityId String          @map("community_id")
   accountId   String          @map("account_id")
+  fundId      String          @map("fund_id")
   ts          DateTime        @default(now()) @map("ts")
   amount      Decimal         @map("amount") @db.Decimal(18, 4)
   currency    String          @default("RON") @map("currency")
@@ -1200,10 +1265,12 @@ model CashTx {
 
   community Community  @relation(fields: [communityId], references: [id])
   account   CashAccount @relation(fields: [accountId], references: [id])
+  fund      Fund        @relation(fields: [fundId], references: [id])
 
   @@index([communityId, accountId])
+  @@index([communityId, fundId])
   @@index([refType, refId])
-  @@unique([communityId, refType, refId, direction])
+  @@unique([communityId, refType, refId, direction, fundId])
   @@map("cash_tx")
 }
 
@@ -1213,6 +1280,7 @@ model BeStatement {
   communityId     String  @map("community_id")
   periodId        String  @map("period_id")
   billingEntityId String  @map("billing_entity_id")
+  fundId          String  @map("fund_id")
   currency        String  @default("RON") @map("currency")
   dueStart        Decimal @default(0) @map("due_start")
   charges         Decimal @default(0) @map("charges")
@@ -1220,7 +1288,7 @@ model BeStatement {
   adjustments     Decimal @default(0) @map("adjustments")
   dueEnd          Decimal @default(0) @map("due_end")
 
-  @@unique([communityId, periodId, billingEntityId])
+  @@unique([communityId, periodId, billingEntityId, fundId])
   @@map("be_statement")
 }
 
@@ -1407,6 +1475,7 @@ enum Role {
   SYSTEM_ADMIN
   COMMUNITY_ADMIN
   CENSOR
+  EXECUTIVE_COMITEE_MEMBER
   BILLING_ENTITY_USER
 }
 
@@ -1414,6 +1483,49 @@ enum ScopeType {
   SYSTEM
   COMMUNITY
   BILLING_ENTITY
+}
+
+enum CommitteeDecisionStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CommitteeVoteValue {
+  APPROVE
+  REJECT
+}
+
+/// Free-form governance proposal raised by the admin; approved by a majority of the community's committee members.
+model CommitteeDecision {
+  id          String                  @id @default(cuid())
+  communityId String                  @map("community_id") // community code, matching app-wide convention
+  title       String
+  description String?
+  amount      Decimal?                @db.Decimal(18, 4)
+  currency    String                  @default("RON")
+  status      CommitteeDecisionStatus @default(OPEN)
+  createdBy   String                  @map("created_by")
+  decidedAt   DateTime?               @map("decided_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  votes       CommitteeVote[]
+
+  @@index([communityId, status])
+  @@map("committee_decision")
+}
+
+model CommitteeVote {
+  id         String             @id @default(cuid())
+  decisionId String             @map("decision_id")
+  userId     String             @map("user_id")
+  vote       CommitteeVoteValue
+  comment    String?
+  createdAt  DateTime           @default(now()) @map("created_at")
+  decision   CommitteeDecision  @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, userId])
+  @@map("committee_vote")
 }
 
 model RoleAssignment {

@@ -50,6 +50,8 @@ const tables = [
   'payment',
   'be_opening_balance',
   'community_opening_balance',
+  'cash_tx',
+  'cash_account',
   'external_ref',
   'refresh_token',
   'invite',

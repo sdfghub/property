@@ -110,7 +110,7 @@ export class AuthService{
     if(!user) throw new UnauthorizedException('User not found')
 
     const roles = await this.prisma.roleAssignment.findMany({
-      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN'] } },
+      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'] } },
     })
     const beRoles = await this.prisma.billingEntityUserRole.findMany({
       where: { userId: user.id },
@@ -154,7 +154,7 @@ export class AuthService{
 
   async issueTokensForUser(user: { id: string; email: string; tokenVersion?: number }, userAgent?: string, ip?: string) {
     const roles = await this.prisma.roleAssignment.findMany({
-      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN'] } },
+      where: { userId: user.id, role: { in: ['SYSTEM_ADMIN', 'COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'] } },
     })
     const beRoles = await this.prisma.billingEntityUserRole.findMany({
       where: { userId: user.id },

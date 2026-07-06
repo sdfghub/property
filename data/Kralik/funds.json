@@ -1,0 +1,142 @@
+[
+  {
+    "code": "EXPENSES",
+    "name": "Cheltuieli Intretinere",
+    "description": "Intretinere",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2026-03",
+    "allocation": {
+      "method": "MONTHLY_EXPENSES",
+      "split": null,
+      "type": "Operational",
+      "penaltyPerDayPct": 0.02,
+      "penaltyFundCode": "PENALIZARI",
+      "altName": "Intretinere",
+      "shortName": "Intretinere"
+    }
+  },
+  {
+    "code": "RULMENT",
+    "name": "Fond Rulment",
+    "description": "Operational",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2026-03",
+    "totalTarget": 5400.00,
+    "targetPlan": { "periodCount": 12, "perPeriodAmount": 450 },
+    "allocation": {
+      "method": "EQUAL",
+      "split": "Nr ap",
+      "type": "Operational",
+      "penaltyPerDayPct": 0,
+      "shortName": "Rulment",
+      "eur": { "curs": 5.236, "amount": 1031 }
+    }
+  },
+  {
+    "code": "REPARATII",
+    "name": "Fond Reparatii",
+    "description": "Tactic",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2026-03",
+    "totalTarget": 12000.00,
+    "targetPlan": { "periodCount": 12, "perPeriodAmount": 1000 },
+    "allocation": {
+      "method": "BY_CPI",
+      "split": "CPI",
+      "type": "Tactic",
+      "penaltyPerDayPct": 0,
+      "penaltyFundCode": "REPARATII",
+      "shortName": "Reparatii",
+      "eur": { "curs": 5.236, "amount": 2292 }
+    }
+  },
+  {
+    "code": "REABILITARE_1",
+    "name": "Fond Reabilitare 1",
+    "description": "Fond Proiect + Reabilitare",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2022-02",
+    "totalTarget": 390000.00,
+    "targetPlan": { "periodCount": 39, "perPeriodAmount": 10000 },
+    "allocation": {
+      "method": "BY_CPI",
+      "split": "CPI",
+      "type": "Strategic",
+      "penaltyPerDayPct": 0,
+      "penaltyFundCode": "REABILITARE_1",
+      "altName": "Fond Proiect + Reabilitare",
+      "shortName": "Reabilitare 1",
+      "eur": { "curs": 5.000, "amount": 78000 }
+    }
+  },
+  {
+    "code": "REABILITARE_2",
+    "name": "Fond Reabilitare 2",
+    "description": "Fond Pod + Fatada",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2025-02",
+    "totalTarget": 1768268.00,
+    "targets": [
+      { "offset": 0, "amount": 43750 },
+      { "offset": 1, "amount": 180346 },
+      { "offset": 2, "amount": 220596 },
+      { "offset": 3, "amount": 220596 },
+      { "offset": 4, "amount": 220596 },
+      { "offset": 5, "amount": 220596 },
+      { "offset": 6, "amount": 220596 },
+      { "offset": 7, "amount": 220596 },
+      { "offset": 8, "amount": 220596 }
+    ],
+    "allocation": {
+      "method": "BY_CPI",
+      "split": "CPI",
+      "type": "Strategic",
+      "penaltyPerDayPct": 0,
+      "penaltyFundCode": "REABILITARE_2",
+      "altName": "Fond Pod + Fatada",
+      "shortName": "Reabilitare 2",
+      "eur": { "curs": 5.052, "amount": 350000 },
+      "statedTotalRon": 1768270.12,
+      "note": "Schedule (Grafic) sums to 1768268; stated Stabilit is 1768270.12 (2.12 RON rounding gap)."
+    }
+  },
+  {
+    "code": "REABILITARE_3",
+    "name": "Fond Reabilitare 3",
+    "description": "Strategic",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2026-03",
+    "totalTarget": 890188.00,
+    "targetPlan": { "periodCount": 8, "perPeriodAmount": 111273.5 },
+    "allocation": {
+      "method": "BY_CPI",
+      "split": "CPI",
+      "type": "Strategic",
+      "penaltyPerDayPct": 0.02,
+      "penaltyFundCode": "REABILITARE_3",
+      "shortName": "Reabilitare 3",
+      "eur": { "curs": 5.236, "amount": 170000 }
+    }
+  },
+  {
+    "code": "PENALIZARI",
+    "name": "Penalizări",
+    "description": "Penalizări de întârziere",
+    "status": "ACTIVE",
+    "currency": "RON",
+    "startPeriodCode": "2026-03",
+    "allocation": {
+      "method": "DIRECT",
+      "split": null,
+      "type": "Operational",
+      "penaltyPerDayPct": 0,
+      "shortName": "Penalizări"
+    }
+  }
+]

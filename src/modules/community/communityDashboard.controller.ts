@@ -15,7 +15,7 @@ export class CommunityDashboardController {
     private readonly engagement: EngagementService,
   ) {}
 
-  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get()
   async get(@Param('communityId') communityId: string, @Req() req: any) {
     const userId: string = req.user?.id ?? req.user?.sub

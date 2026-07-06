@@ -2,7 +2,6 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useI18n } from '../i18n/useI18n'
-import { BillForm, BillTemplate } from './bills/BillForm'
 import { BillTemplatesHost } from './bills/BillTemplatesHost'
 
 export function CommunityExpensesPanel({
@@ -31,7 +30,7 @@ export function CommunityExpensesPanel({
   }>({ description: '', amount: '', expenseTypeId: undefined, currency: 'RON' })
   const [expenseComplete, setExpenseComplete] = React.useState(false)
   const [quickAmounts, setQuickAmounts] = React.useState<Record<string, string>>({})
-  const [quickAddOpen, setQuickAddOpen] = React.useState<Record<string, boolean>>({})
+  const [quickAddOpen] = React.useState<Record<string, boolean>>({})
   const [showCustomForm, setShowCustomForm] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const [editable, setEditable] = React.useState<{ period?: { code: string; status: string }; meters?: any; bills?: any; canClose?: boolean } | null>(null)

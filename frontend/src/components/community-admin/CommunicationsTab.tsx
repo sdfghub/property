@@ -28,6 +28,7 @@ type AnnouncementItem = {
 type Props = {
   communityId: string
   unitGroups: UnitGroup[]
+  readOnly?: boolean
 }
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -41,7 +42,7 @@ function toDateTimeInput(value?: string | null) {
   )}`
 }
 
-export function CommunicationsTab({ communityId, unitGroups }: Props) {
+export function CommunicationsTab({ communityId, unitGroups, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [items, setItems] = React.useState<AnnouncementItem[]>([])
@@ -269,6 +270,7 @@ export function CommunicationsTab({ communityId, unitGroups }: Props) {
                       </div>
                     )}
                   </div>
+                  {!readOnly && (
                   <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                     <button className="btn ghost small" type="button" onClick={() => startEdit(item)}>
                       {t('communications.edit', 'Edit')}
@@ -277,6 +279,7 @@ export function CommunicationsTab({ communityId, unitGroups }: Props) {
                       {t('communications.cancel', 'Cancel')}
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             ))
@@ -284,6 +287,7 @@ export function CommunicationsTab({ communityId, unitGroups }: Props) {
         </div>
       </div>
 
+      {!readOnly && (
       <div className="card">
         <h3>{t('communications.createTitle', 'New announcement')}</h3>
         <form className="stack" style={{ gap: 12, marginTop: 12 }} onSubmit={handleCreate}>
@@ -394,8 +398,9 @@ export function CommunicationsTab({ communityId, unitGroups }: Props) {
           </button>
         </form>
       </div>
+      )}
 
-      {editingId && (
+      {!readOnly && editingId && (
         <div className="card">
           <h3>{t('communications.editTitle', 'Edit announcement')}</h3>
           <form className="stack" style={{ gap: 12, marginTop: 12 }} onSubmit={handleUpdate}>

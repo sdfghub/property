@@ -14,6 +14,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+/github
+/github-token
 
 # Prisma
 prisma/dev.db

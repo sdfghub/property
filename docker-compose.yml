@@ -5,15 +5,18 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: property
-    network_mode: host
+      POSTGRES_DB: property_expenses
+    # Host 5432 is used by another local project's Postgres, so publish on 5540.
+    # Matches DATABASE_URL in .env.
+    ports:
+      - "5540:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d property_expenses"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
   pgdata:

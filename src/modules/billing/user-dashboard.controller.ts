@@ -175,7 +175,25 @@ export class UserDashboardController {
       where: { communityId, periodId: targetClosed.id, billingEntityId: { in: beIds } },
       select: { billingEntityId: true, dueStart: true, charges: true, payments: true, adjustments: true, dueEnd: true },
     })
-    const byBe = new Map(statements.map((s) => [s.billingEntityId, s]))
+    const byBe = new Map<
+      string,
+      { dueStart: number; charges: number; payments: number; adjustments: number; dueEnd: number }
+    >()
+    for (const s of statements) {
+      const existing = byBe.get(s.billingEntityId) ?? {
+        dueStart: 0,
+        charges: 0,
+        payments: 0,
+        adjustments: 0,
+        dueEnd: 0,
+      }
+      existing.dueStart += Number(s.dueStart ?? 0)
+      existing.charges += Number(s.charges ?? 0)
+      existing.payments += Number(s.payments ?? 0)
+      existing.adjustments += Number(s.adjustments ?? 0)
+      existing.dueEnd += Number(s.dueEnd ?? 0)
+      byBe.set(s.billingEntityId, existing)
+    }
     const items = beIds.map((beId) => {
       const s = byBe.get(beId)
       return {

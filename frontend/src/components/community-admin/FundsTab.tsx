@@ -8,6 +8,7 @@ type Props = {
   fundError: string | null
   communityCode: string
   onRefreshFunds?: () => void | Promise<void>
+  readOnly?: boolean
 }
 
 type FundLedgerDigest = {
@@ -35,12 +36,16 @@ type FundLedgerDigest = {
   }>
 }
 
-export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Props) {
+export function FundsTab({ funds, fundError, communityCode, onRefreshFunds, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
-  const [activeCode, setActiveCode] = React.useState<string | null>(
-    funds[0]?.code ?? null,
-  )
+  const [activeCode, setActiveCode] = React.useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const f = new URLSearchParams(window.location.search).get('fund')
+      if (f) return f
+    }
+    return funds[0]?.code ?? null
+  })
   const [ledger, setLedger] = React.useState<FundLedgerDigest | null>(null)
   const [ledgerError, setLedgerError] = React.useState<string | null>(null)
   const [ledgerLoading, setLedgerLoading] = React.useState(false)
@@ -70,8 +75,8 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
   React.useEffect(() => {
     if (!activeCode && funds.length > 0) {
       setActiveCode(funds[0].code)
-    } else if (activeCode && funds.every((f) => f.code !== activeCode)) {
-      // Reset when the list changes and the active fund is gone
+    } else if (activeCode && funds.length > 0 && funds.every((f) => f.code !== activeCode)) {
+      // Reset only once funds are loaded and the active fund is truly gone
       setActiveCode(funds[0]?.code ?? null)
     }
   }, [funds, activeCode])
@@ -254,6 +259,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
       {/*<h4>{t('tab.funds')}</h4>
       <p className="muted">{t('funds.subtitle')}</p>*/}
       {fundError && <div className="badge negative">{fundError}</div>}
+      {!readOnly && (
       <div className="card soft">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -281,6 +287,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
           </button>
         </div>
       </div>
+      )}
       {!fundError && funds.length > 0 ? (
         <div className="stack">
           <div className="row" style={{ flexWrap: 'wrap', gap: 8 }} role="tablist">
@@ -402,6 +409,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                   )}
                   {invLoaded && (
                     <>
+                  {!readOnly && (
                   <div className="card soft" style={{ background: 'rgba(255,255,255,0.02)' }}>
                     <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong>{t('funds.addInvoice', 'Add invoice')}</strong>
@@ -460,6 +468,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                       </form>
                     )}
                   </div>
+                  )}
 
                   {linkedInvoiceMap.size === 0 && (
                     <div className="muted">{t('funds.noLinkedInvoices', 'No linked invoices')}</div>
@@ -484,6 +493,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                             {links.map((l, idx) => (
                               <span key={`${invId}-${l.portionKey ?? 'default'}-${idx}`} style={{ marginRight: 8 }}>
                                 {t('funds.linkedPortion', 'Portion')}: {l.amount ?? inv?.gross ?? ''}{' '}
+                                {!readOnly && (
                                 <button
                                   className="btn ghost small"
                                   style={{ padding: '4px 8px' }}
@@ -492,6 +502,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                                 >
                                   {t('funds.unlink', 'Unlink')}
                                 </button>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -500,6 +511,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                     )
                   })}
 
+                {!readOnly && (
                 <form
                   className="row"
                   style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
@@ -557,6 +569,7 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds }: Pr
                       {t('funds.linkInvoice', 'Link invoice')}
                     </button>
                   </form>
+                  )}
                     </>
                   )}
                 </div>

@@ -8,6 +8,8 @@ type Row = {
   communityId: string
   periodCode: string
   beCode: string
+  fundCode?: string
+  unitCode?: string
   amount: number
   currency?: string
 }
@@ -20,7 +22,7 @@ Usage:
   npm run import:opening -- <file>
 
 File format (CSV): communityId,periodCode,beCode,amount,currency
-File format (JSON): [{ communityId, periodCode, beCode, amount, currency }]
+File format (JSON): [{ communityId, periodCode, beCode, amount, currency, fundCode?, unitCode? }]
 `)
   process.exit(msg ? 1 : 0)
 }
@@ -74,26 +76,85 @@ async function main() {
       console.warn(`Skipping: BE ${r.beCode} not found for ${r.communityId}`)
       continue
     }
-    await prisma.beOpeningBalance.upsert({
-      where: {
-        communityId_periodId_billingEntityId: {
+    let fundId: string | null = null
+    if (r.fundCode) {
+      const fund = await prisma.fund.findUnique({
+        where: { code_communityId: { code: r.fundCode, communityId: r.communityId } },
+        select: { id: true },
+      })
+      if (!fund) {
+        console.warn(`Skipping: fund ${r.fundCode} not found for ${r.communityId}`)
+        continue
+      }
+      fundId = fund.id
+    }
+    let unitId: string | null = null
+    if (r.unitCode) {
+      const unit = await prisma.unit.findUnique({
+        where: { code_communityId: { code: r.unitCode, communityId: r.communityId } },
+        select: { id: true },
+      })
+      if (!unit) {
+        console.warn(`Skipping: unit ${r.unitCode} not found for ${r.communityId}`)
+        continue
+      }
+      unitId = unit.id
+    }
+    if (fundId == null || unitId == null) {
+      const existing = await prisma.beOpeningBalance.findFirst({
+        where: {
           communityId: r.communityId,
           periodId: period.id,
           billingEntityId: be.id,
+          fundId,
+          unitId,
         },
-      },
-      update: {
-        amount: r.amount,
-        currency: r.currency ?? 'RON',
-      },
-      create: {
-        communityId: r.communityId,
-        periodId: period.id,
-        billingEntityId: be.id,
-        amount: r.amount,
-        currency: r.currency ?? 'RON',
-      },
-    })
+        select: { id: true },
+      })
+      if (existing?.id) {
+        await prisma.beOpeningBalance.update({
+          where: { id: existing.id },
+          data: { amount: r.amount, currency: r.currency ?? 'RON' },
+        })
+      } else {
+        await prisma.beOpeningBalance.create({
+          data: {
+            communityId: r.communityId,
+            periodId: period.id,
+            billingEntityId: be.id,
+            fundId,
+            unitId,
+            amount: r.amount,
+            currency: r.currency ?? 'RON',
+          },
+        })
+      }
+    } else {
+      await prisma.beOpeningBalance.upsert({
+        where: {
+          communityId_periodId_billingEntityId_fundId_unitId: {
+            communityId: r.communityId,
+            periodId: period.id,
+            billingEntityId: be.id,
+            fundId,
+            unitId,
+          },
+        },
+        update: {
+          amount: r.amount,
+          currency: r.currency ?? 'RON',
+        },
+        create: {
+          communityId: r.communityId,
+          periodId: period.id,
+          billingEntityId: be.id,
+          fundId,
+          unitId,
+          amount: r.amount,
+          currency: r.currency ?? 'RON',
+        },
+      })
+    }
     count += 1
   }
   console.log(`✅ Imported ${count} opening balances into be_opening_balance from ${file}`)

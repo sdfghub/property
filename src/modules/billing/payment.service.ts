@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
-import { ensureLedgerEntryDetail } from './ledger-detail.util'
 import { ensureCommunityLedgerEntryDetail } from './community-ledger-detail.util'
 import { ensureFundLedgerEntryDetail } from './fund-ledger-detail.util'
 
@@ -17,10 +16,12 @@ type PaymentAllocationSpec = {
   amount: number
 }
 type AllocationSpecLine = {
-  amount: number
+  amount?: number
   billingEntityId?: string
   fundId?: string
   unitId?: string
+  chargeId?: string
+  advance?: boolean // credit/advance allocation to a fund (settles no charge)
 }
 
 @Injectable()
@@ -123,6 +124,8 @@ export class PaymentService {
       SELECT le.id AS "chargeId",
              le.created_at AS "chargeCreatedAt",
              le.fund_id AS "chargeFundId",
+             le.period_id AS "chargePeriodId",
+             le.amount::numeric AS "chargeAmount",
              d.id AS "detailId",
              d.unit_id AS "unitId",
              d.amount::numeric AS "detailAmount",
@@ -175,6 +178,73 @@ export class PaymentService {
       ...(filters?.unitId ? [filters.unitId] : []),
       ...(excludedChargeIds && excludedChargeIds.length ? [excludedChargeIds] : []),
     )
+  }
+
+  async getOpenChargeSummary(
+    communityId: string,
+    billingEntityId: string,
+    filters?: { fundId?: string; unitId?: string },
+  ) {
+    if (!billingEntityId) throw new BadRequestException('billingEntityId is required')
+    const beId = await this.ensureBillingEntity(communityId, billingEntityId)
+    const detailRows = await this.findOpenChargeDetails(this.prisma, communityId, beId, undefined, filters)
+    const byCharge = new Map<
+      string,
+      {
+        chargeId: string
+        fundId: string | null
+        unitId: string | null
+        periodId: string | null
+        chargeRemaining: number
+        detailSum: number
+      }
+    >()
+    for (const r of detailRows as any[]) {
+      const remaining = Number(r.chargeAmount || 0) - Number(r.chargeApplied || 0)
+      if (remaining <= 0) continue
+      const key = r.chargeId
+      const existing = byCharge.get(key)
+      if (existing) {
+        existing.detailSum += Number(r.detailAmount || 0)
+      } else {
+        byCharge.set(key, {
+          chargeId: r.chargeId,
+          fundId: r.chargeFundId ?? null,
+          unitId: r.unitId ?? null,
+          periodId: r.chargePeriodId ?? null,
+          chargeRemaining: remaining,
+          detailSum: Number(r.detailAmount || 0),
+        })
+      }
+    }
+    const raw = Array.from(byCharge.values())
+    // resolve fund + period labels so the charge picker is human-readable
+    const fundIds = Array.from(new Set(raw.map((c) => c.fundId).filter(Boolean))) as string[]
+    const periodIds = Array.from(new Set(raw.map((c) => c.periodId).filter(Boolean))) as string[]
+    const [funds, periods] = await Promise.all([
+      fundIds.length ? this.prisma.fund.findMany({ where: { id: { in: fundIds } }, select: { id: true, code: true, name: true } }) : Promise.resolve([]),
+      periodIds.length ? this.prisma.period.findMany({ where: { id: { in: periodIds } }, select: { id: true, code: true } }) : Promise.resolve([]),
+    ])
+    const fundById = new Map(funds.map((f) => [f.id, f]))
+    const periodById = new Map(periods.map((p) => [p.id, p]))
+    const items = raw.map((c) => {
+      const available = Math.min(c.chargeRemaining, c.detailSum)
+      const f = c.fundId ? fundById.get(c.fundId) : null
+      return {
+        chargeId: c.chargeId,
+        fundId: c.fundId,
+        unitId: c.unitId,
+        periodId: c.periodId,
+        fundCode: f?.code ?? null,
+        fundName: f?.name ?? null,
+        periodCode: c.periodId ? periodById.get(c.periodId)?.code ?? null : null,
+        available: Number(available.toFixed(4)),
+      }
+    })
+    // stable order: oldest period first, then fund name
+    items.sort((a, b) => (a.periodCode || '').localeCompare(b.periodCode || '') || (a.fundName || '').localeCompare(b.fundName || ''))
+    const totalAvailable = items.reduce((s, i) => s + Number(i.available || 0), 0)
+    return { items, totalAvailable: Number(totalAvailable.toFixed(4)) }
   }
 
   private buildAppsFromDetails(
@@ -280,11 +350,18 @@ export class PaymentService {
       const lineAmount = Math.min(remaining, Number(line?.amount ?? 0))
       if (!Number.isFinite(lineAmount) || lineAmount <= 0) continue
       const lineBeId = line.billingEntityId || billingEntityId
+      // If the line targets a specific charge, settle exactly that charge (intersect
+      // with any globally-allowed set); otherwise fall back to fund/unit matching.
+      const lineAllowed = line.chargeId
+        ? (allowedChargeIds && allowedChargeIds.length
+            ? allowedChargeIds.filter((id) => id === line.chargeId)
+            : [line.chargeId])
+        : allowedChargeIds
       const detailRows = await this.findOpenChargeDetails(
         client,
         communityId,
         lineBeId,
-        allowedChargeIds,
+        lineAllowed,
         { fundId: line.fundId, unitId: line.unitId },
         Array.from(coveredChargeIds),
       )
@@ -311,8 +388,25 @@ export class PaymentService {
     let total = 0
     const beIds = new Set<string>()
     const unitIds = new Set<string>()
+    const advanceFundIds = new Set<string>()
     allocationSpec.forEach((line, idx) => {
       const amt = Number(line?.amount ?? 0)
+      if (line.advance) {
+        // advance/credit line: fund required, amount optional (leftover is computed)
+        if (!line.fundId || typeof line.fundId !== 'string') {
+          throw new BadRequestException(`allocationSpec[${idx}].fundId is required for an advance`)
+        }
+        if (line.amount != null && (!Number.isFinite(amt) || amt < 0)) {
+          throw new BadRequestException(`allocationSpec[${idx}].amount must be >= 0`)
+        }
+        advanceFundIds.add(line.fundId)
+        total += amt
+        return
+      }
+      if (line.chargeId && line.amount == null) {
+        // charge marker: restricts settlement to this charge (FIFO), no amount needed
+        return
+      }
       if (!Number.isFinite(amt) || amt <= 0) {
         throw new BadRequestException(`allocationSpec[${idx}].amount must be positive`)
       }
@@ -330,6 +424,15 @@ export class PaymentService {
     })
     if (total - amount > 0.01) {
       throw new BadRequestException('allocationSpec total cannot exceed payment amount')
+    }
+    if (advanceFundIds.size) {
+      const rows = await this.prisma.fund.findMany({
+        where: { communityId, id: { in: Array.from(advanceFundIds) } },
+        select: { id: true },
+      })
+      if (rows.length !== advanceFundIds.size) {
+        throw new BadRequestException('allocationSpec contains invalid advance fundId')
+      }
     }
     if (beIds.size) {
       const rows = await this.prisma.billingEntity.findMany({
@@ -349,78 +452,6 @@ export class PaymentService {
         throw new BadRequestException('allocationSpec contains invalid unitId')
       }
     }
-  }
-
-  private async upsertUnallocatedPaymentDetail(
-    client: TxClient,
-    entry: {
-      id: string
-      communityId: string
-      periodId: string
-      billingEntityId: string
-      kind: string
-      fundId: string
-      currency: string | null
-      refType: string | null
-      refId: string | null
-    },
-    paymentId: string,
-    amount: number,
-  ) {
-    const allocatedRows: Array<{ total: any }> = await (client as any).$queryRawUnsafe(
-      `
-      SELECT COALESCE(SUM(amount),0) AS total
-      FROM be_ledger_entry_detail
-      WHERE ledger_entry_id = $1
-        AND (meta->>'reason' IS NULL OR meta->>'reason' <> 'payment-unallocated')
-    `,
-      entry.id,
-    )
-    const allocated = Number(allocatedRows?.[0]?.total ?? 0)
-    const desired = Math.max(0, amount - allocated)
-    const existing: Array<{ id: string }> = await (client as any).$queryRawUnsafe(
-      `
-      SELECT id
-      FROM be_ledger_entry_detail
-      WHERE ledger_entry_id = $1
-        AND meta->>'reason' = 'payment-unallocated'
-      LIMIT 1
-    `,
-      entry.id,
-    )
-    const existingId = existing?.[0]?.id ?? null
-    if (desired <= 0) {
-      if (existingId) {
-        await (client as any).beLedgerEntryDetail.delete({ where: { id: existingId } })
-      }
-      return
-    }
-    if (existingId) {
-      await (client as any).beLedgerEntryDetail.update({
-        where: { id: existingId },
-        data: { amount: desired },
-      })
-      return
-    }
-    await (client as any).beLedgerEntryDetail.create({
-      data: {
-        ledgerEntryId: entry.id,
-        communityId: entry.communityId,
-        periodId: entry.periodId,
-        billingEntityId: entry.billingEntityId,
-        kind: entry.kind,
-        fundId: entry.fundId,
-        currency: entry.currency || 'RON',
-        refType: entry.refType,
-        refId: entry.refId,
-        amount: desired,
-        meta: {
-          synthetic: true,
-          reason: 'payment-unallocated',
-          paymentId,
-        },
-      },
-    })
   }
 
   private async replaceCommunityPaymentLedger(
@@ -543,93 +574,142 @@ export class PaymentService {
     amount: number,
     communityId: string,
     billingEntityId: string,
+    periodId: string,
+    currency: string,
     allowedChargeIds?: string[],
     allocationSpec?: AllocationSpecLine[] | null,
   ) {
     const paymentIdStr = String(paymentId)
+    // Classify spec lines:
+    //  - advance line  → credit to a fund (settles no charge)
+    //  - charge marker → { chargeId } with no amount: restrict settlement to this charge set (FIFO within it)
+    //  - fixed line    → { fundId/unitId, amount }: legacy fixed-amount targeting
+    const specLines = (allocationSpec || []) as AllocationSpecLine[]
+    const advanceLines = specLines.filter((l) => l.advance)
+    const chargeLines = specLines.filter((l) => !l.advance)
+    const chargeMarkers = chargeLines.filter((l) => l.chargeId && l.amount == null)
+    const fixedLines = chargeLines.filter((l) => l.amount != null)
+    const advanceFundId = advanceLines.find((l) => l.fundId)?.fundId ?? null
+    const explicitAdvance = advanceLines.reduce((s, l) => s + Number(l.amount ?? 0), 0)
+    const chargeApplicable = Math.max(0, Number((amount - explicitAdvance).toFixed(4)))
+
+    // Restrict the settleable charge set when the operator picked specific charges.
+    let effectiveAllowed = allowedChargeIds
+    if (chargeMarkers.length) {
+      const markerIds = chargeMarkers.map((l) => l.chargeId as string)
+      effectiveAllowed = allowedChargeIds && allowedChargeIds.length
+        ? allowedChargeIds.filter((id) => markerIds.includes(id))
+        : markerIds
+    }
+
     let apps: Array<{ paymentId: string; chargeId: string; amount: number; spec: PaymentAllocationSpec | any }> = []
-    let remaining = amount
-    if (allocationSpec && allocationSpec.length) {
-      const res = await this.applyPaymentWithSpec(
-        client,
-        paymentIdStr,
-        amount,
-        communityId,
-        billingEntityId,
-        allocationSpec,
-        allowedChargeIds,
-      )
-      apps = res.apps
-      remaining = res.remaining
-    } else {
-      const detailRows = await this.findOpenChargeDetails(client, communityId, billingEntityId, allowedChargeIds)
-      const res = this.buildAppsFromDetails(detailRows, amount, paymentIdStr, 'AUTO_DETAIL')
-      apps = res.apps
-      remaining = res.remaining
-    }
-    const paymentLedgerEntryId = await this.getPaymentLedgerEntryId(
-      client,
-      communityId,
-      billingEntityId,
-      paymentIdStr,
-    )
-    const paymentLedgerEntry = paymentLedgerEntryId
-      ? await (client as any).beLedgerEntry.findUnique({
-          where: { id: paymentLedgerEntryId },
-          select: {
-            id: true,
-            communityId: true,
-            periodId: true,
-            billingEntityId: true,
-            kind: true,
-            fundId: true,
-            currency: true,
-            refType: true,
-            refId: true,
-          },
-        })
-      : null
-    if (paymentLedgerEntryId) {
-      if (allowedChargeIds && allowedChargeIds.length) {
-        await (client as any).$executeRawUnsafe(
-          `DELETE FROM be_ledger_entry_detail
-           WHERE ledger_entry_id = $1
-             AND (meta->>'chargeId') = ANY($2::text[])`,
-          paymentLedgerEntryId,
-          allowedChargeIds,
+    let remaining = chargeApplicable
+    if (chargeApplicable > 0) {
+      if (fixedLines.length) {
+        const res = await this.applyPaymentWithSpec(
+          client,
+          paymentIdStr,
+          chargeApplicable,
+          communityId,
+          billingEntityId,
+          fixedLines,
+          effectiveAllowed,
         )
+        apps = res.apps
+        remaining = res.remaining
       } else {
-        await (client as any).beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: paymentLedgerEntryId } })
+        // FIFO within the selected set (or all open charges if none selected)
+        const detailRows = await this.findOpenChargeDetails(client, communityId, billingEntityId, effectiveAllowed)
+        const res = this.buildAppsFromDetails(detailRows, chargeApplicable, paymentIdStr, 'AUTO_DETAIL')
+        apps = res.apps
+        remaining = res.remaining
       }
+    } else {
+      remaining = 0
     }
+
+    // Money left after settling charges becomes an advance/credit — needs a target fund.
+    const advanceTotal = Number((explicitAdvance + remaining).toFixed(4))
+    if (advanceTotal > 0.0001 && !advanceFundId) {
+      throw new BadRequestException('Payment exceeds open charges')
+    }
+    remaining = 0
+
     if (apps.length) {
       await (client as any).paymentApplication.createMany({ data: apps, skipDuplicates: true })
-      if (paymentLedgerEntryId && paymentLedgerEntry) {
-        await (client as any).beLedgerEntryDetail.createMany({
-          data: apps.map((app) => ({
-            ledgerEntryId: paymentLedgerEntryId,
-            communityId: paymentLedgerEntry.communityId,
-            periodId: paymentLedgerEntry.periodId,
-            billingEntityId: paymentLedgerEntry.billingEntityId,
-            kind: paymentLedgerEntry.kind,
-            fundId: paymentLedgerEntry.fundId,
-            currency: paymentLedgerEntry.currency,
-            refType: paymentLedgerEntry.refType,
-            refId: paymentLedgerEntry.refId,
+    }
+
+    // Ledger view = charge applications + (optionally) the advance as a fund-only allocation.
+    const ledgerApps = advanceTotal > 0 && advanceFundId
+      ? [...apps, { paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, amount: advanceTotal } }]
+      : apps
+
+    const fundTotals = new Map<string, number>()
+    for (const app of ledgerApps) {
+      const fundId = app.spec?.fundId ?? null
+      if (!fundId) throw new BadRequestException('Payment allocation missing fundId')
+      fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + Number(app.amount))
+    }
+
+    const existing = await (client as any).beLedgerEntry.findMany({
+      where: { communityId, billingEntityId, refType: 'PAYMENT', refId: paymentIdStr },
+      select: { id: true },
+    })
+    if (existing.length) {
+      await (client as any).beLedgerEntryDetail.deleteMany({
+        where: { ledgerEntryId: { in: existing.map((e: { id: string }) => e.id) } },
+      })
+      await (client as any).beLedgerEntry.deleteMany({ where: { id: { in: existing.map((e: { id: string }) => e.id) } } })
+    }
+
+    const ledgerByFund = new Map<string, any>()
+    for (const [fundId, total] of fundTotals.entries()) {
+      const le = await (client as any).beLedgerEntry.create({
+        data: {
+          communityId,
+          periodId,
+          billingEntityId,
+          kind: 'PAYMENT',
+          lane: 'CASH',
+          amount: total,
+          currency,
+          refType: 'PAYMENT',
+          refId: paymentIdStr,
+          fundId,
+        },
+      })
+      ledgerByFund.set(fundId, le)
+    }
+
+    if (ledgerApps.length) {
+      await (client as any).beLedgerEntryDetail.createMany({
+        data: ledgerApps.map((app) => {
+          const fundId = app.spec?.fundId
+          const le = ledgerByFund.get(fundId)
+          return {
+            ledgerEntryId: le.id,
+            communityId,
+            periodId,
+            billingEntityId,
+            kind: 'PAYMENT',
+            fundId,
+            currency,
+            refType: 'PAYMENT',
+            refId: paymentIdStr,
+            unitId: app.spec?.unitId ?? null,
             amount: app.amount,
             meta: app.spec,
-          })),
-          skipDuplicates: true,
-        })
-      }
+          }
+        }),
+        skipDuplicates: true,
+      })
     }
-    if (paymentLedgerEntry) {
-      await this.upsertUnallocatedPaymentDetail(client, paymentLedgerEntry, paymentIdStr, amount)
-      const fundIdTotals = this.buildCommunityPaymentFundTotals(apps, remaining)
-      await this.replaceCommunityPaymentLedger(client, paymentLedgerEntry, paymentIdStr, fundIdTotals)
-      await this.replaceFundPaymentLedger(client, paymentLedgerEntry, paymentIdStr, apps)
-    }
-    return { applied: amount - remaining, remaining }
+
+    const entryCtx = { communityId, periodId, currency }
+    const fundIdTotals = this.buildCommunityPaymentFundTotals(ledgerApps, 0)
+    await this.replaceCommunityPaymentLedger(client, entryCtx as any, paymentIdStr, fundIdTotals)
+    await this.replaceFundPaymentLedger(client, entryCtx as any, paymentIdStr, ledgerApps)
+    return { applied: Number((amount - advanceTotal).toFixed(4)), remaining: 0, advance: advanceTotal }
   }
 
   private async latestPeriodId(communityId: string) {
@@ -639,73 +719,6 @@ export class PaymentService {
       select: { id: true },
     })
     return p?.id ?? 'PAYMENT'
-  }
-
-  private async getPaymentLedgerEntryId(
-    client: TxClient,
-    communityId: string,
-    billingEntityId: string,
-    paymentId: string,
-  ) {
-    const entry = await (client as any).beLedgerEntry.findFirst({
-      where: {
-        communityId,
-        billingEntityId,
-        refType: 'PAYMENT',
-        refId: paymentId,
-        fundId: null,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
-    return entry?.id ?? null
-  }
-
-  private async upsertPaymentLedger(
-    communityId: string,
-    periodId: string,
-    billingEntityId: string,
-    paymentId: string,
-    amount: number,
-    currency: string,
-  ) {
-    const entry = await this.prisma.beLedgerEntry.upsert({
-      where: {
-        communityId_periodId_billingEntityId_refType_refId_fundId: {
-          communityId,
-          periodId,
-          billingEntityId,
-          refType: 'PAYMENT',
-          refId: paymentId,
-          fundId: null,
-        },
-      },
-      update: { amount, currency },
-      create: {
-        communityId,
-        periodId,
-        billingEntityId,
-        kind: 'PAYMENT',
-        lane: 'CASH',
-        amount,
-        currency,
-        refType: 'PAYMENT',
-        refId: paymentId,
-        fundId: null,
-      },
-    })
-    await ensureLedgerEntryDetail(this.prisma, entry, amount, {
-      synthetic: true,
-      reason: 'payment',
-      paymentId,
-    })
-    await this.replaceCommunityPaymentLedger(
-      this.prisma,
-      entry,
-      String(paymentId),
-      new Map([['PAYMENT', amount]]),
-    )
-    return entry.id
   }
 
   async createOrApply(communityId: string, body: any) {
@@ -761,23 +774,26 @@ export class PaymentService {
       })
     }
 
-    await this.upsertPaymentLedger(communityId, periodId, beId, payment.id, amount, body.currency || 'RON')
-    await this.upsertCashTxForPayment(communityId, payment as any)
-
     if (body.applyMode === 'none') {
+      // record-only: post cash only if an explicit spec provides the fund split
+      await this.upsertCashTxForPayment(communityId, payment as any)
       return { payment, applied: 0, remaining: amount }
     }
 
-    const { applied, remaining } = await this.applyPayment(
+    const { applied, remaining, advance } = await this.applyPayment(
       this.prisma,
       payment.id,
       amount,
       communityId,
       beId,
+      periodId,
+      body.currency || 'RON',
       undefined,
       allocationSpec,
     )
-    return { payment, applied, remaining }
+    // post cash AFTER applying so the per-fund split can be derived from the ledger
+    await this.upsertCashTxForPayment(communityId, payment as any)
+    return { payment, applied, remaining, advance }
   }
 
   async createIntent(communityId: string, body: any) {
@@ -841,41 +857,39 @@ export class PaymentService {
       },
     })
 
-    await this.upsertPaymentLedger(
-      communityId,
-      await this.latestPeriodId(communityId),
-      payment.billingEntityId,
-      payment.id,
-      Number(payment.amount),
-      payment.currency || 'RON',
-    )
-    await this.upsertCashTxForPayment(communityId, updated as any)
     await (this.prisma as any).paymentApplication.deleteMany({ where: { paymentId: payment.id } })
+    const periodId = await this.latestPeriodId(communityId)
     const { applied, remaining } = await this.applyPayment(
       this.prisma,
       payment.id,
       Number(payment.amount),
       communityId,
       payment.billingEntityId,
+      periodId,
+      payment.currency || 'RON',
       undefined,
       allocationSpec as any,
     )
+    await this.upsertCashTxForPayment(communityId, updated as any)
     return { payment: updated, applied, remaining }
   }
 
   async reapply(communityId: string, paymentId: string) {
     const payment = await (this.prisma as any).payment.findFirst({
       where: { id: paymentId, communityId },
-      select: { id: true, amount: true, billingEntityId: true, allocationSpec: true },
+      select: { id: true, amount: true, billingEntityId: true, allocationSpec: true, currency: true },
     })
     if (!payment) throw new NotFoundException('Payment not found')
     await (this.prisma as any).paymentApplication.deleteMany({ where: { paymentId } })
+    const periodId = await this.latestPeriodId(communityId)
     return this.applyPayment(
       this.prisma,
       paymentId,
       Number(payment.amount),
       communityId,
       payment.billingEntityId,
+      periodId,
+      payment.currency || 'RON',
       undefined,
       payment.allocationSpec as any,
     )
@@ -904,11 +918,11 @@ export class PaymentService {
 
     const beIds = Array.from(new Set(charges.map((c: { billingEntityId: string }) => c.billingEntityId))) as string[]
     for (const beId of beIds) {
-      const payments: Array<{ id: string; amount: number; allocationSpec?: any }> = (await (client as any).payment.findMany({
+      const payments: Array<{ id: string; amount: number; allocationSpec?: any; currency?: string }> = (await (client as any).payment.findMany({
         where: { communityId, billingEntityId: beId },
         orderBy: { ts: 'asc' },
-        select: { id: true, amount: true, allocationSpec: true },
-      })) as Array<{ id: string; amount: number; allocationSpec?: any }>
+        select: { id: true, amount: true, allocationSpec: true, currency: true },
+      })) as Array<{ id: string; amount: number; allocationSpec?: any; currency?: string }>
       const beChargeIds = charges
         .filter((c: { billingEntityId: string }) => c.billingEntityId === beId)
         .map((c: { id: string }) => c.id)
@@ -916,13 +930,30 @@ export class PaymentService {
         `[PAY] BE=${beId} charges=${beChargeIds.length} payments=${payments.length} (period=${periodId})`,
       )
       if (!payments.length) continue
+      // Net out what each payment already settled elsewhere. This period's applications were just
+      // deleted above, so any remaining applications belong to OTHER periods; only the unspent balance
+      // may be applied here. Without this, a payment is re-applied at its full amount to every period
+      // it is reapplied against, over-settling it and tripping "Payment exceeds open charges".
+      const appliedRows: Array<{ paymentId: string; _sum: { amount: any } }> = await (client as any).paymentApplication.groupBy({
+        by: ['paymentId'],
+        where: { paymentId: { in: payments.map((p) => String((p as any).id)) } },
+        _sum: { amount: true },
+      })
+      const appliedByPayment = new Map(appliedRows.map((r) => [r.paymentId, Number(r._sum.amount ?? 0)]))
       for (const p of payments) {
+        const available = Number((Number(p.amount) - (appliedByPayment.get(String((p as any).id)) ?? 0)).toFixed(4))
+        if (available <= 0.0001) {
+          this.logger.log(`[PAY] Payment ${p.id} fully applied elsewhere, skipping for period=${periodId} BE=${beId}`)
+          continue
+        }
         const res = await this.applyPayment(
           client,
           String((p as any).id),
-          Number(p.amount),
+          available,
           communityId,
           beId,
+          periodId,
+          (p as any).currency || 'RON',
           beChargeIds,
           (p as any).allocationSpec ?? null,
         )
@@ -941,40 +972,52 @@ export class PaymentService {
 
   private async upsertCashTxForPayment(
     communityId: string,
-    payment: { id: string; accountId?: string | null; amount: any; currency: string; ts?: Date | null; method?: string | null },
+    payment: {
+      id: string
+      accountId?: string | null
+      amount: any
+      currency: string
+      ts?: Date | null
+      method?: string | null
+      allocationSpec?: any[] | null
+    },
   ) {
     if (!payment.accountId) return
-    await this.prisma.cashTx.upsert({
-      where: {
-        communityId_refType_refId_direction: {
-          communityId,
-          refType: 'BE_PAYMENT',
-          refId: payment.id,
-          direction: 'IN',
-        },
-      },
-      update: {
-        accountId: payment.accountId,
-        amount: payment.amount,
-        currency: payment.currency || 'RON',
-        ts: payment.ts ?? new Date(),
-        kind: 'PAYMENT',
-        status: 'POSTED',
-      },
-      create: {
-        communityId,
-        accountId: payment.accountId,
-        amount: payment.amount,
-        currency: payment.currency || 'RON',
-        ts: payment.ts ?? new Date(),
-        direction: 'IN',
-        kind: 'PAYMENT',
-        status: 'POSTED',
-        refType: 'BE_PAYMENT',
-        refId: payment.id,
-        memo: payment.method ?? null,
-      },
+    await this.prisma.cashTx.deleteMany({
+      where: { communityId, refType: 'BE_PAYMENT', refId: payment.id, direction: 'IN' },
     })
+    // Source of truth = the per-fund BE PAYMENT ledger entries posted by applyPayment
+    // (covers FIFO, targeted charges, and advances). Skip silently if none (record-only).
+    const les = await (this.prisma as any).beLedgerEntry.findMany({
+      where: { communityId, kind: 'PAYMENT', refType: 'PAYMENT', refId: payment.id },
+      select: { fundId: true, amount: true },
+    })
+    const fundTotals = new Map<string | null, number>()
+    for (const le of les) {
+      const fundId = le.fundId ?? null
+      const amt = Number(le.amount || 0)
+      if (!fundId || !Number.isFinite(amt) || amt <= 0) continue
+      fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + amt)
+    }
+    const rows = Array.from(fundTotals.entries()).filter(([fundId]) => !!fundId).map(([fundId, amount]) => {
+      return {
+      communityId,
+      accountId: payment.accountId as string,
+      fundId,
+      amount,
+      currency: payment.currency || 'RON',
+      ts: payment.ts ?? new Date(),
+      direction: 'IN' as const,
+      kind: 'PAYMENT' as const,
+      status: 'POSTED' as const,
+      refType: 'BE_PAYMENT',
+      refId: payment.id,
+      memo: payment.method ?? null,
+      }
+    })
+    if (rows.length) {
+      await this.prisma.cashTx.createMany({ data: rows })
+    }
   }
 
   private async ensureCashAccount(communityId: string, accountId: string) {

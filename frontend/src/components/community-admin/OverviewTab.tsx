@@ -4,6 +4,8 @@ import { useI18n } from '../../i18n/useI18n'
 import { BillingEntitiesPeriodView } from './BillingEntitiesPeriodView'
 import { BillTemplatesHost } from '../bills/BillTemplatesHost'
 import { MeterTemplatesHost } from '../meters/MeterTemplatesHost'
+import { RecordReceiptModal } from '../money/RecordReceiptModal'
+import { PayBillModal } from '../money/PayBillModal'
 
 type EditablePeriod = {
   period?: { code: string; status: string }
@@ -24,10 +26,6 @@ type DashboardData = {
 
 type Props = {
   editablePeriod: EditablePeriod
-  onGoPeriod: () => void
-  onGoMeters?: () => void
-  onGoBills?: () => void
-  onAddInvoice?: () => void
   onPrepare?: () => void
   onClose?: () => void
   busy?: 'prepare' | 'close' | 'reopen' | 'create' | null
@@ -40,10 +38,12 @@ type Props = {
   onReopen?: () => void
   onReopenPrepared?: () => void
   onCreatePeriod?: () => void
-  onGoStatements?: () => void
   lastClosedSummary?: any | null
   onLoadLastClosedSummary?: () => void
   communityId?: string
+  communityCode?: string
+  communityName?: string
+  billingEntities?: any[]
   funds?: any[]
   invoices?: any[]
   invoicesLoading?: boolean
@@ -65,10 +65,10 @@ type Props = {
 
 export function OverviewTab({
   communityId,
+  communityCode,
+  communityName,
+  billingEntities = [],
   editablePeriod,
-  onGoPeriod,
-  onGoMeters,
-  onGoBills,
   onPrepare,
   onClose,
   busy,
@@ -81,10 +81,8 @@ export function OverviewTab({
   onReopen,
   onReopenPrepared,
   onCreatePeriod,
-  onGoStatements,
   lastClosedSummary,
   onLoadLastClosedSummary,
-  onAddInvoice,
   funds = [],
   invoices = [],
   invoicesLoading,
@@ -99,6 +97,8 @@ export function OverviewTab({
 }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
+  const [showReceipt, setShowReceipt] = React.useState(false)
+  const [showBill, setShowBill] = React.useState(false)
   const [linkInvoiceId, setLinkInvoiceId] = React.useState('')
   const [linkFundId, setLinkFundId] = React.useState('')
   const [linkAmount, setLinkAmount] = React.useState('')
@@ -272,6 +272,16 @@ export function OverviewTab({
           )}
         </div>
         <div className="stack" style={{ gap: 8, alignItems: 'flex-end' }}>
+          {communityId && communityCode && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button className="btn primary small" type="button" onClick={() => setShowReceipt(true)}>
+                + {t('money.recordReceipt', 'Încasare')}
+              </button>
+              <button className="btn secondary small" type="button" onClick={() => setShowBill(true)}>
+                + {t('money.payBill', 'Plată furnizor')}
+              </button>
+            </div>
+          )}
           {editablePeriod?.period?.status === 'OPEN' && (
             <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
@@ -927,6 +937,28 @@ export function OverviewTab({
         </div>
       </div>
       */}
+
+      {communityId && communityCode && (
+        <>
+          <RecordReceiptModal
+            communityId={communityId}
+            communityCode={communityCode}
+            communityName={communityName}
+            billingEntities={billingEntities}
+            open={showReceipt}
+            onClose={() => setShowReceipt(false)}
+            onDone={() => onReloadInvoices?.()}
+          />
+          <PayBillModal
+            communityId={communityId}
+            communityCode={communityCode}
+            communityName={communityName}
+            open={showBill}
+            onClose={() => setShowBill(false)}
+            onDone={() => onReloadInvoices?.()}
+          />
+        </>
+      )}
     </div>
   )
 }

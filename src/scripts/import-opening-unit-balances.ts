@@ -112,23 +112,34 @@ async function main() {
 
   let count = 0
   for (const agg of aggregates.values()) {
-    await prisma.beOpeningBalance.upsert({
+    const existing = await prisma.beOpeningBalance.findFirst({
       where: {
-        communityId_periodId_billingEntityId: {
-          communityId: agg.communityId,
-          periodId: agg.periodId,
-          billingEntityId: agg.beId,
-        },
-      },
-      update: { amount: agg.amount, currency: agg.currency },
-      create: {
         communityId: agg.communityId,
         periodId: agg.periodId,
         billingEntityId: agg.beId,
-        amount: agg.amount,
-        currency: agg.currency,
+        fundId: null,
+        unitId: null,
       },
+      select: { id: true },
     })
+    if (existing?.id) {
+      await prisma.beOpeningBalance.update({
+        where: { id: existing.id },
+        data: { amount: agg.amount, currency: agg.currency },
+      })
+    } else {
+      await prisma.beOpeningBalance.create({
+        data: {
+          communityId: agg.communityId,
+          periodId: agg.periodId,
+          billingEntityId: agg.beId,
+          fundId: null,
+          unitId: null,
+          amount: agg.amount,
+          currency: agg.currency,
+        },
+      })
+    }
     count++
   }
 

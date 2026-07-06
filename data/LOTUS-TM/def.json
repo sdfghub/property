@@ -3468,16 +3468,42 @@
       "name": "Cont bancar principal",
       "type": "BANK",
       "currency": "RON",
-      "openingBalance": 1234,
-      "openingPeriodCode": "2025-09"
+      "defaultFundCode": "EXPENSES",
+      "openings": [
+        {
+          "fundCode": "EXPENSES",
+          "openingBalance": 1234,
+          "openingPeriodCode": "2025-09"
+        }
+      ]
     },
     {
       "code": "PETTY_CASH",
       "name": "Casa",
       "type": "PETTY",
       "currency": "RON",
-      "openingBalance": 532,
-      "openingPeriodCode": "2025-09"
+      "defaultFundCode": "EXPENSES",
+      "openings": [
+        {
+          "fundCode": "EXPENSES",
+          "openingBalance": 532,
+          "openingPeriodCode": "2025-09"
+        }
+      ]
+    }
+  ],
+  "fundChargeOpenings": [
+    {
+      "fundCode": "EXPENSES",
+      "openingPeriodCode": "2025-09",
+      "lines": [
+        {
+          "unitCode": "20",
+          "billingEntityCode": "Ap 20",
+          "amount": 100,
+          "currency": "RON"
+        }
+      ]
     }
   ]
 }

@@ -50,18 +50,22 @@ export class VendorInvoiceService {
     return period.id
   }
 
-  private async resolveCashPeriodId(communityId: string, ts: Date) {
-    const period = await this.prisma.period.findFirst({
-      where: {
-        communityId,
-        startDate: { lte: ts },
-        endDate: { gte: ts },
-      },
-      orderBy: { seq: 'desc' },
-      select: { id: true },
-    })
+  private async resolveCashPeriodId(communityId: string) {
+    // Prefer the current OPEN period; fall back to the latest not-yet-CLOSED period
+    // (e.g. a PREPARED current month) so cash can still be posted.
+    const period =
+      (await this.prisma.period.findFirst({
+        where: { communityId, status: 'OPEN' },
+        orderBy: { seq: 'desc' },
+        select: { id: true },
+      })) ||
+      (await this.prisma.period.findFirst({
+        where: { communityId, status: { not: 'CLOSED' } },
+        orderBy: { seq: 'desc' },
+        select: { id: true },
+      }))
     if (!period) {
-      throw new BadRequestException('No period found for payment date')
+      throw new BadRequestException('No open period found for payment')
     }
     return period.id
   }
@@ -91,7 +95,7 @@ export class VendorInvoiceService {
   }
 
   async listInvoices(communityId: string) {
-    return this.prisma.vendorInvoice.findMany({
+    const rows = await this.prisma.vendorInvoice.findMany({
       where: { communityId },
       orderBy: [{ issueDate: 'desc' }],
       select: {
@@ -116,7 +120,19 @@ export class VendorInvoiceService {
             fund: { select: { id: true, code: true, name: true } },
           },
         },
+        paymentApplications: { select: { amount: true } },
       } as any,
+    })
+    return rows.map((r: any) => {
+      const paid = Array.isArray(r.paymentApplications)
+        ? r.paymentApplications.reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
+        : 0
+      const gross = r.gross != null ? Number(r.gross) : 0
+      return {
+        ...r,
+        paid,
+        due: gross - paid,
+      }
     })
   }
 
@@ -146,6 +162,12 @@ export class VendorInvoiceService {
   }
 
   async createInvoice(communityId: string, body: any) {
+    const fundId =
+      body.fundId ||
+      (body.fundCode ? await this.resolveFundIdByCode(communityId, body.fundCode) : null)
+    if (!fundId) {
+      throw new BadRequestException('fundId or fundCode required when creating an invoice')
+    }
     const vendorId = await this.resolveVendor(communityId, {
       vendorId: body.vendorId,
       vendorName: body.vendorName,
@@ -168,6 +190,12 @@ export class VendorInvoiceService {
       provenance: body.provenance ?? null,
     }
     const invoice = await this.prisma.vendorInvoice.create({ data })
+    await this.linkFund(communityId, invoice.id, {
+      fundId,
+      amount: body.fundAmount ?? null,
+      portionKey: body.fundPortionKey ?? null,
+      notes: body.fundNotes ?? null,
+    })
     if (invoice.source === 'INTERNAL') {
       await this.createVendorPayment(communityId, invoice.id, { ts: new Date() })
     }
@@ -211,6 +239,13 @@ export class VendorInvoiceService {
       throw new BadRequestException('Payment amount must be positive')
     }
     const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : null
+    // Operator may choose which fund the money leaves from (any community fund).
+    let payFundId: string | null = null
+    if (body.fundId) {
+      const fund = await this.prisma.fund.findFirst({ where: { id: body.fundId, communityId }, select: { id: true } })
+      if (!fund) throw new BadRequestException('Invalid fundId for payment')
+      payFundId = fund.id
+    }
     const { payment } = await this.prisma.$transaction(async (tx) => {
       const created = await tx.vendorPayment.create({
         data: {
@@ -236,8 +271,8 @@ export class VendorInvoiceService {
       })
       return { payment: created }
     })
-    await this.postVendorPaymentLedger(invoice, payment)
-    await this.upsertCashTxForVendorPayment(communityId, payment as any)
+    await this.postVendorPaymentLedger(invoice, payment, payFundId)
+    await this.upsertCashTxForVendorPayment(communityId, payment as any, payFundId)
     return payment
   }
 
@@ -249,40 +284,71 @@ export class VendorInvoiceService {
 
   private async upsertCashTxForVendorPayment(
     communityId: string,
-    payment: { id: string; accountId?: string | null; amount: any; currency: string; ts?: Date | null; method?: string | null },
+    payment: {
+      id: string
+      accountId?: string | null
+      amount: any
+      currency: string
+      ts?: Date | null
+      method?: string | null
+      invoiceId?: string | null
+    },
+    forceFundId?: string | null,
   ) {
     if (!payment.accountId) return
-    await this.prisma.cashTx.upsert({
-      where: {
-        communityId_refType_refId_direction: {
-          communityId,
-          refType: 'VENDOR_PAYMENT',
-          refId: payment.id,
-          direction: 'OUT',
-        },
-      },
-      update: {
-        accountId: payment.accountId,
-        amount: payment.amount,
-        currency: payment.currency || 'RON',
-        ts: payment.ts ?? new Date(),
-        kind: 'PAYMENT',
-        status: 'POSTED',
-      },
-      create: {
-        communityId,
-        accountId: payment.accountId,
-        amount: payment.amount,
-        currency: payment.currency || 'RON',
-        ts: payment.ts ?? new Date(),
-        direction: 'OUT',
-        kind: 'PAYMENT',
-        status: 'POSTED',
-        refType: 'VENDOR_PAYMENT',
-        refId: payment.id,
-        memo: payment.method ?? null,
-      },
+    await this.prisma.cashTx.deleteMany({
+      where: { communityId, refType: 'VENDOR_PAYMENT', refId: payment.id, direction: 'OUT' },
     })
+    let rows: Array<{ fundId: string | null; amount: number }> = []
+    if (forceFundId) {
+      rows = [{ fundId: forceFundId, amount: Number(payment.amount) }]
+    } else if (payment.invoiceId) {
+      const fundRows = await this.prisma.fundInvoice.findMany({
+        where: { invoiceId: payment.invoiceId },
+        select: { fundId: true, amount: true },
+      })
+      const total = fundRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+      if (fundRows.length && total > 0) {
+        let allocated = 0
+        for (let i = 0; i < fundRows.length; i += 1) {
+          const r = fundRows[i]
+          const share = i === fundRows.length - 1 ? Number(payment.amount) - allocated : (Number(payment.amount) * Number(r.amount ?? 0)) / total
+          const amt = Number(share.toFixed(4))
+          allocated += amt
+          rows.push({ fundId: r.fundId, amount: amt })
+        }
+      } else if (fundRows.length) {
+        // fund links carry no explicit portion amounts: split the payment equally
+        let allocated = 0
+        for (let i = 0; i < fundRows.length; i += 1) {
+          const r = fundRows[i]
+          const share = i === fundRows.length - 1 ? Number(payment.amount) - allocated : Number((Number(payment.amount) / fundRows.length).toFixed(4))
+          allocated += share
+          rows.push({ fundId: r.fundId, amount: share })
+        }
+      }
+    }
+    if (!rows.length) {
+      throw new BadRequestException('Vendor payment requires fund allocation')
+    }
+    const data = rows.map((r) => {
+      if (!r.fundId) throw new BadRequestException('Vendor payment requires fundId')
+      return {
+      communityId,
+      accountId: payment.accountId as string,
+      fundId: r.fundId,
+      amount: r.amount,
+      currency: payment.currency || 'RON',
+      ts: payment.ts ?? new Date(),
+      direction: 'OUT' as const,
+      kind: 'PAYMENT' as const,
+      status: 'POSTED' as const,
+      refType: 'VENDOR_PAYMENT',
+      refId: payment.id,
+      memo: payment.method ?? null,
+      }
+    })
+    await this.prisma.cashTx.createMany({ data })
   }
 
   private async ensureCommunity(invoiceId: string, communityId: string) {
@@ -290,14 +356,24 @@ export class VendorInvoiceService {
     if (!inv) throw new NotFoundException('Invoice not found for community')
   }
 
+  private async resolveFundIdByCode(communityId: string, fundCode: string) {
+    const fund = await this.prisma.fund.findUnique({
+      where: { communityId_code: { communityId, code: fundCode } },
+      select: { id: true },
+    })
+    if (!fund) throw new NotFoundException(`Fund ${fundCode} not found`)
+    return fund.id
+  }
+
   async linkFund(communityId: string, invoiceId: string, body: { fundId: string; amount?: number; portionKey?: string; notes?: any }) {
     await this.ensureCommunity(invoiceId, communityId)
     const fund = await this.prisma.fund.findFirst({ where: { id: body.fundId, communityId }, select: { id: true } })
     if (!fund) throw new NotFoundException('Fund not found for community')
+    const portionKey = body.portionKey ?? 'default'
     const data = {
       fundId: body.fundId,
       invoiceId,
-      portionKey: body.portionKey ?? null,
+      portionKey,
       amount: body.amount ?? null,
       notes: body.notes ?? null,
     }
@@ -306,7 +382,7 @@ export class VendorInvoiceService {
         fundId_invoiceId_portionKey: {
           fundId: body.fundId,
           invoiceId,
-          portionKey: body.portionKey ?? null,
+          portionKey,
         },
       },
       update: { amount: data.amount, notes: data.notes },
@@ -318,14 +394,15 @@ export class VendorInvoiceService {
 
   async unlinkFund(communityId: string, invoiceId: string, fundId: string, portionKey?: string | null) {
     await this.ensureCommunity(invoiceId, communityId)
+    const key = portionKey ?? 'default'
     const res = await (this.prisma as any).fundInvoice.deleteMany({
       where: {
         fundId,
         invoiceId,
-        portionKey: portionKey ?? null,
+        portionKey: key,
       },
     })
-    await this.deleteFundSpendLedger(communityId, { fundId, invoiceId, portionKey: portionKey ?? null })
+    await this.deleteFundSpendLedger(communityId, { fundId, invoiceId, portionKey: key })
     return { deleted: res.count }
   }
 
@@ -333,6 +410,7 @@ export class VendorInvoiceService {
     communityId: string,
     data: { fundId: string; invoiceId: string; portionKey: string | null; amount?: number | null },
   ) {
+    const portionKey = data.portionKey ?? 'default'
     const fund = await this.prisma.fund.findUnique({
       where: { id: data.fundId },
       select: { id: true, code: true, name: true },
@@ -351,7 +429,7 @@ export class VendorInvoiceService {
           periodId,
           billingEntityId: 'FUND',
           refType: 'FUND_SPEND',
-          refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+          refId: `${fund.id}:${invoice.id}:${portionKey}`,
           fundId: fund.id,
         },
       },
@@ -368,7 +446,7 @@ export class VendorInvoiceService {
         amount,
         currency: invoice.currency || 'RON',
         refType: 'FUND_SPEND',
-        refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+        refId: `${fund.id}:${invoice.id}:${portionKey}`,
         fundId: fund.id,
       },
     })
@@ -377,7 +455,7 @@ export class VendorInvoiceService {
       reason: 'fund-spend',
       fundId: fund.id,
       invoiceId: invoice.id,
-      portionKey: data.portionKey ?? 'default',
+      portionKey,
     })
     const communityEntry = await this.prisma.communityLedgerEntry.upsert({
       where: {
@@ -385,7 +463,7 @@ export class VendorInvoiceService {
           communityId,
           periodId,
           refType: 'FUND_SPEND',
-          refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+          refId: `${fund.id}:${invoice.id}:${portionKey}`,
           fundId: fund.id,
           kind: 'FUND_SPEND',
         },
@@ -402,7 +480,7 @@ export class VendorInvoiceService {
         amount,
         currency: invoice.currency || 'RON',
         refType: 'FUND_SPEND',
-        refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+        refId: `${fund.id}:${invoice.id}:${portionKey}`,
         fundId: fund.id,
       },
     })
@@ -411,7 +489,7 @@ export class VendorInvoiceService {
       reason: 'fund-spend',
       fundId: fund.id,
       invoiceId: invoice.id,
-      portionKey: data.portionKey ?? 'default',
+      portionKey,
     })
     const fundEntry = await this.prisma.fundLedgerEntry.upsert({
       where: {
@@ -420,7 +498,7 @@ export class VendorInvoiceService {
           fundId: fund.id,
           periodId,
           refType: 'FUND_SPEND',
-          refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+          refId: `${fund.id}:${invoice.id}:${portionKey}`,
           kind: 'EXPENSE',
         },
       },
@@ -437,7 +515,7 @@ export class VendorInvoiceService {
         amount,
         currency: invoice.currency || 'RON',
         refType: 'FUND_SPEND',
-        refId: `${fund.id}:${invoice.id}:${data.portionKey ?? 'default'}`,
+        refId: `${fund.id}:${invoice.id}:${portionKey}`,
       },
     })
     await ensureFundLedgerEntryDetail(this.prisma, fundEntry, amount, {
@@ -445,25 +523,30 @@ export class VendorInvoiceService {
       reason: 'fund-spend',
       fundId: fund.id,
       invoiceId: invoice.id,
-      portionKey: data.portionKey ?? 'default',
+      portionKey,
     })
   }
 
   private async postVendorPaymentLedger(
     invoice: { id: string; communityId: string; vendorId: string | null },
     payment: { id: string; amount: any; currency: string | null; ts: Date },
+    forceFundId?: string | null,
   ) {
-    const periodId = await this.resolveCashPeriodId(invoice.communityId, payment.ts)
-    const fundLinks = await this.prisma.fundInvoice.findMany({
-      where: { invoiceId: invoice.id },
-      select: { fundId: true },
-    })
-    if (fundLinks.length > 1) {
-      throw new BadRequestException('Invoice linked to multiple funds; cannot post single payment')
+    const periodId = await this.resolveCashPeriodId(invoice.communityId)
+    let spendFundId: string | null = forceFundId ?? null
+    if (!spendFundId) {
+      const fundLinks = await this.prisma.fundInvoice.findMany({
+        where: { invoiceId: invoice.id },
+        select: { fundId: true },
+      })
+      if (fundLinks.length > 1) {
+        throw new BadRequestException('Invoice linked to multiple funds; choose the paying fund')
+      }
+      spendFundId = fundLinks.length === 1 ? fundLinks[0].fundId : null
     }
-    if (fundLinks.length === 1) {
+    if (spendFundId) {
       const fund = await this.prisma.fund.findUnique({
-        where: { id: fundLinks[0].fundId },
+        where: { id: spendFundId },
         select: { id: true, code: true },
       })
       if (!fund) {
@@ -500,7 +583,7 @@ export class VendorInvoiceService {
         currency: payment.currency || 'RON',
         refType: 'VENDOR_PAYMENT',
         refId: payment.id,
-        fundId: fundLinks.length === 1 ? fundLinks[0].fundId : null,
+        fundId: spendFundId,
       },
     })
     await ensureCommunityLedgerEntryDetail(this.prisma, cle, Number(payment.amount), {

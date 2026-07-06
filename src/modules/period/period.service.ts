@@ -3,6 +3,8 @@ import { Injectable, BadRequestException, ConflictException, Logger } from '@nes
 import { PrismaService } from '../user/prisma.service'
 import { AllocationService } from '../billing/allocation.service'
 import { PaymentService } from '../billing/payment.service'
+import { FeaturesService } from '../features/features.service'
+import { PenaltyLedgerService } from './penalty-ledger.service'
 import { ensureLedgerEntryDetail } from '../billing/ledger-detail.util'
 import { ensureFundLedgerEntryDetail } from '../billing/fund-ledger-detail.util'
 import type { Prisma, PrismaClient } from '@prisma/client'
@@ -16,6 +18,8 @@ export class PeriodService {
     private readonly prisma: PrismaService,
     private readonly allocationService: AllocationService,
     private readonly paymentService: PaymentService,
+    private readonly features: FeaturesService,
+    private readonly penaltyLedger: PenaltyLedgerService,
   ) {}
   private readonly logger = new Logger(PeriodService.name)
 
@@ -111,6 +115,13 @@ export class PeriodService {
   async prepare(communityId: string, periodCode: string) {
     const period = await this.getPeriod(communityId, periodCode)
     if (period.status !== 'OPEN') throw new BadRequestException('Period must be OPEN to prepare')
+    // A period can only be prepared/closed once it has actually ended: penalties and allocations
+    // must not accrue over time (days) that has not yet elapsed.
+    if (new Date(period.endDate) > new Date()) {
+      throw new BadRequestException(
+        `Period ${periodCode} has not ended yet — cannot prepare/close a future period`,
+      )
+    }
 
     // ensure allocations are up to date before staging ledger/statement rows
     await this.recomputeAllocations(communityId, period)
@@ -123,12 +134,29 @@ export class PeriodService {
         )
       }
 
-      // stage charges & statements
+      // post opening balances as charges (idempotent)
+      await this.postOpeningBalances(tx, communityId, period.id)
+
+      // stage principal charges
       await this.postChargesForStage(tx, communityId, period.id, 'CLOSE_PREP')
-      await this.computeStatements(tx, communityId, period.id)
-      // reapply payments against freshly staged charges
+
+      // Apply payments BEFORE accruing penalties. The penalty ledger's payer-favored paydown reads
+      // this period's payments from the PAYMENT ledger, which reapplyForPeriod posts — so it must run
+      // first, otherwise advance() sees zero payments and over-penalizes anyone who paid. (This also
+      // means be_statement below reflects payments on a fresh close, not only on a later cycle.)
       this.log('[PAY] reapplying payments during prepare', { communityId, period: period.id })
       await this.paymentService.reapplyForPeriod(tx, communityId, period.id)
+
+      if (await this.features.isEnabled(communityId, 'penalties')) {
+        // stateful penalty aging ledger: ensure this period's buckets, then advance (provisional).
+        // Runs after payments so the paydown is applied before accrual; penalty charges it posts are
+        // new debt and are intentionally left unsettled by this period's principal payment.
+        await this.penaltyLedger.ensureBuckets(tx, communityId, period.id)
+        await this.penaltyLedger.advance(tx, communityId, period.id, { commit: false })
+      }
+
+      // statements reflect staged charges, applied payments, and posted penalties
+      await this.computeStatements(tx, communityId, period.id)
       await this.computeCommunityStatements(tx, communityId, period.id)
 
       // move to PREPARED
@@ -153,21 +181,27 @@ export class PeriodService {
         where: { ledger: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id } },
       })
       await tx.beLedgerEntry.deleteMany({
-        where: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id },
+        where: { communityId, periodId: period.id, refType: { in: ['CLOSE_FINAL', 'PENALTY_CLOSE_FINAL'] }, refId: period.id },
       })
       await tx.communityLedgerEntry.deleteMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_FINAL', refId: period.id },
       })
 
-      // promote ledger rows to FINAL
+      // promote ledger rows to FINAL (incl. penalty ledger, which uses a dedicated refType)
       await tx.beLedgerEntry.updateMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
         data: { refType: 'CLOSE_FINAL' },
+      })
+      await tx.beLedgerEntry.updateMany({
+        where: { communityId, periodId: period.id, refType: 'PENALTY_CLOSE_PREP', refId: period.id },
+        data: { refType: 'PENALTY_CLOSE_FINAL' },
       })
       await tx.communityLedgerEntry.updateMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
         data: { refType: 'CLOSE_FINAL' },
       })
+      // freeze the penalty bucket state for this period (provisional → committed)
+      await this.penaltyLedger.commitPeriod(tx, communityId, period.id)
 
       // ensure statements exist/updated (idempotent)
       await this.computeStatements(tx, communityId, period.id)
@@ -178,26 +212,38 @@ export class PeriodService {
       if (next) {
         const statements = await tx.beStatement.findMany({
           where: { communityId, periodId: period.id },
-          select: { billingEntityId: true, currency: true, dueEnd: true },
+          select: { billingEntityId: true, fundId: true, currency: true, dueEnd: true },
         })
         for (const s of statements) {
-          await tx.beOpeningBalance.upsert({
+          if (!s.fundId) continue
+          const existing = await tx.beOpeningBalance.findFirst({
             where: {
-              communityId_periodId_billingEntityId: {
-                communityId,
-                periodId: next,
-                billingEntityId: s.billingEntityId,
-              },
-            },
-            update: { amount: s.dueEnd, currency: s.currency },
-            create: {
               communityId,
               periodId: next,
               billingEntityId: s.billingEntityId,
-              amount: s.dueEnd,
-              currency: s.currency,
+              fundId: s.fundId,
+              unitId: null,
             },
+            select: { id: true },
           })
+          if (existing?.id) {
+            await tx.beOpeningBalance.update({
+              where: { id: existing.id },
+              data: { amount: s.dueEnd, currency: s.currency },
+            })
+          } else {
+            await tx.beOpeningBalance.create({
+              data: {
+                communityId,
+                periodId: next,
+                billingEntityId: s.billingEntityId,
+                fundId: s.fundId,
+                unitId: null,
+                amount: s.dueEnd,
+                currency: s.currency,
+              },
+            })
+          }
         }
         const communityStatement = await tx.communityStatement.findUnique({
           where: { communityId_periodId: { communityId, periodId: period.id } },
@@ -229,6 +275,15 @@ export class PeriodService {
     const period = await this.getPeriod(communityId, periodCode)
     await this.recomputeAllocations(communityId, { id: period.id, seq: period.seq, code: period.code })
     return { ok: true }
+  }
+
+  /** Operator-entered due date (scadență) for the period; drives penalty aging. */
+  async setDueDate(communityId: string, periodCode: string, dueDate: string | null) {
+    const period = await this.getPeriod(communityId, periodCode)
+    const d = dueDate ? new Date(dueDate) : null
+    if (dueDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid dueDate')
+    await this.prisma.period.update({ where: { id: period.id }, data: { dueDate: d } })
+    return { ok: true, code: periodCode, dueDate: d }
   }
 
   async summary(communityId: string, periodCode: string) {
@@ -387,6 +442,28 @@ export class PeriodService {
         })
       }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
+      // clean penalty artifacts (dedicated PENALTY_* refTypes + penalty:* community charges); these
+      // are not covered by the CLOSE_* cleanup above, so leaving them would double-count on re-prepare.
+      const penaltyLedgerRows = await tx.beLedgerEntry.findMany({
+        where: { communityId, periodId: period.id, refType: { in: ['PENALTY_CLOSE_PREP', 'PENALTY_CLOSE_FINAL'] } },
+        select: { id: true },
+      })
+      if (penaltyLedgerRows.length) {
+        const ids = penaltyLedgerRows.map((e) => e.id)
+        await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: ids } } })
+        await tx.beLedgerEntry.deleteMany({ where: { id: { in: ids } } })
+      }
+      const penaltyCharges = await tx.communityCharge.findMany({
+        where: { communityId, periodId: period.id, sourceKey: { startsWith: 'penalty:' } },
+        select: { id: true },
+      })
+      if (penaltyCharges.length) {
+        const chargeIds = penaltyCharges.map((c) => c.id)
+        await tx.communityChargeLine.deleteMany({ where: { chargeId: { in: chargeIds } } })
+        await tx.communityCharge.deleteMany({ where: { id: { in: chargeIds } } })
+      }
+      // undo this period's penalty bucket advance (drops its PenaltyBucketPeriod rows, reopens settled buckets)
+      await this.penaltyLedger.revertPeriod(tx, communityId, period.id)
       const communityEntries = await tx.communityLedgerEntry.findMany({
         where: { communityId, periodId: period.id, refType: refTypeToClean, refId: period.id },
         select: { id: true },
@@ -453,6 +530,87 @@ export class PeriodService {
     if (charges.length) return
   }
 
+  private async postOpeningBalances(tx: TxOrClient, communityId: string, periodId: string) {
+    const existing = await tx.beLedgerEntry.findFirst({
+      where: { communityId, periodId, refType: 'OPENING_BALANCE' },
+      select: { id: true },
+    })
+    if (existing) return
+
+    const openings = await tx.beOpeningBalance.findMany({
+      where: { communityId, periodId, fundId: { not: null }, unitId: { not: null } },
+      select: {
+        billingEntityId: true,
+        fundId: true,
+        unitId: true,
+        amount: true,
+        currency: true,
+      },
+    })
+    if (!openings.length) return
+
+    const byBeFund = new Map<string, { billingEntityId: string; fundId: string; currency: string; amount: number }>()
+    for (const o of openings) {
+      const fundId = o.fundId as string
+      const key = `${o.billingEntityId}::${fundId}`
+      const entry = byBeFund.get(key) ?? {
+        billingEntityId: o.billingEntityId,
+        fundId,
+        currency: o.currency ?? 'RON',
+        amount: 0,
+      }
+      entry.amount += Number(o.amount ?? 0)
+      byBeFund.set(key, entry)
+    }
+
+    const ledgerByKey = new Map<string, { id: string; billingEntityId: string; fundId: string; currency: string }>()
+    for (const entry of byBeFund.values()) {
+      const le = await tx.beLedgerEntry.create({
+        data: {
+          communityId,
+          periodId,
+          billingEntityId: entry.billingEntityId,
+          kind: 'CHARGE',
+          lane: 'ACCRUAL',
+          amount: entry.amount,
+          currency: entry.currency,
+          fundId: entry.fundId,
+          refType: 'OPENING_BALANCE',
+          refId: periodId,
+        },
+        select: { id: true },
+      })
+      ledgerByKey.set(`${entry.billingEntityId}::${entry.fundId}`, {
+        id: le.id,
+        billingEntityId: entry.billingEntityId,
+        fundId: entry.fundId,
+        currency: entry.currency,
+      })
+    }
+
+    for (const o of openings) {
+      const fundId = o.fundId as string
+      const unitId = o.unitId as string
+      const le = ledgerByKey.get(`${o.billingEntityId}::${fundId}`)
+      if (!le) continue
+      await tx.beLedgerEntryDetail.create({
+        data: {
+          ledgerEntryId: le.id,
+          communityId,
+          periodId,
+          billingEntityId: o.billingEntityId,
+          kind: 'CHARGE',
+          fundId,
+          currency: o.currency ?? le.currency ?? 'RON',
+          refType: 'OPENING_BALANCE',
+          refId: periodId,
+          unitId,
+          amount: Number(o.amount ?? 0),
+        },
+      })
+    }
+  }
+
   private async postChargesForStage(
     tx: TxOrClient,
     communityId: string,
@@ -460,8 +618,11 @@ export class PeriodService {
     stage: CloseStage,
   ) {
     const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true } })
+    // Only pre-existing NON-fund charges (e.g. expense/vendor-invoice allocations) are read into the
+    // ledger totals here. Fund contributions (sourceType FUND) and penalties are (re)generated below /
+    // in the penalty stage, so including them would double-count on every re-prepare.
     const existingCharges = await tx.communityCharge.findMany({
-      where: { communityId, periodId, status: 'ACTIVE' },
+      where: { communityId, periodId, status: 'ACTIVE', NOT: { sourceType: 'FUND' } },
       include: { lines: true },
     })
     const hasChargeLines = existingCharges.some((c) => c.lines.length)
@@ -615,7 +776,7 @@ export class PeriodService {
             unitId: u.id,
             beId,
             amount: amt,
-            meta: { source: 'FUND', fundCode: proj.code },
+            meta: { source: 'FUND', fundCode: proj.code, allocation: { method, unitMeasure: w, totalMeasure: totalWeight, base: amount } },
           })
           const beTotals = beFundTotals.get(beId) ?? new Map<string, number>()
           beTotals.set(fundId, (beTotals.get(fundId) ?? 0) + amt)
@@ -623,7 +784,7 @@ export class PeriodService {
           fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + amt)
           const dk = `${beId}::${fundId}`
           const byUnit = detailMap.get(dk) ?? new Map<string, { amount: number; meta?: any }>()
-          const entry = byUnit.get(u.id) ?? { amount: 0, meta: { source: 'FUND', fundCode: proj.code } }
+          const entry = byUnit.get(u.id) ?? { amount: 0, meta: { source: 'FUND', fundCode: proj.code, allocation: { method, unitMeasure: w, totalMeasure: totalWeight, base: amount } } }
           entry.amount += amt
           byUnit.set(u.id, entry)
           detailMap.set(dk, byUnit)
@@ -834,7 +995,6 @@ export class PeriodService {
       where: { id: periodId },
       select: { endDate: true, seq: true, communityId: true },
     })
-    const cutoff = period?.endDate ?? new Date()
     const bes = await tx.billingEntity.findMany({
       where: { communityId },
       select: { id: true },
@@ -846,81 +1006,110 @@ export class PeriodService {
         orderBy: { seq: 'desc' },
         select: { id: true },
       })
-      const previousStatement = previousPeriod
-        ? await tx.beStatement.findUnique({
-            where: {
-              communityId_periodId_billingEntityId: {
-                communityId,
-                periodId: previousPeriod.id,
-                billingEntityId: be.id,
+      const fundIds = new Set<string>()
+      const ledgerFunds = await tx.beLedgerEntry.findMany({
+        where: { communityId, periodId, billingEntityId: be.id },
+        select: { fundId: true },
+        distinct: ['fundId'],
+      })
+      ledgerFunds.forEach((r) => r.fundId && fundIds.add(r.fundId))
+      const openingFunds = await tx.beOpeningBalance.findMany({
+        where: { communityId, periodId, billingEntityId: be.id },
+        select: { fundId: true },
+      })
+      openingFunds.forEach((r) => r.fundId && fundIds.add(r.fundId))
+      if (previousPeriod) {
+        const prevFunds = await tx.beStatement.findMany({
+          where: { communityId, periodId: previousPeriod.id, billingEntityId: be.id },
+          select: { fundId: true },
+        })
+        prevFunds.forEach((r) => r.fundId && fundIds.add(r.fundId))
+      }
+
+      for (const fundId of fundIds) {
+        const previousStatement = previousPeriod
+          ? await tx.beStatement.findUnique({
+              where: {
+                communityId_periodId_billingEntityId_fundId: {
+                  communityId,
+                  periodId: previousPeriod.id,
+                  billingEntityId: be.id,
+                  fundId,
+                },
               },
+              select: { dueEnd: true, currency: true },
+            })
+          : null
+
+        const openings = await tx.beOpeningBalance.findMany({
+          where: { communityId, periodId, billingEntityId: be.id, fundId },
+          select: { amount: true, currency: true },
+        })
+        const openingAmount = openings.reduce((s, o) => s + Number(o.amount ?? 0), 0)
+        const openingCurrency = openings.find((o) => o.currency)?.currency ?? 'RON'
+
+        const [chargesAgg, paymentsAgg, adjustmentsAgg] = await Promise.all([
+          tx.beLedgerEntry.aggregate({
+            _sum: { amount: true },
+            where: {
+              communityId,
+              periodId,
+              billingEntityId: be.id,
+              fundId,
+              kind: 'CHARGE',
+              lane: 'ACCRUAL',
+              NOT: { refType: 'OPENING_BALANCE' },
             },
-            select: { dueEnd: true, currency: true },
-          })
-        : null
+          }),
+          tx.beLedgerEntry.aggregate({
+            _sum: { amount: true },
+            where: { communityId, periodId, billingEntityId: be.id, fundId, kind: 'PAYMENT', lane: 'CASH' },
+          }),
+          tx.beLedgerEntry.aggregate({
+            _sum: { amount: true },
+            where: { communityId, periodId, billingEntityId: be.id, fundId, kind: 'ADJUSTMENT', lane: 'ACCRUAL' },
+          }),
+        ])
 
-      const opening = await tx.beOpeningBalance.findUnique({
-        where: {
-          communityId_periodId_billingEntityId: {
+        const dueStart = Number(previousStatement?.dueEnd ?? openingAmount ?? 0)
+        const charges = Number(chargesAgg._sum.amount ?? 0)
+        const payments = Number(paymentsAgg._sum.amount ?? 0)
+        const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
+        const dueEnd = dueStart + charges - payments + adjustments
+
+        await this.recomputeRunningDue(tx, communityId, periodId, be.id, fundId, dueStart)
+
+        await tx.beStatement.upsert({
+          where: {
+            communityId_periodId_billingEntityId_fundId: {
+              communityId,
+              periodId,
+              billingEntityId: be.id,
+              fundId,
+            },
+          },
+          update: {
+            dueStart,
+            charges,
+            payments,
+            adjustments,
+            dueEnd,
+            currency: previousStatement?.currency ?? openingCurrency ?? 'RON',
+          },
+          create: {
             communityId,
             periodId,
             billingEntityId: be.id,
+            fundId,
+            dueStart,
+            charges,
+            payments,
+            adjustments,
+            dueEnd,
+            currency: previousStatement?.currency ?? openingCurrency ?? 'RON',
           },
-        },
-        select: { amount: true, currency: true },
-      })
-
-      const [chargesAgg, paymentsAgg, adjustmentsAgg] = await Promise.all([
-        tx.beLedgerEntry.aggregate({
-          _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'CHARGE', lane: 'ACCRUAL' },
-        }),
-        tx.beLedgerEntry.aggregate({
-          _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'PAYMENT', lane: 'CASH' },
-        }),
-        tx.beLedgerEntry.aggregate({
-          _sum: { amount: true },
-          where: { communityId, periodId, billingEntityId: be.id, kind: 'ADJUSTMENT', lane: 'ACCRUAL' },
-        }),
-      ])
-
-      const dueStart = Number(previousStatement?.dueEnd ?? opening?.amount ?? 0)
-      const charges = Number(chargesAgg._sum.amount ?? 0)
-      const payments = Number(paymentsAgg._sum.amount ?? 0)
-      const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
-      const dueEnd = dueStart + charges - payments + adjustments
-
-      await this.recomputeRunningDue(tx, communityId, periodId, be.id, dueStart)
-
-      await tx.beStatement.upsert({
-        where: {
-          communityId_periodId_billingEntityId: {
-            communityId,
-            periodId,
-            billingEntityId: be.id,
-          },
-        },
-        update: {
-          dueStart,
-          charges,
-          payments,
-          adjustments,
-          dueEnd,
-          currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
-        },
-        create: {
-          communityId,
-          periodId,
-          billingEntityId: be.id,
-          dueStart,
-          charges,
-          payments,
-          adjustments,
-          dueEnd,
-          currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
-        },
-      })
+        })
+      }
     }
   }
 
@@ -996,10 +1185,11 @@ export class PeriodService {
     communityId: string,
     periodId: string,
     beId: string,
+    fundId: string,
     openingDue: number,
   ) {
     const entries = await tx.beLedgerEntry.findMany({
-      where: { communityId, periodId, billingEntityId: beId },
+      where: { communityId, periodId, billingEntityId: beId, fundId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, amount: true, kind: true },
     })

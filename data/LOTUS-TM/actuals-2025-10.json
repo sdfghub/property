@@ -1,0 +1,20 @@
+{
+  "communityId": "LOTUS-TM",
+  "periodCode": "2025-10",
+  "items": [
+    { "description": "Gas September", "templateCode": "GAS-BILL", "detailKey": "gas", "amount": 7138.33, "currency": "RON", "invoiceNumber": "GAS-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Electricity September", "templateCode": "ELECTRICITY-BILL", "detailKey": "electricity", "amount": 4362.85, "currency": "RON", "invoiceNumber": "ELEC-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Water September", "templateCode": "WATER-BILL", "detailKey": "water", "amount": 4464.31, "currency": "RON", "invoiceNumber": "WATER-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Rain September", "templateCode": "WATER-BILL", "detailKey": "rain", "amount": 117.43, "currency": "RON", "invoiceNumber": "WATER-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Garbage September", "templateCode": "GARBAGE-BILL", "detailKey": "garbage", "amount": 1017.84, "currency": "RON", "invoiceNumber": "GARBAGE-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Elevator maintenance September", "templateCode": "ELEVATOR-BILL", "detailKey": "elevator-maintenance", "amount": 2939.92, "currency": "RON", "invoiceNumber": "ELEV-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Liviu Transport September", "templateCode": "LIVIU-BILL", "detailKey": "liviu-transport", "amount": 220, "currency": "RON", "invoiceNumber": "LIVIU-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Liviu September", "templateCode": "LIVIU-BILL", "detailKey": "liviu-cost", "amount": 4638.5, "currency": "RON", "invoiceNumber": "LIVIU-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Cenzor September", "templateCode": "CENZOR-BILL", "detailKey": "cenzor", "amount": 299, "currency": "RON", "invoiceNumber": "CENZOR-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "RCS/RDS September", "templateCode": "COMM-BILL", "detailKey": "comm-rcsrds", "amount": 127.29, "currency": "RON", "invoiceNumber": "COMM-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Administration September", "templateCode": "ADMIN-BILL", "detailKey": "admin", "amount": 2396.94, "currency": "RON", "invoiceNumber": "ADMIN-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Bank September", "templateCode": "BANK-BILL", "detailKey": "bank-commission", "amount": 78.23, "currency": "RON", "invoiceNumber": "BANK-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Vodafone September", "templateCode": "COMM-BILL", "detailKey": "comm-vodafone", "amount": 102.19, "currency": "RON", "invoiceNumber": "COMM-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" },
+    { "description": "Mentenanta CCTV September", "templateCode": "SECURITY-BILL", "detailKey": "cctv", "amount": 340, "currency": "RON", "invoiceNumber": "SEC-2025-09", "invoiceDate": "2025-09-30", "serviceStartPeriod": "2025-09", "serviceEndPeriod": "2025-09" }
+  ]
+}

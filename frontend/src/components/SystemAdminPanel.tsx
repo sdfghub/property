@@ -1,3 +1,4 @@
+import { FeatureToggles } from './FeatureToggles'
 import React from 'react'
 // System admin: community search + community-admin invite management.
 // This screen assumes the user has SYSTEM scope and can see all communities.
@@ -361,6 +362,8 @@ export function SystemAdminPanel() {
                 <h3>{active.name} ({active.code})</h3>
               </div>
             </div>
+
+            <FeatureToggles communityId={active.id} />
 
             <div className="stack">
               <div className="row" style={{ justifyContent: 'space-between' }}>

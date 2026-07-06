@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import fs from 'fs'
 import path from 'path'
@@ -193,8 +193,10 @@ export class CommunityService {
 
     if (communityIds.size === 0) return []
 
+    // scopeId may hold either the community id or its code — match both.
+    const ids = Array.from(communityIds)
     return this.prisma.community.findMany({
-      where: { id: { in: Array.from(communityIds) } },
+      where: { OR: [{ id: { in: ids } }, { code: { in: ids } }] },
       select: { id: true, code: true, name: true },
       ...(q
         ? {
@@ -248,6 +250,47 @@ export class CommunityService {
     const res = await this.prisma.roleAssignment.deleteMany({
       where: { userId, role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeId: communityId },
     })
+    return { ok: true, removed: res.count }
+  }
+
+  private static readonly COMMUNITY_ROLES = ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER']
+
+  /** All users holding a governance role (admin / cenzor / committee) in this community. */
+  async listCommunityRoles(communityId: string) {
+    const rows = await this.prisma.roleAssignment.findMany({
+      where: {
+        scopeType: 'COMMUNITY',
+        scopeId: communityId,
+        role: { in: CommunityService.COMMUNITY_ROLES as any },
+      },
+      include: { user: { select: { id: true, email: true, name: true } } },
+      orderBy: { createAt: 'desc' },
+    })
+    return rows.map((r) => ({
+      assignmentId: r.id,
+      userId: r.userId,
+      email: r.user?.email ?? '',
+      name: r.user?.name ?? null,
+      role: r.role,
+      createdAt: r.createAt,
+    }))
+  }
+
+  /** Revoke a community governance role. Refuses to remove the last administrator (lockout guard). */
+  async removeCommunityRole(communityId: string, userId: string, role: string) {
+    if (!CommunityService.COMMUNITY_ROLES.includes(role)) {
+      throw new BadRequestException('Unsupported community role')
+    }
+    if (role === 'COMMUNITY_ADMIN') {
+      const admins = await this.prisma.roleAssignment.count({
+        where: { role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeId: communityId },
+      })
+      if (admins <= 1) throw new BadRequestException('Cannot remove the last administrator')
+    }
+    const res = await this.prisma.roleAssignment.deleteMany({
+      where: { userId, role: role as any, scopeType: 'COMMUNITY', scopeId: communityId },
+    })
+    if (!res.count) throw new NotFoundException('Role assignment not found')
     return { ok: true, removed: res.count }
   }
 

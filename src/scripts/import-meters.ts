@@ -179,7 +179,7 @@ async function reconcileAggregation(communityId: string, periodCode: string, agg
   )
   const basisMap = sumBasis > 0 ? basisByUnit : byUnit
   const basisTotal = sumBasis > 0 ? sumBasis : sumUnits
-  for (const [unitId, subtotal] of byUnit.entries()) {
+  for (const [unitId] of byUnit.entries()) {
     const basisVal = basisMap.get(unitId) ?? 0
     const share = basisVal / basisTotal
     const adj = residual * share

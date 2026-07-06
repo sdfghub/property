@@ -276,42 +276,61 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
       })
       stats.accounts += 1
 
-      const openingBalance = typeof a.openingBalance === 'number' ? a.openingBalance : 0
-      if (openingBalance !== 0) {
-        const openingPeriodCode = a.openingPeriodCode ?? plan.periodCode
-        const p = await getPeriod(openingPeriodCode)
-        if (!p) throw new Error(`Period ${openingPeriodCode} missing for opening balance`)
-        const direction = openingBalance >= 0 ? CashTxDirection.IN : CashTxDirection.OUT
-        const amount = Math.abs(openingBalance)
-        const refType = 'OPENING_BALANCE'
-        const refId = `${account.id}:${openingPeriodCode}`
-        await prisma.cashTx.upsert({
-          where: { communityId_refType_refId_direction: { communityId, refType, refId, direction } },
-          update: {
-            accountId: account.id,
-            amount,
-            currency: a.currency ?? 'RON',
-            direction,
-            kind: CashTxKind.ADJUSTMENT,
-            status: CashTxStatus.POSTED,
-            ts: p.startDate,
-            memo: 'Opening balance',
-          },
-          create: {
-            communityId,
-            accountId: account.id,
-            amount,
-            currency: a.currency ?? 'RON',
-            direction,
-            kind: CashTxKind.ADJUSTMENT,
-            status: CashTxStatus.POSTED,
-            ts: p.startDate,
-            refType,
-            refId,
-            memo: 'Opening balance',
-          },
-        })
-        stats.cashTx += 1
+      if (Array.isArray(a.openings)) {
+        for (const opening of a.openings) {
+          const openingBalance = typeof opening.openingBalance === 'number' ? opening.openingBalance : 0
+          if (openingBalance === 0) continue
+          const openingPeriodCode = opening.openingPeriodCode ?? plan.periodCode
+          const p = await getPeriod(openingPeriodCode)
+          if (!p) throw new Error(`Period ${openingPeriodCode} missing for opening balance`)
+          if (!opening.fundCode) throw new Error(`fundCode missing for opening balance on account ${a.code}`)
+          const fund = await prisma.fund.findUnique({
+            where: { code_communityId: { communityId, code: opening.fundCode } },
+            select: { id: true },
+          })
+          if (!fund) throw new Error(`Fund ${opening.fundCode} missing for opening balance`)
+          const direction = openingBalance >= 0 ? CashTxDirection.IN : CashTxDirection.OUT
+          const amount = Math.abs(openingBalance)
+          const refType = 'OPENING_BALANCE'
+          const refId = `${account.id}:${openingPeriodCode}:${opening.fundCode}`
+          await prisma.cashTx.upsert({
+            where: {
+              communityId_refType_refId_direction_fundId: {
+                communityId,
+                refType,
+                refId,
+                direction,
+                fundId: fund.id,
+              },
+            },
+            update: {
+              accountId: account.id,
+              fundId: fund.id,
+              amount,
+              currency: a.currency ?? 'RON',
+              direction,
+              kind: CashTxKind.ADJUSTMENT,
+              status: CashTxStatus.POSTED,
+              ts: p.startDate,
+              memo: 'Opening balance',
+            },
+            create: {
+              communityId,
+              accountId: account.id,
+              fundId: fund.id,
+              amount,
+              currency: a.currency ?? 'RON',
+              direction,
+              kind: CashTxKind.ADJUSTMENT,
+              status: CashTxStatus.POSTED,
+              ts: p.startDate,
+              refType,
+              refId,
+              memo: 'Opening balance',
+            },
+          })
+          stats.cashTx += 1
+        }
       }
     }
   }

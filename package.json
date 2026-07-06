@@ -23,6 +23,7 @@
     "add:payment": "ts-node --transpile-only src/scripts/add-payment.ts",
     "import:opening": "ts-node --transpile-only src/scripts/import-opening-balances.ts",
     "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts",
+    "import:arrears": "ts-node --transpile-only src/scripts/import-arrears.ts",
     "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts",
     "wipe:community": "ts-node --transpile-only src/scripts/wipe-community.ts",
     "make:system-admin": "ts-node --transpile-only src/scripts/make-system-admin.ts",

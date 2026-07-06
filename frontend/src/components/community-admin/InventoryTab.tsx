@@ -41,9 +41,10 @@ type Asset = {
 
 type Props = {
   communityId: string
+  readOnly?: boolean
 }
 
-export function InventoryTab({ communityId }: Props) {
+export function InventoryTab({ communityId, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [assets, setAssets] = React.useState<Asset[]>([])
@@ -222,6 +223,7 @@ export function InventoryTab({ communityId }: Props) {
                       <div className="muted">{t('inventory.noRules', 'No rules yet.')}</div>
                     )}
 
+                    {!readOnly && (
                     <div className="card" style={{ padding: 12, borderStyle: 'dashed' }}>
                       <h4 style={{ margin: 0 }}>{t('inventory.newRule', 'New rule')}</h4>
                       <div className="stack" style={{ gap: 10, marginTop: 10 }}>
@@ -309,6 +311,7 @@ export function InventoryTab({ communityId }: Props) {
                         </button>
                       </div>
                     </div>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -317,6 +320,7 @@ export function InventoryTab({ communityId }: Props) {
         </div>
       </div>
 
+      {!readOnly && (
       <div className="card">
         <h3>{t('inventory.newAsset', 'New asset')}</h3>
         <form className="stack" style={{ gap: 12, marginTop: 12 }} onSubmit={handleCreateAsset}>
@@ -342,6 +346,7 @@ export function InventoryTab({ communityId }: Props) {
           </button>
         </form>
       </div>
+      )}
     </div>
   )
 }

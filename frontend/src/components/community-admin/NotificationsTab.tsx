@@ -23,7 +23,11 @@ type PreferenceItem = {
   enabled: boolean
 }
 
-export function NotificationsTab() {
+type Props = {
+  readOnly?: boolean
+}
+
+export function NotificationsTab({ readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
@@ -166,7 +170,7 @@ export function NotificationsTab() {
                     <span className={`badge ${item.readAt ? 'secondary' : ''}`}>
                       {item.readAt ? t('notifications.read', 'Read') : t('notifications.unread', 'Unread')}
                     </span>
-                    {!item.readAt && (
+                    {!readOnly && !item.readAt && (
                       <button className="btn ghost small" type="button" onClick={() => handleMarkRead(item.id)}>
                         {t('notifications.markRead', 'Mark read')}
                       </button>
@@ -179,6 +183,7 @@ export function NotificationsTab() {
         </div>
       </div>
 
+      {!readOnly && (
       <div className="card">
         <h3>{t('notifications.prefsTitle', 'Notification preferences')}</h3>
         <p className="muted">{t('notifications.prefsSubtitle', 'Toggle delivery channels')}</p>
@@ -197,7 +202,9 @@ export function NotificationsTab() {
           ))}
         </div>
       </div>
+      )}
 
+      {!readOnly && (
       <div className="card">
         <h3>{t('notifications.adminTitle', 'Delivery queue')}</h3>
         <p className="muted">{t('notifications.adminSubtitle', 'Manually process pending deliveries')}</p>
@@ -219,6 +226,7 @@ export function NotificationsTab() {
           {adminMessage && <span className="badge positive">{adminMessage}</span>}
         </div>
       </div>
+      )}
     </div>
   )
 }

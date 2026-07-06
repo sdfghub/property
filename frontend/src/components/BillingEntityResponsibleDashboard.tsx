@@ -15,7 +15,7 @@ export function BillingEntityResponsibleDashboard({
   const { t } = useI18n()
   const [periodCode, setPeriodCode] = React.useState(forcedPeriodCode || '')
   const [periods, setPeriods] = React.useState<PeriodRef[]>([])
-  const [loading, setLoading] = React.useState(false)
+  const [loading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const lastPeriodsKey = React.useRef<string | null>(null)
 
@@ -26,7 +26,7 @@ export function BillingEntityResponsibleDashboard({
     if (lastPeriodsKey.current === key) return
     lastPeriodsKey.current = key
     api
-      .get<PeriodRef[]>(`/communities/be/${beId}/periods`)
+      .get<PeriodRef[]>(`/communities/be/${beId}/periods/closed`)
       .then((rows) => {
         setPeriods(rows)
         if (forcedPeriodCode) {

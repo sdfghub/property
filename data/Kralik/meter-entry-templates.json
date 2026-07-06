@@ -1,0 +1,428 @@
+[
+  {
+    "code": "MONTHLY_WATER_COLD",
+    "name": "Citiri lunare apă rece",
+    "order": 1,
+    "template": {
+      "title": "Citiri lunare apă rece",
+      "periodicity": "MONTHLY",
+      "measureTypeCode": "WATER_COLD",
+      "items": [
+        {
+          "key": "COMMUNITY_WATER_COLD",
+          "label": "Contor comunitate - Apa Rece",
+          "kind": "meter",
+          "meterId": "COMMUNITY_WATER_COLD"
+        },
+        {
+          "key": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE"
+        },
+        {
+          "key": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_2_BUCATARIE",
+          "label": "Contor - Apa Rece 2",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_2_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        },
+        {
+          "key": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+          "label": "Contor - Apa Rece 1",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MONTHLY_ELECTRICITY_TOTAL",
+    "name": "Citiri lunare energie electrică",
+    "order": 2,
+    "template": {
+      "title": "Citiri lunare energie electrică",
+      "periodicity": "MONTHLY",
+      "measureTypeCode": "ELECTRICITY_TOTAL",
+      "items": [
+        {
+          "key": "M_400191_C1_U26_AP_32_ELECTRICITY_TOTAL_CONTOR_ENERGIE_ELECTRICA_ARIPA_EST",
+          "label": "Contor - Energie Electrica",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U26_AP_32_ELECTRICITY_TOTAL_CONTOR_ENERGIE_ELECTRICA_ARIPA_EST"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MONTHLY_HEATING",
+    "name": "Citiri lunare energie termică",
+    "order": 3,
+    "template": {
+      "title": "Citiri lunare energie termică",
+      "periodicity": "MONTHLY",
+      "measureTypeCode": "HEATING",
+      "items": [
+        {
+          "key": "M_400191_C1_U26_AP_32_HEATING_CONTOR_ENERGIE_TERMICA_ARIPA_SUD",
+          "label": "Contor - Energie Termica",
+          "kind": "meter",
+          "meterId": "M_400191_C1_U26_AP_32_HEATING_CONTOR_ENERGIE_TERMICA_ARIPA_SUD"
+        }
+      ]
+    }
+  }
+]

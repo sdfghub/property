@@ -39,11 +39,6 @@ export class BeQueryService {
       (r) => r.role === 'COMMUNITY_ADMIN' && r.scopeType === 'COMMUNITY' && r.scopeId === _communityId,
     )
   }
-  private ensureCommunityAdmin(_roles: RoleAssignment[], _communityId: string) {
-    if (this.canCommunityAdmin(_roles, _communityId)) return
-    throw new ForbiddenException('Admin permissions required')
-  }
-
   private async listAccessibleBeIds(communityId: string, roles: RoleAssignment[], userId?: string) {
     if (this.canCommunityAdmin(roles, communityId)) {
       const all = await this.prisma.billingEntity.findMany({
@@ -98,7 +93,25 @@ export class BeQueryService {
         where: { communityId, periodId: period.id, billingEntityId: { in: beIds } },
         select: { billingEntityId: true, dueStart: true, charges: true, payments: true, adjustments: true, dueEnd: true },
       })
-      const byBe = new Map(statements.map((s) => [s.billingEntityId, s]))
+      const byBe = new Map<
+        string,
+        { dueStart: number; charges: number; payments: number; adjustments: number; dueEnd: number }
+      >()
+      for (const s of statements) {
+        const existing = byBe.get(s.billingEntityId) ?? {
+          dueStart: 0,
+          charges: 0,
+          payments: 0,
+          adjustments: 0,
+          dueEnd: 0,
+        }
+        existing.dueStart += Number(s.dueStart ?? 0)
+        existing.charges += Number(s.charges ?? 0)
+        existing.payments += Number(s.payments ?? 0)
+        existing.adjustments += Number(s.adjustments ?? 0)
+        existing.dueEnd += Number(s.dueEnd ?? 0)
+        byBe.set(s.billingEntityId, existing)
+      }
       const items = beIds.map((beId) => {
         const s = byBe.get(beId)
         return {
@@ -149,6 +162,7 @@ export class BeQueryService {
       WHERE community_id = $1
         AND period_id = $2
         AND billing_entity_id = ANY($3)
+        AND (kind != 'CHARGE' OR ref_type IS DISTINCT FROM 'OPENING_BALANCE')
         ${filters.fundId ? 'AND fund_id = $4' : ''}
         ${filters.unitId ? `AND unit_id = ${filters.fundId ? '$5' : '$4'}` : ''}
       GROUP BY billing_entity_id, kind
@@ -181,13 +195,23 @@ export class BeQueryService {
           where: { communityId, periodId: previousPeriod.id, billingEntityId: { in: beIds } },
           select: { billingEntityId: true, dueEnd: true },
         })
-        dueStartByBe = new Map(prevStatements.map((s) => [s.billingEntityId, Number(s.dueEnd ?? 0)]))
+        const sums = new Map<string, number>()
+        for (const s of prevStatements) {
+          const prev = sums.get(s.billingEntityId) ?? 0
+          sums.set(s.billingEntityId, prev + Number(s.dueEnd ?? 0))
+        }
+        dueStartByBe = sums
       } else {
         const openings = await this.prisma.beOpeningBalance.findMany({
           where: { communityId, periodId: period.id, billingEntityId: { in: beIds } },
           select: { billingEntityId: true, amount: true },
         })
-        dueStartByBe = new Map(openings.map((o) => [o.billingEntityId, Number(o.amount ?? 0)]))
+        const sums = new Map<string, number>()
+        for (const o of openings) {
+          const prev = sums.get(o.billingEntityId) ?? 0
+          sums.set(o.billingEntityId, prev + Number(o.amount ?? 0))
+        }
+        dueStartByBe = sums
       }
     }
 
@@ -416,16 +440,15 @@ export class BeQueryService {
     await this.ensureAccess(be.id, be.communityId, roles, userId)
     const period = await this.periodLookup.getPeriod(be.communityId, periodCode)
 
-    const [statement, ledgerEntries, allocationsRaw, splitGroups, splitGroupMembers, expenseTypes] = await Promise.all([
-      this.prisma.beStatement.findUnique({
-        where: {
-          communityId_periodId_billingEntityId: {
+    const [statementRows, ledgerEntries, allocationsRaw, splitGroups, splitGroupMembers, expenseTypes, funds, previousPeriod] =
+      await Promise.all([
+        this.prisma.beStatement.findMany({
+          where: {
             communityId: be.communityId,
             periodId: period.id,
             billingEntityId: be.id,
           },
-        },
-      }),
+        }),
       this.prisma.beLedgerEntry.findMany({
         where: { communityId: be.communityId, periodId: period.id, billingEntityId: be.id },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -474,7 +497,32 @@ export class BeQueryService {
         where: { communityId: be.communityId },
         select: { params: true },
       }),
-    ])
+      this.prisma.fund.findMany({
+        where: { communityId: be.communityId },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ code: 'asc' }],
+      }),
+        period.status !== 'CLOSED'
+          ? this.prisma.period.findFirst({
+              where: { communityId: be.communityId, seq: { lt: period.seq }, status: 'CLOSED' },
+              orderBy: { seq: 'desc' },
+              select: { id: true, seq: true, code: true },
+            })
+          : Promise.resolve(null),
+      ])
+
+    const statement = (statementRows || []).reduce(
+      (acc: any, s: any) => {
+        acc.dueStart += Number(s.dueStart ?? 0)
+        acc.charges += Number(s.charges ?? 0)
+        acc.payments += Number(s.payments ?? 0)
+        acc.adjustments += Number(s.adjustments ?? 0)
+        acc.dueEnd += Number(s.dueEnd ?? 0)
+        acc.currency = acc.currency ?? s.currency ?? 'RON'
+        return acc
+      },
+      { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0, currency: null },
+    )
 
     // Resolve split node display names from any available params (group or expense type templates)
     const splitNodeNames: Record<string, string | null> = {}
@@ -500,7 +548,59 @@ export class BeQueryService {
       split_group_name: a.split_group_name,
     }))
 
-    return { be, period, statement, ledgerEntries, allocations, splitGroups, splitGroupMembers, splitNodeNames }
+    const fundById = (funds || []).reduce<Record<string, { id: string; code: string; name: string }>>(
+      (acc, f: any) => {
+        if (f?.id) acc[f.id] = { id: f.id, code: f.code, name: f.name }
+        return acc
+      },
+      {},
+    )
+
+    let fundOpenings: Array<{ fundId: string; amount: number }> = []
+    if (previousPeriod) {
+      const prevRows: Array<{ fund_id: string | null; kind: string; total: any }> = await this.prisma.$queryRawUnsafe(
+        `
+        SELECT d.fund_id, d.kind, SUM(d.amount)::numeric AS total
+        FROM be_ledger_entry_detail d
+        WHERE d.community_id = $1
+          AND d.period_id = $2
+          AND d.billing_entity_id = $3
+          AND d.fund_id IS NOT NULL
+        GROUP BY d.fund_id, d.kind
+      `,
+        be.communityId,
+        previousPeriod.id,
+        be.id,
+      )
+      const byFund = new Map<string, { charges: number; payments: number; adjustments: number }>()
+      for (const row of prevRows) {
+        const fundId = row.fund_id
+        if (!fundId) continue
+        if (!byFund.has(fundId)) byFund.set(fundId, { charges: 0, payments: 0, adjustments: 0 })
+        const agg = byFund.get(fundId)!
+        if (row.kind === 'CHARGE') agg.charges += Number(row.total ?? 0)
+        else if (row.kind === 'PAYMENT') agg.payments += Number(row.total ?? 0)
+        else if (row.kind === 'ADJUSTMENT') agg.adjustments += Number(row.total ?? 0)
+      }
+      fundOpenings = Array.from(byFund.entries()).map(([fundId, v]) => ({
+        fundId,
+        amount: Number((v.charges - v.payments + v.adjustments).toFixed(4)),
+      }))
+    }
+
+    return {
+      be,
+      period,
+      statement,
+      ledgerEntries,
+      allocations,
+      splitGroups,
+      splitGroupMembers,
+      splitNodeNames,
+      funds,
+      fundById,
+      fundOpenings,
+    }
   }
 
   async getBeSummary(beId: string, roles: RoleAssignment[], userId?: string) {
@@ -557,15 +657,25 @@ export class BeQueryService {
     let previousClosedStatement: any = null
     if (lastClosed) {
       period = await this.periodLookup.getPeriod(be.communityId, lastClosed.code)
-      statement = await this.prisma.beStatement.findUnique({
+      const statementRows = await this.prisma.beStatement.findMany({
         where: {
-          communityId_periodId_billingEntityId: {
-            communityId: be.communityId,
-            periodId: period.id,
-            billingEntityId: be.id,
-          },
+          communityId: be.communityId,
+          periodId: period.id,
+          billingEntityId: be.id,
         },
       })
+      statement = (statementRows || []).reduce(
+        (acc: any, s: any) => {
+          acc.dueStart += Number(s.dueStart ?? 0)
+          acc.charges += Number(s.charges ?? 0)
+          acc.payments += Number(s.payments ?? 0)
+          acc.adjustments += Number(s.adjustments ?? 0)
+          acc.dueEnd += Number(s.dueEnd ?? 0)
+          acc.currency = acc.currency ?? s.currency ?? 'RON'
+          return acc
+        },
+        { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0, currency: null },
+      )
       ledgerEntries = await this.prisma.beLedgerEntry.findMany({
         where: { communityId: be.communityId, periodId: period.id, billingEntityId: be.id },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -578,15 +688,25 @@ export class BeQueryService {
     }
     if (previousClosed) {
       const prevPeriod = await this.periodLookup.getPeriod(be.communityId, previousClosed.code)
-      previousClosedStatement = await this.prisma.beStatement.findUnique({
+      const prevRows = await this.prisma.beStatement.findMany({
         where: {
-          communityId_periodId_billingEntityId: {
-            communityId: be.communityId,
-            periodId: prevPeriod.id,
-            billingEntityId: be.id,
-          },
+          communityId: be.communityId,
+          periodId: prevPeriod.id,
+          billingEntityId: be.id,
         },
       })
+      previousClosedStatement = (prevRows || []).reduce(
+        (acc: any, s: any) => {
+          acc.dueStart += Number(s.dueStart ?? 0)
+          acc.charges += Number(s.charges ?? 0)
+          acc.payments += Number(s.payments ?? 0)
+          acc.adjustments += Number(s.adjustments ?? 0)
+          acc.dueEnd += Number(s.dueEnd ?? 0)
+          acc.currency = acc.currency ?? s.currency ?? 'RON'
+          return acc
+        },
+        { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0, currency: null },
+      )
     }
 
     const [events, polls, funds] = await Promise.all([

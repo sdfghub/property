@@ -12,7 +12,7 @@ export class InviteService{
   ){}
   async createInvite(
     email: string,
-    role: 'COMMUNITY_ADMIN' | 'BILLING_ENTITY_USER' | 'SYSTEM_ADMIN',
+    role: 'COMMUNITY_ADMIN' | 'BILLING_ENTITY_USER' | 'SYSTEM_ADMIN' | 'CENSOR' | 'EXECUTIVE_COMITEE_MEMBER',
     scopeType: 'SYSTEM' | 'COMMUNITY' | 'BILLING_ENTITY',
     scopeId?: string,
     invitedBy?: string,

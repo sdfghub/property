@@ -12,13 +12,15 @@ export class BillingBeController {
   ) {}
 
   @Get(':beId/periods/closed')
-  listClosed(@Param('beId') beId: string, @Req() req: any) {
+  listClosed(@Param('beId') beId: string) {
     return this.periods.listClosedForBe(beId)
   }
 
+  // Billing-entity users must only ever see CLOSED (published) periods — never OPEN/PREPARED ones
+  // that are still being worked on. This endpoint is closed-only regardless of the client.
   @Get(':beId/periods')
-  listAll(@Param('beId') beId: string, @Req() req: any) {
-    return this.periods.listAllForBe(beId)
+  listAll(@Param('beId') beId: string) {
+    return this.periods.listClosedForBe(beId)
   }
 
   @Get(':beId/periods/:periodCode/allocations')

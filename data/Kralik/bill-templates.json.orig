@@ -1,0 +1,90 @@
+[
+  {
+    "id": "BILL_APA_RECE",
+    "name": "Factură Apa Rece - Aquatim",
+    "supplierName": "Aquatim",
+    "expenseTypeCode": "APA_RECE",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_APA_RECE"
+    }
+  },
+  {
+    "id": "BILL_APA_METEO",
+    "name": "Factură Apa Meteo - Aquatim",
+    "supplierName": "Aquatim",
+    "expenseTypeCode": "APA_METEO",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_APA_METEO"
+    }
+  },
+  {
+    "id": "BILL_CURENT_SCARA",
+    "name": "Factură Curent Scara - PPC",
+    "supplierName": "PPC",
+    "expenseTypeCode": "CURENT_SCARA",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_CURENT_SCARA"
+    }
+  },
+  {
+    "id": "BILL_SALUBRITATE",
+    "name": "Factură Salubritate - Retim",
+    "supplierName": "Retim",
+    "expenseTypeCode": "SALUBRITATE",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_SALUBRITATE"
+    }
+  },
+  {
+    "id": "BILL_CURATENIE",
+    "name": "Factură Curatenie - RICH CLLEAN",
+    "supplierName": "RICH CLLEAN",
+    "expenseTypeCode": "CURATENIE",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_CURATENIE"
+    }
+  },
+  {
+    "id": "BILL_ADMINISTRARE",
+    "name": "Factură Administrare - RUSAVIT",
+    "supplierName": "RUSAVIT",
+    "expenseTypeCode": "ADMINISTRARE",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_ADMINISTRARE"
+    }
+  },
+  {
+    "id": "BILL_COMISION_BANCA",
+    "name": "Factură Comision Banca - Libra",
+    "supplierName": "Libra",
+    "expenseTypeCode": "COMISION_BANCA",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_COMISION_BANCA"
+    }
+  },
+  {
+    "id": "BILL_INTERFON",
+    "name": "Factură Interfon - Schmidt",
+    "supplierName": "Schmidt",
+    "expenseTypeCode": "INTERFON",
+    "currency": "RON",
+    "fundCode": "EXPENSES",
+    "chargeMapping": {
+      "expenseSplitId": "SPLIT_INTERFON"
+    }
+  }
+]

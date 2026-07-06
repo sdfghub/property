@@ -41,21 +41,22 @@ export class InviteController{
       throw new ForbiddenException('Community admin required')
     }
     const normalizedRole = (role || 'COMMUNITY_ADMIN') as any
-    if (normalizedRole !== 'COMMUNITY_ADMIN') {
-      throw new ForbiddenException('Only COMMUNITY_ADMIN invites are supported here')
+    const allowedCommunityRoles = ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER']
+    if (!allowedCommunityRoles.includes(normalizedRole)) {
+      throw new ForbiddenException('Unsupported community role')
     }
-    return this.invites.createInvite(email, 'COMMUNITY_ADMIN', 'COMMUNITY', communityId, inviterId)
+    return this.invites.createInvite(email, normalizedRole, 'COMMUNITY', communityId, inviterId)
   }
 
   @UseGuards(JwtAuthGuard,ScopesGuard)
-  @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
+  @Scopes({ role:'COMMUNITY_ADMIN', scopeType:'COMMUNITY', scopeParam:'communityId' })
   @Get('community/:communityId/pending')
   async pendingForCommunity(@Param('communityId') communityId:string){
     return this.invites.pendingForCommunity(communityId)
   }
 
   @UseGuards(JwtAuthGuard,ScopesGuard)
-  @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
+  @Scopes({ role:'COMMUNITY_ADMIN', scopeType:'COMMUNITY', scopeParam:'communityId' })
   @Delete('community/:communityId/pending/:inviteId')
   async deletePending(@Param('inviteId') inviteId:string){
     return this.invites.deletePending(inviteId)

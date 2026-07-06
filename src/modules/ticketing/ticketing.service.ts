@@ -50,15 +50,20 @@ export class TicketingService {
     return !!match
   }
 
-  private async ensureCommunityMember(userId: string, roles: RoleAssignment[], communityId: string) {
-    if (this.isCommunityAdmin(roles, communityId)) return
-    if (await this.isCommunityMember(userId, communityId)) return
-    throw new ForbiddenException('Not a community member')
+  private isCommunityOversight(roles: RoleAssignment[], communityId: string) {
+    return roles.some(
+      (r) =>
+        (r.role === 'CENSOR' || r.role === 'EXECUTIVE_COMITEE_MEMBER') &&
+        r.scopeType === 'COMMUNITY' &&
+        r.scopeId === communityId,
+    )
   }
 
-  private ensureCommunityAdmin(roles: RoleAssignment[], communityId: string) {
+  private async ensureCommunityMember(userId: string, roles: RoleAssignment[], communityId: string) {
     if (this.isCommunityAdmin(roles, communityId)) return
-    throw new ForbiddenException('Admin permissions required')
+    if (this.isCommunityOversight(roles, communityId)) return
+    if (await this.isCommunityMember(userId, communityId)) return
+    throw new ForbiddenException('Not a community member')
   }
 
   private normalizeTitle(raw: any, field = 'title') {

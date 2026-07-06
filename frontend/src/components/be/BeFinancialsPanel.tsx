@@ -9,7 +9,7 @@ export function BeFinancialsPanel({ beId, periodCode }: { beId: string; periodCo
   const [aggSplits, setAggSplits] = React.useState<any[] | null>(null)
   const [activeTab, setActiveTab] = React.useState<'UNIT' | 'SPLIT'>('UNIT')
   const [drillRows, setDrillRows] = React.useState<any[] | null>(null)
-  const [drillMeta, setDrillMeta] = React.useState<{ unitName?: string; splitGroupName?: string } | null>(null)
+  const [, setDrillMeta] = React.useState<{ unitName?: string; splitGroupName?: string } | null>(null)
   const [drillKey, setDrillKey] = React.useState<string | null>(null)
   const [detailLines, setDetailLines] = React.useState<any[] | null>(null)
   const [detailTitle, setDetailTitle] = React.useState<string | null>(null)
@@ -17,9 +17,9 @@ export function BeFinancialsPanel({ beId, periodCode }: { beId: string; periodCo
   const [loading, setLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const lastKey = React.useRef<string | null>(null)
-  const [beInfo, setBeInfo] = React.useState<{ code?: string; name?: string } | null>(null)
-  const [periodInfo, setPeriodInfo] = React.useState<{ code?: string } | null>(null)
-  const [communityId, setCommunityId] = React.useState<string | null>(null)
+  const [, setBeInfo] = React.useState<{ code?: string; name?: string } | null>(null)
+  const [, setPeriodInfo] = React.useState<{ code?: string } | null>(null)
+  const [, setCommunityId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let mounted = true

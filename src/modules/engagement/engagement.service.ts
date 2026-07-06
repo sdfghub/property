@@ -39,8 +39,18 @@ export class EngagementService {
     return !!match
   }
 
+  private isCommunityOversight(roles: RoleAssignment[], communityId: string) {
+    return roles.some(
+      (r) =>
+        (r.role === 'CENSOR' || r.role === 'EXECUTIVE_COMITEE_MEMBER') &&
+        r.scopeType === 'COMMUNITY' &&
+        r.scopeId === communityId,
+    )
+  }
+
   private async ensureCommunityMember(userId: string, roles: RoleAssignment[], communityId: string) {
     if (this.isSystemAdmin(roles) || this.isCommunityAdmin(roles, communityId)) return
+    if (this.isCommunityOversight(roles, communityId)) return
     if (await this.isCommunityMember(userId, communityId)) return
     throw new ForbiddenException('Not a community member')
   }

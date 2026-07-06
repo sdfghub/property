@@ -345,23 +345,29 @@ function AppShell() {
         </div>
       </div>
 
-      {devCommunity ? (
+      {devCommunity && activeRole?.role === 'BILLING_ENTITY_USER' ? (
+        <BillingEntityResponsibleDashboard />
+      ) : devCommunity ? (
         <CommunityAdminDashboard
           forceCommunityId={devCommunity}
           requestedTab={adminTabRequest}
           onTabRequestHandled={() => setAdminTabRequest(null)}
           communitiesOverride={accessibleCommunities}
           onCommunityConfigLoaded={handleCommunityConfigLoaded}
+          viewerRole={activeRole?.role}
         />
       ) : user ? (
         activeRole?.role === 'SYSTEM_ADMIN' ? (
           <SystemAdminPanel />
-        ) : activeRole?.role === 'COMMUNITY_ADMIN' ? (
+        ) : activeRole?.role === 'COMMUNITY_ADMIN' ||
+          activeRole?.role === 'CENSOR' ||
+          activeRole?.role === 'EXECUTIVE_COMITEE_MEMBER' ? (
           <CommunityAdminDashboard
             requestedTab={adminTabRequest}
             onTabRequestHandled={() => setAdminTabRequest(null)}
             communitiesOverride={accessibleCommunities}
             onCommunityConfigLoaded={handleCommunityConfigLoaded}
+            viewerRole={activeRole?.role}
           />
         ) : activeRole?.role === 'BILLING_ENTITY_USER' ? (
           <BillingEntityResponsibleDashboard />
@@ -398,7 +404,8 @@ function RolePicker({
     SYSTEM_ADMIN: t('role.systemAdmin') || 'System admin',
     COMMUNITY_ADMIN: t('role.communityAdmin') || 'Community admin',
     BILLING_ENTITY_USER: t('role.billingEntityUser') || 'Billing entity user',
-    CENSOR: t('role.censor') || 'Censor',
+    CENSOR: t('role.censor') || 'Cenzor',
+    EXECUTIVE_COMITEE_MEMBER: t('role.executive') || 'Comitet executiv',
   }
   const communityIndex = React.useMemo(() => {
     const map: Record<string, string> = { ...communityNames }

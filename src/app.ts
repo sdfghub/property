@@ -1,11 +1,11 @@
 // src/app.ts
+import './load-env';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core'
 import { Controller, Get, Module, ValidationPipe } from '@nestjs/common'
 import type { NextFunction, Request, Response } from 'express'
 import cookieParser from 'cookie-parser'
 import { BillingModule } from './modules/billing/billing.module'
-import { PrismaService } from './modules/user/prisma.service'
 import { UserModule } from './modules/user/user.module'
 import { InviteModule } from './modules/invite/invite.module'
 import { AuthModule } from './modules/auth/auth.module'
@@ -21,6 +21,9 @@ import { CommunicationsModule } from './modules/communications/communications.mo
 import { NotificationsModule } from './modules/notifications/notifications.module'
 import { NotificationsJobsModule } from './modules/notifications-jobs/notifications-jobs.module'
 import { InventoryModule } from './modules/inventory/inventory.module'
+import { FinanceModule } from './modules/finance/finance.module'
+import { CommitteeModule } from './modules/committee/committee.module'
+import { FeaturesModule } from './modules/features/features.module'
 
 @Controller()
 class HealthController {
@@ -52,6 +55,9 @@ class HealthController {
     NotificationsModule,
     NotificationsJobsModule,
     InventoryModule,
+    FinanceModule,
+    CommitteeModule,
+    FeaturesModule,
   ],
   controllers: [HealthController],
 })
@@ -80,7 +86,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Active-Role', 'X-Active-Scope-Type', 'X-Active-Scope-Id'],
   })
   app.use(cookieParser())
   app.use((_: Request, res: Response, next: NextFunction) => {
@@ -128,9 +134,6 @@ async function bootstrap() {
   // Global config
   app.setGlobalPrefix('api')
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
-
-  // Proper shutdown for Prisma
-  const prisma = app.get(PrismaService)
 
   const port = Number(process.env.PORT) || 3000
   await app.listen(port)

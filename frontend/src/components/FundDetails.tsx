@@ -26,10 +26,11 @@ export function FundDetails({ fund }: { fund: Fund }) {
     totalTarget,
     startPeriodCode,
     targetPlan,
-    targets = [],
     defaultBucket,
     allocation,
   } = fund
+  // API may return targets as null (not undefined), so a destructuring default won't apply.
+  const targets = fund.targets ?? []
 
   const allEqual =
     targets.length > 0 &&

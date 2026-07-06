@@ -44,6 +44,22 @@ export class CommunityController {
     return this.svc.revokeAdmin(communityId, userId)
   }
 
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get(':communityId/roles')
+  async communityRoles(@Param('communityId') communityId: string) {
+    return this.svc.listCommunityRoles(communityId)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Delete(':communityId/roles/:userId/:role')
+  async removeRole(
+    @Param('communityId') communityId: string,
+    @Param('userId') userId: string,
+    @Param('role') role: string,
+  ) {
+    return this.svc.removeCommunityRole(communityId, userId, role)
+  }
+
   @UseGuards(JwtAuthGuard, ScopesGuard)
   @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get(':communityId/billing-entities/responsibles')

@@ -1,3 +1,4 @@
+import { Feature } from '../../common/decorators/feature.decorator'
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
@@ -5,6 +6,7 @@ import { TicketingService } from './ticketing.service'
 
 @Controller('communities/:communityId/tickets')
 @UseGuards(JwtAuthGuard, ScopesGuard)
+@Feature('tickets')
 export class TicketingController {
   constructor(private readonly svc: TicketingService) {}
 

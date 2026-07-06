@@ -11,7 +11,7 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
   const { keepExternalRefs = false, keepVendors = true, keepInvoices = true } = opts
 
   // Gather ids needed for FK-based deletes
-  const [periods, units, groups, bes, series, bills, invoices, vendorPayments, ledgerEntries, communityLedgerEntries, fundLedgerEntries, payments, charges] = await Promise.all([
+  const [periods, units, groups, bes, series, bills, invoices, vendorPayments, ledgerEntries, communityLedgerEntries, fundLedgerEntries, payments, charges, cashAccounts] = await Promise.all([
     prisma.period.findMany({ where: { communityId }, select: { id: true } }),
     prisma.unit.findMany({ where: { communityId }, select: { id: true } }),
     prisma.unitGroup.findMany({ where: { communityId }, select: { id: true } }),
@@ -25,6 +25,7 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
     prisma.fundLedgerEntry.findMany({ where: { communityId }, select: { id: true } }),
     prisma.payment.findMany({ where: { communityId }, select: { id: true } }),
     prisma.communityCharge.findMany({ where: { communityId }, select: { id: true } }),
+    prisma.cashAccount.findMany({ where: { communityId }, select: { id: true } }),
   ])
 
   const periodIds = periods.map(x => x.id)
@@ -40,8 +41,12 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
   const paymentIds = payments.map(x => x.id)
   const vendorPaymentIds = vendorPayments.map(x => x.id)
   const chargeIds = charges.map(x => x.id)
+  const cashAccountIds = cashAccounts.map(x => x.id)
 
   const ops = [
+    // Penalty aging ledger (period snapshots reference buckets — drop them first)
+    prisma.penaltyBucketPeriod.deleteMany({ where: { bucket: { communityId } } }),
+    prisma.penaltyBucket.deleteMany({ where: { communityId } }),
     // Allocation/billing outputs first
     prisma.communityChargeLine.deleteMany({ where: { chargeId: { in: chargeIds } } }),
     prisma.communityCharge.deleteMany({ where: { id: { in: chargeIds } } }),
@@ -64,6 +69,8 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
       where: { paymentId: { in: vendorPaymentIds } },
     }),
     prisma.vendorPayment.deleteMany({ where: { id: { in: vendorPaymentIds } } }),
+    prisma.cashTx.deleteMany({ where: { accountId: { in: cashAccountIds } } }),
+    prisma.cashAccount.deleteMany({ where: { id: { in: cashAccountIds } } }),
     prisma.beStatement.deleteMany({ where: { communityId } }),
     prisma.beOpeningBalance.deleteMany({ where: { communityId } }),
     prisma.communityStatement.deleteMany({ where: { communityId } }),

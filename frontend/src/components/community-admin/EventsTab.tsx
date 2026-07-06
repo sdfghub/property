@@ -28,9 +28,10 @@ type EventItem = {
 
 type Props = {
   communityCode: string
+  readOnly?: boolean
 }
 
-export function EventsTab({ communityCode }: Props) {
+export function EventsTab({ communityCode, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [events, setEvents] = React.useState<EventItem[]>([])
@@ -191,6 +192,7 @@ export function EventsTab({ communityCode }: Props) {
         </div>
       </div>
 
+      {!readOnly && (
       <form className="card" onSubmit={handleCreate}>
         <h4>{t('events.create', 'Create event')}</h4>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -260,6 +262,7 @@ export function EventsTab({ communityCode }: Props) {
           </button>
         </div>
       </form>
+      )}
 
       {error && <div className="badge negative">{error}</div>}
       {loading && <div className="muted">{t('events.loading', 'Loading...')}</div>}
@@ -354,9 +357,12 @@ export function EventsTab({ communityCode }: Props) {
                           {t('events.link', 'Open link')}
                         </a>
                       )}
-                      <button className="btn secondary small" type="button" onClick={() => startEdit(event)}>
-                        {t('events.edit', 'Edit')}
-                      </button>
+                      {!readOnly && (
+                        <button className="btn secondary small" type="button" onClick={() => startEdit(event)}>
+                          {t('events.edit', 'Edit')}
+                        </button>
+                      )}
+                      {!readOnly && (
                       <button
                         className="btn ghost small"
                         type="button"
@@ -365,6 +371,7 @@ export function EventsTab({ communityCode }: Props) {
                       >
                         {t('events.delete', 'Delete')}
                       </button>
+                      )}
                     </div>
                   </div>
                   {event.description && <div className="muted">{event.description}</div>}

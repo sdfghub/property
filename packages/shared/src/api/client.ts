@@ -2,11 +2,15 @@
 // It is platform-agnostic: base URL is injected by the caller.
 type TokenBundle = { accessToken?: string; refreshToken?: string }
 
+type ActiveRole = { role: string; scopeType?: string | null; scopeId?: string | null }
+
 export type ApiClientConfig = {
   baseUrl: string
   getTokens: () => TokenBundle
   saveTokens: (tokens: Partial<TokenBundle>) => void
   onUnauthorized?: () => void
+  /** The role the user is currently "acting as" — sent so the API enforces least-privilege. */
+  getActiveRole?: () => ActiveRole | null | undefined
 }
 
 export type ApiClient = {
@@ -59,6 +63,12 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       ...(init.headers as Record<string, string>),
     }
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+    const active = config.getActiveRole?.()
+    if (active?.role) {
+      headers['X-Active-Role'] = active.role
+      if (active.scopeType) headers['X-Active-Scope-Type'] = active.scopeType
+      headers['X-Active-Scope-Id'] = active.scopeId ?? ''
+    }
     const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
     if (!isFormData && !('Content-Type' in headers)) {
       headers['Content-Type'] = 'application/json'

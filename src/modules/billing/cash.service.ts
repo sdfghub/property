@@ -40,6 +40,7 @@ export class CashService {
     const communityId = await this.ensureCommunityId(communityRef)
     const where: any = { communityId }
     if (query?.accountId) where.accountId = query.accountId
+    if (query?.fundId) where.fundId = query.fundId
     if (query?.from || query?.to) {
       where.ts = {}
       if (query.from) where.ts.gte = new Date(query.from)
@@ -56,6 +57,9 @@ export class CashService {
     if (!body.accountId) throw new BadRequestException('accountId is required')
     const account = await this.prisma.cashAccount.findFirst({ where: { id: body.accountId, communityId } })
     if (!account) throw new NotFoundException('Cash account not found')
+    if (!body.fundId) throw new BadRequestException('fundId is required')
+    const fund = await this.prisma.fund.findFirst({ where: { id: body.fundId, communityId }, select: { id: true } })
+    if (!fund) throw new NotFoundException('Fund not found')
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount must be positive')
     if (!body.direction) throw new BadRequestException('direction is required')
@@ -64,6 +68,7 @@ export class CashService {
       data: {
         communityId,
         accountId: body.accountId,
+        fundId: fund.id,
         ts: body.ts ? new Date(body.ts) : undefined,
         amount,
         currency: body.currency || account.currency || 'RON',

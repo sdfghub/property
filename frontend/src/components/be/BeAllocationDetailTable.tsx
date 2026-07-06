@@ -29,7 +29,7 @@ type Detail = {
   }>
 }
 
-export function BeAllocationDetailTable({ title, lines }: { title?: string | null; lines: Detail[] }) {
+export function BeAllocationDetailTable({ lines }: { title?: string | null; lines: Detail[] }) {
   
   if (!lines || lines.length === 0) return null
   return (

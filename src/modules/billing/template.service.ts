@@ -3,6 +3,7 @@ import { ChargeSourceType, SeriesOrigin, SeriesScope } from '@prisma/client'
 type UploadedFile = { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }
 import { PrismaService } from '../user/prisma.service'
 import { AllocationService } from './allocation.service'
+import { VendorInvoiceService } from './vendor-invoice.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 type TemplateKind = 'BILL' | 'METER'
@@ -28,6 +29,7 @@ export class TemplateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly allocator: AllocationService,
+    private readonly vendorInvoices: VendorInvoiceService,
   ) {}
 
   private async ensureCommunityId(ref: string) {
@@ -93,6 +95,17 @@ export class TemplateService {
     }
   }
 
+  private validateBillTemplateItems(tpl: BillTemplateDto) {
+    const items: any[] = Array.isArray(tpl?.template?.items) ? tpl.template.items : []
+    const seen = new Set<string>()
+    for (const it of items) {
+      const key = String(it?.key || '').trim()
+      if (!key) throw new ForbiddenException(`Bill template ${tpl.code} has an item without key`)
+      if (seen.has(key)) throw new ForbiddenException(`Bill template ${tpl.code} has duplicate item key: ${key}`)
+      seen.add(key)
+    }
+  }
+
   async importBillTemplates(communityRef: string, roles: RoleAssignment[], body: any) {
     const communityId = await this.ensureCommunityId(communityRef)
     this.ensureAdmin(roles, communityId)
@@ -105,6 +118,7 @@ export class TemplateService {
         if (!tpl.template || typeof tpl.template !== 'object') {
           throw new ForbiddenException(`Bill template ${tpl.code} must include a template object`)
         }
+        this.validateBillTemplateItems(tpl)
         await (tx as any).billTemplate.upsert({
           where: { communityId_code: { communityId, code: tpl.code } },
           update: {
@@ -175,6 +189,7 @@ export class TemplateService {
     }
     const repo: any = (this.prisma as any).billTemplate
     if (!repo) throw new NotFoundException('Bill templates not supported')
+    this.validateBillTemplateItems(tpl)
     const saved = await repo.upsert({
       where: { communityId_code: { communityId, code: tpl.code } },
       update: {
@@ -376,7 +391,7 @@ export class TemplateService {
   private async applyBillTemplateSubmission(
     communityId: string,
     periodId: string,
-    periodCode: string,
+    _periodCode: string,
     template: { id: string; code: string; name: string; template: any },
     instance: { id: string; values?: any },
     values: Record<string, any>,
@@ -399,6 +414,37 @@ export class TemplateService {
 
     let sourceType: ChargeSourceType = ChargeSourceType.TEMPLATE
     let sourceId = instance.id
+
+    const chargeDrafts: Array<{
+      itemKey: string
+      amount: number
+      fundId: string
+      expenseTypeCode?: string | null
+      description: string
+      currency: string
+    }> = []
+
+    const fundTotals = new Map<string, number>()
+    for (const item of chargeItems) {
+      const chargeCfg = item.kind === 'charge' ? item.charge ?? item : item
+      const key = item.amountKey || item.key
+      const rawVal = valueFor(key)
+      const amount = Number(rawVal)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+      const fundCode = chargeCfg.fundCode ?? output.fundCode ?? null
+      if (!fundCode) {
+        throw new ForbiddenException(`Missing fundCode for template ${template.code} item ${item.key}`)
+      }
+      const fundId = await this.resolveFundId(communityId, fundCode)
+      if (!fundId) {
+        throw new ForbiddenException(`Unknown fundCode ${fundCode} for template ${template.code} item ${item.key}`)
+      }
+      const expenseTypeCode = chargeCfg.expenseTypeCode ?? item.expenseTypeCode ?? null
+      const description = chargeCfg.description ?? item.label ?? item.name ?? item.key ?? template.name
+      const currency = chargeCfg.currency ?? valueFor(chargeCfg.currencyKey) ?? output.currency ?? 'RON'
+      chargeDrafts.push({ itemKey: item.key, amount, fundId, expenseTypeCode, description, currency })
+      fundTotals.set(fundId, (fundTotals.get(fundId) ?? 0) + amount)
+    }
 
     if (mode === 'VENDOR_INVOICE') {
       const vendorId = await this.resolveVendorId(communityId, vendorCfg, values)
@@ -443,6 +489,10 @@ export class TemplateService {
       })
       sourceType = ChargeSourceType.VENDOR_INVOICE
       sourceId = invoice.id
+
+      for (const [fundId, amount] of fundTotals.entries()) {
+        await this.vendorInvoices.linkFund(communityId, invoice.id, { fundId, amount })
+      }
     }
 
     const period = await this.prisma.period.findUnique({
@@ -451,26 +501,16 @@ export class TemplateService {
     })
     if (!period) throw new NotFoundException('Period not found')
 
-    for (const item of chargeItems) {
-      const chargeCfg = item.kind === 'charge' ? item.charge ?? item : item
-      const key = item.amountKey || item.key
-      const rawVal = valueFor(key)
-      const amount = Number(rawVal)
-      if (!Number.isFinite(amount) || amount <= 0) continue
-      const fundCode = chargeCfg.fundCode ?? output.fundCode ?? 'EXPENSES'
-      const fundId = fundCode ? await this.resolveFundId(communityId, fundCode) : null
-      const expenseTypeCode = chargeCfg.expenseTypeCode ?? item.expenseTypeCode ?? null
-      const description = chargeCfg.description ?? item.label ?? item.name ?? item.key ?? template.name
-      const currency = chargeCfg.currency ?? valueFor(chargeCfg.currencyKey) ?? output.currency ?? 'RON'
+    for (const d of chargeDrafts) {
       await this.allocator.createExpense(communityId, period, {
-        description,
-        amount,
-        currency,
-        expenseTypeCode: expenseTypeCode ?? undefined,
+        description: d.description,
+        amount: d.amount,
+        currency: d.currency,
+        expenseTypeCode: d.expenseTypeCode ?? undefined,
         sourceType,
         sourceId,
-        sourceKey: item.key,
-        fundId: fundId ?? undefined,
+        sourceKey: d.itemKey,
+        fundId: d.fundId ?? undefined,
       })
     }
   }
@@ -1030,9 +1070,6 @@ export class TemplateService {
     if (!period) throw new NotFoundException('Period not found')
     const meter: any = await (this.prisma as any).meter.findUnique({ where: { meterId } })
     if (!meter) throw new NotFoundException('Meter not found')
-    const scopeType = meter.scopeType as any
-    const unitIdMap = await this.prisma.unit.findMany({ where: { communityId }, select: { code: true, id: true } })
-    const scopeId = scopeType === 'COMMUNITY' ? communityId : unitIdMap.find((u) => u.code === meter.scopeCode)?.id ?? meter.scopeCode
     const pm = await this.prisma.periodMeasure.findFirst({
       where: {
         communityId,
@@ -1454,7 +1491,7 @@ export class TemplateService {
     return rows
   }
 
-  private async resolveMeterTemplateItems(communityId: string, periodCode: string, templateCode: string) {
+  private async resolveMeterTemplateItems(communityId: string, _periodCode: string, templateCode: string) {
     const repo: any = (this.prisma as any).meterEntryTemplate
     if (!repo) throw new NotFoundException('Meter templates not supported')
     const template = await repo.findUnique({

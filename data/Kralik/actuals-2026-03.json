@@ -1,0 +1,14 @@
+{
+  "periodCode": "2026-03",
+  "_note": "Real supplier invoices for 2026-03. APA_RECE bundles the Aquatim water-side lines (Apa Rece 564.83 + Canalizare 547.03 + Penalitati 19.39 = 1131.25); Apa Meteo (60.55) is a separate BY_CPI charge.",
+  "items": [
+    { "templateCode": "BILL_APA_RECE", "detailKey": "apa_rece", "amount": 1131.25, "invoiceNumber": "F-1-Aquatim", "invoiceGross": 1131.25, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_APA_METEO", "detailKey": "apa_meteo", "amount": 60.55, "invoiceNumber": "F-1-Aquatim", "invoiceGross": 60.55, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_CURENT_SCARA", "detailKey": "curent_scara", "amount": 50.14, "invoiceNumber": "F-2-PPC", "invoiceGross": 50.14, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_SALUBRITATE", "detailKey": "salubritate", "amount": 530.81, "invoiceNumber": "F-3-Retim", "invoiceGross": 530.81, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_CURATENIE", "detailKey": "curatenie", "amount": 0.00, "invoiceNumber": "F-4-RICH CLLEAN", "invoiceGross": 0.00, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_ADMINISTRARE", "detailKey": "administrare", "amount": 550.00, "invoiceNumber": "F-5-RUSADMINISTRA", "invoiceGross": 550.00, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_COMISION_BANCA", "detailKey": "comision_banca", "amount": 31.00, "invoiceNumber": "F-6-Libra", "invoiceGross": 31.00, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" },
+    { "templateCode": "BILL_INTERFON", "detailKey": "interfon", "amount": 0.00, "invoiceNumber": "F-7-Schmidt", "invoiceGross": 0.00, "serviceStartPeriod": "2026-03", "serviceEndPeriod": "2026-03" }
+  ]
+}

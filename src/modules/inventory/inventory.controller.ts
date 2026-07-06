@@ -1,3 +1,4 @@
+import { Feature } from '../../common/decorators/feature.decorator'
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
@@ -5,6 +6,7 @@ import { InventoryService } from './inventory.service'
 
 @Controller('communities/:communityId/inventory')
 @UseGuards(JwtAuthGuard, ScopesGuard)
+@Feature('inventory')
 export class InventoryController {
   constructor(private readonly svc: InventoryService) {}
 

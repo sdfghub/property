@@ -51,9 +51,10 @@ type PollItem = {
 
 type Props = {
   communityCode: string
+  readOnly?: boolean
 }
 
-export function PollsTab({ communityCode }: Props) {
+export function PollsTab({ communityCode, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
   const [polls, setPolls] = React.useState<PollItem[]>([])
@@ -310,6 +311,7 @@ export function PollsTab({ communityCode }: Props) {
         </div>
       </div>
 
+      {!readOnly && (
       <form className="card" onSubmit={handleCreate}>
         <h4>{t('polls.create', 'Create poll')}</h4>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -445,6 +447,7 @@ export function PollsTab({ communityCode }: Props) {
           </button>
         </div>
       </form>
+      )}
 
       {error && <div className="badge negative">{error}</div>}
       {loading && <div className="muted">{t('polls.loading', 'Loading...')}</div>}
@@ -602,7 +605,7 @@ export function PollsTab({ communityCode }: Props) {
                             {t('polls.link', 'Open link')}
                           </a>
                         )}
-                        {poll.status === 'PROPOSED' && (
+                        {!readOnly && poll.status === 'PROPOSED' && (
                           <button
                             className="btn primary small"
                             type="button"
@@ -612,7 +615,7 @@ export function PollsTab({ communityCode }: Props) {
                             {t('polls.approve', 'Approve')}
                           </button>
                         )}
-                        {poll.status === 'PROPOSED' && (
+                        {!readOnly && poll.status === 'PROPOSED' && (
                           <button
                             className="btn ghost small"
                             type="button"
@@ -622,7 +625,7 @@ export function PollsTab({ communityCode }: Props) {
                             {t('polls.reject', 'Reject')}
                           </button>
                         )}
-                        {(poll.status === 'DRAFT' || poll.status === 'PROPOSED') && (
+                        {!readOnly && (poll.status === 'DRAFT' || poll.status === 'PROPOSED') && (
                           <button
                             className="btn secondary small"
                             type="button"
@@ -632,7 +635,7 @@ export function PollsTab({ communityCode }: Props) {
                             {t('polls.edit', 'Edit')}
                           </button>
                         )}
-                        {poll.status === 'APPROVED' && (
+                        {!readOnly && poll.status === 'APPROVED' && (
                           <button
                             className="btn secondary small"
                             type="button"
@@ -642,7 +645,7 @@ export function PollsTab({ communityCode }: Props) {
                             {t('polls.close', 'Close')}
                           </button>
                         )}
-                        {(poll.status === 'CLOSED' || new Date(poll.endAt).getTime() <= Date.now()) &&
+                        {!readOnly && (poll.status === 'CLOSED' || new Date(poll.endAt).getTime() <= Date.now()) &&
                           !poll.resultsPublished && (
                           <button
                             className="btn ghost small"

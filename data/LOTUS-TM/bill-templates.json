@@ -8,7 +8,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Aquatim" }
+        "vendor": { "name": "Aquatim" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "meterTotal", "label": "Consum de apa", "kind": "meter", "meterId": "METER-WATER-TOTAL" },
@@ -27,7 +36,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Eon" }
+        "vendor": { "name": "Eon" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "gas", "label": "Cost gaz", "kind": "charge", "expenseTypeCode": "GAS" }
@@ -44,7 +62,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Hidroelectrica" }
+        "vendor": { "name": "Hidroelectrica" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "electricity", "label": "Cost curent", "kind": "charge", "expenseTypeCode": "ELECTRICITY" }
@@ -61,7 +88,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Imo smth" }
+        "vendor": { "name": "Imo smth" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "admin", "label": "Servicii administrare", "kind": "charge", "expenseTypeCode": "ADMIN" }
@@ -78,7 +114,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Cost cenzori" }
+        "vendor": { "name": "Cost cenzori" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "cenzor", "label": "Servicii cenzorat", "kind": "charge", "expenseTypeCode": "CENZOR" }
@@ -95,7 +140,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Cost ingrijitor" }
+        "vendor": { "name": "Cost ingrijitor" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "liviu-cost", "label": "Indemnizatie", "kind": "charge", "expenseTypeCode": "LIVIU" },
@@ -113,7 +167,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Costuri bancare" }
+        "vendor": { "name": "Costuri bancare" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "bank-commission", "label": "Comisionane bancare", "kind": "charge", "expenseTypeCode": "BANK" }
@@ -130,7 +193,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Comunicare" }
+        "vendor": { "name": "Comunicare" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "comm-vodafone", "label": "Abonament Vodafone interfon", "kind": "charge", "expenseTypeCode": "VODAFONE" },
@@ -148,7 +220,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Salubritate" }
+        "vendor": { "name": "Salubritate" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "garbage", "label": "Servicii RETIM", "kind": "charge", "expenseTypeCode": "GARBAGE" }
@@ -165,7 +246,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Securitate" }
+        "vendor": { "name": "Securitate" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "cctv", "label": "Mentenanta sistem CCTV", "kind": "charge", "expenseTypeCode": "CCTV-MAINTENANCE" }
@@ -182,7 +272,16 @@
         "mode": "VENDOR_INVOICE",
         "fundCode": "EXPENSES",
         "currency": "RON",
-        "vendor": { "name": "Lifturi" }
+        "vendor": { "name": "Lifturi" },
+        "invoice": {
+          "numberKey": "invoiceNumber",
+          "issueDateKey": "invoiceDate",
+          "serviceStartPeriodKey": "serviceStartPeriod",
+          "serviceEndPeriodKey": "serviceEndPeriod",
+          "netKey": "invoiceNet",
+          "vatKey": "invoiceVat",
+          "grossKey": "invoiceGross"
+        }
       },
       "items": [
         { "key": "elevator-maintenance", "label": "Mentenanta lifturi", "kind": "charge", "expenseTypeCode": "ELEVATOR" }

@@ -1,3 +1,4 @@
+import { Feature } from '../../common/decorators/feature.decorator'
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
@@ -5,6 +6,7 @@ import { CommunicationsService } from './communications.service'
 
 @Controller('communities/:communityId/announcements')
 @UseGuards(JwtAuthGuard, ScopesGuard)
+@Feature('announcements')
 export class CommunicationsController {
   constructor(private readonly svc: CommunicationsService) {}
 

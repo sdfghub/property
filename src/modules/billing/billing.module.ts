@@ -9,6 +9,8 @@ import { TemplateService } from './template.service';
 import { AllocationService } from './allocation.service';
 import { BeQueryService } from './be-query.service';
 import { TemplateController } from './template.controller';
+import { ExpenseTypeController } from './expense-type.controller';
+import { ExpenseTypeService } from './expense-type.service';
 import { CommunityBillingEntityController } from './community-be.controller';
 import { VendorInvoiceService } from './vendor-invoice.service';
 import { VendorInvoiceController } from './vendor-invoice.controller';
@@ -26,6 +28,7 @@ import { MePaymentController } from './me-payment.controller';
     BillingBeController,
     CommunityBillingEntityController,
     TemplateController,
+    ExpenseTypeController,
     VendorInvoiceController,
     PaymentController,
     CommunityDueController,
@@ -35,6 +38,7 @@ import { MePaymentController } from './me-payment.controller';
   ],
   providers: [
     TemplateService,
+    ExpenseTypeService,
     BillingPeriodLookupService,
     AllocationService,
     BeQueryService,

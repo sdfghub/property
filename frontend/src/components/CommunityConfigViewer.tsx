@@ -551,9 +551,6 @@ function groupSize(groupId: string, members: any[]) {
   return members.filter((m) => m.groupId === groupId).length
 }
 
-function memberCount(groupId: string, members: any[]) {
-  return members.filter((m) => m.splitGroupId === groupId).length
-}
 function UnitSection({
   units,
   unitGroupMembers,

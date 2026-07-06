@@ -1,7 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
+import { ScopesGuard } from '../../common/guards/scopes.guard'
+import { Scopes } from '../../common/decorators/scopes.decorator'
 import { VendorInvoiceService } from './vendor-invoice.service'
 
 @Controller('communities/:communityId/invoices')
+@UseGuards(JwtAuthGuard, ScopesGuard)
+@Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
 export class VendorInvoiceController {
   constructor(private readonly svc: VendorInvoiceService) {}
 

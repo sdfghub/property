@@ -16,8 +16,21 @@ import { PollsTab } from './PollsTab'
 import { NotificationsTab } from './NotificationsTab'
 import { CommunicationsTab } from './CommunicationsTab'
 import { InventoryTab } from './InventoryTab'
+import { TodayHome } from './TodayHome'
+import { CloseBoard } from './CloseBoard'
+import { DebtorsPanel } from '../money/DebtorsPanel'
+import { UnpaidInvoicesPanel } from '../money/UnpaidInvoicesPanel'
+import { MoneyHub } from '../money/MoneyHub'
+import { AvizierPanel } from './AvizierPanel'
+import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
+import { GovernancePanel } from './GovernancePanel'
 
 export type CommunityAdminTabKey =
+  | 'today'
+  | 'close'
+  | 'avizier'
+  | 'debtors'
+  | 'unpaidInvoices'
   | 'overview'
   | 'commandFinance'
   | 'config'
@@ -29,6 +42,8 @@ export type CommunityAdminTabKey =
   | 'communications'
   | 'inventory'
   | 'notifications'
+  | 'decisions'
+  | 'governance'
   | 'payments'
   | 'statements'
   | 'users'
@@ -41,6 +56,38 @@ type Props = {
   onTabRequestHandled?: () => void
   communitiesOverride?: Community[]
   onCommunityConfigLoaded?: (community: { id?: string; code?: string; name?: string } | null, billingEntities: any[]) => void
+  /** Viewer's active role — restricts the nav for oversight roles (CENSOR / committee). Defaults to full admin. */
+  viewerRole?: string
+}
+
+// Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
+// "today" home is excluded (they land on a role-appropriate page instead).
+const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
+  CENSOR: ['today', 'close', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+}
+function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
+  const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
+  return allow ? allow.includes(key) : true
+}
+function defaultTabFor(_viewerRole?: string): CommunityAdminTabKey {
+  return 'today' // every role lands on a role-aware Today home
+}
+
+// Which per-community feature flag gates each tab (tabs without an entry are always available).
+const FEATURE_BY_TAB: Partial<Record<CommunityAdminTabKey, string>> = {
+  funds: 'funds',
+  meters: 'meters',
+  communications: 'announcements',
+  polls: 'polls',
+  events: 'events',
+  inventory: 'inventory',
+  notifications: 'notifications',
+  decisions: 'committee',
+}
+function featureAllowsTab(key: CommunityAdminTabKey, features?: Record<string, boolean> | null): boolean {
+  const flag = FEATURE_BY_TAB[key]
+  return !flag || !features || features[flag] !== false
 }
 
 export function CommunityAdminDashboard({
@@ -49,15 +96,67 @@ export function CommunityAdminDashboard({
   onTabRequestHandled,
   communitiesOverride,
   onCommunityConfigLoaded,
+  viewerRole,
 }: Props) {
   const { api, activeRole } = useAuth()
   const { t } = useI18n()
+  // Oversight roles (cenzor / committee) see the panels read-only: no write controls rendered.
+  const readOnly = viewerRole === 'CENSOR' || viewerRole === 'EXECUTIVE_COMITEE_MEMBER'
   const [communities, setCommunities] = React.useState<Community[]>([])
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [message, setMessage] = React.useState<string | null>(null)
-  const [activeTab, setActiveTab] = React.useState<CommunityAdminTabKey>('overview')
+  const [activeTab, setActiveTab] = React.useState<CommunityAdminTabKey>(() => {
+    const def = defaultTabFor(viewerRole)
+    if (typeof window === 'undefined') return def
+    const urlTab = new URLSearchParams(window.location.search).get('tab') as CommunityAdminTabKey | null
+    return urlTab && tabAllowedFor(urlTab, viewerRole) ? urlTab : def
+  })
+  // Depth within the dashboard's own history entries (0 = landing) → controls Back visibility.
+  const [histDepth, setHistDepth] = React.useState(0)
+  const activeTabRef = React.useRef(activeTab)
+  React.useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  const urlFor = (tab: CommunityAdminTabKey, extra?: Record<string, string>) => {
+    const u = new URL(window.location.href)
+    u.searchParams.set('tab', tab)
+    u.searchParams.delete('fund')
+    if (extra) Object.entries(extra).forEach(([k, v]) => u.searchParams.set(k, v))
+    return u.pathname + u.search + u.hash
+  }
+  // navigate() pushes a real browser history entry so both the in-app Back button and the
+  // browser Back/Forward buttons move through the dashboard, and the URL is shareable.
+  // `extra` adds deep-link params (e.g. { fund: 'RULMENT' }) the target panel can read.
+  const navigate = React.useCallback((tab: CommunityAdminTabKey, extra?: Record<string, string>) => {
+    if (typeof window === 'undefined') return
+    if (tab === activeTabRef.current && !extra) return
+    const depth = ((window.history.state?.depth as number) || 0) + 1
+    window.history.pushState({ tab, depth }, '', urlFor(tab, extra))
+    setHistDepth(depth)
+    setActiveTab(tab)
+  }, [])
+  const goBack = React.useCallback(() => { window.history.back() }, [])
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    // seed a baseline history entry for the landing tab
+    if (window.history.state?.tab == null) {
+      window.history.replaceState({ tab: activeTabRef.current, depth: 0 }, '', urlFor(activeTabRef.current))
+    } else {
+      setHistDepth((window.history.state.depth as number) || 0)
+    }
+    const onPop = (e: PopStateEvent) => {
+      const tab = (e.state?.tab as CommunityAdminTabKey) ||
+        (new URLSearchParams(window.location.search).get('tab') as CommunityAdminTabKey) || 'today'
+      setActiveTab(tab)
+      setHistDepth((e.state?.depth as number) || 0)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [configJson, setConfigJson] = React.useState<any>(null)
   const [configError, setConfigError] = React.useState<string | null>(null)
+  const [features, setFeatures] = React.useState<Record<string, boolean> | null>(null)
   const [metersConfig, setMetersConfig] = React.useState<any | null>(null)
   const [funds, setFunds] = React.useState<any[]>([])
   const [fundError, setFundError] = React.useState<string | null>(null)
@@ -74,10 +173,6 @@ export function CommunityAdminDashboard({
   const [summary, setSummary] = React.useState<any | null>(null)
   const [summaryError, setSummaryError] = React.useState<string | null>(null)
   const [summaryLoading, setSummaryLoading] = React.useState(false)
-  const [payments, setPayments] = React.useState<any[]>([])
-  const [paymentsError, setPaymentsError] = React.useState<string | null>(null)
-  const [paymentsLoading, setPaymentsLoading] = React.useState(false)
-  const [showPaymentForm, setShowPaymentForm] = React.useState(false)
   const [periodActionError, setPeriodActionError] = React.useState<string | null>(null)
   const [navCollapsed, setNavCollapsed] = React.useState(false)
   const [dashboardData, setDashboardData] = React.useState<any | null>(null)
@@ -85,52 +180,81 @@ export function CommunityAdminDashboard({
   const [dashboardError, setDashboardError] = React.useState<string | null>(null)
   const [fundsLoadedFor, setFundsLoadedFor] = React.useState<string | null>(null)
   const [invoicesLoadedFor, setInvoicesLoadedFor] = React.useState<string | null>(null)
-  const [newPayment, setNewPayment] = React.useState({
-    billingEntityId: '',
-    amount: '',
-    currency: 'RON',
-    ts: '',
-    method: '',
-    refId: '',
-    applyMode: 'fifo',
-  })
   const [overviewInv, setOverviewInv] = React.useState<any[]>([])
   const [overviewInvLoading, setOverviewInvLoading] = React.useState(false)
   const [overviewInvError, setOverviewInvError] = React.useState<string | null>(null)
 
-  const navGroups: Array<{ label: string; items: Array<{ key: CommunityAdminTabKey; label: string }> }> = [
+  // Derived community identity — must be declared before the effects and nav below that reference it.
+  // (Previously defined ~100 lines lower, after its first use, which threw a temporal-dead-zone
+  // ReferenceError on every render and blanked the whole dashboard.)
+  const activeCommunity = communities.find((c) => c.id === selectedId) ?? null
+  const communityCode = activeCommunity?.code || forceCommunityId || ''
+  const communityId = activeCommunity?.id || forceCommunityId || ''
+
+  const navGroupsAll: Array<{ label: string; items: Array<{ key: CommunityAdminTabKey; label: string }> }> = [
     {
-      label: t('nav.core') || 'Core',
+      label: t('nav.home') || 'Acasă',
       items: [
-        { key: 'overview', label: t('tab.overview') || 'Overview' },
-        { key: 'commandFinance', label: t('tab.commandFinance') || 'Command + Finance' },
+        { key: 'today', label: t('tab.today') || 'Today' },
+      ],
+    },
+    {
+      label: t('nav.monthlyClose') || 'Închiderea lunii',
+      items: [
+        { key: 'close', label: t('tab.close') || 'Monthly close' },
+        { key: 'avizier', label: t('tab.avizier') || 'Avizier' },
+        { key: 'meters', label: t('tab.meters') || 'Meters' },
+        { key: 'expenses', label: t('tab.expenses') || 'Invoices & expenses' },
+        { key: 'periodFocus', label: t('tab.periodFocus') || 'Period detail' },
+      ],
+    },
+    {
+      label: t('nav.money') || 'Bani',
+      items: [
+        { key: 'payments', label: t('tab.payments') || 'Payments' },
+        { key: 'debtors', label: t('tab.debtors') || 'Debtors' },
+        { key: 'unpaidInvoices', label: t('tab.unpaidInvoices') || 'Unpaid invoices' },
         { key: 'funds', label: t('tab.funds') || 'Funds' },
-        { key: 'events', label: t('tab.events') || 'Events' },
-        { key: 'polls', label: t('tab.polls') || 'Polls' },
+      ],
+    },
+    {
+      label: t('nav.community') || 'Comunitate',
+      items: [
+        { key: 'decisions', label: t('tab.decisions') || 'Comitet executiv' },
         { key: 'communications', label: t('tab.communications') || 'Communications' },
+        { key: 'polls', label: t('tab.polls') || 'Polls' },
+        { key: 'events', label: t('tab.events') || 'Events' },
         { key: 'inventory', label: t('tab.inventory') || 'Inventory' },
         { key: 'notifications', label: t('tab.notifications') || 'Notifications' },
       ],
     },
     {
-      label: t('nav.periodWork') || 'Period Work',
+      label: t('nav.admin') || 'Administrare',
       items: [
-        { key: 'periodFocus', label: t('tab.periodFocus') || 'Period' },
-        { key: 'meters', label: t('tab.meters') || 'Meters' },
-        { key: 'expenses', label: t('tab.expenses') || 'Expenses' },
-        { key: 'statements', label: t('tab.statements') || 'Statements' },
-      ],
-    },
-    {
-      label: t('nav.admin') || 'Admin',
-      items: [
+        { key: 'governance', label: t('tab.governance') || 'Roluri & acces' },
         { key: 'users', label: t('tab.users') || 'Users' },
-        { key: 'payments', label: t('tab.payments') || 'Payments' },
         { key: 'config', label: t('tab.config') || 'Config' },
-        { key: 'health', label: t('tab.health') || 'Health' },
       ],
     },
   ]
+
+  // Oversight roles (cenzor / committee) get a read-focused subset of tabs.
+  React.useEffect(() => {
+    if (!communityId) return
+    api.get<Record<string, boolean>>(`/communities/${communityId}/features`)
+      .then((f: Record<string, boolean>) => setFeatures(f))
+      .catch(() => setFeatures(null))
+  }, [api, communityId])
+
+  const navGroups = navGroupsAll
+    .map((g) => ({ ...g, items: g.items.filter((i) => tabAllowedFor(i.key, viewerRole) && featureAllowsTab(i.key, features)) }))
+    .filter((g) => g.items.length)
+
+  // If the current tab isn't allowed for this role or is a disabled feature, send them home.
+  React.useEffect(() => {
+    if (!tabAllowedFor(activeTab, viewerRole) || !featureAllowsTab(activeTab, features)) navigate(defaultTabFor(viewerRole))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, viewerRole, features])
 
   React.useEffect(() => {
     if (!requestedTab) return
@@ -174,24 +298,6 @@ export function CommunityAdminDashboard({
         }
       })
   }, [api, activeRole?.scopeId, forceCommunityId])
-
-  const activeCommunity = communities.find((c) => c.id === selectedId) ?? null
-  const communityCode = activeCommunity?.code || forceCommunityId || ''
-  const communityId = activeCommunity?.id || forceCommunityId || ''
-
-  const fetchPayments = React.useCallback(() => {
-    if (!communityCode) return Promise.resolve()
-    setPaymentsLoading(true)
-    setPaymentsError(null)
-    return fetch(`${API_BASE}/communities/${communityCode}/payments`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text())
-        return res.json()
-      })
-      .then((rows) => setPayments(Array.isArray(rows) ? rows : []))
-      .catch((err) => setPaymentsError(err?.message || 'Failed to load payments'))
-      .finally(() => setPaymentsLoading(false))
-  }, [communityCode])
 
   const refreshFunds = React.useCallback(() => {
     if (!communityCode) return Promise.resolve()
@@ -286,7 +392,6 @@ export function CommunityAdminDashboard({
     if (!communityCode) return
     setConfigError(null)
     setFundError(null)
-    setPaymentsError(null)
   }, [communityCode])
 
   React.useEffect(() => {
@@ -325,11 +430,6 @@ export function CommunityAdminDashboard({
   }, [api, communityId])
 
   React.useEffect(() => {
-    if (!communityCode || activeTab !== 'payments') return
-    fetchPayments()
-  }, [activeTab, communityCode, fetchPayments])
-
-  React.useEffect(() => {
     if (!communityCode || activeTab !== 'funds') return
     if (fundsLoadedFor === communityCode) return
     setFundsLoadedFor(communityCode)
@@ -365,21 +465,17 @@ export function CommunityAdminDashboard({
 
   React.useEffect(() => {
     if (!communityCode) return
-    const needsConfig = activeTab === 'config' || activeTab === 'communications' || activeTab === 'payments'
+    const needsConfig = activeTab === 'config' || activeTab === 'communications' || activeTab === 'payments' || activeTab === 'overview'
     if (!needsConfig) return
     if (configJson && (configJson as any)?.community?.code === communityCode) return
     setConfigError(null)
-    fetch(`${API_BASE}/community-config/${communityCode}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text())
-        return res.json()
-      })
+    api.get<any>(`/community-config/${communityCode}`)
       .then((data) => {
         setConfigJson(data)
         onCommunityConfigLoaded?.(data?.community ?? null, data?.billingEntities ?? [])
       })
       .catch((err) => setConfigError(err?.message || 'Failed to load config'))
-  }, [activeTab, communityCode, configJson, onCommunityConfigLoaded])
+  }, [api, activeTab, communityCode, configJson, onCommunityConfigLoaded])
 
   const handlePrepare = React.useCallback(async () => {
     if (!communityId || !editablePeriod?.period?.code) return
@@ -445,11 +541,11 @@ export function CommunityAdminDashboard({
     }
   }, [api, communityId, refreshClosed, refreshEditable])
 
-  if (!activeCommunity && !selectedId) {
+  if (!communityId) {
     return (
       <div className="grid one" style={{ marginTop: 18 }}>
         <div className="card">
-          <div className="empty">{t('communities.empty')}</div>
+          <div className="empty">{selectedId ? t('common.loading') || 'Loading…' : t('communities.empty')}</div>
         </div>
       </div>
     )
@@ -497,7 +593,7 @@ export function CommunityAdminDashboard({
                               key={tab.key}
                               className="btn secondary"
                               type="button"
-                              onClick={() => setActiveTab(tab.key)}
+                              onClick={() => navigate(tab.key)}
                               style={{
                                 justifyContent: 'flex-start',
                                 padding: '10px 12px',
@@ -517,14 +613,39 @@ export function CommunityAdminDashboard({
             </div>
 
             <div style={{ flex: 1, minWidth: 280 }}>
+              {(() => {
+                const group = navGroups.find((g) => g.items.some((i) => i.key === activeTab))
+                const item = group?.items.find((i) => i.key === activeTab)
+                return (
+                  <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                    {histDepth > 0 && (
+                      <button className="btn ghost small" type="button" onClick={goBack}>← {t('common.back') || 'Back'}</button>
+                    )}
+                    <span className="muted" style={{ fontSize: 13 }}>
+                      {group ? `${group.label} › ` : ''}
+                      <strong>{item?.label ?? activeTab}</strong>
+                    </span>
+                  </div>
+                )
+              })()}
+              {activeTab === 'today' && (
+                <TodayHome communityId={communityId} onNavigate={navigate} viewerRole={viewerRole} />
+              )}
+              {activeTab === 'close' && (
+                <CloseBoard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
+              )}
+              {activeTab === 'avizier' && <AvizierPanel communityId={communityId} cenzorEnabled={features ? features.cenzor !== false : true} />}
+              {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
+              {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
+              {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
+              {activeTab === 'unpaidInvoices' && <UnpaidInvoicesPanel communityId={communityId} />}
               {activeTab === 'overview' && (
                 <OverviewTab
-                  communityId={activeCommunity!.id}
+                  communityId={communityId}
+                  communityCode={communityCode}
+                  communityName={activeCommunity?.name}
+                  billingEntities={configJson?.billingEntities || []}
                   editablePeriod={editablePeriod}
-                  onGoPeriod={() => setActiveTab('periodFocus')}
-                  onGoMeters={() => setActiveTab('meters')}
-                  onGoBills={() => setActiveTab('expenses')}
-                  onAddInvoice={() => setActiveTab('expenses')}
                   onPrepare={handlePrepare}
                   onClose={handleClose}
                   busy={busy}
@@ -546,7 +667,6 @@ export function CommunityAdminDashboard({
                   summaryError={summaryError}
                   summaryLoading={summaryLoading}
                   onLoadSummary={loadSummary}
-                  onGoStatements={() => setActiveTab('statements')}
                   lastClosedSummary={lastClosedSummary}
                   onLoadLastClosedSummary={loadLastClosedSummary}
                   funds={funds}
@@ -598,15 +718,15 @@ export function CommunityAdminDashboard({
 
               {activeTab === 'meters' && (
                 <CommunityMetersPanel
-                  communityId={activeCommunity!.id}
+                  communityId={communityId}
                   onStatusChange={() => refreshEditable()}
                 />
               )}
 
               {activeTab === 'periodFocus' && (
                 <PeriodAdmin
-                  communityId={activeCommunity!.id}
-                  communityCode={activeCommunity!.code}
+                  communityId={communityId}
+                  communityCode={communityCode}
                   onGoMeters={() => setActiveTab('meters')}
                   onGoExpenses={() => setActiveTab('expenses')}
                 />
@@ -623,7 +743,7 @@ export function CommunityAdminDashboard({
 
               {activeTab === 'expenses' && (
                 <CommunityExpensesPanel
-                  communityId={activeCommunity!.id}
+                  communityId={communityId}
                   onBillStatusChange={() => refreshEditable()}
                 />
               )}
@@ -634,151 +754,23 @@ export function CommunityAdminDashboard({
                   fundError={fundError}
                   communityCode={communityCode}
                   onRefreshFunds={refreshFunds}
+                  readOnly={readOnly}
                 />
               )}
-              {activeTab === 'events' && <EventsTab communityCode={communityCode} />}
-              {activeTab === 'polls' && <PollsTab communityCode={communityCode} />}
+              {activeTab === 'events' && <EventsTab communityCode={communityCode} readOnly={readOnly} />}
+              {activeTab === 'polls' && <PollsTab communityCode={communityCode} readOnly={readOnly} />}
               {activeTab === 'communications' && (
-                <CommunicationsTab communityId={communityId} unitGroups={configJson?.unitGroups || []} />
+                <CommunicationsTab communityId={communityId} unitGroups={configJson?.unitGroups || []} readOnly={readOnly} />
               )}
-              {activeTab === 'inventory' && <InventoryTab communityId={communityId} />}
-              {activeTab === 'notifications' && <NotificationsTab />}
+              {activeTab === 'inventory' && <InventoryTab communityId={communityId} readOnly={readOnly} />}
+              {activeTab === 'notifications' && <NotificationsTab readOnly={readOnly} />}
               {activeTab === 'payments' && (
-                <div className="card soft">
-                  <div className="muted">{t('tab.payments', 'Payments')}</div>
-                  <div className="row" style={{ marginTop: 6, gap: 8, alignItems: 'center' }}>
-                    <button className="btn primary small" type="button" onClick={() => setShowPaymentForm((v) => !v)}>
-                      {showPaymentForm ? t('payments.hideForm', 'Hide form') : t('payments.add', 'Add payment')}
-                    </button>
-                    <button className="btn ghost small" type="button" onClick={() => fetchPayments()} disabled={paymentsLoading}>
-                      {t('payments.reload', 'Reload')}
-                    </button>
-                    {paymentsLoading && <div className="muted">{t('communities.loading', 'Loading...')}</div>}
-                  </div>
-                  {showPaymentForm && (
-                    <form
-                      className="row"
-                      style={{ gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}
-                      onSubmit={async (e) => {
-                        e.preventDefault()
-                        if (!newPayment.billingEntityId || !newPayment.amount) return
-                        setPaymentsLoading(true)
-                        setPaymentsError(null)
-                        try {
-                          await api.post(`/communities/${communityCode}/payments`, {
-                            billingEntityId: newPayment.billingEntityId,
-                            amount: Number(newPayment.amount),
-                            currency: newPayment.currency || 'RON',
-                            ts: newPayment.ts || undefined,
-                            method: newPayment.method || undefined,
-                            refId: newPayment.refId || undefined,
-                            applyMode: newPayment.applyMode === 'none' ? 'none' : undefined,
-                          })
-                          setNewPayment({
-                            billingEntityId: '',
-                            amount: '',
-                            currency: 'RON',
-                            ts: '',
-                            method: '',
-                            refId: '',
-                            applyMode: 'fifo',
-                          })
-                          await fetchPayments()
-                        } catch (err: any) {
-                          setPaymentsError(err?.message || 'Failed to add payment')
-                        } finally {
-                          setPaymentsLoading(false)
-                        }
-                      }}
-                    >
-                      <select
-                        className="input"
-                        style={{ minWidth: 180 }}
-                        value={newPayment.billingEntityId}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, billingEntityId: e.target.value }))}
-                      >
-                        <option value="">{t('payments.selectBe', 'Select member')}</option>
-                        {(configJson?.billingEntities || []).map((be: any) => (
-                          <option key={be.id || be.code} value={be.id}>
-                            {be.name || be.code || be.id}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="input"
-                        style={{ width: 120 }}
-                        type="number"
-                        step="0.01"
-                        placeholder={t('payments.amount', 'Amount')}
-                        value={newPayment.amount}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, amount: e.target.value }))}
-                        required
-                      />
-                      <input
-                        className="input"
-                        style={{ width: 90 }}
-                        placeholder={t('payments.currency', 'Currency')}
-                        value={newPayment.currency}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, currency: e.target.value }))}
-                      />
-                      <input
-                        className="input"
-                        style={{ width: 160 }}
-                        type="date"
-                        value={newPayment.ts}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, ts: e.target.value }))}
-                      />
-                      <input
-                        className="input"
-                        style={{ width: 120 }}
-                        placeholder={t('payments.method', 'Method')}
-                        value={newPayment.method}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, method: e.target.value }))}
-                      />
-                      <input
-                        className="input"
-                        style={{ width: 140 }}
-                        placeholder={t('payments.ref', 'Reference')}
-                        value={newPayment.refId}
-                        onChange={(e) => setNewPayment((s) => ({ ...s, refId: e.target.value }))}
-                      />
-                      <label className="row" style={{ gap: 6, alignItems: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={newPayment.applyMode !== 'none'}
-                          onChange={(e) =>
-                            setNewPayment((s) => ({ ...s, applyMode: e.target.checked ? 'fifo' : 'none' }))
-                          }
-                        />
-                        <span className="muted">{t('payments.applyNow', 'Apply now')}</span>
-                      </label>
-                      <button className="btn primary small" type="submit" disabled={paymentsLoading}>
-                        {t('payments.save', 'Save')}
-                      </button>
-                    </form>
-                  )}
-                  {paymentsError && <div className="badge negative">{paymentsError}</div>}
-                  {!paymentsError && (
-                    <ul className="muted" style={{ marginTop: 8 }}>
-                      {payments.map((p) => (
-                        <li key={p.id}>
-                          {p.amount} {p.currency} • {p.billingEntityName || p.billingEntityCode || p.billingEntityId} •{' '}
-                          {p.ts ? new Date(p.ts).toLocaleDateString() : ''}
-                          {p.remaining != null ? ` • remaining ${p.remaining}` : ''}
-                          {p.applications && p.applications.length > 0 && (
-                            <div style={{ marginTop: 4, fontSize: 12, color: '#b8cee5' }}>
-                              {t('payments.appliedTo', 'Applied to')}:{" "}
-                              {p.applications
-                                .map((a: any) => `${a.bucket || 'charge'} (${Number(a.amount).toFixed(2)})`)
-                                .join(', ')}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                      {payments.length === 0 && <li>{t('payments.empty', 'No payments yet')}</li>}
-                    </ul>
-                  )}
-                </div>
+                <MoneyHub
+                  communityId={communityId}
+                  communityCode={communityCode}
+                  communityName={activeCommunity?.name}
+                  billingEntities={configJson?.billingEntities || []}
+                />
               )}
 
               {activeTab === 'statements' && (
@@ -788,7 +780,7 @@ export function CommunityAdminDashboard({
                 </div>
               )}
 
-              {activeTab === 'users' && <CommunityUsersPanel communityId={activeCommunity!.id} />}
+              {activeTab === 'users' && <CommunityUsersPanel communityId={communityId} />}
 
               {activeTab === 'health' && (
                 <div className="stack">

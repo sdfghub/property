@@ -56,16 +56,6 @@ async function detectBaseUrl() {
 
 const readJson = (filePath: string) => JSON.parse(fs.readFileSync(filePath, 'utf8'))
 
-const parseCsvRows = (filePath: string) => {
-  const raw = fs.readFileSync(filePath, 'utf8')
-  return raw
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .filter((l) => !l.toLowerCase().startsWith('communityid'))
-    .map((l) => l.split(',').map((s) => s.trim()))
-}
-
 const parseMeterRows = (filePath: string) => {
   const raw = fs.readFileSync(filePath, 'utf8').trim()
   return raw
@@ -137,6 +127,60 @@ async function main() {
   const periodEnd = def?.period?.end
   assert(periodStart && periodEnd, 'def.period.start/end are required')
 
+  const logCashState = async (label: string) => {
+    const accs = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+    const txs = await request('GET', `/communities/${communityId}/cash-tx`, undefined, token)
+    const funds = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+    const fundById = new Map<string, { code?: string; name?: string }>(
+      (Array.isArray(funds) ? funds : []).map((f: any) => [f.id, { code: f.code, name: f.name }]),
+    )
+    const rows = (Array.isArray(accs) ? accs : []).map((a: any) => {
+      const accTx = (Array.isArray(txs) ? txs : []).filter((t: any) => t.accountId === a.id)
+      const inflow = accTx.filter((t: any) => t.direction === 'IN').reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+      const outflow = accTx.filter((t: any) => t.direction === 'OUT').reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+      return {
+        id: a.id,
+        code: a.code,
+        currency: a.currency,
+        txCount: accTx.length,
+        inflow,
+        outflow,
+        net: inflow - outflow,
+      }
+    })
+    console.log(label)
+    console.table(rows)
+
+    const fundRows = new Map<string, any>()
+    ;(Array.isArray(txs) ? txs : []).forEach((t: any) => {
+      const acc = (Array.isArray(accs) ? accs : []).find((a: any) => a.id === t.accountId)
+      if (!acc) return
+      const key = `${t.accountId}:${t.fundId ?? 'UNALLOCATED'}`
+      const info = fundById.get(t.fundId) || {}
+      if (!fundRows.has(key)) {
+        fundRows.set(key, {
+          accountId: acc.id,
+          accountCode: acc.code,
+          fundId: t.fundId ?? null,
+          fundCode: info.code ?? (t.fundId ? null : 'UNALLOCATED'),
+          fundName: info.name ?? (t.fundId ? null : 'Unallocated'),
+          txCount: 0,
+          inflow: 0,
+          outflow: 0,
+          net: 0,
+        })
+      }
+      const row = fundRows.get(key)
+      row.txCount += 1
+      if (t.direction === 'IN') row.inflow += Number(t.amount || 0)
+      if (t.direction === 'OUT') row.outflow += Number(t.amount || 0)
+      row.net = row.inflow - row.outflow
+    })
+    const fundTable = Array.from(fundRows.values())
+    console.log(`${label} (by fund)`)
+    console.table(fundTable)
+  }
+
   console.log(`Ensuring community ${communityId} exists...`)
   const communities = await request('GET', `/communities`, undefined, token)
   const exists = Array.isArray(communities) && communities.some((c: any) => c.id === communityId || c.code === communityId)
@@ -157,7 +201,7 @@ async function main() {
   const periodSet = new Set<string>()
   periodSet.add(periodCode)
   for (const f of files) {
-    const m = f.match(/(meters)-(\d{4}-\d{2})/i)
+    const m = f.match(/(meters|actuals)-(\d{4}-\d{2})/i)
     if (m) periodSet.add(m[2])
   }
   const periods = Array.from(periodSet).sort()
@@ -173,6 +217,7 @@ async function main() {
     }
   }
 
+
   // Create core structure
   console.log('Creating unit groups...')
   for (const group of def.groups || []) {
@@ -187,6 +232,26 @@ async function main() {
   console.log('Creating billing entities...')
   for (const be of def.billingEntities || []) {
     await request('POST', `/communities/${communityId}/billing-entities`, { code: be.code, name: be.name, order: be.order ?? 0 }, token)
+  }
+
+  if (Array.isArray(def.accounts) && def.accounts.length) {
+    console.log('Ensuring cash accounts...')
+    const existingAccounts = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+    const accountByCode = new Map<string, any>(
+      (Array.isArray(existingAccounts) ? existingAccounts : []).map((a: any) => [a.code, a]),
+    )
+    for (const acc of def.accounts) {
+      if (accountByCode.has(acc.code)) continue
+      const created = await request(
+        'POST',
+        `/communities/${communityId}/cash-accounts`,
+        { code: acc.code, name: acc.name, type: acc.type, currency: acc.currency },
+        token,
+      )
+      accountByCode.set(acc.code, created)
+    }
+    console.log(`✔ Cash accounts ensured (${accountByCode.size})`)
+
   }
 
   const unitGroups = await request('GET', `/communities/${communityId}/unit-groups`, undefined, token)
@@ -267,6 +332,28 @@ async function main() {
     )
   }
 
+  console.log('Creating expense types...')
+  for (const exp of def.expenseSplits || []) {
+    const splits = Array.isArray(exp.splits) ? exp.splits : []
+    const firstAlloc = splits.find((s: any) => s?.allocation)?.allocation
+    const method = String(firstAlloc?.ruleCode || firstAlloc?.method || '').trim()
+    if (!method) {
+      throw new Error(`Expense type ${exp.expenseTypeCode} missing allocation method`)
+    }
+    await request(
+      'POST',
+      `/communities/${communityId}/expense-types`,
+      {
+        code: exp.expenseTypeCode,
+        name: exp.name || exp.expenseTypeCode,
+        method,
+        fundCode: 'EXPENSES',
+        splitTemplate: splits,
+      },
+      token,
+    )
+  }
+
   console.log('Creating split groups...')
   for (const sg of def.splitGroups || []) {
     await request('POST', `/communities/${communityId}/split-groups`, {
@@ -343,18 +430,116 @@ async function main() {
   if (fs.existsSync(fundsPath)) {
     console.log('Creating funds...')
     const funds = readJson(fundsPath)
+    const existingFunds = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+    const existingByCode = new Map<string, any>(
+      (Array.isArray(existingFunds) ? existingFunds : []).map((f: any) => [f.code, f]),
+    )
     for (const f of funds || []) {
+      const code = String(f?.code || '').trim()
+      if (!code || existingByCode.has(code)) continue
       await request('POST', `/communities/${communityId}/funds`, f, token)
+    }
+    const refreshed = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+    const refreshedByCode = new Map<string, any>(
+      (Array.isArray(refreshed) ? refreshed : []).map((f: any) => [f.code, f]),
+    )
+    const missingCodes = (funds || [])
+      .map((f: any) => String(f?.code || '').trim())
+      .filter((code: string) => code && !refreshedByCode.has(code))
+    assert(!missingCodes.length, `funds missing after creation: ${missingCodes.join(', ')}`)
+  }
+
+  if (Array.isArray(def.fundChargeOpenings) && def.fundChargeOpenings.length) {
+    console.log('Posting fund opening charge balances (unit-level)...')
+    const rows: any[] = []
+    for (const block of def.fundChargeOpenings) {
+      const fundCode = String(block?.fundCode || '').trim()
+      const openingPeriodCode = String(block?.openingPeriodCode || '').trim()
+      assert(fundCode, 'fundCode missing for fundChargeOpenings')
+      assert(openingPeriodCode, `openingPeriodCode missing for fundChargeOpenings ${fundCode}`)
+      const lines = Array.isArray(block?.lines) ? block.lines : []
+      for (const line of lines) {
+        const unitCode = String(line?.unitCode || '').trim()
+        assert(unitCode, `unitCode missing for fundChargeOpenings ${fundCode}`)
+        rows.push({
+          communityId,
+          periodCode: openingPeriodCode,
+          unitCode,
+          fundCode,
+          amount: Number(line?.amount ?? 0),
+          currency: line?.currency ?? 'RON',
+        })
+      }
+    }
+    if (rows.length) {
+      await request('POST', `/admin/opening-balances/units`, { rows }, token)
+      console.log(`✔ Fund opening charges posted (${rows.length})`)
     }
   }
 
+  if (Array.isArray(def.accounts) && def.accounts.length) {
+    console.log('Posting cash opening balances...')
+    const existingAccounts = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+    const accountByCode = new Map<string, any>(
+      (Array.isArray(existingAccounts) ? existingAccounts : []).map((a: any) => [a.code, a]),
+    )
+    const funds = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+    const fundByCode = new Map<string, any>(
+      (Array.isArray(funds) ? funds : []).map((f: any) => [f.code, f]),
+    )
+    for (const acc of def.accounts) {
+      const stored = accountByCode.get(acc.code)
+      assert(stored?.id, `cash account not found for code ${acc.code}`)
+      assert(Array.isArray(acc.openings), `openings missing for account ${acc.code}`)
+      for (const opening of acc.openings) {
+        const openingBalance = Number(opening.openingBalance ?? 0)
+        if (!Number.isFinite(openingBalance) || openingBalance === 0) continue
+        assert(opening.openingPeriodCode, `openingPeriodCode missing for account ${acc.code}`)
+        assert(opening.fundCode, `fundCode missing for account ${acc.code}`)
+        assert(
+          opening.openingPeriodCode === periodCode,
+          `openingPeriodCode ${opening.openingPeriodCode} does not match def.period.code ${periodCode}`,
+        )
+        const fund = fundByCode.get(opening.fundCode)
+        assert(fund?.id, `fund not found for code ${opening.fundCode} (account ${acc.code})`)
+        const direction = openingBalance >= 0 ? 'IN' : 'OUT'
+        const amount = Math.abs(openingBalance)
+        await request(
+          'POST',
+          `/communities/${communityId}/cash-tx`,
+          {
+            accountId: stored.id,
+            fundId: fund.id,
+            amount,
+            currency: acc.currency,
+            direction,
+            kind: 'ADJUSTMENT',
+            refType: 'OPENING_BALANCE',
+            refId: `${acc.code}:${opening.openingPeriodCode}:${opening.fundCode}`,
+            memo: 'Opening balance',
+            ts: periodStart,
+          },
+          token,
+        )
+      }
+    }
+    console.log('✔ Cash opening balances posted')
+  }
+
   const billTplPath = path.join(communityDir, 'bill-templates.json')
+  const billTemplatesByCode = new Map<string, { items: any[] }>()
   if (fs.existsSync(billTplPath)) {
     console.log('Creating bill templates...')
     const body = readJson(billTplPath)
     const templates = normalizeBillTemplates(body)
     for (const tpl of templates) {
       await request('POST', `/communities/${communityId}/periods/${periodCode}/bill-templates`, tpl, token)
+    }
+    for (const tpl of templates) {
+      const code = String(tpl?.code || '').trim()
+      if (!code) continue
+      const items = Array.isArray(tpl?.template?.items) ? tpl.template.items : []
+      billTemplatesByCode.set(code, { items })
     }
   }
 
@@ -369,6 +554,26 @@ async function main() {
   }
 
   for (const pCode of periods) {
+    const allPeriodsForActuals = await request('GET', `/communities/${communityId}/periods`, undefined, token)
+    const periodRows = Array.isArray(allPeriodsForActuals) ? allPeriodsForActuals : []
+    console.log(`Periods snapshot before actuals ${pCode}:`)
+    console.table(
+      periodRows.map((p: any) => ({
+        code: p.code,
+        status: p.status,
+        seq: p.seq,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        preparedAt: p.preparedAt,
+        closedAt: p.closedAt,
+      })),
+    )
+    const periodRow = periodRows.find((p: any) => p.code === pCode)
+    assert(periodRow, `Period ${pCode} not found`)
+    if (periodRow.status !== 'OPEN') {
+      console.log(`⚠️ Period ${pCode} is not OPEN (status=${periodRow.status}). Actuals submission will likely fail.`)
+    }
+
     const meterFiles = files.filter((f) => f.startsWith(`meters-${pCode}-`) && f.endsWith('.csv'))
     for (const mf of meterFiles) {
       const rows = parseMeterRows(path.join(communityDir, mf))
@@ -381,6 +586,105 @@ async function main() {
           token,
         )
       }
+    }
+
+    const actualsPath = path.join(communityDir, `actuals-${pCode}.json`)
+    if (fs.existsSync(actualsPath)) {
+      console.log(`Submitting actuals ${path.basename(actualsPath)} (period=${pCode}, status=${periodRow.status})...`)
+      const actuals = readJson(actualsPath)
+      const items = Array.isArray(actuals?.items) ? actuals.items : []
+      if (actuals?.periodCode && actuals.periodCode !== pCode) {
+        throw new Error(`actuals periodCode mismatch: expected ${pCode}, got ${actuals.periodCode}`)
+      }
+      console.log(
+        `Actuals items: ${items.length}, templates available: ${billTemplatesByCode.size}, meter templates: ${
+          fs.existsSync(meterTplPath) ? 'yes' : 'no'
+        }`,
+      )
+      const byTemplate = new Map<string, Record<string, any>>()
+      for (const it of items) {
+        const templateCode = String(it?.templateCode || '').trim()
+        const detailKey = String(it?.detailKey || '').trim()
+        const amount = Number(it?.amount)
+        if (!templateCode || !detailKey) {
+          throw new Error(`actuals item requires templateCode and detailKey`)
+        }
+        if (!Number.isFinite(amount)) {
+          throw new Error(`actuals item ${templateCode}/${detailKey} has invalid amount`)
+        }
+        const tpl = billTemplatesByCode.get(templateCode)
+        if (!tpl) {
+          throw new Error(`actuals item references unknown template: ${templateCode}`)
+        }
+        const itemDef = tpl.items.find((x: any) => x?.key === detailKey)
+        if (!itemDef || (itemDef.kind !== 'charge' && itemDef.kind !== 'expense')) {
+          throw new Error(`actuals item ${templateCode}/${detailKey} does not match a charge item`)
+        }
+        const map = byTemplate.get(templateCode) || {}
+        if (map[detailKey] != null) {
+          throw new Error(`duplicate actuals detailKey for template ${templateCode}: ${detailKey}`)
+        }
+        map[detailKey] = amount
+        const invoiceNumber = it?.invoiceNumber
+        const invoiceDate = it?.invoiceDate
+        const invoiceNet = it?.invoiceNet
+        const invoiceVat = it?.invoiceVat
+        const invoiceGross = it?.invoiceGross
+        const serviceStartPeriod = it?.serviceStartPeriod
+        const serviceEndPeriod = it?.serviceEndPeriod
+        if (invoiceNumber != null) {
+          if (map.invoiceNumber != null && map.invoiceNumber !== invoiceNumber) {
+            throw new Error(`conflicting invoiceNumber for template ${templateCode}`)
+          }
+          map.invoiceNumber = invoiceNumber
+        }
+        if (invoiceDate != null) {
+          if (map.invoiceDate != null && map.invoiceDate !== invoiceDate) {
+            throw new Error(`conflicting invoiceDate for template ${templateCode}`)
+          }
+          map.invoiceDate = invoiceDate
+        }
+        if (invoiceNet != null) {
+          if (map.invoiceNet != null && map.invoiceNet !== invoiceNet) {
+            throw new Error(`conflicting invoiceNet for template ${templateCode}`)
+          }
+          map.invoiceNet = invoiceNet
+        }
+        if (invoiceVat != null) {
+          if (map.invoiceVat != null && map.invoiceVat !== invoiceVat) {
+            throw new Error(`conflicting invoiceVat for template ${templateCode}`)
+          }
+          map.invoiceVat = invoiceVat
+        }
+        if (invoiceGross != null) {
+          if (map.invoiceGross != null && map.invoiceGross !== invoiceGross) {
+            throw new Error(`conflicting invoiceGross for template ${templateCode}`)
+          }
+          map.invoiceGross = invoiceGross
+        }
+        if (serviceStartPeriod != null) {
+          if (map.serviceStartPeriod != null && map.serviceStartPeriod !== serviceStartPeriod) {
+            throw new Error(`conflicting serviceStartPeriod for template ${templateCode}`)
+          }
+          map.serviceStartPeriod = serviceStartPeriod
+        }
+        if (serviceEndPeriod != null) {
+          if (map.serviceEndPeriod != null && map.serviceEndPeriod !== serviceEndPeriod) {
+            throw new Error(`conflicting serviceEndPeriod for template ${templateCode}`)
+          }
+          map.serviceEndPeriod = serviceEndPeriod
+        }
+        byTemplate.set(templateCode, map)
+      }
+      for (const [templateCode, values] of byTemplate.entries()) {
+        await request(
+          'POST',
+          `/communities/${communityId}/periods/${pCode}/bill-templates/${templateCode}/state`,
+          { state: 'SUBMITTED', values },
+          token,
+        )
+      }
+      console.log(`✔ Actuals submitted (${items.length})`)
     }
 
     console.log(`Closing template instances for ${pCode}...`)
@@ -407,6 +711,20 @@ async function main() {
     await request('POST', `/communities/${communityId}/periods/${pCode}/prepare`, {}, token)
     console.log(`Approving period ${pCode}...`)
     await request('POST', `/communities/${communityId}/periods/${pCode}/approve`, {}, token)
+
+    // After closing this period, create the next one (OPEN) for payments.
+    const m = pCode.match(/^(\d{4})-(\d{2})$/)
+    assert(m, `Invalid period code format: ${pCode}`)
+    const year = Number(m[1])
+    const month = Number(m[2])
+    const nextYear = month === 12 ? year + 1 : year
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextCode = `${nextYear}-${String(nextMonth).padStart(2, '0')}`
+    const openAfter = await request('GET', `/communities/${communityId}/periods/open`, undefined, token)
+    if (!Array.isArray(openAfter) || openAfter.length === 0) {
+      console.log(`Creating next open period ${nextCode} for payments...`)
+      await request('POST', `/communities/${communityId}/periods/create`, { code: nextCode }, token)
+    }
 
     console.log(`Fetching meter readings for ${pCode}...`)
     const meters = await request('GET', `/communities/${communityId}/meters`, undefined, token)
@@ -567,6 +885,222 @@ async function main() {
     console.table(fundRows)
     console.log(`Total charges (Funds): ${fundTotal}`)
   }
+
+  console.log('Fetching vendor invoices...')
+  const invoices = await request('GET', `/communities/${communityId}/invoices`, undefined, token)
+  const invoiceRows = (Array.isArray(invoices) ? invoices : []).map((inv: any) => ({
+    id: inv.id,
+    number: inv.number ?? null,
+    vendor: inv.vendor?.name ?? null,
+    issueDate: inv.issueDate ?? null,
+    currency: inv.currency ?? null,
+    gross: inv.gross ?? null,
+    funds: Array.isArray(inv.fundInvoices)
+      ? inv.fundInvoices.map((f: any) => `${f.fund?.code ?? f.fundId}:${f.amount ?? ''}`).join(', ')
+      : '',
+  }))
+  console.table(invoiceRows)
+  if (invoiceRows.length >= 2) {
+    console.log('Creating vendor payments for first two invoices...')
+    let accounts = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      const created = await request(
+        'POST',
+        `/communities/${communityId}/cash-accounts`,
+        { code: 'MAIN', name: 'Main account', type: 'BANK', currency: 'RON' },
+        token,
+      )
+      accounts = [created]
+    }
+    const accountId = accounts?.[0]?.id ?? null
+    const inv1 = (Array.isArray(invoices) ? invoices[0] : null)
+    const inv2 = (Array.isArray(invoices) ? invoices[1] : null)
+    const gross1 = Number(inv1?.gross)
+    const gross2 = Number(inv2?.gross)
+    assert(Number.isFinite(gross1) && gross1 > 0, 'First invoice gross is invalid')
+    assert(Number.isFinite(gross2) && gross2 > 0, 'Second invoice gross is invalid')
+    await logCashState('Cash accounts before vendor payments')
+    await request(
+      'POST',
+      `/communities/${communityId}/invoices/${inv1.id}/payments`,
+      { amount: gross1 * 0.5, currency: inv1.currency || 'RON', method: 'BANK', accountId },
+      token,
+    )
+    await request(
+      'POST',
+      `/communities/${communityId}/invoices/${inv2.id}/payments`,
+      { amount: gross2, currency: inv2.currency || 'RON', method: 'BANK', accountId },
+      token,
+    )
+    await logCashState('Cash accounts after vendor payments')
+    console.log('✔ Vendor payments created')
+
+    const invoicesAfter = await request('GET', `/communities/${communityId}/invoices`, undefined, token)
+    const invoiceRowsAfter = (Array.isArray(invoicesAfter) ? invoicesAfter : []).map((inv: any) => ({
+      id: inv.id,
+      number: inv.number ?? null,
+      vendor: inv.vendor?.name ?? null,
+      currency: inv.currency ?? null,
+      gross: inv.gross ?? null,
+      paid: inv.paid ?? null,
+      due: inv.due ?? null,
+    }))
+    console.log('Invoices after payments (with due)')
+    console.table(invoiceRowsAfter)
+  } else {
+    console.log('Skipping vendor payments: fewer than 2 invoices')
+  }
+  await logCashState('Cash accounts final balances')
+
+  console.log('Creating BE payment for Ap 20 (expenses + partial other fund)...')
+  const bes = await request('GET', `/communities/${communityId}/billing-entities`, undefined, token)
+  const be20 = (Array.isArray(bes) ? bes : []).find((b: any) => b.code === 'Ap 20')
+  assert(be20?.id, 'Billing entity Ap 20 not found')
+  const unitsList = await request('GET', `/communities/${communityId}/units`, undefined, token)
+  const unit20 = (Array.isArray(unitsList) ? unitsList : []).find((u: any) => u.code === '20')
+  assert(unit20?.id, 'Unit code 20 not found')
+  console.log(`Target unit for BE payment: ${unit20.code} (${unit20.id})`)
+  const openPeriodList = await request('GET', `/communities/${communityId}/periods/open`, undefined, token)
+  const openPeriod = Array.isArray(openPeriodList) ? openPeriodList[openPeriodList.length - 1] : openPeriodList
+  assert(openPeriod?.code, 'No open period found for payments')
+  const paymentPeriodCode = openPeriod.code
+  console.log(`Payment period (OPEN): ${paymentPeriodCode}`)
+  const funds = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+  const expenseFund = (Array.isArray(funds) ? funds : []).find((f: any) => f.code === 'EXPENSES')
+  assert(expenseFund?.id, 'EXPENSES fund not found')
+  const otherFund = (Array.isArray(funds) ? funds : []).find((f: any) => f.code && f.code !== 'EXPENSES')
+  assert(otherFund?.id, 'No secondary fund found for partial payment')
+  const roundDown4 = (value: number) => Math.floor(value * 10000) / 10000
+  const openExpenses = await request(
+    'GET',
+    `/communities/${communityId}/payments/open-charges?billingEntityId=${be20.id}&fundId=${expenseFund.id}&unitId=${unit20.id}`,
+    undefined,
+    token,
+  )
+  const openOther = await request(
+    'GET',
+    `/communities/${communityId}/payments/open-charges?billingEntityId=${be20.id}&fundId=${otherFund.id}&unitId=${unit20.id}`,
+    undefined,
+    token,
+  )
+  const expensesAvailable = Number(openExpenses?.totalAvailable || 0)
+  const otherAvailable = Number(openOther?.totalAvailable || 0)
+  console.log('Open charge items for unit 20 (expenses fund)')
+  console.table((openExpenses?.items || []).slice(0, 10))
+  console.log(`Open charges total (expenses): ${expensesAvailable}`)
+  console.log('Open charge items for unit 20 (other fund)')
+  console.table((openOther?.items || []).slice(0, 10))
+  console.log(`Open charges total (other): ${otherAvailable}`)
+  console.log('Ap 20 open-charge availability for unit 20 (by fund)')
+  console.table([
+    { fundId: expenseFund.id, fundCode: expenseFund.code, fundName: expenseFund.name, available: expensesAvailable },
+    { fundId: otherFund.id, fundCode: otherFund.code, fundName: otherFund.name, available: otherAvailable },
+  ])
+  assert(expensesAvailable > 0, 'No EXPENSES open charges found for Ap 20 unit 20')
+  assert(otherAvailable > 0, 'No secondary fund open charges found for Ap 20 unit 20')
+  const epsilon = 0.0001
+  const payOther = roundDown4(Math.max(0, otherAvailable * 0.5 - epsilon))
+  const payExpenses = roundDown4(Math.max(0, expensesAvailable - epsilon))
+  const payAmount = roundDown4(payExpenses + payOther)
+  const accountList = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+  const bankAcc = (Array.isArray(accountList) ? accountList : []).find((a: any) => a.code === 'BANK_MAIN')
+  assert(bankAcc?.id, 'BANK_MAIN cash account not found')
+  await request(
+    'POST',
+    `/communities/${communityId}/payments`,
+    {
+      billingEntityId: be20.id,
+      amount: payAmount,
+      currency: 'RON',
+      method: 'BANK',
+      accountId: bankAcc.id,
+      allocationSpec: [
+        { amount: payExpenses, fundId: expenseFund.id, unitId: unit20.id, billingEntityId: be20.id },
+        { amount: payOther, fundId: otherFund.id, unitId: unit20.id, billingEntityId: be20.id },
+      ],
+    },
+    token,
+  )
+  console.log(`✔ BE payment posted for Ap 20 (amount=${payAmount})`)
+
+  const openExpensesAfter = await request(
+    'GET',
+    `/communities/${communityId}/payments/open-charges?billingEntityId=${be20.id}&fundId=${expenseFund.id}&unitId=${unit20.id}`,
+    undefined,
+    token,
+  )
+  const openOtherAfter = await request(
+    'GET',
+    `/communities/${communityId}/payments/open-charges?billingEntityId=${be20.id}&fundId=${otherFund.id}&unitId=${unit20.id}`,
+    undefined,
+    token,
+  )
+  const expensesAvailableAfter = Number(openExpensesAfter?.totalAvailable || 0)
+  const otherAvailableAfter = Number(openOtherAfter?.totalAvailable || 0)
+  console.log(`Ap 20 open-charge availability for unit 20 after payment (period ${paymentPeriodCode})`)
+  console.table([
+    { fundId: expenseFund.id, fundCode: expenseFund.code, fundName: expenseFund.name, available: expensesAvailableAfter },
+    { fundId: otherFund.id, fundCode: otherFund.code, fundName: otherFund.name, available: otherAvailableAfter },
+  ])
+
+  const petty = (def.accounts || []).find((a: any) => a.type === 'PETTY')
+  const bank = (def.accounts || []).find((a: any) => a.type === 'BANK')
+  if (petty && bank) {
+    console.log('Moving all money from petty cash to bank...')
+    const accs = await request('GET', `/communities/${communityId}/cash-accounts`, undefined, token)
+    const pettyAcc = (Array.isArray(accs) ? accs : []).find((a: any) => a.code === petty.code)
+    const bankAcc = (Array.isArray(accs) ? accs : []).find((a: any) => a.code === bank.code)
+    assert(pettyAcc?.id, `Cash account not found for petty code ${petty.code}`)
+    assert(bankAcc?.id, `Cash account not found for bank code ${bank.code}`)
+    const fundsForTransfer = await request('GET', `/communities/${communityId}/funds`, undefined, token)
+    const transferFundCode = bank.defaultFundCode || petty.defaultFundCode
+    assert(transferFundCode, 'defaultFundCode missing for petty/bank transfer')
+    const transferFund = (Array.isArray(fundsForTransfer) ? fundsForTransfer : []).find((f: any) => f.code === transferFundCode)
+    assert(transferFund?.id, `fund not found for code ${transferFundCode}`)
+    const txs = await request('GET', `/communities/${communityId}/cash-tx`, undefined, token)
+    const pettyTx = (Array.isArray(txs) ? txs : []).filter((t: any) => t.accountId === pettyAcc.id)
+    const pettyIn = pettyTx.filter((t: any) => t.direction === 'IN').reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+    const pettyOut = pettyTx.filter((t: any) => t.direction === 'OUT').reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+    const pettyNet = pettyIn - pettyOut
+    if (pettyNet > 0) {
+      await request(
+        'POST',
+        `/communities/${communityId}/cash-tx`,
+        {
+          accountId: pettyAcc.id,
+          fundId: transferFund.id,
+          amount: pettyNet,
+          currency: pettyAcc.currency,
+          direction: 'OUT',
+          kind: 'TRANSFER',
+          refType: 'TRANSFER',
+          refId: `${petty.code}->${bank.code}`,
+          memo: 'Move petty cash to bank',
+        },
+        token,
+      )
+      await request(
+        'POST',
+        `/communities/${communityId}/cash-tx`,
+        {
+          accountId: bankAcc.id,
+          fundId: transferFund.id,
+          amount: pettyNet,
+          currency: bankAcc.currency,
+          direction: 'IN',
+          kind: 'TRANSFER',
+          refType: 'TRANSFER',
+          refId: `${petty.code}->${bank.code}`,
+          memo: 'Move petty cash to bank',
+        },
+        token,
+      )
+    }
+    await logCashState('Cash accounts after petty transfer')
+  }
+  const invoiceTotal = invoiceRows.reduce((s: number, r: any) => s + (Number(r.gross) || 0), 0)
+  console.log(`Total invoices: ${invoiceRows.length}`)
+  console.log(`Total invoice gross: ${invoiceTotal}`)
 
   console.log('✅ UI-style reset/import complete')
 }

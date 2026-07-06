@@ -1,0 +1,1716 @@
+{
+  "id": "Kralik",
+  "name": "AP Gh Lazar 4",
+  "expenseFundCode": "EXPENSES",
+  "period": {
+    "code": "2026-03",
+    "start": "2026-03-01",
+    "end": "2026-03-31"
+  },
+  "groups": [
+    {
+      "code": "ALL_BILLABLE",
+      "name": "Toate unitățile facturabile"
+    },
+    {
+      "code": "RESIDENTIAL",
+      "name": "Apartamente / unități rezidențiale"
+    },
+    {
+      "code": "COMMERCIAL",
+      "name": "Spațiu comercial"
+    },
+    {
+      "code": "SAD",
+      "name": "SAD-uri / spații cu altă destinație"
+    },
+    {
+      "code": "TYPE_APARTAMENT",
+      "name": "Tip unitate: Apartament"
+    },
+    {
+      "code": "TYPE_SAD",
+      "name": "Tip unitate: SAD"
+    },
+    {
+      "code": "SVC_APA_RECE",
+      "name": "Unități participante la serviciul: Apa Rece"
+    },
+    {
+      "code": "SVC_APA_METEO",
+      "name": "Unități participante la serviciul: Apa Meteo"
+    },
+    {
+      "code": "SVC_CURENT_SCARA",
+      "name": "Unități participante la serviciul: Curent Scara"
+    },
+    {
+      "code": "SVC_SALUBRITATE",
+      "name": "Unități participante la serviciul: Salubritate"
+    },
+    {
+      "code": "SVC_CURATENIE",
+      "name": "Unități participante la serviciul: Curatenie"
+    },
+    {
+      "code": "SVC_ADMINISTRARE",
+      "name": "Unități participante la serviciul: Administrare"
+    },
+    {
+      "code": "SVC_COMISION_BANCA",
+      "name": "Unități participante la serviciul: Comision Banca"
+    },
+    {
+      "code": "SVC_INTERFON",
+      "name": "Unități participante la serviciul: Interfon"
+    }
+  ],
+  "billingEntities": [
+    {
+      "code": "BE_GUTULEAC_ALEXANDRU_GUTULEAC_ALINA",
+      "name": "Guțuleac Alexandru, Guțuleac Alina",
+      "order": 1
+    },
+    {
+      "code": "BE_MATEI_VIOREL",
+      "name": "Matei Viorel",
+      "order": 2
+    },
+    {
+      "code": "BE_GEORGE_RADU_GABRIEL",
+      "name": "George Radu Gabriel",
+      "order": 3
+    },
+    {
+      "code": "BE_GAMPE_FRANCISC",
+      "name": "Gampe Francisc",
+      "order": 4
+    },
+    {
+      "code": "BE_CODREA_RUXANDRA_GEORGETA",
+      "name": "Codrea Ruxandra-Georgeta",
+      "order": 5
+    },
+    {
+      "code": "BE_PETREAN_DELIA",
+      "name": "Petrean Delia",
+      "order": 6
+    },
+    {
+      "code": "BE_CATARGIU_CONSTANTIN",
+      "name": "Catargiu Constantin",
+      "order": 7
+    },
+    {
+      "code": "BE_OLARU_POSIAR_LUCIAN",
+      "name": "Olaru-Posiar Lucian",
+      "order": 8
+    },
+    {
+      "code": "BE_KARACS_BEBE",
+      "name": "Karacs Bebe",
+      "order": 9
+    },
+    {
+      "code": "BE_FLOREA_LUCIAN",
+      "name": "Florea Lucian",
+      "order": 10
+    },
+    {
+      "code": "BE_GAMPE_DORINA_SVETLANA",
+      "name": "Gampe Dorina Svetlana",
+      "order": 11
+    },
+    {
+      "code": "BE_RADOI_ANA_MARIA",
+      "name": "Rădoi Ana-Maria",
+      "order": 12
+    },
+    {
+      "code": "BE_MARES_MARIAN_MIHAI",
+      "name": "Mareș Marian-Mihai ",
+      "order": 13
+    },
+    {
+      "code": "BE_BOITI_ZOLTAN_EMANUEL",
+      "name": "Boiti Zoltán-Emanuel",
+      "order": 14
+    },
+    {
+      "code": "BE_CABINET_AV_COLCEA_MIHAI_MIHNEA_RADU",
+      "name": "Cabinet Av.Colcea Mihai, Mihnea Radu",
+      "order": 15
+    },
+    {
+      "code": "BE_FIKL_EMIL",
+      "name": "Fikl Emil",
+      "order": 16
+    },
+    {
+      "code": "BE_DASCAL_ADRIANA",
+      "name": "Dascāl Adriana",
+      "order": 17
+    },
+    {
+      "code": "BE_GROSU_ALEXANDRU_PRICOP_ALEXANDRA",
+      "name": "Grosu Alexandru, Pricop Alexandra",
+      "order": 18
+    },
+    {
+      "code": "BE_JARDA_GHEORGHE",
+      "name": "Jarda Gheorghe",
+      "order": 19
+    },
+    {
+      "code": "BE_MACRI_NICODEMO_MACRI_FRANCESCO_MACRI_ANTONIO",
+      "name": "Macri Nicodemo, Macri Francesco, Macri Antonio",
+      "order": 20
+    },
+    {
+      "code": "BE_SOAMES_MARIANA",
+      "name": "Soames Mariana",
+      "order": 21
+    },
+    {
+      "code": "BE_PRIMARIE_TM_UAT",
+      "name": "Primārie TM UAT",
+      "order": 22
+    },
+    {
+      "code": "BE_JARDA_CRISTIAN",
+      "name": "Jarda Cristian",
+      "order": 23
+    },
+    {
+      "code": "BE_DAVID_MARIUS",
+      "name": "David Marius",
+      "order": 24
+    },
+    {
+      "code": "BE_SC_MINI_MARKET_MELTES_SRL",
+      "name": "Sc Mini Market Meltes Srl",
+      "order": 25
+    },
+    {
+      "code": "BE_SEMENESCU_MARIA_DANIELA",
+      "name": "Semenescu Maria-Daniela",
+      "order": 26
+    },
+    {
+      "code": "BE_BRINZEU_ADINA",
+      "name": "Brînzeu Adina",
+      "order": 27
+    }
+  ],
+  "structure": [
+    {
+      "code": "400191-C1-U6-AP 1",
+      "name": "AP 1",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.16,
+      "billingEntity": "BE_GUTULEAC_ALEXANDRU_GUTULEAC_ALINA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 1
+    },
+    {
+      "code": "400191-C1-U28-AP 1/B",
+      "name": "AP 1/B",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 2.21,
+      "billingEntity": "BE_MATEI_VIOREL",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 2
+    },
+    {
+      "code": "400191-C1-U9-AP 2/1",
+      "name": "AP 2/1",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 3.61,
+      "billingEntity": "BE_GEORGE_RADU_GABRIEL",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 3
+    },
+    {
+      "code": "400191-C1-U19-AP 2/2",
+      "name": "AP 2/2",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 1.99,
+      "billingEntity": "BE_GAMPE_FRANCISC",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 4
+    },
+    {
+      "code": "400191-C1-U8-AP 3",
+      "name": "AP 3",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 3.46,
+      "billingEntity": "BE_CODREA_RUXANDRA_GEORGETA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 5
+    },
+    {
+      "code": "400191-C1-U12-AP 4 (I)",
+      "name": "AP 4 (I)",
+      "residents": 1,
+      "sqm": 142.9,
+      "cpi": 6.47,
+      "billingEntity": "BE_PETREAN_DELIA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 6
+    },
+    {
+      "code": "400191-C1-U10-AP 4A",
+      "name": "AP 4A",
+      "residents": 2,
+      "sqm": null,
+      "cpi": 7.47,
+      "billingEntity": "BE_CATARGIU_CONSTANTIN",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 7
+    },
+    {
+      "code": "400191-C1-U20-AP 5 (I-A)",
+      "name": "AP 5 (I-A)",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.7,
+      "billingEntity": "BE_OLARU_POSIAR_LUCIAN",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 8
+    },
+    {
+      "code": "400191-C1-U21-AP 5 (I-B)",
+      "name": "AP 5 (I-B)",
+      "residents": 2,
+      "sqm": null,
+      "cpi": 2.76,
+      "billingEntity": "BE_KARACS_BEBE",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 9
+    },
+    {
+      "code": "400191-C1-U7-AP 6",
+      "name": "AP 6",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.74,
+      "billingEntity": "BE_FLOREA_LUCIAN",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 10
+    },
+    {
+      "code": "400191-C1-U11-AP 6A",
+      "name": "AP 6A",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.12,
+      "billingEntity": "BE_GAMPE_DORINA_SVETLANA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 11
+    },
+    {
+      "code": "400191-C1-U18-AP 8",
+      "name": "AP 8",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 3.07,
+      "billingEntity": "BE_RADOI_ANA_MARIA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 12
+    },
+    {
+      "code": "400191-C1-U29-AP 9",
+      "name": "AP 9",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.16,
+      "billingEntity": "BE_MARES_MARIAN_MIHAI",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 13
+    },
+    {
+      "code": "400191-C1-U37-AP 10A",
+      "name": "AP 10A",
+      "residents": 1,
+      "sqm": 40.17,
+      "cpi": 2.04,
+      "billingEntity": "BE_BOITI_ZOLTAN_EMANUEL",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 14
+    },
+    {
+      "code": "400191-C1-U27-AP 10B",
+      "name": "AP 10B",
+      "residents": 2,
+      "sqm": null,
+      "cpi": 2.87,
+      "billingEntity": "BE_CABINET_AV_COLCEA_MIHAI_MIHNEA_RADU",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 15
+    },
+    {
+      "code": "400191-C1-U25-AP 31",
+      "name": "AP 31",
+      "residents": 2,
+      "sqm": 120.0,
+      "cpi": 6.86,
+      "billingEntity": "BE_FIKL_EMIL",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 16
+    },
+    {
+      "code": "400191-C1-U26-AP 32",
+      "name": "AP 32",
+      "residents": 1,
+      "sqm": 120.32,
+      "cpi": 6.87,
+      "billingEntity": "BE_DASCAL_ADRIANA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 17
+    },
+    {
+      "code": "400191-C1-U30-AP 4 (III)",
+      "name": "AP 4 (III)",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.32,
+      "billingEntity": "BE_GROSU_ALEXANDRU_PRICOP_ALEXANDRA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 18
+    },
+    {
+      "code": "400191-C1-U31-AP 5 (III)",
+      "name": "AP 5 (III)",
+      "residents": 1,
+      "sqm": null,
+      "cpi": 2.86,
+      "billingEntity": "BE_JARDA_GHEORGHE",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 19
+    },
+    {
+      "code": "400191-C1-U32-AP 11",
+      "name": "AP 11",
+      "residents": 1,
+      "sqm": 41.6,
+      "cpi": 2.16,
+      "billingEntity": "BE_MACRI_NICODEMO_MACRI_FRANCESCO_MACRI_ANTONIO",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 20
+    },
+    {
+      "code": "400191-C1-U14-AP 11A",
+      "name": "AP 11A",
+      "residents": 0,
+      "sqm": 53.41,
+      "cpi": 2.75,
+      "billingEntity": "BE_MACRI_NICODEMO_MACRI_FRANCESCO_MACRI_ANTONIO",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 21
+    },
+    {
+      "code": "400191-C1-U33-AP 11B",
+      "name": "AP 11B",
+      "residents": 1,
+      "sqm": 31.56,
+      "cpi": 1.63,
+      "billingEntity": "BE_SOAMES_MARIANA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 22
+    },
+    {
+      "code": "400191-C1-U34-AP 12 (SAD 4/A)",
+      "name": "AP 12 (SAD 4/A)",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 2.297,
+      "billingEntity": "BE_PRIMARIE_TM_UAT",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 23
+    },
+    {
+      "code": "400191-C1-U34-AP 12 (SAD 4/B)",
+      "name": "AP 12 (SAD 4/B)",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 2.297,
+      "billingEntity": "BE_PRIMARIE_TM_UAT",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 24
+    },
+    {
+      "code": "400191-C1-U34-AP 12 (SAD 4/C)",
+      "name": "AP 12 (SAD 4/C)",
+      "residents": 0,
+      "sqm": null,
+      "cpi": 2.296,
+      "billingEntity": "BE_PRIMARIE_TM_UAT",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 25
+    },
+    {
+      "code": "400191-C1-U35-AP 14A",
+      "name": "AP 14A",
+      "residents": 2,
+      "sqm": 59.06,
+      "cpi": 2.84,
+      "billingEntity": "BE_JARDA_CRISTIAN",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 26
+    },
+    {
+      "code": "400191-C1-U36-AP 14B",
+      "name": "AP 14B",
+      "residents": 1,
+      "sqm": 50.05,
+      "cpi": 2.41,
+      "billingEntity": "BE_DAVID_MARIUS",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "RESIDENTIAL",
+        "TYPE_APARTAMENT",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_SALUBRITATE",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 27
+    },
+    {
+      "code": "400191-C1-U23-SPAȚIU COMERCIAL",
+      "name": "SPAȚIU COMERCIAL",
+      "residents": 0,
+      "sqm": 99.28,
+      "cpi": 4.77,
+      "billingEntity": "BE_SC_MINI_MARKET_MELTES_SRL",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "COMMERCIAL",
+        "TYPE_SAD",
+        "SVC_CURENT_SCARA",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 28
+    },
+    {
+      "code": "400191-C1-U16-SAD 2/1",
+      "name": "SAD 2/1",
+      "residents": 0,
+      "sqm": 15.6,
+      "cpi": 0.75,
+      "billingEntity": "BE_SEMENESCU_MARIA_DANIELA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_SAD",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 29
+    },
+    {
+      "code": "400191-C1-U17-SAD 2/2",
+      "name": "SAD 2/2",
+      "residents": 0,
+      "sqm": 83.03999999999999,
+      "cpi": 3.85,
+      "billingEntity": "BE_BRINZEU_ADINA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_SAD",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 30
+    },
+    {
+      "code": "400191-C1-U5-SAD 1",
+      "name": "SAD 1",
+      "residents": 0,
+      "sqm": 99.41,
+      "cpi": 4.78,
+      "billingEntity": "BE_BRINZEU_ADINA",
+      "groupCodes": [
+        "ALL_BILLABLE",
+        "SAD",
+        "TYPE_SAD",
+        "SVC_APA_RECE",
+        "SVC_APA_METEO",
+        "SVC_CURENT_SCARA",
+        "SVC_CURATENIE",
+        "SVC_ADMINISTRARE",
+        "SVC_COMISION_BANCA",
+        "SVC_INTERFON"
+      ],
+      "startPeriod": "2026-03",
+      "endPeriod": null,
+      "order": 31
+    }
+  ],
+  "measureTypes": [
+    {
+      "code": "WATER_COLD",
+      "name": "Apă rece",
+      "unit": "m3"
+    },
+    {
+      "code": "WATER_METEO",
+      "name": "Apă meteo",
+      "unit": "m3"
+    },
+    {
+      "code": "ELECTRICITY_TOTAL",
+      "name": "Energie electrică",
+      "unit": "kWh"
+    },
+    {
+      "code": "HEATING",
+      "name": "Energie termică",
+      "unit": "kWh"
+    },
+    {
+      "code": "COOLING",
+      "name": "Răcire",
+      "unit": "kWh"
+    }
+  ],
+  "meters": [
+    {
+      "name": "Contor comunitate - Apa Rece",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "Kralik",
+      "typeCode": "WATER_COLD",
+      "meterId": "COMMUNITY_WATER_COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U6-AP 1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U28-AP 1/B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U9-AP 2/1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U19-AP 2/2",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U8-AP 3",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U12-AP 4 (I)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U10-AP 4A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U20-AP 5 (I-A)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U21-AP 5 (I-B)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U7-AP 6",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U11-AP 6A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U18-AP 8",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U29-AP 9",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U37-AP 10A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U27-AP 10B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U25-AP 31",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U26-AP 32",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U30-AP 4 (III)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U31-AP 5 (III)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U32-AP 11",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U14-AP 11A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U33-AP 11B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/A)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/B)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/C)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U35-AP 14A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U36-AP 14B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U23-SPAȚIU COMERCIAL",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U16-SAD 2/1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U17-SAD 2/2",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U5-SAD 1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 2",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U6-AP 1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_2_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U28-AP 1/B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U9-AP 2/1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U19-AP 2/2",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U8-AP 3",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U12-AP 4 (I)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U10-AP 4A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U20-AP 5 (I-A)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U21-AP 5 (I-B)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U7-AP 6",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U11-AP 6A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U18-AP 8",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U29-AP 9",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U37-AP 10A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U27-AP 10B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U25-AP 31",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U26-AP 32",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U30-AP 4 (III)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U31-AP 5 (III)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U32-AP 11",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U14-AP 11A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U33-AP 11B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/A)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/B)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/C)",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U35-AP 14A",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U36-AP 14B",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U23-SPAȚIU COMERCIAL",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U16-SAD 2/1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U17-SAD 2/2",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Apa Rece 1",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U5-SAD 1",
+      "typeCode": "WATER_COLD",
+      "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Energie Electrica",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U26-AP 32",
+      "typeCode": "ELECTRICITY_TOTAL",
+      "meterId": "M_400191_C1_U26_AP_32_ELECTRICITY_TOTAL_CONTOR_ENERGIE_ELECTRICA_ARIPA_EST",
+      "origin": "METER"
+    },
+    {
+      "name": "Contor - Energie Termica",
+      "scopeType": "UNIT",
+      "scopeCode": "400191-C1-U26-AP 32",
+      "typeCode": "HEATING",
+      "meterId": "M_400191_C1_U26_AP_32_HEATING_CONTOR_ENERGIE_TERMICA_ARIPA_SUD",
+      "origin": "METER"
+    }
+  ],
+  "allocationRules": [
+    {
+      "code": "BY_CPI",
+      "name": "După cota-parte indiviză",
+      "method": "BY_SQM",
+      "params": {
+        "weightSource": "cpi",
+        "weights": {
+          "400191-C1-U6-AP 1": 2.16,
+          "400191-C1-U28-AP 1/B": 2.21,
+          "400191-C1-U9-AP 2/1": 3.61,
+          "400191-C1-U19-AP 2/2": 1.99,
+          "400191-C1-U8-AP 3": 3.46,
+          "400191-C1-U12-AP 4 (I)": 6.47,
+          "400191-C1-U10-AP 4A": 7.47,
+          "400191-C1-U20-AP 5 (I-A)": 2.7,
+          "400191-C1-U21-AP 5 (I-B)": 2.76,
+          "400191-C1-U7-AP 6": 2.74,
+          "400191-C1-U11-AP 6A": 2.12,
+          "400191-C1-U18-AP 8": 3.07,
+          "400191-C1-U29-AP 9": 2.16,
+          "400191-C1-U37-AP 10A": 2.04,
+          "400191-C1-U27-AP 10B": 2.87,
+          "400191-C1-U25-AP 31": 6.86,
+          "400191-C1-U26-AP 32": 6.87,
+          "400191-C1-U30-AP 4 (III)": 2.32,
+          "400191-C1-U31-AP 5 (III)": 2.86,
+          "400191-C1-U32-AP 11": 2.16,
+          "400191-C1-U14-AP 11A": 2.75,
+          "400191-C1-U33-AP 11B": 1.63,
+          "400191-C1-U34-AP 12 (SAD 4/A)": 2.297,
+          "400191-C1-U34-AP 12 (SAD 4/B)": 2.297,
+          "400191-C1-U34-AP 12 (SAD 4/C)": 2.296,
+          "400191-C1-U35-AP 14A": 2.84,
+          "400191-C1-U36-AP 14B": 2.41,
+          "400191-C1-U23-SPAȚIU COMERCIAL": 4.77,
+          "400191-C1-U16-SAD 2/1": 0.75,
+          "400191-C1-U17-SAD 2/2": 3.85,
+          "400191-C1-U5-SAD 1": 4.78
+        }
+      }
+    },
+    {
+      "code": "BY_RESIDENTS",
+      "name": "După numărul de persoane",
+      "method": "BY_RESIDENTS",
+      "params": {}
+    },
+    {
+      "code": "BY_WATER_COLD",
+      "name": "După consumul de apă rece",
+      "method": "BY_CONSUMPTION",
+      "params": {
+        "measureType": "WATER_COLD"
+      }
+    },
+    {
+      "code": "EQUAL",
+      "name": "Egal pe unitate",
+      "method": "EQUAL",
+      "params": {}
+    }
+  ],
+  "aggregations": [],
+  "derivedMeters": [],
+  "expenseSplits": [
+    {
+      "id": "SPLIT_APA_RECE",
+      "expenseTypeCode": "APA_RECE",
+      "name": "Apa Rece",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_APA_METEO",
+      "expenseTypeCode": "APA_METEO",
+      "name": "Apa Meteo",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_METEO"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_CURENT_SCARA",
+      "expenseTypeCode": "CURENT_SCARA",
+      "name": "Curent Scara",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURENT_SCARA"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_SALUBRITATE",
+      "expenseTypeCode": "SALUBRITATE",
+      "name": "Salubritate",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_SALUBRITATE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_CURATENIE",
+      "expenseTypeCode": "CURATENIE",
+      "name": "Curatenie",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURATENIE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_ADMINISTRARE",
+      "expenseTypeCode": "ADMINISTRARE",
+      "name": "Administrare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_ADMINISTRARE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_COMISION_BANCA",
+      "expenseTypeCode": "COMISION_BANCA",
+      "name": "Comision Banca",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_COMISION_BANCA"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_INTERFON",
+      "expenseTypeCode": "INTERFON",
+      "name": "Interfon",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_INTERFON"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "code": "BANK_LIBRA_RON",
+      "name": "Libra - RON",
+      "type": "BANK",
+      "currency": "RON",
+      "defaultFundCode": "EXPENSES",
+      "iban": "RO31 BREL 0002 0022 7438 0100",
+      "bank": "Libra"
+    },
+    {
+      "code": "CASH_RON",
+      "name": "Casă numerar RON",
+      "type": "PETTY",
+      "currency": "RON",
+      "defaultFundCode": "EXPENSES"
+    }
+  ]
+}

@@ -1,9 +1,11 @@
+import { Feature } from '../../common/decorators/feature.decorator'
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { FundService } from './fund.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 
 @Controller('communities/:communityId/funds')
+@Feature('funds')
 export class FundController {
   constructor(private readonly svc: FundService) {}
 

@@ -44,6 +44,13 @@ export function AuthProvider({ children, baseUrl, storage }: AuthProviderProps) 
     storage.save(auth)
   }, [auth, storage])
 
+  // Keep the current "act as" role in a ref so the (memoized) api client always reads
+  // the latest selection without being recreated on every role switch.
+  const activeRoleRef = React.useRef(auth.activeRole)
+  React.useEffect(() => {
+    activeRoleRef.current = auth.activeRole
+  }, [auth.activeRole])
+
   // Keep roles in sync with current access token (they live in JWT).
   React.useEffect(() => {
     const rolesFromToken = decodeRoles(auth.accessToken)
@@ -69,12 +76,24 @@ export function AuthProvider({ children, baseUrl, storage }: AuthProviderProps) 
 
   const setTokensWithRoles = React.useCallback((data: { accessToken?: string; refreshToken?: string; user?: User | null }) => {
     const roles = decodeRoles(data.accessToken)
-    setAuth((prev) => ({
-      ...prev,
-      ...data,
-      roles,
-      activeRole: roles.length ? roles[0] : null,
-    }))
+    setAuth((prev) => {
+      // Preserve the user's chosen role across token refreshes / reloads (only fall back
+      // to the first role when the previous choice is no longer available in the new token).
+      const keep = prev.activeRole
+        ? roles.find(
+            (r) =>
+              r.role === prev.activeRole?.role &&
+              r.scopeType === prev.activeRole?.scopeType &&
+              r.scopeId === prev.activeRole?.scopeId,
+          )
+        : undefined
+      return {
+        ...prev,
+        ...data,
+        roles,
+        activeRole: keep ?? (roles.length ? roles[0] : null),
+      }
+    })
   }, [])
 
   const api = React.useMemo(
@@ -84,6 +103,7 @@ export function AuthProvider({ children, baseUrl, storage }: AuthProviderProps) 
         getTokens: () => ({ accessToken: auth.accessToken, refreshToken: auth.refreshToken }),
         saveTokens: (tokens) => setTokensWithRoles(tokens),
         onUnauthorized: clearAuth,
+        getActiveRole: () => activeRoleRef.current,
       }),
     [apiBase, auth.accessToken, auth.refreshToken, clearAuth, setTokensWithRoles],
   )

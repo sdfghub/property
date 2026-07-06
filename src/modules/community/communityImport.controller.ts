@@ -11,6 +11,8 @@ type OpeningRow = {
   communityId: string
   periodCode: string
   beCode: string
+  fundCode?: string
+  unitCode?: string
   amount: number
   currency?: string
 }
@@ -19,6 +21,7 @@ type OpeningUnitRow = {
   communityId: string
   periodCode: string
   unitCode: string
+  fundCode: string
   amount: number
   currency?: string
 }
@@ -68,23 +71,76 @@ export class CommunityImportController {
         select: { id: true },
       })
       if (!be) continue
-      await this.prisma.beOpeningBalance.upsert({
-        where: {
-          communityId_periodId_billingEntityId: {
+      let fundId: string | null = null
+      if (r.fundCode) {
+        const fund = await this.prisma.fund.findUnique({
+          where: { communityId_code: { code: r.fundCode, communityId: r.communityId } },
+          select: { id: true },
+        })
+        if (!fund) continue
+        fundId = fund.id
+      }
+      let unitId: string | null = null
+      if (r.unitCode) {
+        const unit = await this.prisma.unit.findUnique({
+          where: { code_communityId: { code: r.unitCode, communityId: r.communityId } },
+          select: { id: true },
+        })
+        if (!unit) continue
+        unitId = unit.id
+      }
+      if (fundId == null || unitId == null) {
+        const existing = await this.prisma.beOpeningBalance.findFirst({
+          where: {
             communityId: r.communityId,
             periodId: period.id,
             billingEntityId: be.id,
+            fundId,
+            unitId,
           },
-        },
-        update: { amount: Number(r.amount), currency: r.currency ?? 'RON' },
-        create: {
-          communityId: r.communityId,
-          periodId: period.id,
-          billingEntityId: be.id,
-          amount: Number(r.amount),
-          currency: r.currency ?? 'RON',
-        },
-      })
+          select: { id: true },
+        })
+        if (existing?.id) {
+          await this.prisma.beOpeningBalance.update({
+            where: { id: existing.id },
+            data: { amount: Number(r.amount), currency: r.currency ?? 'RON' },
+          })
+        } else {
+          await this.prisma.beOpeningBalance.create({
+            data: {
+              communityId: r.communityId,
+              periodId: period.id,
+              billingEntityId: be.id,
+              fundId,
+              unitId,
+              amount: Number(r.amount),
+              currency: r.currency ?? 'RON',
+            },
+          })
+        }
+      } else {
+        await this.prisma.beOpeningBalance.upsert({
+          where: {
+            communityId_periodId_billingEntityId_fundId_unitId: {
+              communityId: r.communityId,
+              periodId: period.id,
+              billingEntityId: be.id,
+              fundId,
+              unitId,
+            },
+          },
+          update: { amount: Number(r.amount), currency: r.currency ?? 'RON' },
+          create: {
+            communityId: r.communityId,
+            periodId: period.id,
+            billingEntityId: be.id,
+            fundId,
+            unitId,
+            amount: Number(r.amount),
+            currency: r.currency ?? 'RON',
+          },
+        })
+      }
       count += 1
     }
     return { ok: true, count }
@@ -95,9 +151,18 @@ export class CommunityImportController {
   async importOpeningUnits(@Body() body: any) {
     const rows: OpeningUnitRow[] = Array.isArray(body?.rows) ? body.rows : body
     if (!Array.isArray(rows)) throw new Error('rows must be an array')
-    const aggregates = new Map<string, { communityId: string; periodId: string; beId: string; currency: string; amount: number }>()
+    const entries: Array<{
+      communityId: string
+      periodId: string
+      beId: string
+      unitId: string
+      fundId: string
+      currency: string
+      amount: number
+    }> = []
     for (const r of rows) {
       if (!r?.communityId || !r?.periodCode || !r?.unitCode) continue
+      if (!r?.fundCode) continue
       if (!Number.isFinite(Number(r.amount))) continue
       const period = await this.prisma.period.findUnique({
         where: { communityId_code: { communityId: r.communityId, code: r.periodCode } },
@@ -109,6 +174,11 @@ export class CommunityImportController {
         select: { id: true },
       })
       if (!unit) continue
+      const fund = await this.prisma.fund.findUnique({
+        where: { communityId_code: { code: r.fundCode, communityId: r.communityId } },
+        select: { id: true },
+      })
+      if (!fund) continue
       const bem = await this.prisma.billingEntityMember.findFirst({
         where: {
           unitId: unit.id,
@@ -118,25 +188,26 @@ export class CommunityImportController {
         select: { billingEntityId: true },
       })
       if (!bem) continue
-      const key = `${r.communityId}::${period.id}::${bem.billingEntityId}`
-      const entry = aggregates.get(key) ?? {
+      entries.push({
         communityId: r.communityId,
         periodId: period.id,
         beId: bem.billingEntityId,
+        unitId: unit.id,
+        fundId: fund.id,
         currency: r.currency ?? 'RON',
-        amount: 0,
-      }
-      entry.amount += Number(r.amount)
-      aggregates.set(key, entry)
+        amount: Number(r.amount),
+      })
     }
     let count = 0
-    for (const agg of aggregates.values()) {
+    for (const agg of entries) {
       await this.prisma.beOpeningBalance.upsert({
         where: {
-          communityId_periodId_billingEntityId: {
+          communityId_periodId_billingEntityId_fundId_unitId: {
             communityId: agg.communityId,
             periodId: agg.periodId,
             billingEntityId: agg.beId,
+            fundId: agg.fundId,
+            unitId: agg.unitId,
           },
         },
         update: { amount: agg.amount, currency: agg.currency },
@@ -144,6 +215,8 @@ export class CommunityImportController {
           communityId: agg.communityId,
           periodId: agg.periodId,
           billingEntityId: agg.beId,
+          fundId: agg.fundId,
+          unitId: agg.unitId,
           amount: agg.amount,
           currency: agg.currency,
         },

@@ -1,4 +1,3 @@
-import React from 'react'
 import { CommunityConfigViewer } from '../CommunityConfigViewer'
 
 type Props = {

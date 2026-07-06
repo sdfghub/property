@@ -1,0 +1,602 @@
+{
+    "items": [
+        {
+            "kind": "PRINCIPAL",
+            "amount": 297.62,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U10-AP 4A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 436.18,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U11-AP 6A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 949.51,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U12-AP 4 (I)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 1248.97,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U14-AP 11A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 39.73,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U16-SAD 2/1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 1321.22,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U17-SAD 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 556.51,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U18-AP 8"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 457.29,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U19-AP 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 250.00,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U20-AP 5 (I-A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 354.41,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U23-SPAȚIU COMERCIAL"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 397.05,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U27-AP 10B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 13579.83,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U28-AP 1/B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 149.20,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U31-AP 5 (III)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 1672.22,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U32-AP 11"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 387.10,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U33-AP 11B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 41.39,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 342.54,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -78.57,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/C)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -19.27,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U35-AP 14A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 345.92,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U36-AP 14B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 360.77,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U37-AP 10A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 972.56,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U5-SAD 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 419.42,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U6-AP 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 388.40,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U7-AP 6"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 153.02,
+            "fundCode": "EXPENSES",
+            "unitCode": "400191-C1-U9-AP 2/1"
+        },
+        {
+            "kind": "PENALTY",
+            "amount": 4109.42,
+            "fundCode": "PENALIZARI",
+            "unitCode": "400191-C1-U28-AP 1/B",
+            "sourceFund": "EXPENSES"
+        },
+        {
+            "kind": "PENALTY",
+            "amount": 148.14,
+            "fundCode": "PENALIZARI",
+            "unitCode": "400191-C1-U32-AP 11",
+            "sourceFund": "EXPENSES"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 763.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U10-AP 4A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 216.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U11-AP 6A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 661.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U12-AP 4 (I)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -289.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U14-AP 11A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -13482.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U16-SAD 2/1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -1392.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U17-SAD 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 612.96,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U18-AP 8"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 545.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U19-AP 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 48.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U20-AP 5 (I-A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 510.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U21-AP 5 (I-B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 2196.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U23-SPAȚIU COMERCIAL"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 701.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U25-AP 31"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 702.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U26-AP 32"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 293.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U27-AP 10B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 6966.19,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U28-AP 1/B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 221.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U29-AP 9"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 237.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U30-AP 4 (III)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 292.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U31-AP 5 (III)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -5743.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U32-AP 11"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -3821.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U33-AP 11B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -270.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 7958.57,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -33.37,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/C)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 1050.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U35-AP 14A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -627.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U36-AP 14B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 252.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U37-AP 10A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 15717.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U5-SAD 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 221.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U6-AP 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 280.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U7-AP 6"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 353.00,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U8-AP 3"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 3532.86,
+            "fundCode": "REABILITARE_1",
+            "unitCode": "400191-C1-U9-AP 2/1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 27437.43,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U10-AP 4A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 27887.19,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U11-AP 6A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 44365.11,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U12-AP 4 (I)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 23352.90,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U14-AP 11A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 1361.80,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U17-SAD 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 29076.40,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U18-AP 8"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 22009.09,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U19-AP 2/2"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 41956.22,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U20-AP 5 (I-A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 32851.09,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U21-AP 5 (I-B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 84347.26,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U23-SPAȚIU COMERCIAL"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 11314.48,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U25-AP 31"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 47106.00,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U26-AP 32"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 19679.33,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U27-AP 10B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 38079.10,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U28-AP 1/B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -2128.35,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U31-AP 5 (III)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 12928.71,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U32-AP 11"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 14823.07,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U33-AP 11B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 39595.35,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/A)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 40597.23,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 40597.23,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/C)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 47047.34,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U35-AP 14A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 37084.29,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U37-AP 10A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 18249.96,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U6-AP 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 13663.44,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U7-AP 6"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -7000.00,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U8-AP 3"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 63835.12,
+            "fundCode": "REABILITARE_2",
+            "unitCode": "400191-C1-U9-AP 2/1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 294.49,
+            "fundCode": "REPARATII",
+            "unitCode": "400191-C1-U23-SPAȚIU COMERCIAL"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 150.64,
+            "fundCode": "REPARATII",
+            "unitCode": "400191-C1-U28-AP 1/B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 165.62,
+            "fundCode": "REPARATII",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 180.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U14-AP 11A"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 250.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U18-AP 8"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 280.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U23-SPAȚIU COMERCIAL"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 30.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U26-AP 32"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 20.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U27-AP 10B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 280.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U28-AP 1/B"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 100.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U29-AP 9"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 210.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U32-AP 11"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 246.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U34-AP 12 (SAD 4/B)"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 280.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U5-SAD 1"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": -10.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U8-AP 3"
+        },
+        {
+            "kind": "PRINCIPAL",
+            "amount": 30.00,
+            "fundCode": "RULMENT",
+            "unitCode": "400191-C1-U9-AP 2/1"
+        }
+    ],
+    "currency": "RON",
+    "periodCode": "2026-03"
+}

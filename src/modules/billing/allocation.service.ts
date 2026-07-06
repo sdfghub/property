@@ -7,67 +7,39 @@ type PeriodRef = { id: string; seq: number; code: string }
 
 @Injectable()
 export class AllocationService {
-  private formatDisplay(meta: any, ctx?: { description?: string; amount?: number; meterLabels?: Map<string, string> }) {
-    const subject = meta?.splitNode?.name || meta?.splitNode?.id || ctx?.description || meta?.allocationMethod || 'allocation'
-    const method = meta?.allocation?.method || meta?.allocationMethod
-    const basis = meta?.allocation?.basis || meta?.basis
-    const weight = meta?.weightSource || meta?.allocation?.weightSource
-    const unitMeasure = meta?.unitMeasure
-    const totalMeasure = meta?.totalMeasure
-    const derived = meta?.splitNode?.derivedShare
-    const meterLookup = ctx?.meterLabels
-
-    const totalMeterLabel =
-      (derived?.totalMeterId && meterLookup?.get(derived.totalMeterId)) || derived?.totalMeterLabel || null
-    const partMeterLabel =
-      (derived?.partMeterId && meterLookup?.get(derived.partMeterId)) || derived?.partMeterLabel || null
-
-    let displayKey = 'alloc.leaf.generic'
-    if (weight === 'explicit') displayKey = 'alloc.leaf.explicit'
-    else if (weight === 'equal') displayKey = 'alloc.leaf.equal'
-    else if (typeof unitMeasure === 'number' && typeof totalMeasure === 'number') displayKey = 'alloc.leaf.measure'
-    if (derived?.meterType) displayKey = 'alloc.leaf.derived'
-
-    const displayParams: any = {
-      subject,
-      method,
-      basisType: basis?.type,
-      basisCode: basis?.code,
-      weightSource: weight,
-      unitMeasure,
-      totalMeasure,
-      meterType: derived?.meterType,
-      totalMeterId: totalMeterLabel || derived?.totalMeterId,
-      partMeterId: partMeterLabel || derived?.partMeterId,
-      totalMeterLabel,
-      partMeterLabel,
-      amount: ctx?.amount,
-      expenseDescription: ctx?.description,
-    }
-
-    const parts: string[] = []
-    if (method && basis?.type) {
-      parts.push(`${subject}: ${method} on ${basis.type}${basis.code ? `:${basis.code}` : ''}`)
-    } else if (method) {
-      parts.push(`${subject}: ${method}`)
-    } else {
-      parts.push(subject)
-    }
-    if (weight) parts.push(`weight source ${weight}`)
-    if (typeof unitMeasure === 'number' && typeof totalMeasure === 'number') {
-      parts.push(`measure ${unitMeasure}/${totalMeasure}`)
-    }
-    if (derived?.meterType) {
-      const tot = derived.totalMeterId ? `/${totalMeterLabel || derived.totalMeterId}` : ''
-      const part = derived.partMeterId ? ` part=${partMeterLabel || derived.partMeterId}` : ''
-      parts.push(`derived from ${derived.meterType}${tot}${part}`)
-    }
-    if (typeof ctx?.amount === 'number') parts.push(`amount ${ctx.amount}`)
-
-    return { display: parts.join('. '), displayKey, displayParams }
-  }
-
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Per-unit measures for an allocation weight source.
+   *
+   * SQM and RESIDENTS (persoane) are static unit attributes, not monthly readings, so they carry
+   * forward: each unit uses the value from the most recent period (by seq) at or before this period in
+   * which it was defined — typically only the first/onboarding period actually carries them. Meter /
+   * consumption measures are genuinely period-specific and are read from the current period only.
+   */
+  private async unitMeasuresForWeight(
+    communityId: string,
+    typeCode: string,
+    period: { id: string; seq: number },
+  ): Promise<Array<{ scopeId: string; value: any; meterId: string | null }>> {
+    const isStatic = typeCode === 'SQM' || typeCode === 'RESIDENTS'
+    if (!isStatic) {
+      return this.prisma.periodMeasure.findMany({
+        where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode },
+        select: { scopeId: true, value: true, meterId: true },
+      })
+    }
+    return this.prisma.$queryRawUnsafe(
+      `select distinct on (pm.scope_id)
+              pm.scope_id as "scopeId", pm.value, pm.meter_id as "meterId"
+         from period_measure pm
+         join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.type_code = $2
+          and pm.scope_type::text = 'UNIT' and p.seq <= $3
+        order by pm.scope_id, p.seq desc`,
+      communityId, typeCode, period.seq,
+    )
+  }
 
   async createExpense(
     communityId: string,
@@ -441,20 +413,6 @@ export class AllocationService {
             const weight = (Number(raw) || 0) / total
             const amt = amount * weight
             perUnit[unitCode] = { weight, amount: amt }
-            const display = this.formatDisplay(
-              { allocationMethod: method, basis, weight, weightSource: 'explicit', splitNode: leaf },
-              { description: input.description, amount: amt, meterLabels },
-            )
-            const meta = {
-              allocationMethod: method,
-              basis: basis ?? null,
-              weight,
-              weightSource: 'explicit',
-              splitNode: leaf,
-              display: display.display,
-              displayKey: display.displayKey,
-              displayParams: display.displayParams,
-            }
             const beId = unitBe.get(unit.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -462,7 +420,7 @@ export class AllocationService {
               source: 'ALLOC',
               expenseType: expenseTypeCode,
               splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'explicit' },
+              allocation: { method, basis, weightSource: 'explicit', unitMeasure: Number(raw), totalMeasure: total, base: amount },
             }
             const fundLines = linesByFund.get(fundId) ?? []
             fundLines.push({ unitId: unit.id, beId, amount: amt, meta: lineMeta })
@@ -527,20 +485,6 @@ export class AllocationService {
           const per = amount / units.length
           for (const u of units) {
             perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            const display = this.formatDisplay(
-              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal', splitNode: leaf },
-              { description: input.description, amount: per, meterLabels },
-            )
-          const meta = {
-            allocationMethod: method,
-            basis: basis ?? null,
-            weight: 1 / units.length,
-            weightSource: 'equal',
-            splitNode: leaf,
-            display: display.display,
-            displayKey: display.displayKey,
-            displayParams: display.displayParams,
-          }
             const beId = unitBe.get(u.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -548,7 +492,7 @@ export class AllocationService {
               source: 'ALLOC',
               expenseType: expenseTypeCode,
               splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'equal' },
+              allocation: { method, basis, weightSource: 'equal', unitMeasure: 1, totalMeasure: units.length, base: amount },
             }
             const fundLines = linesByFund.get(fundId) ?? []
             fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
@@ -603,28 +547,11 @@ export class AllocationService {
 
         if (!typeCode) throw new ForbiddenException('Missing weight source for allocation')
 
-        const measures = await this.prisma.periodMeasure.findMany({
-          where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode },
-          select: { scopeId: true, value: true, meterId: true },
-        })
+        const measures = await this.unitMeasuresForWeight(communityId, typeCode, period)
         if (!measures.length) {
           const per = amount / units.length
           for (const u of units) {
             perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            const display = this.formatDisplay(
-              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal-fallback', splitNode: leaf },
-              { description: input.description, amount: per, meterLabels },
-            )
-            const meta = {
-              allocationMethod: method,
-              basis: basis ?? null,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              splitNode: leaf,
-              display: display.display,
-              displayKey: display.displayKey,
-              displayParams: display.displayParams,
-            }
             const beId = unitBe.get(u.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -632,7 +559,7 @@ export class AllocationService {
               source: 'ALLOC',
               expenseType: expenseTypeCode,
               splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'equal-fallback' },
+              allocation: { method, basis, weightSource: 'equal-fallback', unitMeasure: 1, totalMeasure: units.length, base: amount },
             }
             const fundLines = linesByFund.get(fundId) ?? []
             fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
@@ -699,20 +626,6 @@ export class AllocationService {
           const per = amount / units.length
           for (const u of units) {
             perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            const display = this.formatDisplay(
-              { allocationMethod: method, basis, weight: 1 / units.length, weightSource: 'equal-fallback', splitNode: leaf },
-              { description: input.description, amount: per, meterLabels },
-            )
-            const meta = {
-              allocationMethod: method,
-              basis: basis ?? null,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              splitNode: leaf,
-              display: display.display,
-              displayKey: display.displayKey,
-              displayParams: display.displayParams,
-            }
             const beId = unitBe.get(u.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -720,7 +633,7 @@ export class AllocationService {
               source: 'ALLOC',
               expenseType: expenseTypeCode,
               splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'equal-fallback' },
+              allocation: { method, basis, weightSource: 'equal-fallback', unitMeasure: 1, totalMeasure: units.length, base: amount },
             }
             const fundLines = linesByFund.get(fundId) ?? []
             fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
@@ -782,30 +695,6 @@ export class AllocationService {
           const weight = val / total
           const amt = amount * weight
           perUnit[u.code] = { weight, amount: amt }
-          const display = this.formatDisplay(
-            {
-              allocationMethod: method,
-              basis,
-              weight,
-              weightSource: typeCode,
-              unitMeasure: val,
-              totalMeasure: total,
-              splitNode: leaf,
-            },
-            { description: input.description, amount: amt, meterLabels },
-          )
-          const meta = {
-            allocationMethod: method,
-            basis: basis ?? null,
-            weight,
-            weightSource: typeCode,
-            unitMeasure: val,
-            totalMeasure: total,
-            splitNode: leaf,
-            display: display.display,
-            displayKey: display.displayKey,
-            displayParams: display.displayParams,
-          }
           const beId = unitBe.get(u.id)
           if (!beId) continue
           const fundId = defaultFundId
@@ -813,7 +702,7 @@ export class AllocationService {
             source: 'ALLOC',
             expenseType: expenseTypeCode,
             splitNodeId: leaf?.id ?? null,
-            allocation: { method, basis, weightSource: typeCode, unitMeasure: val, totalMeasure: total },
+            allocation: { method, basis, weightSource: typeCode, unitMeasure: val, totalMeasure: total, base: amount },
           }
           const fundLines = linesByFund.get(fundId) ?? []
           fundLines.push({ unitId: u.id, beId, amount: amt, meta: lineMeta })
@@ -891,7 +780,7 @@ export class AllocationService {
         }
       }
 
-      const processSplits = async (nodes: any[], amount: number, parentId: string | null, trail: any[]) => {
+      const processSplits = async (nodes: any[], amount: number, _parentId: string | null, trail: any[]) => {
         await resolveShares(nodes)
         for (const node of nodes) {
           const share = node._resolvedShare ?? node.share
@@ -953,18 +842,6 @@ export class AllocationService {
           const amount = Number(entry.amount) || 0
           const weight = amount / total
           perUnit[unitCode] = { weight, amount }
-          const display = this.formatDisplay(
-            { allocationMethod: method, weight, weightSource: 'explicit' },
-            { description: input.description, amount, meterLabels },
-          )
-          const meta = {
-            allocationMethod: method,
-            weight,
-            weightSource: 'explicit',
-            display: display.display,
-            displayKey: display.displayKey,
-            displayParams: display.displayParams,
-          }
           const beId = unitBe.get(unit.id)
           if (!beId) continue
           const fundId = defaultFundId
@@ -1039,18 +916,6 @@ export class AllocationService {
           const share = (Number(raw) || 0) / total
           const amount = Number(input.amount) * share
           perUnit[unitCode] = { weight: share, amount }
-          const display = this.formatDisplay(
-            { allocationMethod: method, weight: share, weightSource: 'explicit' },
-            { description: input.description, amount, meterLabels },
-          )
-          const meta = {
-            allocationMethod: method,
-            weight: share,
-            weightSource: 'explicit',
-            display: display.display,
-            displayKey: display.displayKey,
-            displayParams: display.displayParams,
-          }
           const beId = unitBe.get(unit.id)
           if (!beId) continue
           const fundId = defaultFundId
@@ -1103,24 +968,12 @@ export class AllocationService {
 
         const units = await this.prisma.unit.findMany({ where: { communityId }, select: { id: true, code: true } })
         const perUnit: Record<string, { weight: number; amount: number }> = {}
-        const measures = await this.prisma.periodMeasure.findMany({
-          where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode },
-          select: { scopeId: true, value: true },
-        })
+        const measures = await this.unitMeasuresForWeight(communityId, typeCode, period)
         if (!measures.length) {
           const per = Number(input.amount) / units.length
           for (const u of units) {
             const amount = per
             perUnit[u.code] = { weight: 1 / units.length, amount }
-            const meta = {
-              allocationMethod: method,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              display: this.formatDisplay(
-                { allocationMethod: method, weight: 1 / units.length, weightSource: 'equal-fallback' },
-                { description: input.description, amount, meterLabels },
-              ),
-            }
             const beId = unitBe.get(u.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -1179,15 +1032,6 @@ export class AllocationService {
           for (const u of units) {
             const amount = per
             perUnit[u.code] = { weight: 1 / units.length, amount }
-            const meta = {
-              allocationMethod: method,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              display: this.formatDisplay(
-                { allocationMethod: method, weight: 1 / units.length, weightSource: 'equal-fallback' },
-                { description: input.description, amount, meterLabels },
-              ),
-            }
             const beId = unitBe.get(u.id)
             if (!beId) continue
             const fundId = defaultFundId
@@ -1238,17 +1082,6 @@ export class AllocationService {
           const weight = val / total
           const amount = Number(input.amount) * weight
           perUnit[u.code] = { weight, amount }
-          const meta = {
-            allocationMethod: method,
-            weight,
-            weightSource: typeCode,
-            unitMeasure: val,
-            totalMeasure: total,
-            display: this.formatDisplay(
-              { allocationMethod: method, weight, weightSource: typeCode, unitMeasure: val, totalMeasure: total },
-              { description: input.description, amount, meterLabels },
-            ),
-          }
           const beId = unitBe.get(u.id)
           if (!beId) continue
           const fundId = defaultFundId

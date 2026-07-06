@@ -148,7 +148,7 @@ export function MainScreen() {
     if (!beId || !isExpensesView) return
     setLoading(true)
     api
-      .get<PeriodRef[]>(`/communities/be/${beId}/periods`)
+      .get<PeriodRef[]>(`/communities/be/${beId}/periods/closed`)
       .then((data) => {
         setPeriods(data)
         if (!selected && data.length) setSelected(data[data.length - 1].code)
