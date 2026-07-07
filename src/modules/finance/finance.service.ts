@@ -435,11 +435,16 @@ export class FinanceService {
       const rate = Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0) / 100
       const ratePerDayPct = Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
       const firstPenal = new Date(b.firstPenalDay)
-      let daysToDate = 0 // cumulative penalizable days this bucket has been overdue, across periods
+      const due = b.dueDate ? new Date(b.dueDate) : null
+      let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
       const hist = (periodsByBucket.get(b.bucketId) ?? []).map((pr) => {
+        // Zile: days actually penalized in THIS period (counted from firstPenalDay, i.e. after grace).
         const lo = firstPenal > new Date(pr.startDate) ? firstPenal : new Date(pr.startDate)
         const days = countDays(lo, new Date(pr.endDate))
-        daysToDate += days
+        penalDaysToDate += days
+        // Total zile: total AGE of the debt = days overdue since scadența through this period's end
+        // (the grace month included). Falls back to penalized-days when the bucket has no due date.
+        const daysToDate = due ? countDays(new Date(due.getTime() + DAY), new Date(pr.endDate)) : penalDaysToDate
         return {
           periodCode: pr.periodCode,
           principalRemaining: round2(pr.principalRemaining),
@@ -451,7 +456,7 @@ export class FinanceService {
           current: pr.periodCode === p.code,
         }
       })
-      const totalDays = daysToDate // total days overdue through the latest period shown
+      const totalDays = hist.length ? hist[hist.length - 1].daysToDate : 0 // total age through latest period
       const cur = hist.find((h) => h.current)
       const last = hist[hist.length - 1]
       const postedThis = cur?.penaltyPosted ?? 0
