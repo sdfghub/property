@@ -58,14 +58,20 @@ export class PeriodService {
     const code = explicitCode || this.inferPeriodCode(last?.code, nextSeq)
     const existing = await this.prisma.period.findUnique({ where: { communityId_code: { communityId, code } } })
     if (existing) throw new ConflictException(`Period ${code} already exists`)
+    // Derive the period's real month bounds from a YYYY-MM code — the penalty engine counts
+    // penalizable days within [startDate, endDate], so these must be the actual month, not "today".
+    // dueDate (scadența) stays null: the association admin sets it explicitly.
+    const mm = /^(\d{4})-(\d{2})$/.exec(code)
+    const startDate = mm ? new Date(Date.UTC(Number(mm[1]), Number(mm[2]) - 1, 1)) : new Date()
+    const endDate = mm ? new Date(Date.UTC(Number(mm[1]), Number(mm[2]), 0)) : new Date()
     const created = await this.prisma.period.create({
       data: {
         communityId,
         code,
         seq: nextSeq,
         status: 'OPEN',
-        startDate: new Date(),
-        endDate: new Date(),
+        startDate,
+        endDate,
       },
       select: { id: true, code: true, status: true, seq: true },
     })

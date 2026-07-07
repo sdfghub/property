@@ -55,6 +55,19 @@ async function detectBaseUrl() {
 
 const readJson = (filePath: string) => JSON.parse(fs.readFileSync(filePath, 'utf8'))
 
+// Auto-import scadență convention: due = 20th of the month FOLLOWING the period.
+// (In normal use the association admin sets the due date explicitly; here we set it so the
+// 30-day penalty grace applies instead of penalties accruing from the first month.)
+const dueDate20thNextMonth = (periodCode: string) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(periodCode)
+  if (!m) throw new Error(`Invalid period code for due date: ${periodCode}`)
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const ny = mo === 12 ? y + 1 : y
+  const nm = mo === 12 ? 1 : mo + 1
+  return `${ny}-${String(nm).padStart(2, '0')}-20`
+}
+
 const parseCsvRows = (filePath: string) => {
   const raw = fs.readFileSync(filePath, 'utf8')
   return raw
@@ -223,6 +236,10 @@ async function main() {
       existingPeriods.add(periodCode)
       console.log(`✔ Period created ${periodCode}`)
     }
+    // Set scadența (auto-import convention: 20th of the next month) so the penalty grace applies.
+    const dueDate = dueDate20thNextMonth(periodCode)
+    await request('POST', `/communities/${communityId}/periods/${periodCode}/due-date`, { dueDate }, token)
+    console.log(`✔ Due date set ${periodCode} → ${dueDate}`)
   }
 
   const billTemplatesByCode = new Map<string, { items: any[] }>()
@@ -386,6 +403,7 @@ async function main() {
     if (!Array.isArray(openAfter) || openAfter.length === 0) {
       console.log(`Creating next open period ${nextCode} for payments...`)
       await request('POST', `/communities/${communityId}/periods/create`, { code: nextCode }, token)
+      await request('POST', `/communities/${communityId}/periods/${nextCode}/due-date`, { dueDate: dueDate20thNextMonth(nextCode) }, token)
     }
   }
 
