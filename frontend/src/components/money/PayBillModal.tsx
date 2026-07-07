@@ -7,7 +7,11 @@ import { FundSelect } from './FundSelect'
 import { ReceiptPrintView, ReceiptData } from './ReceiptPrintView'
 import { money, num2 } from './money-utils'
 
-type Invoice = { id: string; number?: string; vendor?: string; currency?: string; gross: number; paid: number; outstanding: number }
+type Invoice = { id: string; number?: string; vendor?: string; currency?: string; gross: number; paid: number; outstanding: number; dueDate?: string | null }
+
+const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : '')
+// Unpaid + due date in the past = overdue (day granularity, local midnight).
+const isOverdue = (d?: string | null) => !!d && new Date(d) < new Date(new Date().toDateString())
 
 export function PayBillModal({
   communityId,
@@ -135,12 +139,17 @@ export function PayBillModal({
                 <option value="">{t('paybill.select', 'Selectează factura')}</option>
                 {invoices.map((i) => (
                   <option key={i.id} value={i.id}>
-                    {(i.number || '—')} · {i.vendor || '—'} · {money(i.outstanding, i.currency)}
+                    {(i.number || '—')} · {i.vendor || '—'} · {money(i.outstanding, i.currency)}{i.dueDate ? ` · scad. ${fmtDate(i.dueDate)}${isOverdue(i.dueDate) ? ' ⚠' : ''}` : ''}
                   </option>
                 ))}
               </select>
             )}
             {inv && <div className="muted">{t('paybill.outstanding', 'Rest de plată')}: {money(outstanding, currency)}</div>}
+            {inv?.dueDate && (
+              <div className="muted" style={{ color: isOverdue(inv.dueDate) ? 'var(--danger, #dc2626)' : undefined, fontWeight: isOverdue(inv.dueDate) ? 600 : undefined }}>
+                {t('paybill.due', 'Scadență')}: {fmtDate(inv.dueDate)}{isOverdue(inv.dueDate) ? ` — ${t('unpaid.overdue', 'depășită')}` : ''}
+              </div>
+            )}
             {!loadingList && invoices.length === 0 && <div className="empty">{t('unpaid.clear', 'Toate facturile sunt plătite 🎉')}</div>}
           </div>
 

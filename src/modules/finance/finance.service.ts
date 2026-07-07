@@ -62,6 +62,7 @@ export class FinanceService {
   async unpaidVendorInvoices(communityId: string) {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select vi.id, vi.number, v.name as vendor, vi.currency,
+              vi.issue_date as "issueDate", vi.due_date as "dueDate",
               coalesce(vi.gross,0)::float8 as gross,
               coalesce(sum(vpa.amount),0)::float8 as paid,
               (coalesce(vi.gross,0) - coalesce(sum(vpa.amount),0))::float8 as outstanding
@@ -69,9 +70,9 @@ export class FinanceService {
          left join vendor v on v.id = vi.vendor_id
          left join vendor_payment_application vpa on vpa.invoice_id = vi.id
         where vi.community_id = $1
-        group by vi.id, vi.number, v.name, vi.currency, vi.gross
+        group by vi.id, vi.number, v.name, vi.currency, vi.issue_date, vi.due_date, vi.gross
         having (coalesce(vi.gross,0) - coalesce(sum(vpa.amount),0)) > 0.005
-        order by outstanding desc`,
+        order by vi.due_date asc nulls last, outstanding desc`,
       communityId,
     )
     const totalOutstanding = rows.reduce((s, r) => s + Number(r.outstanding), 0)
