@@ -304,6 +304,7 @@ async function main() {
         map[detailKey] = amount
         const invoiceNumber = it?.invoiceNumber
         const invoiceDate = it?.invoiceDate
+        const invoiceDueDate = it?.invoiceDueDate
         const invoiceNet = it?.invoiceNet
         const invoiceVat = it?.invoiceVat
         const invoiceGross = it?.invoiceGross
@@ -314,6 +315,12 @@ async function main() {
             throw new Error(`conflicting invoiceNumber for template ${templateCode}`)
           }
           map.invoiceNumber = invoiceNumber
+        }
+        if (invoiceDueDate != null) {
+          if (map.invoiceDueDate != null && map.invoiceDueDate !== invoiceDueDate) {
+            throw new Error(`conflicting invoiceDueDate for template ${templateCode}`)
+          }
+          map.invoiceDueDate = invoiceDueDate
         }
         if (invoiceDate != null) {
           if (map.invoiceDate != null && map.invoiceDate !== invoiceDate) {

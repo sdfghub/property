@@ -38,6 +38,11 @@ export function BillForm({
   const [loading, setLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const items = safeItems
+  // Invoice bills carry a scadență (due date). The value key comes from the template's
+  // output.invoice.dueDateKey (default 'invoiceDueDate') and is persisted with the state values.
+  const invoiceCfg: any = (template as any)?.output?.invoice
+  const isInvoice = (template as any)?.output?.mode === 'VENDOR_INVOICE'
+  const dueDateKey: string = invoiceCfg?.dueDateKey || 'invoiceDueDate'
   const hasPrefill = Object.keys(template.values || {}).length > 0
   const [billState, setBillState] = React.useState<'NEW' | 'FILLED' | 'CLOSED'>(template.state || (hasPrefill ? 'FILLED' : 'NEW'))
 
@@ -187,6 +192,9 @@ export function BillForm({
                 <strong>{item.label}</strong>: {values[item.key] ?? '—'} {item.kind === 'meter' ? '' : ''}
               </li>
             ))}
+            {isInvoice && (
+              <li><strong>Scadență factură</strong>: {values[dueDateKey] || '—'}</li>
+            )}
           </ul>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn secondary" type="button" onClick={() => updateState('FILLED')} disabled={loading}>
@@ -215,6 +223,20 @@ export function BillForm({
                 </div>
               </div>
             ))}
+            {isInvoice && (
+              <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <label className="label" style={{ minWidth: 220 }}>Scadență factură</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={values[dueDateKey] ?? ''}
+                  onChange={(e) => onChange(dueDateKey, e.target.value)}
+                  style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
+                  disabled={!canEdit}
+                />
+                <div className="muted" style={{ fontSize: 12 }}>due date</div>
+              </div>
+            )}
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={save} disabled={loading}>

@@ -450,6 +450,9 @@ export class TemplateService {
       const vendorId = await this.resolveVendorId(communityId, vendorCfg, values)
       const issueDateVal = valueFor(invoiceCfg.issueDateKey) ?? invoiceCfg.issueDate ?? null
       const issueDate = issueDateVal ? new Date(issueDateVal) : null
+      // Due date (scadența facturii): from the configured key, defaulting to 'invoiceDueDate'.
+      const dueDateVal = valueFor(invoiceCfg.dueDateKey || 'invoiceDueDate') ?? invoiceCfg.dueDate ?? null
+      const dueDate = dueDateVal ? new Date(dueDateVal) : null
       const serviceStartPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceStartPeriodKey))
       const serviceEndPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceEndPeriodKey))
       const currency = valueFor(invoiceCfg.currencyKey) ?? invoiceCfg.currency ?? output.currency ?? 'RON'
@@ -462,6 +465,7 @@ export class TemplateService {
           vendorId,
           number: valueFor(invoiceCfg.numberKey) ?? invoiceCfg.number ?? null,
           issueDate,
+          dueDate,
           serviceStartPeriodId,
           serviceEndPeriodId,
           currency,
@@ -477,6 +481,7 @@ export class TemplateService {
           templateInstanceId: instance.id,
           number: valueFor(invoiceCfg.numberKey) ?? invoiceCfg.number ?? null,
           issueDate,
+          dueDate,
           serviceStartPeriodId,
           serviceEndPeriodId,
           currency,

@@ -838,6 +838,7 @@ model VendorInvoice {
   templateInstanceId   String?   @map("template_instance_id")
   number               String?   @map("number")
   issueDate            DateTime? @map("issue_date")
+  dueDate              DateTime? @map("due_date")
   serviceStartPeriodId String?   @map("service_start_period_id")
   serviceEndPeriodId   String?   @map("service_end_period_id")
   currency             String    @default("RON") @map("currency")
