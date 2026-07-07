@@ -458,7 +458,9 @@ async function main() {
   console.log('Creating BE payment for Ap 20 (expenses + partial other fund)...')
   const bes = await request('GET', `/communities/${communityId}/billing-entities`, undefined, token)
   const be20 = (Array.isArray(bes) ? bes : []).find((b: any) => b.code === 'Ap 20')
-  assert(be20?.id, 'Billing entity Ap 20 not found')
+  if (!be20?.id) {
+    console.log('↷ Skipping Ap 20 demo BE payment (no billing entity "Ap 20" in this community)')
+  } else {
   const funds = await request('GET', `/communities/${communityId}/funds`, undefined, token)
   const expenseFund = (Array.isArray(funds) ? funds : []).find((f: any) => f.code === 'EXPENSES')
   assert(expenseFund?.id, 'EXPENSES fund not found')
@@ -521,6 +523,7 @@ async function main() {
     token,
   )
   console.log(`✔ BE payment posted for Ap 20 (amount=${payAmount})`)
+  }
 
   const petty = (def.accounts || []).find((a: any) => a.type === 'PETTY')
   const bank = (def.accounts || []).find((a: any) => a.type === 'BANK')
