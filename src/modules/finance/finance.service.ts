@@ -35,17 +35,36 @@ export class FinanceService {
     return this.latestStatementPeriod(communityId)
   }
 
-  /** Debtors: per billing entity outstanding (sum of due_end) for the reference period. */
+  /**
+   * Debtors: per billing entity outstanding for the reference period.
+   * The statement snapshot (be_statement.due_end) is only rebuilt at period close, so a receipt
+   * recorded in the still-open period would not show up. To reflect it immediately we subtract
+   * payments recorded in periods that have NO statement yet (uncommitted — e.g. the open period).
+   */
   async receivables(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, topDebtors: [] }
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select be.code as "beCode", be.name as "beName", sum(bs.due_end)::float8 as debt
-         from be_statement bs
-         join billing_entity be on be.id = bs.billing_entity_id
-        where bs.community_id = $1 and bs.period_id = $2
-        group by be.id, be.code, be.name
-        having sum(bs.due_end) > 0.005
+      `with stmt as (
+         select bs.billing_entity_id as be_id, sum(bs.due_end) as due_end
+           from be_statement bs
+          where bs.community_id = $1 and bs.period_id = $2
+          group by bs.billing_entity_id
+       ),
+       uncommitted_pay as (
+         select le.billing_entity_id as be_id, sum(le.amount) as paid
+           from be_ledger_entry le
+          where le.community_id = $1 and le.kind = 'PAYMENT' and le.lane = 'CASH'
+            and not exists (select 1 from be_statement bs2 where bs2.period_id = le.period_id)
+          group by le.billing_entity_id
+       )
+       select be.code as "beCode", be.name as "beName",
+              (coalesce(stmt.due_end,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt
+         from billing_entity be
+         left join stmt on stmt.be_id = be.id
+         left join uncommitted_pay on uncommitted_pay.be_id = be.id
+        where be.community_id = $1
+          and (coalesce(stmt.due_end,0) - coalesce(uncommitted_pay.paid,0)) > 0.005
         order by debt desc`,
       communityId, period.id,
     )
