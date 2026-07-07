@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { PrismaService } from '../user/prisma.service'
 import { ensureCommunityLedgerEntryDetail } from './community-ledger-detail.util'
 import { ensureFundLedgerEntryDetail } from './fund-ledger-detail.util'
+import { buildChargeComparator, resolveAllocationConfig, type OrderableCharge } from './payment-allocation'
 
 type TxClient = any
 type PaymentAllocationSpec = {
@@ -125,6 +126,8 @@ export class PaymentService {
              le.created_at AS "chargeCreatedAt",
              le.fund_id AS "chargeFundId",
              le.period_id AS "chargePeriodId",
+             p.seq AS "periodSeq",
+             p.due_date AS "periodDueDate",
              le.amount::numeric AS "chargeAmount",
              d.id AS "detailId",
              d.unit_id AS "unitId",
@@ -132,6 +135,7 @@ export class PaymentService {
              COALESCE(app.paid,0)::numeric AS "chargeApplied"
       FROM be_ledger_entry le
       JOIN be_ledger_entry_detail d ON d.ledger_entry_id = le.id
+      JOIN period p ON p.id = le.period_id
       LEFT JOIN (
         SELECT charge_id, SUM(amount) AS paid
         FROM payment_application
@@ -247,12 +251,57 @@ export class PaymentService {
     return { items, totalAvailable: Number(totalAvailable.toFixed(4)) }
   }
 
+  /**
+   * Resolve the per-community charge-ordering comparator for the automatic spread.
+   * Returns undefined for FIFO (fast path — no extra lookups), else builds the penalty-fund
+   * set and fund-priority index the strategy needs.
+   */
+  private async resolveOrderComparator(
+    client: TxClient,
+    communityId: string,
+  ): Promise<((a: OrderableCharge, b: OrderableCharge) => number) | undefined> {
+    const c = await client.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { id: true, paymentAllocation: true },
+    })
+    const cfg = resolveAllocationConfig(c?.paymentAllocation)
+    if (cfg.strategy === 'FIFO') return undefined
+
+    const funds = await client.fund.findMany({
+      where: { communityId: c?.id ?? communityId },
+      select: { id: true, code: true, allocation: true },
+    })
+    const idByCode = new Map<string, string>(funds.map((f: any) => [f.code, f.id]))
+
+    // Penalty funds = the resolved targets of any fund's penaltyFundCode (default 'PENALIZARI').
+    const targetCodes = new Set<string>(['PENALIZARI'])
+    for (const f of funds as any[]) {
+      const pc = (f.allocation as any)?.penaltyFundCode
+      if (pc) targetCodes.add(pc)
+    }
+    const penaltyFundIds = new Set<string>()
+    for (const code of targetCodes) {
+      const id = idByCode.get(code)
+      if (id) penaltyFundIds.add(id)
+    }
+
+    const fundOrderIndex = new Map<string, number>()
+    ;(cfg.fundOrder ?? []).forEach((code, i) => {
+      const id = idByCode.get(code)
+      if (id) fundOrderIndex.set(id, i)
+    })
+
+    return buildChargeComparator(cfg.strategy, { penaltyFundIds, fundOrderIndex })
+  }
+
   private buildAppsFromDetails(
     detailRows: any[],
     amount: number,
     paymentId: string,
     source: 'AUTO_DETAIL' | 'SPEC',
     specMeta?: { fundId?: string | null; unitId?: string | null; billingEntityId?: string | null; lineIndex?: number },
+    // Optional ordering strategy (per-community). Absent => FIFO (oldest charge first).
+    comparator?: (a: { chargeCreatedAt: Date; periodSeq: number | null; chargeFundId: string | null }, b: { chargeCreatedAt: Date; periodSeq: number | null; chargeFundId: string | null }) => number,
   ) {
     const byCharge = new Map<
       string,
@@ -260,6 +309,7 @@ export class PaymentService {
         chargeId: string
         chargeCreatedAt: Date
         chargeFundId: string
+        periodSeq: number | null
         chargeApplied: number
         details: Array<{ detailId: string; unitId?: string | null; detailAmount: number }>
       }
@@ -277,6 +327,7 @@ export class PaymentService {
           chargeId: r.chargeId,
           chargeCreatedAt: r.chargeCreatedAt,
           chargeFundId: r.chargeFundId,
+          periodSeq: r.periodSeq == null ? null : Number(r.periodSeq),
           chargeApplied: Number(r.chargeApplied),
           details: [
             {
@@ -288,9 +339,9 @@ export class PaymentService {
         })
       }
     }
-    const charges = Array.from(byCharge.values()).sort(
-      (a, b) => a.chargeCreatedAt.getTime() - b.chargeCreatedAt.getTime(),
-    )
+    const fifo = (a: { chargeCreatedAt: Date }, b: { chargeCreatedAt: Date }) =>
+      a.chargeCreatedAt.getTime() - b.chargeCreatedAt.getTime()
+    const charges = Array.from(byCharge.values()).sort(comparator ?? fifo)
     let remaining = amount
     const apps: Array<{ paymentId: string; chargeId: string; amount: number; spec: PaymentAllocationSpec | any }> = []
     const coveredChargeIds: string[] = []
@@ -618,9 +669,12 @@ export class PaymentService {
         apps = res.apps
         remaining = res.remaining
       } else {
-        // FIFO within the selected set (or all open charges if none selected)
+        // Automatic spread across open charges, ordered by the community's allocation strategy
+        // (default FIFO — oldest charge first). Restricted to the selected set when the operator
+        // picked specific charges via charge markers.
+        const comparator = await this.resolveOrderComparator(client, communityId)
         const detailRows = await this.findOpenChargeDetails(client, communityId, billingEntityId, effectiveAllowed)
-        const res = this.buildAppsFromDetails(detailRows, chargeApplicable, paymentIdStr, 'AUTO_DETAIL')
+        const res = this.buildAppsFromDetails(detailRows, chargeApplicable, paymentIdStr, 'AUTO_DETAIL', undefined, comparator)
         apps = res.apps
         remaining = res.remaining
       }

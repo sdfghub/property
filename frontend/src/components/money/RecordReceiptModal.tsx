@@ -214,7 +214,7 @@ export function RecordReceiptModal({
             <div className="stack" style={{ gap: 6 }}>
               <label className="label">{t('receipt.mode', 'Cum se sting taxele')}</label>
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                {([['fifo', t('receipt.modeFifo', 'Automat (FIFO)')], ['select', t('receipt.modeSelect', 'Alege taxele')], ['avans', t('receipt.modeAvans', 'Avans (credit)')]] as const).map(([m, lbl]) => (
+                {([['fifo', t('receipt.modeFifo', 'Automat (regula comunității)')], ['select', t('receipt.modeSelect', 'Alege taxele')], ['avans', t('receipt.modeAvans', 'Avans (credit)')]] as const).map(([m, lbl]) => (
                   <button key={m} type="button" className={`btn small ${mode === m ? 'primary' : 'ghost'}`} onClick={() => setMode(m as any)}>{lbl}</button>
                 ))}
               </div>

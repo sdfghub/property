@@ -202,6 +202,7 @@ model Community {
   timezone String @default("Europe/Bucharest") @map("timezone")
   penaltyGraceDays Int @default(30) @map("penalty_grace_days")
   features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
+  paymentAllocation Json? @map("payment_allocation") // per-community payment→charge allocation strategy (see PaymentAllocationService; default FIFO)
 
   periods                    Period[]
   units                      Unit[]

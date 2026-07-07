@@ -18,6 +18,8 @@ import { CashService } from './cash.service';
 import { CashController } from './cash.controller';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { PaymentAllocationService } from './payment-allocation.service';
+import { PaymentAllocationController } from './payment-allocation.controller';
 import { CommunityDueController } from './community-due.controller';
 import { UserDashboardController } from './user-dashboard.controller';
 import { MePaymentController } from './me-payment.controller';
@@ -31,6 +33,7 @@ import { MePaymentController } from './me-payment.controller';
     ExpenseTypeController,
     VendorInvoiceController,
     PaymentController,
+    PaymentAllocationController,
     CommunityDueController,
     UserDashboardController,
     MePaymentController,
@@ -44,6 +47,7 @@ import { MePaymentController } from './me-payment.controller';
     BeQueryService,
     VendorInvoiceService,
     PaymentService,
+    PaymentAllocationService,
     CashService,
     PrismaService,
   ],

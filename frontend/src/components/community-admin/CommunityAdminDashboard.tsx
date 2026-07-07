@@ -734,6 +734,7 @@ export function CommunityAdminDashboard({
 
               {activeTab === 'config' && (
                 <ConfigTab
+                  communityId={communityId}
                   configJson={configJson}
                   metersConfig={metersConfig}
                   configError={configError}
