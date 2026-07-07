@@ -46,32 +46,33 @@ export function CommunityExpensesPanel({
   React.useEffect(() => {
     if (!communityId) return
     setMessage(null)
-    api
-      .get<any>(`/communities/${communityId}/periods/editable`)
-      .then((res) => {
-        if (res?.period?.code) {
-          setPeriodCode(res.period.code)
-          setEditable(res)
-        }
+    let alive = true
+    // Load all three period sources together, then choose the default period ONCE with a clear
+    // precedence — editable/open first, closed only as a last resort. (Previously three concurrent
+    // handlers each set periodCode off stale state, so the closed-periods one could win the race and
+    // open a previous CLOSED month instead of the current one.)
+    Promise.all([
+      api.get<any>(`/communities/${communityId}/periods/editable`).catch(() => null),
+      api.get<Array<{ id: string; code: string }>>(`/communities/${communityId}/periods/open`).catch(() => [] as any[]),
+      api.get<Array<{ id: string; code: string }>>(`/communities/${communityId}/periods/closed`).catch(() => [] as any[]),
+    ])
+      .then(([ed, open, closed]) => {
+        if (!alive) return
+        const openRows = Array.isArray(open) ? open : []
+        const closedRows = Array.isArray(closed) ? closed : []
+        setEditable(ed || null)
+        setOpenPeriods(openRows)
+        setPeriods(closedRows)
+        const preferred =
+          (ed?.period?.code && ed.period.status !== 'CLOSED' ? ed.period.code : '') ||
+          openRows[0]?.code ||
+          closedRows[0]?.code ||
+          ''
+        // Don't clobber an existing (user) selection.
+        setPeriodCode((cur) => cur || preferred)
       })
-      .catch(() => null)
-    api
-      .get<Array<{ id: string; code: string }>>(`/communities/${communityId}/periods/open`)
-      .then((rows) => {
-        setOpenPeriods(rows)
-        if (rows.length) {
-          setPeriodCode(rows[0].code)
-        }
-      })
-      .catch((err: any) => setMessage(err?.message || 'Could not load periods'))
-
-    api
-      .get<Array<{ id: string; code: string }>>(`/communities/${communityId}/periods/closed`)
-      .then((rows) => {
-        setPeriods(rows)
-        if (!openPeriods.length && rows.length && !periodCode) setPeriodCode(rows[0].code)
-      })
-      .catch((err: any) => setMessage(err?.message || 'Could not load periods'))
+      .catch((err: any) => { if (alive) setMessage(err?.message || 'Could not load periods') })
+    return () => { alive = false }
   }, [api, communityId])
 
   React.useEffect(() => {
