@@ -163,7 +163,11 @@ async function main() {
       const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys(), ...(closing ? closing.keys() : [])])
       for (const k of keys) {
         const [be, fund] = k.split('::')
-        const dueStart = running.get(k) || 0
+        // Opening: chain from the prior period's close; on a key's FIRST appearance (the first injected
+        // period, or a unit that shows up mid-history with pre-existing debt) seed it from the source's
+        // own opening arrears for this month, so it lands in "Sold precedent" instead of a hidden
+        // adjustment and the avizier row adds up (sold + charges − payments = total due).
+        const dueStart = running.has(k) ? (running.get(k) as number) : (arrears.get(k) ?? 0)
         const charges = beFundTotal.get(k) || 0
         // Close at next month's opening balance; a key absent there was paid down to zero. Fall back to
         // carrying (dueStart+charges) only when there is no successor month (shouldn't happen for injected periods).
