@@ -7,6 +7,7 @@ import { I18nProvider, useI18n } from './i18n/useI18n'
 import { SystemAdminPanel } from './components/SystemAdminPanel'
 import { CommunityAdminDashboard, type CommunityAdminTabKey } from './components/community-admin/CommunityAdminDashboard'
 import { BillingEntityResponsibleDashboard } from './components/BillingEntityResponsibleDashboard'
+import { MyMeterReadings } from './components/meters/MyMeterReadings'
 import { PushPrompt } from './components/PushPrompt'
 import { API_BASE } from './api/client'
 import './styles/index.css'
@@ -346,7 +347,10 @@ function AppShell() {
       </div>
 
       {devCommunity && activeRole?.role === 'BILLING_ENTITY_USER' ? (
-        <BillingEntityResponsibleDashboard />
+        <>
+          <MyMeterReadings communityId={devCommunity} />
+          <BillingEntityResponsibleDashboard />
+        </>
       ) : devCommunity ? (
         <CommunityAdminDashboard
           forceCommunityId={devCommunity}
