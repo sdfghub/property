@@ -1114,6 +1114,7 @@ model PenaltyBucket {
   id                String   @id @default(cuid())
   communityId       String   @map("community_id")
   billingEntityId   String   @map("billing_entity_id")
+  unitId            String?  @map("unit_id")          // the unit this debt belongs to (buckets are per-unit; null = legacy per-BE)
   fundId            String   @map("fund_id")          // source fund whose principal this is
   targetFundId      String   @map("target_fund_id")   // resolved penaltyFundCode (earmark)
   originKey         String   @map("origin_key")       // 'period:<periodId>' | migrated opening originKey

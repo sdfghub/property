@@ -150,13 +150,14 @@ export class PenaltyLedgerService {
     }
 
     // per (BE, source fund): { posted this period, outstanding after } → drives the posted charge
-    const perBeFund = new Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number }>()
+    const perBeFund = new Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number; postedByUnit: Map<string, number> }>()
 
     for (const g of groups.values()) {
       let remainingPay = await this.streamAPayment(tx, communityId, periodId, g.beId, g.fundId)
       const ordered = (g.buckets as any[]).slice().sort((a, b) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime())
       let groupPosted = 0
       let groupOutstanding = 0
+      const groupPostedByUnit = new Map<string, number>() // per-unit buckets attribute posted straight to their unit
       for (const b of ordered) {
         const prev = b.periods[0]
         let principalRemaining = prev ? Number(prev.principalRemaining) : Number(b.principalOriginal)
@@ -187,9 +188,10 @@ export class PenaltyLedgerService {
         }
         groupPosted += posted
         groupOutstanding += Math.max(0, principalRemaining)
+        if (posted > 0 && (b as any).unitId) groupPostedByUnit.set((b as any).unitId, (groupPostedByUnit.get((b as any).unitId) ?? 0) + posted)
       }
       if (groupPosted > 0.0001) {
-        perBeFund.set(`${g.fundId}::${g.beId}`, { beId: g.beId, f: g.f, posted: groupPosted, outstanding: groupOutstanding })
+        perBeFund.set(`${g.fundId}::${g.beId}`, { beId: g.beId, f: g.f, posted: groupPosted, outstanding: groupOutstanding, postedByUnit: groupPostedByUnit })
       }
     }
 
@@ -210,15 +212,22 @@ export class PenaltyLedgerService {
     const beTargetTotal = new Map<string, { beId: string; targetId: string; amount: number }>()
     const beTargetDetail = new Map<string, Map<string, number>>()
 
-    for (const { beId, f, posted, outstanding } of perBeFund.values()) {
-      const shares = await this.penaltyUnitShares(tx, communityId, beId, f.id)
-      const totalW = Array.from(shares.values()).reduce((s, v) => s + v, 0)
-      if (totalW <= 0) continue
+    for (const { beId, f, posted, outstanding, postedByUnit } of perBeFund.values()) {
+      // Per-unit buckets already know which unit owes what — attribute directly. Otherwise (legacy per-BE
+      // buckets) fall back to splitting the group total across the BE's units by their weight share.
+      let unitAmounts: Array<[string, number]>
+      if (postedByUnit && postedByUnit.size) {
+        unitAmounts = Array.from(postedByUnit.entries())
+      } else {
+        const shares = await this.penaltyUnitShares(tx, communityId, beId, f.id)
+        const totalW = Array.from(shares.values()).reduce((s, v) => s + v, 0)
+        if (totalW <= 0) continue
+        unitAmounts = Array.from(shares.entries()).map(([u, w]) => [u, posted * (w / totalW)] as [string, number])
+      }
       const entry = bySource.get(f.code) ?? { targetId: f.targetId, lines: [] }
       const k = `${beId}::${f.targetId}`
-      for (const [unitId, w] of shares.entries()) {
-        const amt = posted * (w / totalW)
-        entry.lines.push({ unitId, beId, amount: amt, calc: { w, totalW, accrued: posted, principal: outstanding, ratePerDayPct: f.rate * 100 } })
+      for (const [unitId, amt] of unitAmounts) {
+        entry.lines.push({ unitId, beId, amount: amt, calc: { w: amt, totalW: posted, accrued: posted, principal: outstanding, ratePerDayPct: f.rate * 100 } })
         const du = beTargetDetail.get(k) ?? new Map<string, number>()
         du.set(unitId, (du.get(unitId) ?? 0) + amt)
         beTargetDetail.set(k, du)

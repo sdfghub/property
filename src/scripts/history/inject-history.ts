@@ -39,12 +39,14 @@ async function main() {
 
     const running = new Map<string, number>() // be::fund -> running dueEnd (chained across periods)
     const noArrears = new Set<string>()        // (be,fund) months carried with no source arrears figure
-    const penBucket = new Map<string, string>() // be -> penalty bucket id
-    const penAccrued = new Map<string, number>() // be -> cumulative penalty posted
+    const penDisplay = new Map<string, string>()   // unitCode -> per-unit historical-aging bucket id (rate 0, imported penalties)
+    const penDisplayAcc = new Map<string, number>() // unitCode -> cumulative imported penalty posted
+    const periodMeta = new Map<string, { periodId: string; seq: number; dueDate: Date | null; rate: number }>() // code -> period info + schedule rate
+    const GRACE_DAYS = 30
 
     // idempotency for the migrated penalty aging (buckets are per-BE, not per-period)
-    await prisma.penaltyBucketPeriod.deleteMany({ where: { bucket: { communityId, originKey: 'migrated' } } })
-    await prisma.penaltyBucket.deleteMany({ where: { communityId, originKey: 'migrated' } })
+    await prisma.penaltyBucketPeriod.deleteMany({ where: { bucket: { communityId, originKey: { startsWith: 'migrated' } } } })
+    await prisma.penaltyBucket.deleteMany({ where: { communityId, originKey: { startsWith: 'migrated' } } })
 
     // Per-month source arrears. The export's "Restanțe" (arrearsByFund / penArrears) is each month's
     // OPENING balance, so a period CLOSES at the NEXT source month's opening — verified on the export:
@@ -77,6 +79,7 @@ async function main() {
         create: { communityId, code: m.code, seq, status: 'CLOSED', closedAt: new Date(Date.UTC(y, mo, 0)), preparedAt: new Date(Date.UTC(y, mo, 0)), startDate: new Date(Date.UTC(y, mo - 1, 1)), endDate: new Date(Date.UTC(y, mo, 0)), dueDate: m.dueDate ? new Date(m.dueDate) : null },
       })
       const periodId = period.id
+      periodMeta.set(m.code, { periodId, seq, dueDate: m.dueDate ? new Date(m.dueDate) : null, rate: (m as any).penaltyRate ?? 0 })
 
       // Idempotency: drop our prior artifacts for this period.
       const prior = await prisma.beLedgerEntry.findMany({ where: { communityId, periodId, refType: { in: [REF, REF + '_PAY'] } }, select: { id: true } })
@@ -184,23 +187,68 @@ async function main() {
         running.set(k, dueEnd)
       }
 
-      // ── Layer 2b: penalty aging (avizier month/total penalty columns read penalty_bucket_period) ──
-      for (const [k, posted] of beFundTotal.entries()) {
-        const [be, fund] = k.split('::')
-        if (fund !== 'PENALIZARI' || !posted) continue
-        let bucketId = penBucket.get(be)
+      // ── Layer 2b: penalty aging DISPLAY (imported per-unit penalties). A per-unit "display" bucket
+      //    (ratePerDayPct 0 → never accrues going forward) holds the source's historical penalty per month
+      //    so the avizier penalty columns render. Forward penalties are COMPUTED from the per-unit DEBT
+      //    buckets built after the loop.
+      for (const [uc, u] of Object.entries(m.units)) {
+        const be = unitBe.get(uc); if (!be) continue
+        const posted = (u as any).penPosted || 0
+        if (!posted) continue
+        let bucketId = penDisplay.get(uc)
         if (!bucketId) {
           const b = await prisma.penaltyBucket.create({
-            data: { communityId, billingEntityId: bid(be) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: 'migrated', dueDate: m.dueDate ? new Date(m.dueDate) : null, firstPenalDay: m.dueDate ? new Date(m.dueDate) : new Date(Date.UTC(y, mo - 1, 1)), principalOriginal: 1e9, status: 'OPEN' },
+            data: { communityId, billingEntityId: bid(be) as string, unitId: uid(uc) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: `migrated:${uc}`, dueDate: m.dueDate ? new Date(m.dueDate) : null, firstPenalDay: m.dueDate ? new Date(m.dueDate) : new Date(Date.UTC(y, mo - 1, 1)), principalOriginal: 1e9, ratePerDayPct: 0, status: 'OPEN' } as any,
           })
-          bucketId = b.id; penBucket.set(be, bucketId)
+          bucketId = b.id; penDisplay.set(uc, bucketId)
         }
-        const acc = (penAccrued.get(be) || 0) + posted; penAccrued.set(be, acc)
+        const acc = (penDisplayAcc.get(uc) || 0) + posted; penDisplayAcc.set(uc, acc)
         await prisma.penaltyBucketPeriod.create({
-          data: { bucketId, periodId, periodSeq: seq, penaltyPosted: posted, penaltyAccrued: acc, principalRemaining: arrears.get(`${be}::EXPENSES`) ?? 0, status: 'COMMITTED' },
+          data: { bucketId, periodId, periodSeq: seq, penaltyPosted: posted, penaltyAccrued: acc, principalRemaining: (u as any).arrearsByFund?.EXPENSES ?? 0, status: 'COMMITTED' },
         })
       }
     }
+
+    // ── Per-unit DEBT buckets for forward penalty computation. Reconstruct each unit's EXPENSES debt by
+    //    origin-month via FIFO (opening arrears seeded first, then each month's charge; a month's payment
+    //    settles oldest tranches first), and emit a bucket per surviving tranche STAMPED with that month's
+    //    schedule rate. March+ computes penalties from these — each at its own rate, capped at its principal.
+    const injCodes = months.map((mm) => mm.code)
+    const lastMeta = periodMeta.get(injCodes[injCodes.length - 1])!
+    const uExpArr = (code: string, uc: string): number => {
+      const mm = parsed.months.find((x) => x.code === code)
+      return Number((mm?.units as any)?.[uc]?.arrearsByFund?.EXPENSES ?? 0)
+    }
+    let debtBuckets = 0
+    for (const uc of [...new Set(parsed.units.map((u) => u.code))]) {
+      const be = unitBe.get(uc); if (!be || !beId.get(be) || !unitId.get(uc)) continue
+      const vs: Array<{ dueDate: Date | null; rate: number; principal: number; remaining: number }> = []
+      let seeded = false
+      for (const mm of months) {
+        const meta = periodMeta.get(mm.code)!
+        const u = (mm.units as any)[uc]
+        const opening = uExpArr(mm.code, uc)
+        const charge = u ? Object.values(u.charges as Record<string, number>).reduce((a, b) => a + Number(b), 0) : 0
+        if (!seeded) { if (opening > 0.005) vs.push({ dueDate: meta.dueDate, rate: meta.rate, principal: opening, remaining: opening }); seeded = true }
+        if (charge > 0.005) vs.push({ dueDate: meta.dueDate, rate: meta.rate, principal: charge, remaining: charge })
+        const closing = uExpArr(nextCode.get(mm.code) || '', uc)
+        let pay = opening + charge - closing // per-unit FIFO payment plug (>=0 settles oldest first)
+        for (const v of vs) { if (pay <= 0.005) break; const d = Math.min(v.remaining, pay); v.remaining -= d; pay -= d }
+      }
+      let idx = 0
+      for (const v of vs) {
+        if (v.remaining <= 0.01) continue
+        const fpd = v.dueDate ? new Date(v.dueDate.getTime() + GRACE_DAYS * 86400000) : new Date(Date.UTC(2000, 0, 1))
+        const b = await prisma.penaltyBucket.create({
+          data: { communityId, billingEntityId: bid(be) as string, unitId: uid(uc) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: `migrated-debt:${uc}:${idx}`, dueDate: v.dueDate, firstPenalDay: fpd, principalOriginal: v.principal, ratePerDayPct: v.rate * 100, status: 'OPEN' } as any,
+        })
+        await prisma.penaltyBucketPeriod.create({
+          data: { bucketId: b.id, periodId: lastMeta.periodId, periodSeq: lastMeta.seq, principalRemaining: v.remaining, penaltyAccrued: 0, penaltyPosted: 0, status: 'COMMITTED' },
+        })
+        idx++; debtBuckets++
+      }
+    }
+    console.log(`per-unit debt buckets (rate-stamped) for forward penalty computation: ${debtBuckets}`)
 
     if (noArrears.size) console.log(`ℹ funds carried without a source arrears figure (balance = accrual): ${[...noArrears].join(', ')}`)
 
