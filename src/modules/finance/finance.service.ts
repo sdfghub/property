@@ -418,6 +418,7 @@ export class FinanceService {
     const bucketRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select pb.id as "bucketId", pb.origin_key as "originKey", pb.principal_original::float8 as "principalOriginal",
               pb.due_date as "dueDate", pb.first_penal_day as "firstPenalDay", pb.status as "bucketStatus",
+              pb.rate_per_day_pct::float8 as "bucketRate",
               sf.code as "sourceFund", sf.name as "sourceFundName", tf.code as "targetFund", sf.allocation as "srcAlloc"
          from penalty_bucket pb
          join fund sf on sf.id = pb.fund_id
@@ -452,8 +453,10 @@ export class FinanceService {
     let monthTotal = 0
     let grandTotal = 0
     const buckets = bucketRows.map((b) => {
-      const rate = Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0) / 100
-      const ratePerDayPct = Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
+      // The bucket carries the rate stamped at its creation; only fall back to the fund's current rate
+      // for legacy buckets with no stamped rate. (Showing the fund rate made rate-stamped buckets read 0%.)
+      const ratePerDayPct = b.bucketRate != null ? Number(b.bucketRate) : Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
+      const rate = ratePerDayPct / 100
       const firstPenal = new Date(b.firstPenalDay)
       const due = b.dueDate ? new Date(b.dueDate) : null
       let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
