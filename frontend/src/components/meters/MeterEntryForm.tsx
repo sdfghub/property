@@ -27,6 +27,38 @@ export function MeterEntryForm({
   const [message, setMessage] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [items, setItems] = React.useState<MeterItem[]>(baseItems)
+  // INDEX vs CONSUMPTION per measure type, previous reading per meter, and reading history.
+  const [modeByType, setModeByType] = React.useState<Record<string, string>>({})
+  const [prevByMeter, setPrevByMeter] = React.useState<Record<string, number | null>>({})
+  const [historyByMeter, setHistoryByMeter] = React.useState<Record<string, any[]>>({})
+  const [openHistory, setOpenHistory] = React.useState<Set<string>>(new Set())
+
+  const modeOf = (typeCode?: string) => (typeCode && modeByType[typeCode] === 'INDEX' ? 'INDEX' : 'CONSUMPTION')
+
+  React.useEffect(() => {
+    if (!communityId) return
+    api.get<any>(`/communities/${communityId}/measure-modes`)
+      .then((r: any) => {
+        const m: Record<string, string> = {}
+        ;(r?.types || []).forEach((t: any) => { m[t.code] = t.mode })
+        setModeByType(m)
+      })
+      .catch(() => {})
+  }, [api, communityId])
+
+  const toggleHistory = (meterId: string) => {
+    setOpenHistory((prev) => {
+      const next = new Set(prev)
+      if (next.has(meterId)) { next.delete(meterId); return next }
+      next.add(meterId)
+      if (!historyByMeter[meterId]) {
+        api.get<any>(`/communities/${communityId}/meters/${meterId}/history`)
+          .then((r: any) => setHistoryByMeter((h) => ({ ...h, [meterId]: r?.history || [] })))
+          .catch(() => setHistoryByMeter((h) => ({ ...h, [meterId]: [] })))
+      }
+      return next
+    })
+  }
 
   // Reset local state when a new template is selected/refetched
   React.useEffect(() => {
@@ -93,6 +125,19 @@ export function MeterEntryForm({
     })
     if (Object.keys(seeds).length) setValues((prev) => ({ ...seeds, ...prev }))
   }, [items, values])
+
+  // Previous reading per meter (for INDEX consumption preview).
+  React.useEffect(() => {
+    if (!communityId || !periodCode) return
+    items
+      .filter((it) => it.kind === 'meter' && (it as any).meterId)
+      .forEach((it) => {
+        const mid = (it as any).meterId as string
+        api.get<any>(`/communities/${communityId}/periods/${periodCode}/meters/${mid}`)
+          .then((r: any) => setPrevByMeter((p) => ({ ...p, [mid]: r?.previousReading ?? null })))
+          .catch(() => {})
+      })
+  }, [api, communityId, periodCode, items])
 
   const onChange = (key: string, val: string) => setValues((prev) => ({ ...prev, [key]: val }))
 
@@ -183,26 +228,70 @@ export function MeterEntryForm({
       ) : (
         <>
           <div className="stack" style={{ gap: 6 }}>
-            {items.map((item) => (
-              <div key={item.key} className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <label className="label" style={{ minWidth: 220 }}>
-                  {item.label} {item.unitCode ? <span className="muted">(unit {item.unitCode})</span> : null}
-                </label>
-                <input
-                  className="input"
-                  type="number"
-                  step="0.000001"
-                  value={values[item.key] ?? ''}
-                  onChange={(e) => onChange(item.key, e.target.value)}
-                  placeholder="0.00"
-                  style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
-                  disabled={!canEdit || state === 'CLOSED'}
-                />
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {(item as any).meterId || item.typeCode}
+            {items.map((item) => {
+              const mid = (item as any).meterId as string | undefined
+              const mode = modeOf((item as any).typeCode)
+              const prev = mid ? prevByMeter[mid] ?? null : null
+              const entered = Number(values[item.key])
+              const consumption = mode === 'INDEX' && !Number.isNaN(entered)
+                ? (prev != null ? Math.max(0, entered - prev) : entered)
+                : null
+              return (
+              <div key={item.key} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border,#eee)', paddingTop: 6 }}>
+                <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <label className="label" style={{ minWidth: 220 }}>
+                    {item.label} {item.unitCode ? <span className="muted">(unit {item.unitCode})</span> : null}
+                    <span className="muted" style={{ marginLeft: 6 }}>· {mode === 'INDEX' ? 'index (citire)' : 'consum'}</span>
+                  </label>
+                  <input
+                    className="input"
+                    type="number"
+                    step="0.000001"
+                    value={values[item.key] ?? ''}
+                    onChange={(e) => onChange(item.key, e.target.value)}
+                    placeholder={mode === 'INDEX' ? 'citire contor' : '0.00'}
+                    style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
+                    disabled={!canEdit}
+                  />
+                  <div className="muted" style={{ fontSize: 12 }}>{mid || item.typeCode}</div>
+                  {mid && (
+                    <button type="button" className="btn ghost small" onClick={() => toggleHistory(mid)}>
+                      {openHistory.has(mid) ? 'ascunde istoric' : 'istoric'}
+                    </button>
+                  )}
                 </div>
+                {mode === 'INDEX' && (
+                  <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
+                    {prev != null ? `citire anterioară: ${prev} → ` : 'prima citire → '}
+                    consum: <strong>{consumption != null ? Number(consumption.toFixed(3)) : '—'}</strong>
+                  </div>
+                )}
+                {mid && openHistory.has(mid) && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, margin: '4px 0 6px' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'right', color: 'var(--muted,#666)' }}>
+                        <th style={{ textAlign: 'left', padding: '2px 6px' }}>Perioadă</th>
+                        <th style={{ padding: '2px 6px' }}>Index</th>
+                        <th style={{ padding: '2px 6px' }}>Consum</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(historyByMeter[mid] || []).map((h: any, j: number) => (
+                        <tr key={j} style={{ textAlign: 'right', borderTop: '1px solid var(--border,#eee)' }}>
+                          <td style={{ textAlign: 'left', padding: '2px 6px' }}>{h.periodCode}</td>
+                          <td style={{ padding: '2px 6px' }}>{h.reading ?? '—'}</td>
+                          <td style={{ padding: '2px 6px' }}>{h.consumption ?? '—'}</td>
+                        </tr>
+                      ))}
+                      {!(historyByMeter[mid] || []).length && (
+                        <tr><td colSpan={3} className="muted" style={{ padding: '2px 6px' }}>fără citiri anterioare</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={save} disabled={loading}>

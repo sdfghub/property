@@ -1,5 +1,6 @@
 import { CommunityConfigViewer } from '../CommunityConfigViewer'
 import { PaymentAllocationPanel } from './PaymentAllocationPanel'
+import { MeasureModePanel } from './MeasureModePanel'
 
 type Props = {
   communityId: string
@@ -13,6 +14,7 @@ export function ConfigTab({ communityId, configJson, metersConfig, configError, 
   return (
     <div className="stack">
       {communityId && <PaymentAllocationPanel communityId={communityId} />}
+      {communityId && <MeasureModePanel communityId={communityId} />}
       {configError && <div className="badge negative">{configError}</div>}
       {!configError && !configJson && <div className="muted">{loadingLabel}</div>}
       {configJson && <CommunityConfigViewer config={configJson} metersConfig={metersConfig} />}
