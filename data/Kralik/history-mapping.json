@@ -1,8 +1,10 @@
 {
   "_doc": "Maps an external history export (matrix.csv + penalties.csv) onto this community. Reusable: another association supplies its own mapping. Units auto-match the export column label to a def.json unit by name (minus an optional prefix); overrides handle mismatches. Every metric (Cheltuiala) must be classified or the parser reports it (no inference).",
   "unitLabelPrefix": "AP ",
+  "_unification": "Multiple export columns may map to ONE unit code (units merged over time); the parser SUMS them. E.g. the three '12 (SAD 4/*)' columns and both 'SAD 2/2' columns each collapse into a single surviving unit.",
   "unitOverrides": {
-    "SP COM": "400191-C1-U23-SPAȚIU COMERCIAL"
+    "SP COM": "400191-C1-U23-SPAȚIU COMERCIAL",
+    "SAD 2/2 (2)": "400191-C1-U17-SAD 2/2"
   },
   "metrics": {
     "Nr. Ap.": { "kind": "ignore" },
