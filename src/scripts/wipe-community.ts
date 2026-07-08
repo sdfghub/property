@@ -103,6 +103,9 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
     prisma.billingEntityMember.deleteMany({
       where: { OR: [{ billingEntityId: { in: beIds } }, { unitId: { in: unitIds } }] },
     }),
+    // Resident/user ↔ billing-entity links (FK is RESTRICT, so must be cleared before the BE delete).
+    // These are re-established via invites after a rebuild.
+    prisma.billingEntityUserRole.deleteMany({ where: { billingEntityId: { in: beIds } } }),
 
     // Topology
     prisma.unitGroup.deleteMany({ where: { id: { in: groupIds } } }),
