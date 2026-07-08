@@ -382,8 +382,16 @@ export class AllocationService {
       const allocateLeaf = async (leaf: any, amount: number, splitId: string, splitTrail: any[]) => {
         const alloc = { ...(leaf.allocation ?? {}) }
         if (alloc.ruleCode && !alloc.method) {
-          let rule = await this.prisma.allocationRule.findUnique({ where: { id: String(alloc.ruleCode) } })
-          if (!rule) {
+          // Rules are stored with id = `${code}-${communityId}` (see importers/community/apply.ts),
+          // so resolve by that composite id first, then a bare id, before any method-based fallback.
+          let rule =
+            (await this.prisma.allocationRule.findUnique({ where: { id: `${alloc.ruleCode}-${communityId}` } })) ||
+            (await this.prisma.allocationRule.findUnique({ where: { id: String(alloc.ruleCode) } }))
+          // Legacy fallback: some callers pass the enum method itself as the ruleCode. Only query the
+          // `method` enum column when the ruleCode actually is a valid AllocationMethod — otherwise Prisma
+          // throws "Invalid value for argument `method`" for app-level rule codes (e.g. BY_WATER_COLD, BY_CPI),
+          // silently dropping the whole charge.
+          if (!rule && (Object.values(AllocationMethod) as string[]).includes(String(alloc.ruleCode))) {
             const where: any = { communityId, method: String(alloc.ruleCode) }
             if (alloc.params !== undefined && alloc.params !== null) {
               where.params = { equals: alloc.params }
