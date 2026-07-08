@@ -1103,7 +1103,39 @@ export class TemplateService {
         meterId,
       },
     })
-    return pm
+    const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
+    const previousReading = await this.priorReadingByMeter(communityId, meterId, (period as any).seq)
+    return { ...(pm ?? {}), meterId, typeCode: meter.typeCode, mode, previousReading }
+  }
+
+  /** Prior period's reading for a meter (by meterId), for display. */
+  private async priorReadingByMeter(communityId: string, meterId: string, currentSeq: number): Promise<number | null> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pm.reading::float8 as reading
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.meter_id = $2 and pm.reading is not null and p.seq < $3
+        order by p.seq desc limit 1`,
+      communityId, meterId, currentSeq,
+    )
+    return rows.length ? Number(rows[0].reading) : null
+  }
+
+  /** Recent reading history for a meter (period, reading index, consumption), newest first. */
+  async getMeterHistory(communityRef: string, meterId: string, roles: RoleAssignment[]) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const meter: any = await (this.prisma as any).meter.findUnique({ where: { meterId } })
+    if (!meter) throw new NotFoundException('Meter not found')
+    const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pr.code as "periodCode", pr.seq as seq,
+              pm.reading::float8 as reading, pm.value::float8 as consumption, pm.estimated
+         from period_measure pm join period pr on pr.id = pm.period_id
+        where pm.community_id = $1 and pm.meter_id = $2
+        order by pr.seq desc limit 24`,
+      communityId, meterId,
+    )
+    return { meterId, typeCode: meter.typeCode, mode, history: rows }
   }
 
   // ── Meter reading mode (INDEX vs CONSUMPTION) ──────────────────────────────

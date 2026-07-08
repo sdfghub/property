@@ -20,6 +20,8 @@ import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
 import { PaymentAllocationService } from './payment-allocation.service';
 import { PaymentAllocationController } from './payment-allocation.controller';
+import { MeasureModeService } from './measure-mode.service';
+import { MeasureModeController } from './measure-mode.controller';
 import { CommunityDueController } from './community-due.controller';
 import { UserDashboardController } from './user-dashboard.controller';
 import { MePaymentController } from './me-payment.controller';
@@ -34,6 +36,7 @@ import { MePaymentController } from './me-payment.controller';
     VendorInvoiceController,
     PaymentController,
     PaymentAllocationController,
+    MeasureModeController,
     CommunityDueController,
     UserDashboardController,
     MePaymentController,
@@ -48,6 +51,7 @@ import { MePaymentController } from './me-payment.controller';
     VendorInvoiceService,
     PaymentService,
     PaymentAllocationService,
+    MeasureModeService,
     CashService,
     PrismaService,
   ],

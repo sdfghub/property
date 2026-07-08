@@ -179,6 +179,11 @@ export class TemplateController {
     return this.templates.importMeterTemplateCsv(communityId, periodCode, code, req.user?.roles ?? [], file)
   }
 
+  @Get('meters/:meterId/history')
+  meterHistory(@Param('communityId') communityId: string, @Param('meterId') meterId: string, @Req() req: any) {
+    return this.templates.getMeterHistory(communityId, meterId, req.user?.roles ?? [])
+  }
+
   @Get('periods/:periodCode/meters/:meterId')
   meterReading(@Param('communityId') communityId: string, @Param('periodCode') periodCode: string, @Param('meterId') meterId: string, @Req() req: any) {
     return this.templates.getMeterReading(communityId, periodCode, meterId, req.user?.roles ?? [])
