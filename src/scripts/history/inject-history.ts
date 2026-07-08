@@ -46,6 +46,28 @@ async function main() {
     await prisma.penaltyBucketPeriod.deleteMany({ where: { bucket: { communityId, originKey: 'migrated' } } })
     await prisma.penaltyBucket.deleteMany({ where: { communityId, originKey: 'migrated' } })
 
+    // Per-month source arrears. The export's "Restanțe" (arrearsByFund / penArrears) is each month's
+    // OPENING balance, so a period CLOSES at the NEXT source month's opening — verified on the export:
+    // Restanțe(N+1) = Restanțe(N) + charges(N) − payments(N). Using this month's Restanțe as dueEnd
+    // (the old behaviour) lagged every balance by one month, understating "total de plată" by ~a month
+    // of charges. We look ahead across ALL parsed months (incl. the cutover month), so the last injected
+    // period closes at the computed period's opening.
+    const seqOf = (code: string) => { const [yy, mm] = code.split('-').map(Number); return yy * 12 + mm }
+    const ordered = [...parsed.months].sort((a, b) => seqOf(a.code) - seqOf(b.code))
+    const nextCode = new Map<string, string>()
+    for (let i = 0; i < ordered.length - 1; i++) nextCode.set(ordered[i].code, ordered[i + 1].code)
+    const arrearsOf = (mm: any) => {
+      const a = new Map<string, number>()
+      const addA = (be: string, fund: string, v: number) => { if (v == null) return; const k = `${be}::${fund}`; a.set(k, (a.get(k) || 0) + v) }
+      for (const [unitCode, u] of Object.entries<any>(mm.units)) {
+        const be = unitBe.get(unitCode); if (!be) continue
+        for (const [fund, v] of Object.entries<any>(u.arrearsByFund)) addA(be, fund, v as number)
+        if (u.penArrears) addA(be, 'PENALIZARI', u.penArrears)
+      }
+      return a
+    }
+    const arrearsByCode = new Map<string, Map<string, number>>(ordered.map((mm) => [mm.code, arrearsOf(mm)]))
+
     for (const m of months) {
       const [y, mo] = m.code.split('-').map(Number)
       const seq = y * 12 + mo
@@ -127,13 +149,16 @@ async function main() {
         for (const [fund, v] of Object.entries(u.arrearsByFund)) addArr(be, fund, v)
         if (u.penArrears) addArr(be, 'PENALIZARI', u.penArrears)
       }
-      const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys()])
+      const closing = arrearsByCode.get(nextCode.get(m.code) || '') // dueEnd = NEXT month's opening arrears
+      const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys(), ...(closing ? closing.keys() : [])])
       for (const k of keys) {
         const [be, fund] = k.split('::')
         const dueStart = running.get(k) || 0
         const charges = beFundTotal.get(k) || 0
-        const dueEnd = arrears.has(k) ? (arrears.get(k) as number) : (dueStart + charges)
-        if (!arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
+        // Close at next month's opening balance; a key absent there was paid down to zero. Fall back to
+        // carrying (dueStart+charges) only when there is no successor month (shouldn't happen for injected periods).
+        const dueEnd = closing ? (closing.get(k) ?? 0) : (arrears.has(k) ? (arrears.get(k) as number) : (dueStart + charges))
+        if (!closing && !arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
         const plug = Number((dueStart + charges - dueEnd).toFixed(4))
         const payments = plug >= 0 ? plug : 0
         const adjustments = plug < 0 ? -plug : 0
