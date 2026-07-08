@@ -37,6 +37,9 @@ async function main() {
     const bid = (c: string) => { const v = beId.get(c); if (!v) miss.add('be:' + c); return v }
     const uid = (c: string) => { const v = unitId.get(c); if (!v) miss.add('unit:' + c); return v }
 
+    const running = new Map<string, number>() // be::fund -> running dueEnd (chained across periods)
+    const noArrears = new Set<string>()        // (be,fund) months carried with no source arrears figure
+
     for (const m of months) {
       const [y, mo] = m.code.split('-').map(Number)
       const seq = y * 12 + mo
@@ -48,11 +51,12 @@ async function main() {
       const periodId = period.id
 
       // Idempotency: drop our prior artifacts for this period.
-      const prior = await prisma.beLedgerEntry.findMany({ where: { communityId, periodId, refType: REF }, select: { id: true } })
+      const prior = await prisma.beLedgerEntry.findMany({ where: { communityId, periodId, refType: { in: [REF, REF + '_PAY'] } }, select: { id: true } })
       if (prior.length) {
         await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
         await prisma.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
       }
+      await prisma.beStatement.deleteMany({ where: { communityId, periodId } })
       const priorCC = await prisma.communityCharge.findMany({ where: { communityId, periodId, allocationStrategy: REF }, select: { id: true } })
       if (priorCC.length) {
         await prisma.communityChargeLine.deleteMany({ where: { chargeId: { in: priorCC.map((x) => x.id) } } })
@@ -77,6 +81,7 @@ async function main() {
         const be = unitBe.get(unitCode); if (!be) continue
         for (const [service, amt] of Object.entries(u.charges)) add(be, 'EXPENSES', unitCode, service, amt)
         for (const [fund, amt] of Object.entries(u.funds)) add(be, fund, unitCode, 'CONTRIB', amt)
+        if (u.penPosted) add(be, 'PENALIZARI', unitCode, 'penalty:EXPENSES', u.penPosted) // penalty charge (avizier PEN: column)
       }
 
       // CommunityCharge + lines (avizier reads these).
@@ -105,7 +110,37 @@ async function main() {
           data: Array.from(mu.entries()).map(([u, amt]) => ({ ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', fundId: fid(fund), currency: 'RON', refType: REF, refId: periodId, unitId: uid(u) as string, amount: amt, meta: { source: REF } })),
         })
       }
+
+      // ── Layer 2: balance chain + payment plug + statement ──────────────────
+      // dueEnd = the export's arrears for (BE,fund); payment (or adjustment) is the plug that satisfies
+      // dueEnd = dueStart + charges − payments + adjustments. No arrears figure ⇒ carry (flagged).
+      const arrears = new Map<string, number>() // be::fund -> source arrears (dueEnd target)
+      const addArr = (be: string, fund: string, v: number) => { if (v == null) return; const k = `${be}::${fund}`; arrears.set(k, (arrears.get(k) || 0) + v) }
+      for (const [unitCode, u] of Object.entries(m.units)) {
+        const be = unitBe.get(unitCode); if (!be) continue
+        for (const [fund, v] of Object.entries(u.arrearsByFund)) addArr(be, fund, v)
+        if (u.penArrears) addArr(be, 'PENALIZARI', u.penArrears)
+      }
+      const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys()])
+      for (const k of keys) {
+        const [be, fund] = k.split('::')
+        const dueStart = running.get(k) || 0
+        const charges = beFundTotal.get(k) || 0
+        const dueEnd = arrears.has(k) ? (arrears.get(k) as number) : (dueStart + charges)
+        if (!arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
+        const plug = Number((dueStart + charges - dueEnd).toFixed(4))
+        const payments = plug >= 0 ? plug : 0
+        const adjustments = plug < 0 ? -plug : 0
+        if (payments > 0.005) {
+          const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF + '_PAY', refId: periodId, fundId: fid(fund) } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_PAY', refId: periodId, unitId: null, amount: payments, meta: { source: REF } } })
+        }
+        await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges, payments, adjustments, dueEnd } })
+        running.set(k, dueEnd)
+      }
     }
+
+    if (noArrears.size) console.log(`ℹ funds carried without a source arrears figure (balance = accrual): ${[...noArrears].join(', ')}`)
 
     if (miss.size) console.log(`\n⚠ unresolved refs: ${[...miss].join(', ')}`)
     console.log('✅ layer-1 charge injection complete')
