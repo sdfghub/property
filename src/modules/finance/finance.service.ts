@@ -484,6 +484,10 @@ export class FinanceService {
       monthTotal += postedThis
       grandTotal += accruedToDate
       const isOpening = b.originKey === 'opening'
+      // Migrated buckets carry no real "original principal" — they use a 1e9 sentinel to disable the
+      // legal cap (the penalty was already accrued in the source system). Flag them so the UI omits the
+      // meaningless "Datorie" figure and never claims the cap was reached.
+      const uncapped = b.originKey === 'migrated' || Number(b.principalOriginal) >= 1e9
       return {
         label: isOpening
           ? `Restanță reportată (${b.sourceFund})`
@@ -493,12 +497,13 @@ export class FinanceService {
         dueDate: b.dueDate,
         firstPenalDay: b.firstPenalDay,
         ratePerDayPct,
-        principalOriginal: round2(b.principalOriginal),
+        uncapped,
+        principalOriginal: uncapped ? null : round2(b.principalOriginal),
         principalRemaining: round2(cur?.principalRemaining ?? last?.principalRemaining ?? b.principalOriginal),
         penaltyThisPeriod: round2(postedThis),
         penaltyToDate: round2(accruedToDate),
         totalDays,
-        capReached: accruedToDate + 0.005 >= Number(b.principalOriginal),
+        capReached: !uncapped && accruedToDate + 0.005 >= Number(b.principalOriginal),
         status: b.bucketStatus,
         history: hist,
       }

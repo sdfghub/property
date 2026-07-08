@@ -434,8 +434,8 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       </span>
                     </div>
                     <div className="muted" style={{ fontSize: 12, margin: '4px 0' }}>
-                      {t('avizier.penPrincipal', 'Datorie')}: {money(b.principalOriginal)}
-                      {' · '}{t('avizier.penRemaining', 'rămas')}: {money(b.principalRemaining)}
+                      {!b.uncapped && <>{t('avizier.penPrincipal', 'Datorie')}: {money(b.principalOriginal)}{' · '}</>}
+                      {t('avizier.penRemaining', 'rămas')}: {money(b.principalRemaining)}
                       {' → '}{t('avizier.penTarget', 'în fondul')} {b.targetFund}
                       {' · '}{t('avizier.penTotalDays', 'Total zile')}: <strong>{b.totalDays}</strong>
                       {' · '}{t('avizier.penToDate', 'acumulat')}: <strong>{money(b.penaltyToDate)}</strong>
