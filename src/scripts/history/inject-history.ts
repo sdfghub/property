@@ -235,15 +235,22 @@ async function main() {
         let pay = opening + charge - closing // per-unit FIFO payment plug (>=0 settles oldest first)
         for (const v of vs) { if (pay <= 0.005) break; const d = Math.min(v.remaining, pay); v.remaining -= d; pay -= d }
       }
+      // Seed each debt bucket's already-accrued penalty from the unit's imported historical total, spread
+      // across its still-penalizing buckets (weight = remaining × rate; 0%-rate buckets get none), capped
+      // at each bucket's principal. This makes the legal cap (penalty ≤ principal) account for what the
+      // debt already accrued before the cutover, instead of restarting the accrual from zero.
+      const survivors = vs.filter((v) => v.remaining > 0.01)
+      const totW = survivors.reduce((s, v) => s + v.remaining * v.rate, 0)
+      const histPenalty = penDisplayAcc.get(uc) || 0
       let idx = 0
-      for (const v of vs) {
-        if (v.remaining <= 0.01) continue
+      for (const v of survivors) {
+        const seed = totW > 0 ? Math.min(v.principal, histPenalty * (v.remaining * v.rate) / totW) : 0
         const fpd = v.dueDate ? new Date(v.dueDate.getTime() + GRACE_DAYS * 86400000) : new Date(Date.UTC(2000, 0, 1))
         const b = await prisma.penaltyBucket.create({
-          data: { communityId, billingEntityId: bid(be) as string, unitId: uid(uc) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: `migrated-debt:${uc}:${idx}`, dueDate: v.dueDate, firstPenalDay: fpd, principalOriginal: v.principal, ratePerDayPct: v.rate * 100, status: 'OPEN' } as any,
+          data: { communityId, billingEntityId: bid(be) as string, unitId: uid(uc) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: `migrated-debt:${uc}:${idx}`, dueDate: v.dueDate, firstPenalDay: fpd, principalOriginal: v.principal, ratePerDayPct: v.rate * 100, seedPenaltyAccrued: seed, status: 'OPEN' } as any,
         })
         await prisma.penaltyBucketPeriod.create({
-          data: { bucketId: b.id, periodId: lastMeta.periodId, periodSeq: lastMeta.seq, principalRemaining: v.remaining, penaltyAccrued: 0, penaltyPosted: 0, status: 'COMMITTED' },
+          data: { bucketId: b.id, periodId: lastMeta.periodId, periodSeq: lastMeta.seq, principalRemaining: v.remaining, penaltyAccrued: seed, penaltyPosted: 0, status: 'COMMITTED' },
         })
         idx++; debtBuckets++
       }
