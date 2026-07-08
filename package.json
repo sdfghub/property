@@ -31,6 +31,7 @@
     "backfill:ledger-details": "ts-node --transpile-only src/scripts/backfill-ledger-details.ts",
     "api:smoke": "ts-node --transpile-only src/scripts/api-smoke-test.ts",
     "test:payment-allocation": "ts-node --transpile-only src/scripts/test-payment-allocation.ts",
+    "history:parse": "ts-node --transpile-only src/scripts/history/parse-export.ts",
     "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts"
   },
   "dependencies": {
