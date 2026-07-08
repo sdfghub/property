@@ -12,6 +12,7 @@ type NormalizedRow = {
   code: string
   residents?: number | string | null
   sqm?: number | string | null
+  cpi?: number | string | null
   order?: number
   billing_entity: string
   group_codes: string
@@ -31,6 +32,7 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
       code: String(r.code ?? '').trim(),
       residents: r.residents,
       sqm: r.sqm,
+      cpi: (r as any).cpi,
       order: (r as any).order,
       billing_entity: r.billingEntity ?? r.billing_entity ?? '',
       group_codes: Array.isArray(r.groupCodes) ? r.groupCodes.join(';') : (r.group_codes ?? ''),
@@ -68,9 +70,13 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   const periodMeasures: CommunityImportPlan['periodMeasures'] = []
 
   for (const r of rows) {
-    const res = toNum(r.residents); const sqm = toNum(r.sqm)
+    const res = toNum(r.residents); const sqm = toNum(r.sqm); const cpi = toNum(r.cpi)
+    // The BY_SQM rules are "după cota-parte indiviză", so the SQM measure carries the cotă weight.
+    // Prefer the explicit cotă (cpi) when present — otherwise BY_SQM allocation has no weight for units
+    // without a raw sqm and silently collapses to an equal split. Fall back to raw sqm.
+    const cota = cpi ?? sqm
     if (res != null) periodMeasures.push({ unitCode: r.code, typeCode: 'RESIDENTS', value: res })
-    if (sqm != null) periodMeasures.push({ unitCode: r.code, typeCode: 'SQM', value: sqm })
+    if (cota != null) periodMeasures.push({ unitCode: r.code, typeCode: 'SQM', value: cota })
 
     if (r.billing_entity)
       memberships.push({ unitCode: r.code, billingEntityCode: String(r.billing_entity).trim(), startPeriod: r.start_period, endPeriod: r.end_period })
