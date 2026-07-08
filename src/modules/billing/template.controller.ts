@@ -109,7 +109,7 @@ export class TemplateController {
     return this.templates.saveMeterTemplateState(communityId, periodCode, code, req.user?.roles ?? [], {
       state: body.state,
       values: body.values,
-    })
+    }, req.user?.id ?? req.user?.sub)
   }
 
   @Post('meter-templates/import')
@@ -176,7 +176,7 @@ export class TemplateController {
     @Req() req: any,
   ) {
     if (!file?.buffer?.length) throw new BadRequestException('Missing CSV file')
-    return this.templates.importMeterTemplateCsv(communityId, periodCode, code, req.user?.roles ?? [], file)
+    return this.templates.importMeterTemplateCsv(communityId, periodCode, code, req.user?.roles ?? [], file, req.user?.id ?? req.user?.sub)
   }
 
   @Get('meters/:meterId/history')
@@ -196,6 +196,6 @@ export class TemplateController {
       value: Number(body.value),
       origin: body.origin,
       estimated: !!body.estimated,
-    })
+    }, req.user?.id ?? req.user?.sub)
   }
 }

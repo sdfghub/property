@@ -449,10 +449,13 @@ model PeriodMeasure {
   value       Decimal      @map("value") @db.Decimal(18, 6) // period consumption (derived when INDEX mode)
   reading     Decimal?     @map("reading") @db.Decimal(18, 6) // raw cumulative meter index (INDEX mode only)
   estimated   Boolean      @default(false) @map("estimated")
+  enteredById String?      @map("entered_by_id") // user who entered this value (null for derived/aggregation)
+  selfReported Boolean     @default(false) @map("self_reported") // true when entered by a non-admin (e.g. resident)
   provenance  Json?        @map("provenance")
 
   community Community @relation(fields: [communityId], references: [id])
   period    Period    @relation(fields: [periodId], references: [id])
+  enteredBy User?     @relation("MeasureEnteredBy", fields: [enteredById], references: [id])
 
   @@unique([communityId, periodId, scopeType, scopeId, typeCode])
   @@index([meterId])
@@ -1444,6 +1447,7 @@ model User {
   ticketsCreated          Ticket[]                   @relation("TicketCreatedBy")
   ticketsAssigned         Ticket[]                   @relation("TicketAssignee")
   ticketEvents            TicketEvent[]
+  enteredMeasures         PeriodMeasure[]            @relation("MeasureEnteredBy")
   announcementsCreated    Announcement[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]

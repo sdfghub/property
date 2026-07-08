@@ -35,6 +35,8 @@ export function BillForm({
     () => Object.fromEntries(Object.entries(template.values || {}).map(([k, v]) => [k, String(v)])),
   )
   const [expenseTypeMap, setExpenseTypeMap] = React.useState<Record<string, { id: string; currency?: string | null; name?: string }>>({})
+  // Self-reported (non-admin) marker per meter item, for admin highlight.
+  const [selfByKey, setSelfByKey] = React.useState<Record<string, { selfReported?: boolean; enteredByName?: string | null }>>({})
   const [loading, setLoading] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const items = safeItems
@@ -94,6 +96,7 @@ export function BillForm({
           .get<any>(`/communities/${communityId}/periods/${periodCode}/meters/${(m as any).meterId}`)
           .then((res) => {
             if (res?.value != null) setValues((prev) => ({ ...prev, [m.key]: String(Number(res.value)) }))
+            if (res?.selfReported) setSelfByKey((s) => ({ ...s, [m.key]: { selfReported: true, enteredByName: res?.enteredByName ?? null } }))
           })
           .catch(() => null)
       })
@@ -221,6 +224,11 @@ export function BillForm({
                 <div className="muted" style={{ fontSize: 12 }}>
                   {item.kind === 'meter' ? item.meterId : item.expenseTypeCode}
                 </div>
+                {item.kind === 'meter' && selfByKey[item.key]?.selfReported && (
+                  <span className="badge warn" title="Valoare introdusă de proprietar, nu de administrator">
+                    ⚠ citit de proprietar{selfByKey[item.key]?.enteredByName ? ` (${selfByKey[item.key]?.enteredByName})` : ''}
+                  </span>
+                )}
               </div>
             ))}
             {isInvoice && (

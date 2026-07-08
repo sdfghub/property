@@ -42,6 +42,18 @@ export class TemplateService {
     return
   }
 
+  /** Whether the caller holds a privileged (non-resident) role for this community. */
+  private isCommunityAdmin(roles: RoleAssignment[], communityId: string): boolean {
+    return (roles || []).some((r) => {
+      if (r.role === 'SYSTEM_ADMIN') return true
+      return (
+        (r.role === 'COMMUNITY_ADMIN' || r.role === 'CENSOR' || r.role === 'EXECUTIVE_COMITEE_MEMBER') &&
+        r.scopeType === 'COMMUNITY' &&
+        (r.scopeId === communityId || r.scopeId == null)
+      )
+    })
+  }
+
   private normalizeBillTemplates(raw: any): BillTemplateDto[] {
     const templates: BillTemplateDto[] = Array.isArray(raw)
       ? raw
@@ -694,6 +706,10 @@ export class TemplateService {
               values[clone.key] = valNum
               clone.value = valNum
             }
+            if (pm?.selfReported) {
+              ;(clone as any).selfReported = true
+              ;(clone as any).enteredById = pm.enteredById
+            }
           }
         } else if (item.kind === 'meter') {
           const m = meters.find((mx: any) => mx.meterId === item.meterId)
@@ -711,6 +727,10 @@ export class TemplateService {
             values[item.key] = valNum
             ;(item as any).value = valNum
           }
+          if (pm?.selfReported) {
+            ;(item as any).selfReported = true
+            ;(item as any).enteredById = pm.enteredById
+          }
         } else {
           items.push(item)
         }
@@ -727,9 +747,11 @@ export class TemplateService {
     templateCode: string,
     roles: RoleAssignment[],
     payload: { state?: string; values?: Record<string, any> },
+    userId?: string,
   ) {
     const communityId = await this.ensureCommunityId(communityRef)
     this.ensureAdmin(roles, communityId)
+    const selfReported = !this.isCommunityAdmin(roles, communityId)
     const period = await this.prisma.period.findUnique({ where: { communityId_code: { communityId, code: periodCode } } })
     if (!period) throw new NotFoundException('Period not found')
     const repo: any = (this.prisma as any).meterEntryTemplate
@@ -793,7 +815,7 @@ export class TemplateService {
               typeCode: meter.typeCode,
             },
           },
-          update: { value: valueNum, reading, origin: 'METER', estimated: false, meterId, provenance },
+          update: { value: valueNum, reading, origin: 'METER', estimated: false, meterId, provenance, enteredById: userId ?? null, selfReported },
           create: {
             communityId,
             periodId: period.id,
@@ -806,6 +828,8 @@ export class TemplateService {
             estimated: false,
             meterId,
             provenance,
+            enteredById: userId ?? null,
+            selfReported,
           },
         })
         if (mode === 'INDEX') {
@@ -930,10 +954,12 @@ export class TemplateService {
     templateCode: string,
     roles: RoleAssignment[],
     file: UploadedFile,
+    userId?: string,
   ) {
     if (!file?.buffer?.length) throw new BadRequestException('Missing CSV file')
     const communityId = await this.ensureCommunityId(communityRef)
     this.ensureAdmin(roles, communityId)
+    const selfReported = !this.isCommunityAdmin(roles, communityId)
     const period = await this.getPeriod(communityId, periodCode)
     const { template, items, meterById, keyByMeterId, itemLabelByKey } = await this.resolveMeterTemplateItems(
       communityId,
@@ -1003,7 +1029,7 @@ export class TemplateService {
             typeCode: meter.typeCode,
           },
         },
-        update: { value: derivedValue, reading, origin: 'METER', estimated: false, meterId, provenance },
+        update: { value: derivedValue, reading, origin: 'METER', estimated: false, meterId, provenance, enteredById: userId ?? null, selfReported },
         create: {
           communityId,
           periodId: period.id,
@@ -1016,6 +1042,8 @@ export class TemplateService {
           estimated: false,
           meterId,
           provenance,
+          enteredById: userId ?? null,
+          selfReported,
         },
       })
       if (mode === 'INDEX') {
@@ -1105,7 +1133,12 @@ export class TemplateService {
     })
     const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
     const previousReading = await this.priorReadingByMeter(communityId, meterId, (period as any).seq)
-    return { ...(pm ?? {}), meterId, typeCode: meter.typeCode, mode, previousReading }
+    let enteredByName: string | null = null
+    if ((pm as any)?.enteredById) {
+      const u = await this.prisma.user.findUnique({ where: { id: (pm as any).enteredById }, select: { name: true, email: true } })
+      enteredByName = u?.name || u?.email || null
+    }
+    return { ...(pm ?? {}), meterId, typeCode: meter.typeCode, mode, previousReading, enteredByName }
   }
 
   /** Prior period's reading for a meter (by meterId), for display. */
@@ -1129,8 +1162,12 @@ export class TemplateService {
     const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select pr.code as "periodCode", pr.seq as seq,
-              pm.reading::float8 as reading, pm.value::float8 as consumption, pm.estimated
-         from period_measure pm join period pr on pr.id = pm.period_id
+              pm.reading::float8 as reading, pm.value::float8 as consumption, pm.estimated,
+              pm.self_reported as "selfReported", pm.entered_by_id as "enteredById",
+              coalesce(u.name, u.email) as "enteredByName"
+         from period_measure pm
+         join period pr on pr.id = pm.period_id
+         left join "user" u on u.id = pm.entered_by_id
         where pm.community_id = $1 and pm.meter_id = $2
         order by pr.seq desc limit 24`,
       communityId, meterId,
@@ -1205,6 +1242,7 @@ export class TemplateService {
     periodCode: string,
     roles: RoleAssignment[],
     input: { meterId: string; value: number; origin?: string; estimated?: boolean },
+    userId?: string,
   ) {
     const communityId = await this.ensureCommunityId(communityRef)
     this.ensureAdmin(roles, communityId)
@@ -1230,6 +1268,7 @@ export class TemplateService {
       : null
     const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
     const { reading, value: valueNum } = this.deriveMeasureValues(mode, entered, prior, openingIndex)
+    const selfReported = !this.isCommunityAdmin(roles, communityId)
     const pm = await (this.prisma as any).periodMeasure.upsert({
       where: {
         communityId_periodId_scopeType_scopeId_typeCode: {
@@ -1246,6 +1285,8 @@ export class TemplateService {
         origin,
         estimated: !!input.estimated,
         meterId: meter.meterId,
+        enteredById: userId ?? null,
+        selfReported,
       },
       create: {
         communityId,
@@ -1258,6 +1299,8 @@ export class TemplateService {
         reading,
         estimated: !!input.estimated,
         meterId: meter.meterId,
+        enteredById: userId ?? null,
+        selfReported,
       },
     })
     await this.recomputeAggregationsAndDerived(communityId, period.id)

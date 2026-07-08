@@ -30,6 +30,8 @@ export function MeterEntryForm({
   // INDEX vs CONSUMPTION per measure type, previous reading per meter, and reading history.
   const [modeByType, setModeByType] = React.useState<Record<string, string>>({})
   const [prevByMeter, setPrevByMeter] = React.useState<Record<string, number | null>>({})
+  // Self-reported (non-admin) marker per meter, for admin highlight.
+  const [flagByMeter, setFlagByMeter] = React.useState<Record<string, { selfReported?: boolean; enteredByName?: string | null }>>({})
   const [historyByMeter, setHistoryByMeter] = React.useState<Record<string, any[]>>({})
   const [openHistory, setOpenHistory] = React.useState<Set<string>>(new Set())
 
@@ -134,7 +136,10 @@ export function MeterEntryForm({
       .forEach((it) => {
         const mid = (it as any).meterId as string
         api.get<any>(`/communities/${communityId}/periods/${periodCode}/meters/${mid}`)
-          .then((r: any) => setPrevByMeter((p) => ({ ...p, [mid]: r?.previousReading ?? null })))
+          .then((r: any) => {
+            setPrevByMeter((p) => ({ ...p, [mid]: r?.previousReading ?? null }))
+            setFlagByMeter((f) => ({ ...f, [mid]: { selfReported: !!r?.selfReported, enteredByName: r?.enteredByName ?? null } }))
+          })
           .catch(() => {})
       })
   }, [api, communityId, periodCode, items])
@@ -254,6 +259,11 @@ export function MeterEntryForm({
                     disabled={!canEdit}
                   />
                   <div className="muted" style={{ fontSize: 12 }}>{mid || item.typeCode}</div>
+                  {mid && flagByMeter[mid]?.selfReported && (
+                    <span className="badge warn" title="Valoare introdusă de proprietar, nu de administrator">
+                      ⚠ citit de proprietar{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
+                    </span>
+                  )}
                   {mid && (
                     <button type="button" className="btn ghost small" onClick={() => toggleHistory(mid)}>
                       {openHistory.has(mid) ? 'ascunde istoric' : 'istoric'}
@@ -278,7 +288,10 @@ export function MeterEntryForm({
                     <tbody>
                       {(historyByMeter[mid] || []).map((h: any, j: number) => (
                         <tr key={j} style={{ textAlign: 'right', borderTop: '1px solid var(--border,#eee)' }}>
-                          <td style={{ textAlign: 'left', padding: '2px 6px' }}>{h.periodCode}</td>
+                          <td style={{ textAlign: 'left', padding: '2px 6px' }}>
+                            {h.periodCode}
+                            {h.selfReported ? <span title={`citit de proprietar${h.enteredByName ? ` (${h.enteredByName})` : ''}`} style={{ color: 'var(--warn, #b45309)', marginLeft: 4 }}>⚠</span> : null}
+                          </td>
                           <td style={{ padding: '2px 6px' }}>{h.reading ?? '—'}</td>
                           <td style={{ padding: '2px 6px' }}>{h.consumption ?? '—'}</td>
                         </tr>
