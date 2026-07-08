@@ -32,6 +32,7 @@
     "api:smoke": "ts-node --transpile-only src/scripts/api-smoke-test.ts",
     "test:payment-allocation": "ts-node --transpile-only src/scripts/test-payment-allocation.ts",
     "history:parse": "ts-node --transpile-only src/scripts/history/parse-export.ts",
+    "history:inject": "ts-node --transpile-only src/scripts/history/inject-history.ts",
     "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts"
   },
   "dependencies": {
