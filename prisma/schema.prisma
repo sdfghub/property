@@ -203,6 +203,7 @@ model Community {
   penaltyGraceDays Int @default(30) @map("penalty_grace_days")
   features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
   paymentAllocation Json? @map("payment_allocation") // per-community payment→charge allocation strategy (see PaymentAllocationService; default FIFO)
+  measureModes Json? @map("measure_modes") // per-type meter reading mode { "<typeCode>": "INDEX" | "CONSUMPTION" }; default CONSUMPTION
 
   periods                    Period[]
   units                      Unit[]
@@ -445,7 +446,8 @@ model PeriodMeasure {
   scopeId     String       @map("scope_id")
   typeCode    String       @map("type_code")
   origin      SeriesOrigin @map("origin")
-  value       Decimal      @map("value") @db.Decimal(18, 6)
+  value       Decimal      @map("value") @db.Decimal(18, 6) // period consumption (derived when INDEX mode)
+  reading     Decimal?     @map("reading") @db.Decimal(18, 6) // raw cumulative meter index (INDEX mode only)
   estimated   Boolean      @default(false) @map("estimated")
   provenance  Json?        @map("provenance")
 
@@ -778,6 +780,7 @@ model Meter {
   installedAt DateTime? @map("installed_at")
   retiredAt   DateTime? @map("retired_at")
   multiplier  Decimal?  @map("multiplier") @db.Decimal(18, 6)
+  openingIndex Decimal? @map("opening_index") @db.Decimal(18, 6) // optional baseline for INDEX-mode meters
   notes       String?   @map("notes")
 
   @@index([scopeCode])

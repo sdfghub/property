@@ -762,8 +762,9 @@ export class TemplateService {
         }
       }
       for (const [key, val] of Object.entries(payload.values)) {
-        const valueNum = val as any
-        if (valueNum === undefined || valueNum === null || valueNum === '') continue
+        if (val === undefined || val === null || (val as any) === '') continue
+        const entered = Number(val)
+        if (Number.isNaN(entered)) continue
         const meterId = meterKeyMap.get(key)
         if (!meterId || !meterRepo || !pmRepo) continue
         const meter = await meterRepo.findUnique({ where: { meterId } })
@@ -776,6 +777,12 @@ export class TemplateService {
           itemKey: key,
           itemLabel: meterItemLabel.get(key) ?? key,
         }
+        const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
+        const prior = mode === 'INDEX'
+          ? await this.priorReadingValue(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq)
+          : null
+        const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
+        const { reading, value: valueNum } = this.deriveMeasureValues(mode, entered, prior, openingIndex)
         await pmRepo.upsert({
           where: {
             communityId_periodId_scopeType_scopeId_typeCode: {
@@ -786,7 +793,7 @@ export class TemplateService {
               typeCode: meter.typeCode,
             },
           },
-          update: { value: valueNum, origin: 'METER', estimated: false, meterId, provenance },
+          update: { value: valueNum, reading, origin: 'METER', estimated: false, meterId, provenance },
           create: {
             communityId,
             periodId: period.id,
@@ -795,11 +802,15 @@ export class TemplateService {
             typeCode: meter.typeCode,
             origin: 'METER',
             value: valueNum,
+            reading,
             estimated: false,
             meterId,
             provenance,
           },
         })
+        if (mode === 'INDEX') {
+          await this.recomputeNextConsumption(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq, entered)
+        }
       }
     }
     const res = await instRepo.upsert({
@@ -976,6 +987,12 @@ export class TemplateService {
         itemKey: key || meterId,
         itemLabel: (key ? itemLabelByKey.get(key) : null) ?? meterId,
       }
+      const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
+      const prior = mode === 'INDEX'
+        ? await this.priorReadingValue(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq)
+        : null
+      const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
+      const { reading, value: derivedValue } = this.deriveMeasureValues(mode, valueNum, prior, openingIndex)
       await pmRepo.upsert({
         where: {
           communityId_periodId_scopeType_scopeId_typeCode: {
@@ -986,7 +1003,7 @@ export class TemplateService {
             typeCode: meter.typeCode,
           },
         },
-        update: { value: valueNum, origin: 'METER', estimated: false, meterId, provenance },
+        update: { value: derivedValue, reading, origin: 'METER', estimated: false, meterId, provenance },
         create: {
           communityId,
           periodId: period.id,
@@ -994,12 +1011,16 @@ export class TemplateService {
           scopeId,
           typeCode: meter.typeCode,
           origin: 'METER',
-          value: valueNum,
+          value: derivedValue,
+          reading,
           estimated: false,
           meterId,
           provenance,
         },
       })
+      if (mode === 'INDEX') {
+        await this.recomputeNextConsumption(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq, valueNum)
+      }
       imported += 1
     }
     const valuesByKey: Record<string, number> = {}
@@ -1085,6 +1106,68 @@ export class TemplateService {
     return pm
   }
 
+  // ── Meter reading mode (INDEX vs CONSUMPTION) ──────────────────────────────
+  // Per community per measure-type. INDEX: entered value is a cumulative meter reading and the
+  // period consumption = thisReading − previousReading (or − meter.openingIndex for the first one).
+  // CONSUMPTION (default): the entered value IS the consumption (historical behavior).
+
+  /** Resolve the reading mode for a measure type in a community. Default CONSUMPTION. */
+  private async resolveMeasureMode(communityId: string, typeCode: string): Promise<'INDEX' | 'CONSUMPTION'> {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { measureModes: true },
+    })
+    const modes = (c?.measureModes as Record<string, string>) || {}
+    return modes[typeCode] === 'INDEX' ? 'INDEX' : 'CONSUMPTION'
+  }
+
+  /** Most recent prior period's raw reading for this series (seq < currentSeq), or null. */
+  private async priorReadingValue(
+    communityId: string, scopeType: any, scopeId: string, typeCode: string, currentSeq: number,
+  ): Promise<number | null> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pm.reading::float8 as reading
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.scope_type::text = $2 and pm.scope_id = $3 and pm.type_code = $4
+          and pm.reading is not null and p.seq < $5
+        order by p.seq desc limit 1`,
+      communityId, String(scopeType), scopeId, typeCode, currentSeq,
+    )
+    return rows.length ? Number(rows[0].reading) : null
+  }
+
+  /** Compute {reading, value(consumption)} to store for the given mode. Negative diffs clamp to 0. */
+  private deriveMeasureValues(
+    mode: 'INDEX' | 'CONSUMPTION', entered: number, prior: number | null, openingIndex: number | null,
+  ): { reading: number | null; value: number } {
+    if (mode !== 'INDEX') return { reading: null, value: entered }
+    const base = prior ?? openingIndex ?? null
+    const value = base == null ? 0 : Math.max(0, entered - base)
+    return { reading: entered, value }
+  }
+
+  /**
+   * A reading in period P also determines the NEXT period's consumption (nextReading − P.reading).
+   * After writing P's reading, recompute the immediately-following period that has a reading.
+   */
+  private async recomputeNextConsumption(
+    communityId: string, scopeType: any, scopeId: string, typeCode: string, currentSeq: number, currentReading: number,
+  ): Promise<void> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pm.id, pm.period_id as "periodId", pm.reading::float8 as reading
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.scope_type::text = $2 and pm.scope_id = $3 and pm.type_code = $4
+          and pm.reading is not null and p.seq > $5
+        order by p.seq asc limit 1`,
+      communityId, String(scopeType), scopeId, typeCode, currentSeq,
+    )
+    if (!rows.length) return
+    const next = rows[0]
+    const value = Math.max(0, Number(next.reading) - currentReading)
+    await this.prisma.periodMeasure.update({ where: { id: next.id }, data: { value } })
+    await this.recomputeAggregationsAndDerived(communityId, next.periodId)
+  }
+
   async upsertMeterReading(
     communityRef: string,
     periodCode: string,
@@ -1105,8 +1188,16 @@ export class TemplateService {
       scopeId = unitIdMap.find((u) => u.code === meter.scopeCode)?.id ?? meter.scopeCode
     }
     const origin = (input.origin as any) ?? 'METER'
-    const valueNum = input.value as any
-    if (valueNum === undefined || valueNum === null || valueNum === '') throw new ForbiddenException('Invalid meter value')
+    const entered = Number(input.value)
+    if (input.value === undefined || input.value === null || (input.value as any) === '' || Number.isNaN(entered)) {
+      throw new ForbiddenException('Invalid meter value')
+    }
+    const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
+    const prior = mode === 'INDEX'
+      ? await this.priorReadingValue(communityId, scopeType, scopeId, meter.typeCode, period.seq)
+      : null
+    const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
+    const { reading, value: valueNum } = this.deriveMeasureValues(mode, entered, prior, openingIndex)
     const pm = await (this.prisma as any).periodMeasure.upsert({
       where: {
         communityId_periodId_scopeType_scopeId_typeCode: {
@@ -1119,6 +1210,7 @@ export class TemplateService {
       },
       update: {
         value: valueNum,
+        reading,
         origin,
         estimated: !!input.estimated,
         meterId: meter.meterId,
@@ -1131,11 +1223,15 @@ export class TemplateService {
         typeCode: meter.typeCode,
         origin,
         value: valueNum,
+        reading,
         estimated: !!input.estimated,
         meterId: meter.meterId,
       },
     })
     await this.recomputeAggregationsAndDerived(communityId, period.id)
+    if (mode === 'INDEX') {
+      await this.recomputeNextConsumption(communityId, scopeType, scopeId, meter.typeCode, period.seq, entered)
+    }
     return pm
   }
 

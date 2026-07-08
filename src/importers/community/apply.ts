@@ -130,12 +130,19 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
   // measure types
   if (Array.isArray(plan.measureTypes)) {
     stats.measureTypes += plan.measureTypes.length
+    // Per-community per-type reading mode (INDEX = enter meter index, consumption = diff).
+    const measureModes: Record<string, string> = {}
     for (const mt of plan.measureTypes) {
       await prisma.measureType.upsert({
         where: { code: mt.code },
         update: { unit: mt.unit, name: mt.name ?? null } as any,
         create: { code: mt.code, unit: mt.unit, name: mt.name ?? null } as any,
       })
+      const rm = (mt as any).readingMode
+      if (rm === 'INDEX' || rm === 'CONSUMPTION') measureModes[mt.code] = rm
+    }
+    if (Object.keys(measureModes).length) {
+      await prisma.community.update({ where: { id: communityId }, data: { measureModes } as any })
     }
   }
 
@@ -152,6 +159,7 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
             scopeType: m.scopeType as any,
             typeCode: m.typeCode,
             origin: (m.origin as any) ?? 'METER',
+            openingIndex: (m as any).openingIndex ?? null,
             notes: (m as any).notes ?? null,
           },
           create: {
@@ -161,6 +169,7 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
             scopeCode: m.scopeCode,
             typeCode: m.typeCode,
             origin: (m.origin as any) ?? 'METER',
+            openingIndex: (m as any).openingIndex ?? null,
             notes: (m as any).notes ?? null,
           },
         })
