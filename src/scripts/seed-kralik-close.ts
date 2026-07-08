@@ -76,6 +76,30 @@ async function main() {
   if (!period) throw new Error(`period ${PERIOD.code} not found (did import:community run?)`)
   await prisma.period.update({ where: { id: period.id }, data: { startDate: new Date(PERIOD.start), endDate: new Date(PERIOD.end), dueDate: new Date(dueDate) } })
 
+  // 3b) March water readings: the export carries per-unit cold-water consumption (m³) as a driver
+  //     ("Apa rece-Consum"). Load it as UNIT-scoped WATER_COLD measures for this period so APA_RECE
+  //     (BY_CONSUMPTION) splits by real consumption instead of collapsing to an equal split. Values are
+  //     consumption (not an index), so write value directly regardless of the community's reading mode.
+  //     Write a measure for EVERY unit — BY_CONSUMPTION falls back to a full equal split if ANY eligible
+  //     unit lacks a reading, so units with no recorded consumption get 0 (they bear no water cost) rather
+  //     than dragging the whole split back to equal.
+  const unitRows = await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })
+  const srcUnits = (src?.units || {}) as Record<string, any>
+  let waterN = 0, waterNonZero = 0
+  for (const u of unitRows) {
+    const cons = Number(srcUnits[u.code]?.drivers?.water_cold ?? 0)
+    // per-unit aggregate reading (source gives one m³ total per unit; units may have several physical
+    // meters) — use a synthetic meterId like the importer does for SQM/RESIDENTS (meterId is required).
+    const meterId = `WATER_COLD-${u.code}`
+    await prisma.periodMeasure.upsert({
+      where: { communityId_periodId_scopeType_scopeId_typeCode: { communityId: COMM, periodId: period.id, scopeType: 'UNIT', scopeId: u.id, typeCode: 'WATER_COLD' } },
+      update: { value: cons, origin: 'ADMIN', meterId },
+      create: { communityId: COMM, periodId: period.id, scopeType: 'UNIT', scopeId: u.id, typeCode: 'WATER_COLD', value: cons, origin: 'ADMIN', meterId },
+    })
+    waterN++; if (cons > 0) waterNonZero++
+  }
+  console.log(`March water readings loaded (WATER_COLD, m³): ${waterN} units (${waterNonZero} with consumption)`)
+
   // 4) penalty buckets: after a full-history injection there are no opening balances (injected statements
   //    + migrated buckets are the cutover), so seedFromOpenings is a no-op here; March's advance continues
   //    from the injected buckets. (Harmless if openings exist for a non-injected rebuild.)
