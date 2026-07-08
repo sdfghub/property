@@ -9,13 +9,13 @@ import { TemplateService } from '../modules/billing/template.service'
 import { PeriodService } from '../modules/period/period.service'
 import { PenaltyLedgerService } from '../modules/period/penalty-ledger.service'
 import { PrismaService } from '../modules/user/prisma.service'
+import { parseExport } from './history/parse-export'
 
 @Module({ imports: [FeaturesModule, BillingModule, PeriodModule] })
 class ScriptModule {}
 
 const COMM = 'Kralik'
 const PERIOD = { code: '2026-03', start: '2026-03-01', end: '2026-03-31' }
-const DUE_DATE = '2026-04-30' // due in the future of the period
 const GRACE_DAYS = 30
 
 async function main() {
@@ -56,12 +56,29 @@ async function main() {
   }
   console.log(`expense types patched with fundCode=${expFund}: ${etp}`)
 
+  // 2c) source-driven period settings: due date + penalty rate come from the exported schedule (File 2),
+  //     so the computed period matches reality (Kralik's rate has been 0 since mid-2023 → no March penalties).
+  const parsed = parseExport(path.join(process.cwd(), 'data', COMM))
+  const src = parsed.months.find((m) => m.code === PERIOD.code)
+  const dueDate = src?.dueDate || `${PERIOD.code}-30`
+  const srcRatePct = (src?.penaltyRate ?? 0) * 100 // penaltyRate is a fraction; Fund.allocation.penaltyPerDayPct is a percent
+  const rateFunds = await prisma.fund.findMany({ where: { communityId: COMM } })
+  for (const f of rateFunds) {
+    const alloc = (f.allocation as any) || {}
+    if (alloc.penaltyPerDayPct != null && Number(alloc.penaltyPerDayPct) !== srcRatePct) {
+      await prisma.fund.update({ where: { id: f.id }, data: { allocation: { ...alloc, penaltyPerDayPct: srcRatePct } } })
+    }
+  }
+  console.log(`source period ${PERIOD.code}: dueDate=${dueDate} penaltyRate=${srcRatePct}%`)
+
   // 3) period dueDate (import created the period from def.json)
   const period = await prisma.period.findFirst({ where: { communityId: COMM, code: PERIOD.code } })
   if (!period) throw new Error(`period ${PERIOD.code} not found (did import:community run?)`)
-  await prisma.period.update({ where: { id: period.id }, data: { startDate: new Date(PERIOD.start), endDate: new Date(PERIOD.end), dueDate: new Date(DUE_DATE) } })
+  await prisma.period.update({ where: { id: period.id }, data: { startDate: new Date(PERIOD.start), endDate: new Date(PERIOD.end), dueDate: new Date(dueDate) } })
 
-  // 4) seed penalty buckets from opening arrears
+  // 4) penalty buckets: after a full-history injection there are no opening balances (injected statements
+  //    + migrated buckets are the cutover), so seedFromOpenings is a no-op here; March's advance continues
+  //    from the injected buckets. (Harmless if openings exist for a non-injected rebuild.)
   const seed = await ledger.seedFromOpenings(COMM, period.id)
   console.log(`seedFromOpenings: ${JSON.stringify(seed)}`)
 

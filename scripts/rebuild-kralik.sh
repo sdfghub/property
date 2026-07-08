@@ -21,4 +21,7 @@ npm run import:meter-templates -- ./data/Kralik >/dev/null
 echo "📚 injecting full history at ledger level from the export (charges + balances + penalties)..."
 npm run history:inject -- ./data/Kralik
 
-echo "✅ Kralik rebuilt: history injected (Feb-22..Feb-26); 2026-03 is the current open period."
+echo "🧮 computing 2026-03 on top of the injected history (source rate/due date)..."
+npx ts-node --transpile-only src/scripts/seed-kralik-close.ts
+
+echo "✅ Kralik rebuilt: history injected (Feb-22..Feb-26) + 2026-03 computed."
