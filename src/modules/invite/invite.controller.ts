@@ -18,14 +18,29 @@ export class InviteController{
     )
   }
 
-  @UseGuards(JwtAuthGuard,ScopesGuard)
-  @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
+  /** Caller must be SYSTEM_ADMIN, or COMMUNITY_ADMIN of the community that owns the billing entity. */
+  private async assertBeAdmin(req: any, beId: string) {
+    const roles = Array.isArray(req?.user?.roles) ? req.user.roles : []
+    if (this.isSystemAdmin(roles)) return
+    const communityId = beId ? await this.invites.billingEntityCommunityId(beId) : null
+    if (!communityId) throw new ForbiddenException('Unknown billing entity')
+    if (!this.isCommunityAdmin(roles, communityId)) throw new ForbiddenException('Community admin required')
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post()
-  createSystemInvite(@Body() body:any, @Req() req:any){
+  async createSystemInvite(@Body() body:any, @Req() req:any){
     const { email, role, scopeType, scopeId, beRoles } = body
     const inviterId = req?.user?.sub
     if (!inviterId) {
       throw new UnauthorizedException('Missing auth user')
+    }
+    const roles = Array.isArray(req?.user?.roles) ? req.user.roles : []
+    if (scopeType === 'BILLING_ENTITY') {
+      // A community admin may invite users to billing entities within their own community.
+      await this.assertBeAdmin(req, scopeId)
+    } else if (!this.isSystemAdmin(roles)) {
+      throw new ForbiddenException('System admin required')
     }
     return this.invites.createInvite(email, role, scopeType, scopeId, inviterId, beRoles)
   }
@@ -62,17 +77,17 @@ export class InviteController{
     return this.invites.deletePending(inviteId)
   }
 
-  @UseGuards(JwtAuthGuard,ScopesGuard)
-  @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
+  @UseGuards(JwtAuthGuard)
   @Get('billing-entity/:beId/pending')
-  async pendingForBe(@Param('beId') beId:string){
+  async pendingForBe(@Param('beId') beId:string, @Req() req:any){
+    await this.assertBeAdmin(req, beId)
     return this.invites.pendingForBe(beId)
   }
 
-  @UseGuards(JwtAuthGuard,ScopesGuard)
-  @Scopes({ role:'SYSTEM_ADMIN', scopeType:'SYSTEM' })
+  @UseGuards(JwtAuthGuard)
   @Delete('billing-entity/:beId/pending/:inviteId')
-  async deletePendingBe(@Param('inviteId') inviteId:string){
+  async deletePendingBe(@Param('beId') beId:string, @Param('inviteId') inviteId:string, @Req() req:any){
+    await this.assertBeAdmin(req, beId)
     return this.invites.deletePending(inviteId)
   }
 

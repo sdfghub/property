@@ -10,6 +10,13 @@ export class InviteService{
     private readonly prisma:PrismaService,
     private readonly mail: MailService
   ){}
+
+  /** Community that owns a billing entity (for authorizing community-admin BE invites). */
+  async billingEntityCommunityId(beId: string): Promise<string | null> {
+    const be = await this.prisma.billingEntity.findUnique({ where: { id: beId }, select: { communityId: true } })
+    return be?.communityId ?? null
+  }
+
   async createInvite(
     email: string,
     role: 'COMMUNITY_ADMIN' | 'BILLING_ENTITY_USER' | 'SYSTEM_ADMIN' | 'CENSOR' | 'EXECUTIVE_COMITEE_MEMBER',
