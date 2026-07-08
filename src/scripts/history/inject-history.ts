@@ -39,6 +39,12 @@ async function main() {
 
     const running = new Map<string, number>() // be::fund -> running dueEnd (chained across periods)
     const noArrears = new Set<string>()        // (be,fund) months carried with no source arrears figure
+    const penBucket = new Map<string, string>() // be -> penalty bucket id
+    const penAccrued = new Map<string, number>() // be -> cumulative penalty posted
+
+    // idempotency for the migrated penalty aging (buckets are per-BE, not per-period)
+    await prisma.penaltyBucketPeriod.deleteMany({ where: { bucket: { communityId, originKey: 'migrated' } } })
+    await prisma.penaltyBucket.deleteMany({ where: { communityId, originKey: 'migrated' } })
 
     for (const m of months) {
       const [y, mo] = m.code.split('-').map(Number)
@@ -137,6 +143,23 @@ async function main() {
         }
         await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges, payments, adjustments, dueEnd } })
         running.set(k, dueEnd)
+      }
+
+      // ── Layer 2b: penalty aging (avizier month/total penalty columns read penalty_bucket_period) ──
+      for (const [k, posted] of beFundTotal.entries()) {
+        const [be, fund] = k.split('::')
+        if (fund !== 'PENALIZARI' || !posted) continue
+        let bucketId = penBucket.get(be)
+        if (!bucketId) {
+          const b = await prisma.penaltyBucket.create({
+            data: { communityId, billingEntityId: bid(be) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: 'migrated', dueDate: m.dueDate ? new Date(m.dueDate) : null, firstPenalDay: m.dueDate ? new Date(m.dueDate) : new Date(Date.UTC(y, mo - 1, 1)), principalOriginal: 1e9, status: 'OPEN' },
+          })
+          bucketId = b.id; penBucket.set(be, bucketId)
+        }
+        const acc = (penAccrued.get(be) || 0) + posted; penAccrued.set(be, acc)
+        await prisma.penaltyBucketPeriod.create({
+          data: { bucketId, periodId, periodSeq: seq, penaltyPosted: posted, penaltyAccrued: acc, principalRemaining: arrears.get(`${be}::EXPENSES`) ?? 0, status: 'COMMITTED' },
+        })
       }
     }
 
