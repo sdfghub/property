@@ -112,14 +112,24 @@ async function main() {
         if (u.penPosted) add(be, 'PENALIZARI', unitCode, 'penalty:EXPENSES', u.penPosted) // penalty charge (avizier PEN: column)
       }
 
-      // CommunityCharge + lines (avizier reads these).
+      // CommunityCharge + lines (avizier reads these). Tag each charge the way the avizier's column
+      // logic expects (finance.service.ts): fund contributions as sourceType FUND (→ own fund column,
+      // e.g. "Fond Rulment"/"Reabilitare"), service charges with allocationSnapshot.expenseType (→ own
+      // per-service column under Cheltuieli), penalties via their 'penalty:%' sourceKey. Without this
+      // every injected charge falls through to the 'ALTELE' label and collapses into a single column.
       for (const [sk, s] of svc.entries()) {
         const [fund, service] = sk.split('::')
         const total = s.lines.reduce((a, l) => a + l.amount, 0)
+        const isPenalty = service.startsWith('penalty:')
+        const isFund = !isPenalty && service === 'CONTRIB'
+        const sourceType = isFund ? 'FUND' : 'EXPENSE'
+        const sourceId = isFund ? fund : service
+        const sourceKey = isFund ? 'offset:0' : service
+        const allocationSnapshot = (!isPenalty && !isFund) ? { expenseType: service } : undefined
         const cc = await prisma.communityCharge.upsert({
-          where: { communityId_periodId_sourceType_sourceId_sourceKey_fundId: { communityId, periodId, sourceType: 'EXPENSE', sourceId: service, sourceKey: service, fundId: fid(fund) as string } },
-          update: { amount: total, allocationStrategy: REF, status: 'ACTIVE' },
-          create: { communityId, periodId, fundId: fid(fund), sourceType: 'EXPENSE', sourceId: service, sourceKey: service, amount: total, currency: 'RON', allocationStrategy: REF, status: 'ACTIVE', meta: { source: REF, service } },
+          where: { communityId_periodId_sourceType_sourceId_sourceKey_fundId: { communityId, periodId, sourceType, sourceId, sourceKey, fundId: fid(fund) as string } },
+          update: { amount: total, allocationStrategy: REF, status: 'ACTIVE', allocationSnapshot },
+          create: { communityId, periodId, fundId: fid(fund), sourceType, sourceId, sourceKey, amount: total, currency: 'RON', allocationStrategy: REF, status: 'ACTIVE', allocationSnapshot, meta: { source: REF, service } },
         })
         await prisma.communityChargeLine.deleteMany({ where: { chargeId: cc.id } })
         await prisma.communityChargeLine.createMany({
