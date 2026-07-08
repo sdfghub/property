@@ -1121,6 +1121,7 @@ model PenaltyBucket {
   firstPenalDay     DateTime @map("first_penal_day")  // dueDate + graceDays + 1
   principalOriginal Decimal  @map("principal_original") // cap base
   seedPenaltyAccrued Decimal @default(0) @map("seed_penalty_accrued") // carried penalty at cutover (cap headroom baseline)
+  ratePerDayPct     Decimal? @map("rate_per_day_pct") // penalty %/day stamped at bucket creation; null => use the fund's current rate
   status            String   @default("OPEN") @map("status") // OPEN | SETTLED
   createdAt         DateTime @default(now()) @map("created_at")
 

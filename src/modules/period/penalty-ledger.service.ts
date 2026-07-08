@@ -25,18 +25,21 @@ export class PenaltyLedgerService {
     return Math.floor((to.getTime() - from.getTime()) / DAY) + 1
   }
 
-  /** Funds with a positive daily rate + a resolvable target (earmark) fund. */
+  /** Penalty-source funds (penaltyPerDayPct configured) with a resolvable target (earmark) fund.
+   *  Rate may be 0 today: existing buckets carry their own stamped rate, so we must still advance them. */
   private async penalFunds(tx: TxOrClient, communityId: string): Promise<PenalFund[]> {
     const funds = await tx.fund.findMany({ where: { communityId }, select: { id: true, code: true, allocation: true } })
     const byCode = new Map(funds.map((f) => [f.code, f]))
     return funds
       .map((f) => {
-        const rate = Number((f.allocation as any)?.penaltyPerDayPct ?? 0) / 100
-        const targetCode = (f.allocation as any)?.penaltyFundCode || 'PENALIZARI'
+        const alloc = (f.allocation as any) || {}
+        const configured = alloc.penaltyPerDayPct != null // a penalty source (its current rate may be 0)
+        const rate = Number(alloc.penaltyPerDayPct ?? 0) / 100
+        const targetCode = alloc.penaltyFundCode || 'PENALIZARI'
         const target = byCode.get(targetCode)
-        return { id: f.id, code: f.code, rate, targetId: target?.id as string, targetCode }
+        return { id: f.id, code: f.code, rate, targetId: target?.id as string, targetCode, configured }
       })
-      .filter((f) => f.rate > 0 && f.targetId)
+      .filter((f) => (f as any).configured && f.targetId)
   }
 
   /** Per-unit weights within a BE = the unit's share of principal (opening + charges) in a fund. */
@@ -110,7 +113,8 @@ export class PenaltyLedgerService {
             communityId, billingEntityId: r.beId, fundId: f.id, targetFundId: f.targetId,
             originKey: `period:${periodId}`, dueDate: period?.dueDate ?? null, firstPenalDay,
             principalOriginal: principal, status: 'OPEN',
-          },
+            ratePerDayPct: f.rate * 100, // stamp the rate in effect when this debt's bucket is created
+          } as any,
         })
       }
     }
@@ -166,7 +170,10 @@ export class PenaltyLedgerService {
         // exact, due-date-anchored penalizable days within this period
         const lo = new Date(b.firstPenalDay) > pStart ? new Date(b.firstPenalDay) : pStart
         const days = this.countDays(lo, pEnd)
-        const penaltyN = principalRemaining * g.f.rate * days
+        // Each bucket accrues at the rate stamped when it was created (the schedule rate for its origin
+        // month); fall back to the fund's current rate for buckets created before rate-stamping existed.
+        const bucketRate = (b as any).ratePerDayPct != null ? Number((b as any).ratePerDayPct) / 100 : g.f.rate
+        const penaltyN = principalRemaining * bucketRate * days
         const accrued = Math.min(penaltyAccrued + penaltyN, Number(b.principalOriginal)) // per-bucket cap
         const posted = Math.max(0, accrued - penaltyAccrued)
 
