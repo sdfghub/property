@@ -520,7 +520,7 @@
       "name": "AP 10A",
       "residents": 1,
       "sqm": 40.17,
-      "cpi": 2.04,
+      "cpi": 2.47,
       "billingEntity": "BE_BOITI_ZOLTAN_EMANUEL",
       "groupCodes": [
         "ALL_BILLABLE",
@@ -1512,7 +1512,7 @@
           "400191-C1-U11-AP 6A": 2.12,
           "400191-C1-U18-AP 8": 3.07,
           "400191-C1-U29-AP 9": 2.16,
-          "400191-C1-U37-AP 10A": 2.04,
+          "400191-C1-U37-AP 10A": 2.47,
           "400191-C1-U27-AP 10B": 2.87,
           "400191-C1-U25-AP 31": 6.86,
           "400191-C1-U26-AP 32": 6.87,
