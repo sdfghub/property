@@ -104,7 +104,7 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
             </div>
             <div className="stack" style={{ gap: 2 }}>
               <label className="label">{t('periodSettings.grace', 'Zile de grație')}</label>
-              <input type="number" min={0} max={365} value={graceDays} disabled={!!readOnly} onChange={(e) => setGraceDays(e.target.value)} style={{ width: 100 }} />
+              <input type="number" min={0} max={365} value={graceDays} disabled={!editable} onChange={(e) => setGraceDays(e.target.value)} style={{ width: 100 }} />
               <span className="muted" style={{ fontSize: 11 }}>{t('periodSettings.graceHint', 'valabil pentru toată asociația')}</span>
             </div>
           </div>
@@ -135,7 +135,14 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
             )}
           </div>
 
-          {!readOnly && (
+          {!editable && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              {readOnly
+                ? t('periodSettings.readOnlyRole', 'Vizualizare — doar administratorul poate modifica.')
+                : t('periodSettings.closed', 'Perioadă închisă — setările sunt doar pentru vizualizare.')}
+            </div>
+          )}
+          {editable && (
             <div className="row" style={{ gap: 8, alignItems: 'center' }}>
               <button type="button" className="btn primary" disabled={busy} onClick={save}>{t('common.save', 'Salvează')}</button>
               {msg && <span className="badge positive">{msg}</span>}
