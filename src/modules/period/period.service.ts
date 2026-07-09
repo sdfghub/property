@@ -52,7 +52,7 @@ export class PeriodService {
     const last = await this.prisma.period.findFirst({
       where: { communityId },
       orderBy: { seq: 'desc' },
-      select: { seq: true, code: true },
+      select: { seq: true, code: true, dueDate: true, endDate: true },
     })
     const nextSeq = (last?.seq ?? 0) + 1
     const code = explicitCode || this.inferPeriodCode(last?.code, nextSeq)
@@ -60,10 +60,18 @@ export class PeriodService {
     if (existing) throw new ConflictException(`Period ${code} already exists`)
     // Derive the period's real month bounds from a YYYY-MM code — the penalty engine counts
     // penalizable days within [startDate, endDate], so these must be the actual month, not "today".
-    // dueDate (scadența) stays null: the association admin sets it explicitly.
     const mm = /^(\d{4})-(\d{2})$/.exec(code)
     const startDate = mm ? new Date(Date.UTC(Number(mm[1]), Number(mm[2]) - 1, 1)) : new Date()
     const endDate = mm ? new Date(Date.UTC(Number(mm[1]), Number(mm[2]), 0)) : new Date()
+    // Carry the previous month's penalty settings forward: the penalty rate already lives on each fund
+    // (its current value is stamped at close) and grace is community-wide, so both persist automatically.
+    // The one per-period setting is the due date (scadența) — copy the previous month's convention (same
+    // number of days after the period ends) so the admin doesn't re-enter it every month. Admin can edit it.
+    let dueDate: Date | null = null
+    if (last?.dueDate && last?.endDate) {
+      const offsetMs = new Date(last.dueDate).getTime() - new Date(last.endDate).getTime()
+      dueDate = new Date(endDate.getTime() + offsetMs)
+    }
     const created = await this.prisma.period.create({
       data: {
         communityId,
@@ -72,8 +80,9 @@ export class PeriodService {
         status: 'OPEN',
         startDate,
         endDate,
+        dueDate,
       },
-      select: { id: true, code: true, status: true, seq: true },
+      select: { id: true, code: true, status: true, seq: true, dueDate: true },
     })
     return created
   }

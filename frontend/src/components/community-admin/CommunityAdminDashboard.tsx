@@ -18,6 +18,7 @@ import { CommunicationsTab } from './CommunicationsTab'
 import { InventoryTab } from './InventoryTab'
 import { TodayHome } from './TodayHome'
 import { CloseBoard } from './CloseBoard'
+import { PeriodSettingsPanel } from './PeriodSettingsPanel'
 import { DebtorsPanel } from '../money/DebtorsPanel'
 import { UnpaidInvoicesPanel } from '../money/UnpaidInvoicesPanel'
 import { MoneyHub } from '../money/MoneyHub'
@@ -49,6 +50,7 @@ export type CommunityAdminTabKey =
   | 'users'
   | 'health'
   | 'periodFocus'
+  | 'periodSettings'
 
 type Props = {
   forceCommunityId?: string
@@ -63,8 +65,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -202,6 +204,7 @@ export function CommunityAdminDashboard({
       label: t('nav.monthlyClose') || 'Închiderea lunii',
       items: [
         { key: 'close', label: t('tab.close') || 'Monthly close' },
+        { key: 'periodSettings', label: t('tab.periodSettings') || 'Setări perioadă' },
         { key: 'avizier', label: t('tab.avizier') || 'Avizier' },
         { key: 'meters', label: t('tab.meters') || 'Meters' },
         { key: 'expenses', label: t('tab.expenses') || 'Invoices & expenses' },
@@ -634,6 +637,9 @@ export function CommunityAdminDashboard({
               {activeTab === 'close' && (
                 <CloseBoard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
               )}
+              {activeTab === 'periodSettings' && (
+                <PeriodSettingsPanel communityId={communityId} readOnly={readOnly} />
+              )}
               {activeTab === 'avizier' && <AvizierPanel communityId={communityId} cenzorEnabled={features ? features.cenzor !== false : true} />}
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
               {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
@@ -739,7 +745,6 @@ export function CommunityAdminDashboard({
                   metersConfig={metersConfig}
                   configError={configError}
                   loadingLabel={t('config.loading')}
-                  readOnly={readOnly}
                 />
               )}
 
