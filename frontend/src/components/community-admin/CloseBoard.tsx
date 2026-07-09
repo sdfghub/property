@@ -2,6 +2,7 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import type { CommunityAdminTabKey } from './CommunityAdminDashboard'
+import { UnitAttributesTable } from './UnitAttributesTable'
 
 type Props = { communityId: string; onNavigate: (tab: CommunityAdminTabKey) => void; readOnly?: boolean }
 
@@ -86,9 +87,9 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
       </div>
       {err ? <div className="badge negative">{err}</div> : null}
 
-      <Step n={1} status="optional" title={t('close.residents', 'Residents & units')}
-        desc={t('close.residentsDesc', 'Update resident counts / move-ins before allocating (drives per-person & cota-parte shares).')}>
-        <button className="btn secondary small" onClick={() => onNavigate('users')}>{t('common.open', 'Open')}</button>
+      <Step n={1} status="optional" title={t('close.residents', 'Confirmă persoane & cotă / mp')}
+        desc={t('close.residentsDesc', 'Confirmă numărul de persoane și cota-parte/mp pe unitate înainte de alocare (determină cotele per-persoană și pe cotă-parte).')}>
+        <UnitAttributesTable communityId={communityId} periodCode={code as string} editable={!readOnly && st === 'OPEN'} />
       </Step>
 
       <Step n={2} status={stat('meters', metersDone)} title={t('close.readings', 'Meter readings')}

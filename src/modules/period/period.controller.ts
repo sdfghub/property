@@ -75,6 +75,19 @@ export class PeriodController {
     return this.periods.setSettings(c, p, body || {})
   }
 
+  // Per-unit residents count + sqm (cotă) confirmation for the month close.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('unit-attributes')
+  getUnitAttributes(@Param('communityId') c: string, @Param('periodCode') p: string) {
+    return this.periods.getUnitAttributes(c, p)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Post('unit-attributes')
+  setUnitAttributes(@Param('communityId') c: string, @Param('periodCode') p: string, @Body() body: any) {
+    return this.periods.setUnitAttributes(c, p, body || {})
+  }
+
   @Scopes({ role: ['CENSOR', 'COMMUNITY_ADMIN'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Post('reject')
   async reject(@Param('communityId') c: string, @Param('periodCode') p: string, @Req() req: any) {

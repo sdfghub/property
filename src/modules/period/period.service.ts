@@ -396,6 +396,66 @@ export class PeriodService {
     return out
   }
 
+  /** Per-unit residents count + sqm (cotă) effective for a period. Residents/SQM are UNIT-scoped
+   *  PeriodMeasure rows read as "latest value at or before this period" (allocation.service semantics),
+   *  so a closed period shows the values that applied then. */
+  async getUnitAttributes(communityId: string, periodCode: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    const units = await this.prisma.unit.findMany({
+      where: { communityId }, select: { id: true, code: true }, orderBy: { order: 'asc' },
+    })
+    const rows: Array<{ scopeId: string; typeCode: string; value: number }> = await this.prisma.$queryRawUnsafe(
+      `select distinct on (pm.scope_id, pm.type_code)
+              pm.scope_id as "scopeId", pm.type_code as "typeCode", pm.value::float8 as value
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.type_code in ('RESIDENTS','SQM')
+          and pm.scope_type::text = 'UNIT' and p.seq <= $2
+        order by pm.scope_id, pm.type_code, p.seq desc`,
+      communityId, period.seq,
+    )
+    const byUnit = new Map<string, { residents?: number; sqm?: number }>()
+    for (const r of rows) {
+      const u = byUnit.get(r.scopeId) ?? {}
+      if (r.typeCode === 'RESIDENTS') u.residents = Number(r.value); else u.sqm = Number(r.value)
+      byUnit.set(r.scopeId, u)
+    }
+    const label = (code: string) => code.split('-').slice(3).join('-') || code // "…-U28-AP 1/B" → "AP 1/B"
+    return {
+      period: { code: period.code, status: period.status, editable: period.status !== 'CLOSED' },
+      units: units.map((u) => ({
+        unitId: u.id, code: u.code, label: label(u.code),
+        residents: byUnit.get(u.id)?.residents ?? null,
+        sqm: byUnit.get(u.id)?.sqm ?? null,
+      })),
+    }
+  }
+
+  /** Set per-unit residents/sqm for a (non-closed) period. Writes UNIT-scoped PeriodMeasure rows;
+   *  they take effect on the next allocation recompute. */
+  async setUnitAttributes(communityId: string, periodCode: string, body: any) {
+    const period = await this.getPeriod(communityId, periodCode)
+    if (period.status === 'CLOSED') throw new BadRequestException('Cannot edit a closed period')
+    const units = await this.prisma.unit.findMany({ where: { communityId }, select: { id: true, code: true } })
+    const codeById = new Map(units.map((u) => [u.id, u.code]))
+    const writes: any[] = []
+    const apply = (typeCode: 'RESIDENTS' | 'SQM', origin: string, map: any) => {
+      for (const [unitId, raw] of Object.entries(map || {})) {
+        const val = Number(raw)
+        if (!Number.isFinite(val) || val < 0) throw new BadRequestException(`Invalid ${typeCode} for unit ${unitId}`)
+        const code = codeById.get(unitId); if (!code) continue
+        writes.push(this.prisma.periodMeasure.upsert({
+          where: { communityId_periodId_scopeType_scopeId_typeCode: { communityId, periodId: period.id, scopeType: 'UNIT' as any, scopeId: unitId, typeCode } },
+          update: { value: val, origin: origin as any },
+          create: { communityId, periodId: period.id, scopeType: 'UNIT' as any, scopeId: unitId, typeCode, origin: origin as any, value: val, meterId: `${typeCode}-${code}` },
+        }))
+      }
+    }
+    apply('RESIDENTS', 'DECLARATION', body?.residents)
+    apply('SQM', 'ADMIN', body?.sqm)
+    if (writes.length) await this.prisma.$transaction(writes)
+    return { ok: true, code: periodCode, updated: writes.length }
+  }
+
   async summary(communityId: string, periodCode: string) {
     const period = await this.prisma.period.findUnique({
       where: { communityId_code: { communityId, code: periodCode } },

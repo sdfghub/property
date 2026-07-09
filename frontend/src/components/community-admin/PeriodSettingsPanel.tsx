@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { UnitAttributesTable } from './UnitAttributesTable'
 
 type PenaltyFund = { code: string; name: string; penaltyFundCode: string; ratePerDayPct: number; stamped: boolean }
 type Settings = {
@@ -133,6 +134,11 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
             {editable && s.penaltyFunds.some((f) => !f.stamped) && (
               <span className="muted" style={{ fontSize: 11 }}>{t('periodSettings.rateNote', 'Rata curentă a fondului; se aplică la închiderea perioadei.')}</span>
             )}
+          </div>
+
+          <div className="stack" style={{ gap: 4 }}>
+            <label className="label">{t('periodSettings.units', 'Persoane & cotă-parte pe unitate')}</label>
+            <UnitAttributesTable communityId={communityId} periodCode={code} editable={editable} />
           </div>
 
           {!editable && (
