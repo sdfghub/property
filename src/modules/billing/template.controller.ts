@@ -15,6 +15,16 @@ export class TemplateController {
     return this.templates.listBillTemplates(communityId, periodCode, req.user?.roles ?? [])
   }
 
+  @Get('periods/:periodCode/expenses/status')
+  expensesStatus(@Param('communityId') communityId: string, @Param('periodCode') periodCode: string, @Req() req: any) {
+    return this.templates.expensesStatus(communityId, periodCode, req.user?.roles ?? [])
+  }
+
+  @Get('periods/:periodCode/expenses')
+  listExpenses(@Param('communityId') communityId: string, @Param('periodCode') periodCode: string, @Req() req: any) {
+    return this.templates.listExpenses(communityId, periodCode, req.user?.roles ?? [])
+  }
+
   @Post('periods/:periodCode/bill-templates')
   upsertBillTemplate(
     @Param('communityId') communityId: string,

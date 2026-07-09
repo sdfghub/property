@@ -362,6 +362,40 @@ export class TemplateService {
     })
   }
 
+  /** Expense types for the community — the bill form uses these to label/currency expense rows. */
+  async expensesStatus(communityRef: string, _periodCode: string, roles: RoleAssignment[]) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const types = await this.prisma.expenseType.findMany({
+      where: { communityId }, select: { id: true, code: true, name: true, currency: true }, orderBy: { code: 'asc' },
+    })
+    return { types }
+  }
+
+  /** This period's recorded expenses, aggregated per expense type (drives the bill form's pre-fill). */
+  async listExpenses(communityRef: string, periodCode: string, roles: RoleAssignment[]) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    this.ensureAdmin(roles, communityId)
+    const period = await this.prisma.period.findUnique({ where: { communityId_code: { communityId, code: periodCode } } })
+    if (!period) return { items: [] }
+    // Expense charges may be sourced from EXPENSE/TEMPLATE (injected) or VENDOR_INVOICE (engine-computed);
+    // all carry allocationSnapshot.expenseType. Fund contributions and penalties don't, so filtering on
+    // that tag captures exactly the per-expense-type amounts the bill form needs.
+    const charges = await this.prisma.communityCharge.findMany({
+      where: { communityId, periodId: period.id },
+      select: { amount: true, allocationSnapshot: true, meta: true },
+    })
+    const byType = new Map<string, { code: string; amount: number; description: string }>()
+    for (const c of charges) {
+      const code = String((c.allocationSnapshot as any)?.expenseType ?? '')
+      if (!code) continue
+      const cur = byType.get(code) ?? { code, amount: 0, description: String((c.meta as any)?.service ?? code) }
+      cur.amount += Number(c.amount)
+      byType.set(code, cur)
+    }
+    return { items: Array.from(byType.values()).map((e) => ({ allocatableAmount: e.amount, expenseType: { code: e.code }, description: e.description })) }
+  }
+
   async saveBillTemplateState(
     communityRef: string,
     periodCode: string,
