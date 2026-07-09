@@ -309,10 +309,15 @@ export class PeriodService {
     const isClosed = period.status === 'CLOSED'
     const stampedByFund = new Map<string, number>()
     if (isClosed) {
+      // Rate stamped on this period's debt: engine-created buckets use origin_key 'period:<id>';
+      // migrated historical debt uses 'migrated-debt:%' buckets dated to that period's due date.
       const rows: Array<{ fundId: string; rate: number | null }> = await this.prisma.$queryRawUnsafe(
         `select fund_id as "fundId", max(rate_per_day_pct)::float8 as rate
-           from penalty_bucket where community_id = $1 and origin_key = $2 group by fund_id`,
-        communityId, `period:${period.id}`,
+           from penalty_bucket
+          where community_id = $1
+            and (origin_key = $2 or (origin_key like 'migrated-debt%' and due_date::date = $3::date))
+          group by fund_id`,
+        communityId, `period:${period.id}`, period.dueDate,
       )
       for (const r of rows) stampedByFund.set(r.fundId, Number(r.rate ?? 0))
     }
