@@ -4,6 +4,7 @@ import { PrismaService } from '../user/prisma.service'
 import { randomBytes, createHash, scrypt, timingSafeEqual } from 'crypto'
 import { promisify } from 'util'
 import { InviteService } from '../invite/invite.service'
+import { MailService } from '../mail/mail.service'
 
 type RoleAssignment={ role:string; scopeType:string; scopeId?:string|null }
 
@@ -11,6 +12,19 @@ const scryptAsync = promisify(scrypt)
 
 function sha256(raw: string){ return createHash('sha256').update(raw).digest('hex') }
 function normalizeEmail(email: string){ return email.trim().toLowerCase() }
+
+function passwordResetEmail(link: string){
+  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1f2937">
+    <h2 style="margin:0 0 16px;font-size:20px;color:#111827">Resetare parolă</h2>
+    <p style="margin:0 0 16px">Am primit o cerere de resetare a parolei pentru contul tău. Apasă butonul de mai jos pentru a seta o parolă nouă:</p>
+    <p style="margin:0 0 20px"><a href="${link}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600">Resetează parola</a></p>
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Sau copiază acest link în browser:<br/><a href="${link}">${link}</a></p>
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Linkul expiră în 1 oră.</p>
+    <p style="margin:0;font-size:13px;color:#6b7280">Dacă nu tu ai cerut resetarea, ignoră acest email — parola rămâne neschimbată.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+    <p style="font-size:12px;color:#9ca3af;margin:0">Administrare cheltuieli asociație · acest email a fost trimis automat.</p>
+  </div>`
+}
 
 async function hashPassword(password: string){
   const salt = randomBytes(16).toString('hex')
@@ -34,7 +48,44 @@ export class AuthService{
     private readonly prisma:PrismaService,
     private readonly jwt:JwtService,
     private readonly invites: InviteService,
+    private readonly mail: MailService,
   ){}
+
+  /** Always returns ok (never reveals whether the email exists). Emails a one-time
+   *  reset link only when a matching account is found. */
+  async requestPasswordReset(email: string){
+    const normalized = normalizeEmail(email)
+    const user = await this.prisma.user.findUnique({ where:{ email: normalized } })
+    if (user) {
+      // invalidate any previously-issued, still-unused tokens for this user
+      await this.prisma.passwordReset.updateMany({ where:{ userId: user.id, usedAt: null }, data:{ usedAt: new Date() } })
+      const token = randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 60*60*1000) // 1 hour
+      await this.prisma.passwordReset.create({ data:{ userId: user.id, tokenHash: sha256(token), expiresAt } })
+      const base = process.env.APP_PUBLIC_URL || 'http://localhost:3000'
+      const link = `${base}/reset-password?reset=${token}`
+      await this.mail.send(user.email, 'Resetare parolă — Administrare cheltuieli asociație', passwordResetEmail(link))
+      this.logger.log(`Password reset requested user=${user.id}`)
+    } else {
+      this.logger.log(`Password reset requested for unknown email=${normalized}`)
+    }
+    return { ok: true }
+  }
+
+  async resetPassword(token: string, password: string){
+    if (!token || !password || password.length < 6) throw new BadRequestException('Parolă invalidă (minim 6 caractere)')
+    const rec = await this.prisma.passwordReset.findUnique({ where:{ tokenHash: sha256(token) } })
+    if (!rec || rec.usedAt || rec.expiresAt.getTime() < Date.now()) throw new BadRequestException('Link de resetare invalid sau expirat')
+    const passwordHash = await hashPassword(password)
+    await this.prisma.$transaction([
+      // set the new password and bump tokenVersion to invalidate all live access tokens
+      this.prisma.user.update({ where:{ id: rec.userId }, data:{ passwordHash, tokenVersion: { increment: 1 } } }),
+      this.prisma.passwordReset.update({ where:{ id: rec.id }, data:{ usedAt: new Date() } }),
+      this.prisma.refreshToken.updateMany({ where:{ userId: rec.userId, revokedAt: null }, data:{ revokedAt: new Date() } }),
+    ])
+    this.logger.log(`Password reset completed user=${rec.userId}`)
+    return { ok: true }
+  }
 
   async registerWithPassword(email: string, password: string, name?: string, inviteToken?: string){
     const normalized = normalizeEmail(email)

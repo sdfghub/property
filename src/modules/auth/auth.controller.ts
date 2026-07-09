@@ -71,6 +71,16 @@ export class AuthController{
     return { ok:true }
   }
 
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string){
+    return this.auth.requestPasswordReset(email)
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body('token') token: string, @Body('password') password: string){
+    return this.auth.resetPassword(token, password)
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('revoke-all')
   async revokeAll(@Req() req:any){

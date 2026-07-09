@@ -533,12 +533,15 @@ function AuthCard() {
     return search.get('invite') || search.get('inviteToken') || search.get('token')
   }, [])
   const canRegister = Boolean(inviteToken)
+  const resetToken = React.useMemo(() => new URLSearchParams(window.location.search).get('reset'), [])
+  const [mode, setMode] = React.useState<'login' | 'forgot'>('login')
+  const [notice, setNotice] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!inviteToken) return
     setInviteLoading(true)
     getInviteSummary(inviteToken)
-      .then((data) => {
+      .then((data: any) => {
         setInviteSummary(data)
         if (data?.email && !email) setEmail(data.email)
       })
@@ -576,6 +579,98 @@ function AuthCard() {
     } finally {
       setWorking(false)
     }
+  }
+
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault()
+    setWorking(true)
+    setFormError(null)
+    setNotice(null)
+    try {
+      await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      setNotice('Dacă există un cont cu acest email, ți-am trimis un link de resetare. Verifică-ți inbox-ul (și folderul Spam).')
+    } catch {
+      setFormError('Nu am putut trimite emailul. Încearcă din nou.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault()
+    setWorking(true)
+    setFormError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.message || 'Link de resetare invalid sau expirat')
+      }
+      setNotice('Parola a fost schimbată cu succes. Te poți autentifica acum.')
+    } catch (err: any) {
+      setFormError(err?.message || 'Eroare la resetarea parolei')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const linkBtnStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    color: 'var(--accent, #2563eb)',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    fontSize: 13,
+    textAlign: 'left',
+  }
+
+  if (resetToken) {
+    const done = Boolean(notice) && !formError
+    return (
+      <div className="grid two">
+        <div className="card">
+          <h2>Resetare parolă</h2>
+          <p className="muted">Setează o parolă nouă pentru contul tău.</p>
+          {done ? (
+            <div className="stack" style={{ gap: 12 }}>
+              <div className="badge">{notice}</div>
+              <a className="btn" href="/">Mergi la autentificare</a>
+            </div>
+          ) : (
+            <form className="stack" onSubmit={handleReset}>
+              <label className="label">
+                <span>Parolă nouă</span>
+                <span className="muted">Minim 6 caractere.</span>
+              </label>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                required
+                minLength={6}
+                placeholder="••••••••"
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button className="btn" type="submit" disabled={working}>
+                {working ? 'Se salvează…' : 'Schimbă parola'}
+              </button>
+              {formError && <div className="badge negative">{formError}</div>}
+            </form>
+          )}
+        </div>
+        <div />
+      </div>
+    )
   }
 
   if (canRegister) {
@@ -653,6 +748,47 @@ function AuthCard() {
     )
   }
 
+  if (mode === 'forgot') {
+    return (
+      <div className="grid two">
+        <div className="card">
+          <h2>Resetare parolă</h2>
+          <p className="muted">Introdu emailul contului și îți trimitem un link de resetare.</p>
+          <form className="stack" onSubmit={handleForgot}>
+            <label className="label">
+              <span>{t('auth.emailLabel')}</span>
+            </label>
+            <input
+              className="input"
+              type="email"
+              value={email}
+              required
+              placeholder={t('auth.emailPlaceholder')}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button className="btn" type="submit" disabled={working}>
+              {working ? 'Se trimite…' : 'Trimite linkul de resetare'}
+            </button>
+            {notice && <div className="badge">{notice}</div>}
+            {formError && <div className="badge negative">{formError}</div>}
+            <button
+              type="button"
+              style={linkBtnStyle}
+              onClick={() => {
+                setMode('login')
+                setNotice(null)
+                setFormError(null)
+              }}
+            >
+              ← Înapoi la autentificare
+            </button>
+          </form>
+        </div>
+        <div />
+      </div>
+    )
+  }
+
   return (
     <div className="grid two">
       <div className="card">
@@ -691,6 +827,17 @@ function AuthCard() {
               {t('common.error')}: {formError || error}
             </div>
           )}
+          <button
+            type="button"
+            style={linkBtnStyle}
+            onClick={() => {
+              setMode('forgot')
+              setFormError(null)
+              setPassword('')
+            }}
+          >
+            Ai uitat parola?
+          </button>
         </form>
       </div>
       <div />

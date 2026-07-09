@@ -1437,6 +1437,7 @@ model User {
   billingEntityRoles      BillingEntityUserRole[]
   invites                 Invite[]
   refreshTokens           RefreshToken[]
+  passwordResets          PasswordReset[]
   oauthAccounts           UserOAuthAccount[]
   pushTokens              PushToken[]
   eventsCreated           Event[]
@@ -1584,6 +1585,19 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_token")
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_reset")
 }
 
 model PushToken {
