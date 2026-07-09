@@ -292,6 +292,96 @@ export class PeriodService {
     return { ok: true, code: periodCode, dueDate: d }
   }
 
+  /**
+   * Per-period settings bundle for the admin panel: the period's own fields (due date editable;
+   * start/end/status read-only), the community-wide grace days, and each penalty-source fund's rate.
+   * For a CLOSED period the rate is what was STAMPED on that period's debt buckets (read-only history);
+   * for a non-closed period it is the fund's current rate (what gets stamped at its close).
+   */
+  async getSettings(communityId: string, periodCode: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    const community = await this.prisma.community.findUnique({
+      where: { id: communityId }, select: { penaltyGraceDays: true },
+    })
+    const funds = await this.prisma.fund.findMany({
+      where: { communityId }, select: { id: true, code: true, name: true, allocation: true }, orderBy: { code: 'asc' },
+    })
+    const isClosed = period.status === 'CLOSED'
+    const stampedByFund = new Map<string, number>()
+    if (isClosed) {
+      const rows: Array<{ fundId: string; rate: number | null }> = await this.prisma.$queryRawUnsafe(
+        `select fund_id as "fundId", max(rate_per_day_pct)::float8 as rate
+           from penalty_bucket where community_id = $1 and origin_key = $2 group by fund_id`,
+        communityId, `period:${period.id}`,
+      )
+      for (const r of rows) stampedByFund.set(r.fundId, Number(r.rate ?? 0))
+    }
+    const penaltyFunds = funds
+      .filter((f) => (f.allocation as any)?.penaltyPerDayPct != null) // penalty-source funds (penalty-ledger.service penalFunds)
+      .map((f) => {
+        const alloc = (f.allocation as any) || {}
+        const stamped = isClosed && stampedByFund.has(f.id)
+        return {
+          code: f.code,
+          name: f.name,
+          penaltyFundCode: alloc.penaltyFundCode || 'PENALIZARI',
+          ratePerDayPct: stamped ? (stampedByFund.get(f.id) as number) : Number(alloc.penaltyPerDayPct ?? 0),
+          stamped,
+        }
+      })
+    return {
+      period: {
+        code: period.code,
+        status: period.status,
+        dueDate: period.dueDate,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        preparedAt: period.preparedAt,
+        closedAt: period.closedAt,
+        editable: !isClosed,
+      },
+      graceDays: Number((community as any)?.penaltyGraceDays ?? 30),
+      penaltyFunds,
+    }
+  }
+
+  /** Apply only the provided settings (admin). Penalty rates are the fund's current rate (applied at the
+   *  next close via bucket stamping) and cannot be changed on a CLOSED period. */
+  async setSettings(communityId: string, periodCode: string, body: any) {
+    const period = await this.getPeriod(communityId, periodCode)
+    const out: any = { ok: true, code: periodCode }
+
+    if (body?.dueDate !== undefined) {
+      const d = body.dueDate ? new Date(body.dueDate) : null
+      if (body.dueDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid dueDate')
+      await this.prisma.period.update({ where: { id: period.id }, data: { dueDate: d } })
+      out.dueDate = d
+    }
+
+    if (body?.graceDays !== undefined && body.graceDays !== null) {
+      const g = Math.round(Number(body.graceDays))
+      if (!Number.isFinite(g) || g < 0 || g > 365) throw new BadRequestException('Invalid graceDays')
+      await this.prisma.community.update({ where: { id: communityId }, data: { penaltyGraceDays: g } })
+      out.graceDays = g
+    }
+
+    if (body?.penaltyRates && typeof body.penaltyRates === 'object') {
+      if (period.status === 'CLOSED') throw new BadRequestException('Cannot change penalty rates on a closed period')
+      for (const [fundCode, pctRaw] of Object.entries(body.penaltyRates as Record<string, any>)) {
+        const pct = Number(pctRaw)
+        if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new BadRequestException(`Invalid rate for ${fundCode}`)
+        const fund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true, allocation: true } })
+        if (!fund) throw new BadRequestException(`Fund ${fundCode} not found`)
+        const alloc = (fund.allocation as any) || {}
+        // merge so method/weights/penaltyFundCode survive (fund.service overwrites the whole allocation)
+        await this.prisma.fund.update({ where: { id: fund.id }, data: { allocation: { ...alloc, penaltyPerDayPct: pct } } })
+      }
+      out.penaltyRates = body.penaltyRates
+    }
+
+    return out
+  }
+
   async summary(communityId: string, periodCode: string) {
     const period = await this.prisma.period.findUnique({
       where: { communityId_code: { communityId, code: periodCode } },

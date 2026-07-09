@@ -61,6 +61,20 @@ export class PeriodController {
     return this.periods.summary(c, p)
   }
 
+  // Per-period settings: due date + per-fund penalty rate + community grace days.
+  // Admin edits; cenzor/CEX may only view.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('settings')
+  getSettings(@Param('communityId') c: string, @Param('periodCode') p: string) {
+    return this.periods.getSettings(c, p)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Post('settings')
+  setSettings(@Param('communityId') c: string, @Param('periodCode') p: string, @Body() body: any) {
+    return this.periods.setSettings(c, p, body || {})
+  }
+
   @Scopes({ role: ['CENSOR', 'COMMUNITY_ADMIN'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Post('reject')
   async reject(@Param('communityId') c: string, @Param('periodCode') p: string, @Req() req: any) {

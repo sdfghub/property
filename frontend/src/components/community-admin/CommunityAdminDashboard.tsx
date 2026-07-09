@@ -739,6 +739,7 @@ export function CommunityAdminDashboard({
                   metersConfig={metersConfig}
                   configError={configError}
                   loadingLabel={t('config.loading')}
+                  readOnly={readOnly}
                 />
               )}
 
