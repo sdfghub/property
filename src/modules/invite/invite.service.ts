@@ -11,6 +11,30 @@ export class InviteService{
     private readonly mail: MailService
   ){}
 
+  private roleLabel(role: string): string {
+    const map: Record<string, string> = {
+      SYSTEM_ADMIN: 'Administrator sistem',
+      COMMUNITY_ADMIN: 'Administrator asociație',
+      CENSOR: 'Cenzor',
+      EXECUTIVE_COMITEE_MEMBER: 'Membru comitet executiv',
+      BILLING_ENTITY_USER: 'Proprietar / rezident',
+    }
+    return map[role] ?? role
+  }
+
+  private button(href: string, label: string): string {
+    return `<a href="${href}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600">${label}</a>`
+  }
+
+  private emailShell(title: string, bodyHtml: string): string {
+    return `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1f2937">
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827">${title}</h2>
+      ${bodyHtml}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+      <p style="font-size:12px;color:#9ca3af;margin:0">Administrare cheltuieli asociație · acest email a fost trimis automat.</p>
+    </div>`
+  }
+
   /** Community that owns a billing entity (for authorizing community-admin BE invites). */
   async billingEntityCommunityId(beId: string): Promise<string | null> {
     const be = await this.prisma.billingEntity.findUnique({ where: { id: beId }, select: { communityId: true } })
@@ -56,17 +80,29 @@ export class InviteService{
     })
     const base=process.env.APP_PUBLIC_URL||'http://localhost:3000'
     const link=`${base}/invite?token=${token}`
+    const roleLabel = this.roleLabel(role)
     if (existingUser) {
       await this.claimInviteForUser(token, existingUser.id)
       await this.mail.send(
         normalizedEmail,
-        'Access granted',
-        `<p>You were granted <b>${role}</b> access. You can sign in at <a href="${base}">${base}</a>.</p>`
+        'Acces acordat — Administrare cheltuieli asociație',
+        this.emailShell('Acces acordat',
+          `<p style="margin:0 0 20px">V-a fost acordat accesul cu rolul <b>${roleLabel}</b>.</p>
+           <p style="margin:0 0 8px">${this.button(base, 'Deschide aplicația')}</p>`)
       )
       this.logger.log(`Invite auto-accepted for existing user ${existingUser.email} role=${role} scope=${scopeType}:${scopeId ?? '-'}`)
       return inv
     }
-    await this.mail.send(normalizedEmail, 'You are invited', `<p>You were invited as <b>${role}</b>. Accept: <a href="${link}">${link}</a></p>`)
+    await this.mail.send(
+      normalizedEmail,
+      'Invitație — Administrare cheltuieli asociație',
+      this.emailShell('Ați fost invitat',
+        `<p style="margin:0 0 16px">Ați fost invitat în aplicația de administrare a cheltuielilor cu rolul <b>${roleLabel}</b>.</p>
+         <p style="margin:0 0 20px">Apăsați butonul de mai jos pentru a vă crea parola și a activa contul:</p>
+         <p style="margin:0 0 20px">${this.button(link, 'Acceptă invitația')}</p>
+         <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Sau copiați acest link în browser:<br/><a href="${link}">${link}</a></p>
+         <p style="margin:0;font-size:13px;color:#6b7280">Invitația expiră în 7 zile.</p>`)
+    )
     this.logger.log(`Invite created for ${normalizedEmail} role=${role} scope=${scopeType}:${scopeId ?? '-'}`)
     return inv
   }
