@@ -1,0 +1,64 @@
+# Production stack for the Property Expenses app (Postgres + NestJS API + Caddy web).
+#
+# Usage (from this directory):
+#   cp .env.example .env      # then fill in secrets
+#   docker compose up -d --build
+#
+# Build context is `..` (the repo root / NestJS backend), so the images are built
+# straight from a checkout of this repo — no rsync or hand-copied files needed.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: property_expenses
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d property_expenses"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD}@db:5432/property_expenses?schema=public
+      PORT: "3000"
+      NODE_ENV: production
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      MAIL_FROM: ${MAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+    # This repo has no SQL migrations folder — sync the schema with `prisma db push`.
+    command: ["sh", "-lc", "npx prisma db push --skip-generate --accept-data-loss && node dist/server.js"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    # :80 is the origin Cloudflare talks to (SSL mode Flexible). :443 is exposed for a
+    # future Full(strict) upgrade with an Origin Certificate.
+    ports: ["80:80", "443:443"]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
