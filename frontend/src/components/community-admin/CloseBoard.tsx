@@ -117,7 +117,8 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
 
       <Step n={1} status={effStat('residents', 'optional')} {...area('residents')} title={t('close.residents', 'Confirmă persoane & cotă / mp')}
         desc={t('close.residentsDesc', 'Confirmă numărul de persoane și cota-parte/mp pe unitate înainte de alocare (determină cotele per-persoană și pe cotă-parte).')}>
-        <UnitAttributesTable communityId={communityId} periodCode={code as string} editable={!readOnly && st === 'OPEN'} />
+        <UnitAttributesTable communityId={communityId} periodCode={code as string} editable={!readOnly && st === 'OPEN' && !isMarked('residents')} />
+        {isMarked('residents') && !readOnly && st === 'OPEN' ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>🔒 {t('close.locked', 'Finalizat — doar citire. Anulează pentru a edita.')}</div> : null}
       </Step>
 
       <Step n={2} status={effStat('meters', stat('meters', metersDone))} {...area('meters')} title={t('close.readings', 'Meter readings')}
@@ -135,8 +136,9 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
         {!readOnly && (
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn secondary small" disabled={busy === 'recompute'} onClick={() => act('recompute', () => post('recompute'))}>{busy === 'recompute' ? '…' : t('close.recompute', 'Recompute')}</button>
-          <input type="date" className="input" value={dueInput} onChange={(e) => setDueInput(e.target.value)} style={{ width: 160 }} />
-          <button className="btn secondary small" disabled={busy === 'due' || !dueInput} onClick={() => act('due', () => post('due-date', { dueDate: dueInput }))}>{busy === 'due' ? '…' : t('close.saveDue', 'Save scadență')}</button>
+          <input type="date" className="input" value={dueInput} disabled={isMarked('allocate')} onChange={(e) => setDueInput(e.target.value)} style={{ width: 160 }} />
+          <button className="btn secondary small" disabled={busy === 'due' || !dueInput || isMarked('allocate')} onClick={() => act('due', () => post('due-date', { dueDate: dueInput }))}>{busy === 'due' ? '…' : t('close.saveDue', 'Save scadență')}</button>
+          {isMarked('allocate') ? <span className="muted" style={{ fontSize: 12 }}>🔒 {t('close.locked', 'Finalizat — doar citire. Anulează pentru a edita.')}</span> : null}
         </div>
         )}
       </Step>
