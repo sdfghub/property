@@ -124,7 +124,32 @@ export class PeriodService {
     const allTemplatesClosed = meters.open.length === 0 && bills.open.length === 0
     const canPrepare = period.status === 'OPEN' && allTemplatesClosed
     const canClose = period.status === 'PREPARED' && allTemplatesClosed
-    return { period, meters, bills, canClose, canPrepare }
+    return { period, meters, bills, canClose, canPrepare, checklist: (period as any).checklist || {} }
+  }
+
+  /** Per-area "mark complete" checklist for the monthly-close board (persisted on Period.checklist). */
+  async getChecklist(communityId: string, periodCode: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    return {
+      code: period.code,
+      status: period.status,
+      editable: period.status !== 'CLOSED',
+      checklist: ((period as any).checklist as Record<string, any>) || {},
+    }
+  }
+
+  /** Toggle one area's completion (admin). Rejected on a CLOSED period. `by` is stamped for the audit hint. */
+  async setChecklist(communityId: string, periodCode: string, body: any, by?: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    if (period.status === 'CLOSED') throw new BadRequestException('Perioada este închisă (doar vizualizare)')
+    const areaKey = String(body?.areaKey ?? '').trim()
+    if (!areaKey || areaKey.length > 64) throw new BadRequestException('areaKey invalid')
+    const done = body?.done === undefined ? true : Boolean(body.done)
+    const cur = (period as any).checklist && typeof (period as any).checklist === 'object' ? { ...(period as any).checklist } : {}
+    if (done) cur[areaKey] = { at: new Date().toISOString(), by: by || null }
+    else delete cur[areaKey]
+    await this.prisma.period.update({ where: { id: period.id }, data: { checklist: cur } })
+    return { ok: true, checklist: cur }
   }
 
   async prepare(communityId: string, periodCode: string) {

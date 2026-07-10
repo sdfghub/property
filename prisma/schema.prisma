@@ -259,6 +259,7 @@ model Period {
   status      PeriodStatus @default(OPEN)
   preparedAt  DateTime?    @map("prepared_at")
   closedAt    DateTime?    @map("closed_at")
+  checklist   Json?        @map("checklist") // per-area monthly-close completion: { [areaKey]: { at, by } }
 
   community                  Community                    @relation(fields: [communityId], references: [id])
   PeriodMeasure              PeriodMeasure[]

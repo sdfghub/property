@@ -75,6 +75,19 @@ export class PeriodController {
     return this.periods.setSettings(c, p, body || {})
   }
 
+  // Monthly-close per-area completion checklist. Admin toggles; cenzor/CEX may only view.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('checklist')
+  getChecklist(@Param('communityId') c: string, @Param('periodCode') p: string) {
+    return this.periods.getChecklist(c, p)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Post('checklist')
+  setChecklist(@Param('communityId') c: string, @Param('periodCode') p: string, @Body() body: any, @Req() req: any) {
+    return this.periods.setChecklist(c, p, body || {}, req?.user?.email)
+  }
+
   // Per-unit residents count + sqm (cotă) confirmation for the month close.
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('unit-attributes')
