@@ -119,16 +119,18 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
     api.get<any[]>(`/communities/${communityId}/periods`).then((rows) => {
       const sorted = (rows || []).slice().sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0))
       setPeriods(sorted)
-    }).catch(() => setPeriods([]))
+      // default to the newest period (the one being closed), not the latest CLOSED one
+      if (sorted.length) setPeriod((cur) => cur || sorted[0].code)
+      else setLoading(false)
+    }).catch(() => { setPeriods([]); setLoading(false) })
   }, [api, communityId])
 
   React.useEffect(() => {
-    if (!communityId) return
+    if (!communityId || !period) return
     let alive = true
     setLoading(true)
-    const q = period ? `?period=${encodeURIComponent(period)}` : ''
-    api.get<any>(`/communities/${communityId}/finance/avizier${q}`)
-      .then((d) => { if (alive) { setData(d); if (!period && d?.period?.code) setPeriod(d.period.code); setLoading(false) } })
+    api.get<any>(`/communities/${communityId}/finance/avizier?period=${encodeURIComponent(period)}`)
+      .then((d) => { if (alive) { setData(d); setLoading(false) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
   }, [api, communityId, period])
