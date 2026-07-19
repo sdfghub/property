@@ -22,6 +22,9 @@ const catLabel = (c: string) =>
 const prettyBe = (s?: string) =>
   !s ? '' : s.replace(/^BE_/, '').split('_').map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w)).join(' ')
 
+// Numeric-column headers wrap (multi-word labels stack) so columns shrink to the small numbers below.
+const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 80 }
+
 export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityId: string; cenzorEnabled?: boolean }) {
   const { api, activeRole } = useAuth()
   const { t: rawT } = useI18n()
@@ -222,23 +225,23 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
         <div className="empty">{t('avizier.none', 'No data for this period.')}</div>
       ) : (
         <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, whiteSpace: 'nowrap' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>{t('avizier.entity', 'Apartament')}</th>
-                <th style={{ padding: '8px 10px' }}>{t('avizier.soldPrec', 'Sold precedent')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Sold precedent')}</th>
                 {cols.map((col, i) => {
                   if (col.kind === 'cat') return (
-                    <th key={`c${i}`} style={{ padding: '8px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}>{catLabel(col.cat)}</th>
+                    <th key={`c${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}>{catLabel(col.cat)}</th>
                   )
                   if (col.kind === 'pen') return (
-                    <th key={`p${i}`} style={{ padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}
+                    <th key={`p${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}
                       title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Total penalizări acumulate') : t('avizier.penMonthHint', 'Penalizări luna aceasta')} — ${CAT_LABEL[col.fund] || col.fund}`}>
                       {col.scope === 'total' ? t('avizier.penTotalShort', 'Pen. total') : t('avizier.penMonthShort', 'Pen. lună')}
                     </th>
                   )
                   return (
-                    <th key={`t${i}`} style={{ padding: '8px 10px' }}>
+                    <th key={`t${i}`} style={{ ...TH_WRAP, padding: '8px 10px' }}>
                       {col.group.categories.length > 1 ? (
                         <button type="button" onClick={() => toggleGroup(col.group.key)} title={t('avizier.expand', 'Detaliază')}
                           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit', fontWeight: 700 }}>
@@ -248,13 +251,13 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     </th>
                   )
                 })}
-                <th style={{ padding: '8px 10px' }}>{t('avizier.curent', 'Total lună')}</th>
-                <th style={{ padding: '8px 10px' }}>{t('avizier.incasari', 'Încasări')}</th>
-                {hasAdj && <th style={{ padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}>{t('avizier.adjustments', 'Ajustări')}</th>}
-                <th style={{ padding: '8px 10px', fontWeight: 700 }}>{t('avizier.total', 'Total de plată')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.curent', 'Total lună')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.incasari', 'Încasări')}</th>
+                {hasAdj && <th style={{ ...TH_WRAP, padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}>{t('avizier.adjustments', 'Ajustări')}</th>}
+                <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{t('avizier.total', 'Total de plată')}</th>
               </tr>
             </thead>
-            <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <tbody style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
               {rows.map((r) => {
                 const hov = hoverBe === r.beCode
                 const rowBg = hov ? 'var(--hover-bg, #eef4ff)' : undefined

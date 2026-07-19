@@ -373,7 +373,8 @@ export class FinanceService {
     const mine = rows.filter((r) => r.label === category && Math.abs(r.amt) > 0.0001)
 
     const fmt = (n: any) => (n == null ? '?' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-    const num = (n: any) => (n == null ? '?' : String(Number(n)))
+    // round measures/percentages to 2 digits and drop trailing zeros (avoids float noise like 99.99999997)
+    const num = (n: any) => (n == null ? '?' : String(Math.round(Number(n) * 100) / 100))
     const methodLabel = (m: string) =>
       m === 'BY_CONSUMPTION' ? 'după consum' :
       m === 'BY_RESIDENTS' ? 'după număr de persoane' :
