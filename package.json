@@ -22,6 +22,7 @@
     "close:period": "ts-node --transpile-only src/scripts/close-period.ts",
     "add:payment": "ts-node --transpile-only src/scripts/add-payment.ts",
     "import:opening": "ts-node --transpile-only src/scripts/import-opening-balances.ts",
+    "import:cash": "ts-node --transpile-only src/scripts/import-kralik-cash.ts",
     "import:opening:units": "ts-node --transpile-only src/scripts/import-opening-unit-balances.ts",
     "import:arrears": "ts-node --transpile-only src/scripts/import-arrears.ts",
     "close:templates": "ts-node --transpile-only src/scripts/close-templates.ts",

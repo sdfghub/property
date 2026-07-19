@@ -109,6 +109,38 @@ async function main() {
   }
   console.log(`injected April: ${bf.size} (BE,fund) statements; Σ dueEnd (=May opening) = ${aprCloseTotal.toFixed(2)}`)
 
+  // community_charge/lines so the April avizier shows charge columns (per-fund; EXPENSES lumped as
+  // INTRETINERE since the sheet's April maintenance is carried as one bucket here).
+  const priorCC = await prisma.communityCharge.findMany({ where: { communityId: COMM, periodId: aprPeriod.id, allocationStrategy: REF }, select: { id: true } })
+  if (priorCC.length) { await prisma.communityChargeLine.deleteMany({ where: { chargeId: { in: priorCC.map((x: any) => x.id) } } }); await prisma.communityCharge.deleteMany({ where: { id: { in: priorCC.map((x: any) => x.id) } } }) }
+  const svc = new Map<string, { fund: string; service: string; lines: Array<{ be: string; unit: string; amount: number }> }>()
+  for (const [uc, rec] of Object.entries<any>(ledger.byUnit)) {
+    const be = beByCode[uc]; if (!be) continue
+    for (const [fund, v] of Object.entries<any>(rec.charges || {})) {
+      if (!(Math.abs(Number(v)) > 0.005)) continue
+      const service = fund === 'EXPENSES' ? 'INTRETINERE' : fund === 'PENALIZARI' ? 'penalty:EXPENSES' : 'CONTRIB'
+      const sk = `${fund}::${service}`
+      let s = svc.get(sk); if (!s) { s = { fund, service, lines: [] }; svc.set(sk, s) }
+      s.lines.push({ be, unit: uc, amount: Number(v) })
+    }
+  }
+  for (const [, s] of svc) {
+    const total = s.lines.reduce((a, l) => a + l.amount, 0)
+    const isPenalty = s.service.startsWith('penalty:')
+    const isFund = !isPenalty && s.service === 'CONTRIB'
+    const sourceType = isFund ? 'FUND' : 'EXPENSE'
+    const sourceId = isFund ? s.fund : s.service
+    const sourceKey = isFund ? 'offset:0' : s.service
+    const allocationSnapshot = (!isPenalty && !isFund) ? { expenseType: s.service } : undefined
+    const cc = await prisma.communityCharge.upsert({
+      where: { communityId_periodId_sourceType_sourceId_sourceKey_fundId: { communityId: COMM, periodId: aprPeriod.id, sourceType, sourceId, sourceKey, fundId: funds.get(s.fund)! } },
+      update: { amount: total, allocationStrategy: REF, status: 'ACTIVE', allocationSnapshot },
+      create: { communityId: COMM, periodId: aprPeriod.id, fundId: funds.get(s.fund)!, sourceType, sourceId, sourceKey, amount: total, currency: 'RON', allocationStrategy: REF, status: 'ACTIVE', allocationSnapshot, meta: { source: REF, service: s.service } },
+    })
+    await prisma.communityChargeLine.deleteMany({ where: { chargeId: cc.id } })
+    await prisma.communityChargeLine.createMany({ data: s.lines.map((l) => ({ chargeId: cc.id, communityId: COMM, periodId: aprPeriod.id, billingEntityId: beIds.get(l.be)!, unitId: unitIds.get(l.unit)!, amount: l.amount, meta: { source: REF, service: s.service, fund: s.fund } })) })
+  }
+
   // ── 2) compute May 2026-05 (chains from April beStatement.dueEnd) ──
   const [my, mm] = MAY.code.split('-').map(Number)
   const mayPeriod = await prisma.period.upsert({

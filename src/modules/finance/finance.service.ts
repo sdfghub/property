@@ -546,6 +546,32 @@ export class FinanceService {
     return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
   }
 
+  /**
+   * Payment log for one billing entity in a period: the individual owner receipts collected against
+   * that period's cycle (from the imported cash register — payment.provider='cash-register',
+   * providerMeta.cycleCode = the period code), with date, account, reference, payer and fund split.
+   */
+  async paymentsLog(communityId: string, periodCode: string, beCode: string) {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { rows: [], total: 0 }
+    const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: beCode }, select: { id: true, name: true } })
+    if (!be) return { rows: [], total: 0 }
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select id, ts, amount::float8 as amount, provider_ref as "ref", method, provider_meta as "meta"
+         from payment
+        where community_id = $1 and billing_entity_id = $3 and provider = 'cash-register'
+          and provider_meta->>'cycleCode' = $4
+        order by ts, id`,
+      communityId, period.id, be.id, period.code,
+    )
+    const out = rows.map((r) => ({
+      date: r.ts, amount: round2(Number(r.amount)), ref: r.ref, method: r.method,
+      account: r.meta?.account ?? null, payer: r.meta?.payer ?? null,
+      funds: r.meta?.funds ?? null, cycle: r.meta?.cycle ?? null, memo: r.meta?.memo ?? null,
+    }))
+    return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
+  }
+
   /** Collection rate for a period: charged (be_statement.charges) vs collected (payments). */
   async collection(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)

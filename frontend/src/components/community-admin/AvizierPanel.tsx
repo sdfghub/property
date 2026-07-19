@@ -58,6 +58,14 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
       .catch(() => setSoldDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
   }
 
+  const [payDetail, setPayDetail] = React.useState<{ be: string; data: any } | null>(null)
+  const openPayments = (beCode: string) => {
+    setPayDetail({ be: beCode, data: null })
+    api.get<any>(`/communities/${communityId}/finance/avizier/payments?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
+      .then((d: any) => setPayDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
+      .catch(() => setPayDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
+  }
+
   const openExplain = (beCode: string, category: string) => {
     setExplain({ be: beCode, cat: category, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/explain?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}&category=${encodeURIComponent(category)}`)
@@ -279,7 +287,12 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     )
                   })}
                   <td style={{ padding: '6px 10px' }}>{money(r.curentTotal)}</td>
-                  <td style={{ padding: '6px 10px' }}>{r.payments ? money(r.payments) : ''}</td>
+                  <td style={{ padding: '6px 10px' }}>{r.payments ? (
+                    <button type="button" onClick={() => openPayments(r.beCode)} title={t('avizier.paymentsLog', 'Jurnal încasări')}
+                      style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                      {money(r.payments)}
+                    </button>
+                  ) : ''}</td>
                   <td style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.totalDue)}</td>
                 </tr>
               ))}
@@ -332,6 +345,58 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
                     <td style={{ padding: '8px' }}>{t('avizier.total', 'Total')}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {payDetail && (
+        <div onClick={() => setPayDetail(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 640, width: '92%', maxHeight: '82vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ margin: 0 }}>{t('avizier.paymentsTitle', 'Jurnal încasări — plăți proprietar')}</h4>
+              <button className="btn ghost small" onClick={() => setPayDetail(null)}>✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{payDetail.data?.beName || payDetail.be} · {data?.period?.code}</div>
+            {!payDetail.data ? (
+              <div className="empty">{t('common.loading', 'Loading…')}</div>
+            ) : payDetail.data.error ? (
+              <div className="badge negative">{t('common.error', 'Error')}</div>
+            ) : !(payDetail.data.rows || []).length ? (
+              <div className="empty">{t('avizier.paymentsNone', 'Fără încasări înregistrate pentru această perioadă.')}</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: 'var(--muted, #666)' }}>
+                    <th style={{ padding: '4px 8px' }}>{t('avizier.payDate', 'Data')}</th>
+                    <th style={{ padding: '4px 8px' }}>{t('avizier.payAccount', 'Cont')}</th>
+                    <th style={{ padding: '4px 8px' }}>{t('avizier.payDetail', 'Detalii')}</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right' }}>{t('avizier.paySum', 'Sumă')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(payDetail.data.rows || []).map((r: any, i: number) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.date ? new Date(r.date).toLocaleDateString('ro-RO') : ''}</td>
+                      <td style={{ padding: '6px 8px' }}>{r.account}{r.cycle === 'prior' ? <span className="badge warn" style={{ marginLeft: 4 }} title={t('avizier.payPrior', 'Achitare ciclu anterior')}>ant.</span> : null}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <div>{r.memo || ''}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          {r.ref ? `${r.ref} · ` : ''}{r.payer || ''}
+                          {r.funds ? ' · ' + Object.entries(r.funds).map(([f, a]: any) => `${f}: ${money(a)}`).join(', ') : ''}
+                        </div>
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
+                    <td colSpan={3} style={{ padding: '8px' }}>{t('avizier.total', 'Total')} ({(payDetail.data.rows || []).length})</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(payDetail.data.total)}</td>
                   </tr>
                 </tbody>
               </table>
