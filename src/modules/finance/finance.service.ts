@@ -152,7 +152,8 @@ export class FinanceService {
     // per-BE running balance from statements
     const stmtRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select billing_entity_id as "beId",
-              sum(due_start)::float8 as sold, sum(payments)::float8 as pay, sum(due_end)::float8 as total
+              sum(due_start)::float8 as sold, sum(payments)::float8 as pay,
+              sum(adjustments)::float8 as adj, sum(due_end)::float8 as total
          from be_statement where community_id = $1 and period_id = $2
         group by billing_entity_id`,
       communityId, period.id,
@@ -286,6 +287,7 @@ export class FinanceService {
           penaltyTotal: round2(penTotal.get(be.id) ?? 0),
           penaltyByFund: Object.fromEntries(penaltyByFund.get(be.id) ?? []),
           payments: round2(Number(s?.pay ?? 0)),
+          adjustments: round2(Number(s?.adj ?? 0)),
           totalDue: round2(Number(s?.total ?? 0)),
         }
       })
@@ -298,6 +300,7 @@ export class FinanceService {
       penaltyMonth: round2(rows.reduce((s, r) => s + r.penaltyMonth, 0)),
       penaltyTotal: round2(rows.reduce((s, r) => s + r.penaltyTotal, 0)),
       payments: round2(rows.reduce((s, r) => s + r.payments, 0)),
+      adjustments: round2(rows.reduce((s, r) => s + r.adjustments, 0)),
       totalDue: round2(rows.reduce((s, r) => s + r.totalDue, 0)),
       byCategory: categories.reduce((acc, c) => {
         acc[c] = round2(rows.reduce((s, r) => s + (r.charges[c] ?? 0), 0))
@@ -569,6 +572,29 @@ export class FinanceService {
       account: r.meta?.account ?? null, payer: r.meta?.payer ?? null,
       funds: r.meta?.funds ?? null, cycle: r.meta?.cycle ?? null, memo: r.meta?.memo ?? null,
     }))
+    return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
+  }
+
+  /**
+   * Explain a billing entity's adjustments for a period: the non-cash balance corrections
+   * (be_ledger_entry kind ADJUSTMENT — e.g. penalty forgiveness "scutire-penalizări") per fund.
+   */
+  async explainAdjustments(communityId: string, periodCode: string, beCode: string) {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { rows: [], total: 0 }
+    const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: beCode }, select: { id: true, name: true } })
+    if (!be) return { rows: [], total: 0 }
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select coalesce(f.code, 'ALTELE') as "fundCode", coalesce(f.name, f.code, 'Altele') as "fundName",
+              sum(d.amount)::float8 as amount, max(d.meta->>'reason') as reason
+         from be_ledger_entry_detail d left join fund f on f.id = d.fund_id
+        where d.community_id = $1 and d.period_id = $2 and d.billing_entity_id = $3 and d.kind = 'ADJUSTMENT'
+        group by f.code, f.name
+       having abs(sum(d.amount)) > 0.0001
+        order by coalesce(f.name, f.code)`,
+      communityId, period.id, be.id,
+    )
+    const out = rows.map((r) => ({ fundCode: r.fundCode, fundName: r.fundName, amount: round2(Number(r.amount)), reason: r.reason }))
     return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
   }
 

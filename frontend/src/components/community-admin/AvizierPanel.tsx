@@ -66,6 +66,14 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
       .catch(() => setPayDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
   }
 
+  const [adjDetail, setAdjDetail] = React.useState<{ be: string; data: any } | null>(null)
+  const openAdjustments = (beCode: string) => {
+    setAdjDetail({ be: beCode, data: null })
+    api.get<any>(`/communities/${communityId}/finance/avizier/adjustments?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
+      .then((d: any) => setAdjDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
+      .catch(() => setAdjDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
+  }
+
   const openExplain = (beCode: string, category: string) => {
     setExplain({ be: beCode, cat: category, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/explain?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}&category=${encodeURIComponent(category)}`)
@@ -123,6 +131,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const cats: string[] = data?.categories ?? []
   const rows: any[] = data?.rows ?? []
   const totals = data?.totals
+  const hasAdj = Math.abs(Number(totals?.adjustments ?? 0)) > 0.005
 
   // Group category columns under their owning fund; each group is a collapsible total column.
   const groups: { key: string; label: string; categories: string[] }[] =
@@ -228,6 +237,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                 })}
                 <th style={{ padding: '8px 10px' }}>{t('avizier.curent', 'Total lună')}</th>
                 <th style={{ padding: '8px 10px' }}>{t('avizier.incasari', 'Încasări')}</th>
+                {hasAdj && <th style={{ padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}>{t('avizier.adjustments', 'Ajustări')}</th>}
                 <th style={{ padding: '8px 10px', fontWeight: 700 }}>{t('avizier.total', 'Total de plată')}</th>
               </tr>
             </thead>
@@ -293,6 +303,12 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       {money(r.payments)}
                     </button>
                   ) : ''}</td>
+                  {hasAdj && <td style={{ padding: '6px 10px' }}>{r.adjustments ? (
+                    <button type="button" onClick={() => openAdjustments(r.beCode)} title={t('avizier.adjustments', 'Ajustări')}
+                      style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                      {money(r.adjustments)}
+                    </button>
+                  ) : ''}</td>}
                   <td style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.totalDue)}</td>
                 </tr>
               ))}
@@ -309,6 +325,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   ))}
                   <td style={{ padding: '8px 10px' }}>{money(totals.curentTotal)}</td>
                   <td style={{ padding: '8px 10px' }}>{money(totals.payments)}</td>
+                  {hasAdj && <td style={{ padding: '8px 10px' }}>{money(totals.adjustments)}</td>}
                   <td style={{ padding: '8px 10px' }}>{money(totals.totalDue)}</td>
                 </tr>
               ) : null}
@@ -397,6 +414,45 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
                     <td colSpan={3} style={{ padding: '8px' }}>{t('avizier.total', 'Total')} ({(payDetail.data.rows || []).length})</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(payDetail.data.total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {adjDetail && (
+        <div onClick={() => setAdjDetail(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480, width: '90%', maxHeight: '80vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ margin: 0 }}>{t('avizier.adjTitle', 'Ajustări — corecții fără numerar')}</h4>
+              <button className="btn ghost small" onClick={() => setAdjDetail(null)}>✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{adjDetail.data?.beName || adjDetail.be} · {data?.period?.code}</div>
+            {!adjDetail.data ? (
+              <div className="empty">{t('common.loading', 'Loading…')}</div>
+            ) : adjDetail.data.error ? (
+              <div className="badge negative">{t('common.error', 'Error')}</div>
+            ) : !(adjDetail.data.rows || []).length ? (
+              <div className="empty">{t('avizier.adjNone', 'Fără ajustări.')}</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                <tbody>
+                  {(adjDetail.data.rows || []).map((r: any) => (
+                    <tr key={r.fundCode} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                      <td style={{ padding: '6px 8px' }}>
+                        {r.fundName}
+                        {r.reason ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{r.reason === 'scutire-penalizari' ? t('avizier.adjForgive', 'scutire penalizări') : r.reason}</span> : null}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
+                    <td style={{ padding: '8px' }}>{t('avizier.total', 'Total')}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(adjDetail.data.total)}</td>
                   </tr>
                 </tbody>
               </table>

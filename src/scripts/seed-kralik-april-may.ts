@@ -41,6 +41,26 @@ async function main() {
   const cpiByCode: Record<string, number> = Object.fromEntries((def.structure || []).filter((u: any) => u.cpi != null).map((u: any) => [u.code, Number(u.cpi)]))
   const beByCode: Record<string, string> = Object.fromEntries((def.structure || []).map((u: any) => [u.code, u.billingEntity]))
 
+  // Actual register cash per (BE, fund) for the April cycle — EXCLUDING cycle:"prior" receipts (those
+  // settle a pre-April balance already baked into the April opening). Owner payments come from the
+  // register; whatever balance reduction isn't backed by this cash becomes an adjustment below.
+  const cash = loadJson('cash-2026-05.json')
+  const mp = loadJson('history-mapping.json')
+  const prefixL = mp.unitLabelPrefix ?? ''
+  const normLbl = (x: string) => String(x).replace(/ /g, '').replace(/[\s./]/g, '').toUpperCase()
+  const byNormLbl = new Map<string, string>()
+  for (const u of def.structure || []) { const nm = String(u.name || ''); const lab = nm.startsWith(prefixL) ? nm.slice(prefixL.length) : (nm || u.code); byNormLbl.set(normLbl(lab), u.code) }
+  const ovNormLbl = new Map<string, string>(Object.entries(mp.unitOverrides || {}).map(([k, v]: any) => [normLbl(k), v as string]))
+  const resolveCode = (lab: string) => { const n = normLbl(lab); return ovNormLbl.get(n) ?? byNormLbl.get(n) ?? null }
+  const cashByBeFund = new Map<string, number>()
+  for (const t of (cash.tx || [])) {
+    if (t.void || t.dir !== 'IN' || t.kind !== 'PAYMENT' || t.cycle === 'prior' || !t.unit) continue
+    const code = resolveCode(t.unit); const be = code ? beByCode[code] : null
+    if (!be) continue
+    const fundsObj: Record<string, number> = t.funds || { [t.fund || 'EXPENSES']: t.amount }
+    for (const [fc, amt] of Object.entries(fundsObj)) { const kk = `${be}::${fc}`; cashByBeFund.set(kk, (cashByBeFund.get(kk) || 0) + Number(amt)) }
+  }
+
   // ── config patches (same as seed-kralik-may) ──
   await prisma.community.update({ where: { id: COMM }, data: { penaltyGraceDays: 30 } })
   const cpiRule = (def.allocationRules || []).find((r: any) => r.code === 'BY_CPI')
@@ -70,7 +90,7 @@ async function main() {
     create: { communityId: COMM, code: APR.code, seq: ay * 12 + am, status: 'CLOSED', preparedAt: new Date(APR.end), closedAt: new Date(APR.end), startDate: new Date(APR.start), endDate: new Date(APR.end), dueDate: new Date(APR.due) },
   })
   // clear prior injection artifacts (idempotent)
-  const priorLe = await prisma.beLedgerEntry.findMany({ where: { communityId: COMM, periodId: aprPeriod.id, refType: { in: [REF, REF + '_PAY'] } }, select: { id: true } })
+  const priorLe = await prisma.beLedgerEntry.findMany({ where: { communityId: COMM, periodId: aprPeriod.id, refType: { in: [REF, REF + '_PAY', REF + '_ADJ'] } }, select: { id: true } })
   if (priorLe.length) { await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: priorLe.map((x: any) => x.id) } } }); await prisma.beLedgerEntry.deleteMany({ where: { id: { in: priorLe.map((x: any) => x.id) } } }) }
   await prisma.beStatement.deleteMany({ where: { communityId: COMM, periodId: aprPeriod.id } })
 
@@ -96,13 +116,19 @@ async function main() {
       const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'CHARGE', lane: 'ACCRUAL', amount: a.chg, currency: 'RON', refType: REF, refId: aprPeriod.id, fundId } })
       await prisma.beLedgerEntryDetail.createMany({ data: Array.from(a.units.entries()).map(([u, amt]) => ({ ledgerEntryId: le.id, communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'CHARGE', fundId, currency: 'RON', refType: REF, refId: aprPeriod.id, unitId: unitIds.get(u)!, amount: amt, meta: { source: REF } })) })
     }
-    // balance chain: plug = dueStart + charges - dueEnd
+    // balance chain: payments = real register cash; adjustments absorb the rest so dueEnd lands on
+    // a.close. plug = dueStart + charges - dueEnd is the total reduction the balance needs.
     const plug = Number((a.open + a.chg - a.close).toFixed(4))
-    const payments = plug >= 0 ? plug : 0
-    const adjustments = plug < 0 ? -plug : 0
+    const payments = Number((cashByBeFund.get(k) ?? 0).toFixed(4))
+    const adjustments = Number((payments - plug).toFixed(4)) // negative ⇒ forgiveness/credit; 0 when cash==plug
     if (payments > 0.005) {
       const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF + '_PAY', refId: aprPeriod.id, fundId } })
       await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'PAYMENT', fundId, currency: 'RON', refType: REF + '_PAY', refId: aprPeriod.id, unitId: null, amount: payments, meta: { source: REF } } })
+    }
+    if (Math.abs(adjustments) > 0.005) {
+      const reason = fund === 'PENALIZARI' ? 'scutire-penalizari' : 'reconciliere-numerar'
+      const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF + '_ADJ', refId: aprPeriod.id, fundId } })
+      await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, kind: 'ADJUSTMENT', fundId, currency: 'RON', refType: REF + '_ADJ', refId: aprPeriod.id, unitId: null, amount: adjustments, meta: { source: REF, reason } } })
     }
     await prisma.beStatement.create({ data: { communityId: COMM, periodId: aprPeriod.id, billingEntityId: beId, fundId, dueStart: a.open, charges: a.chg, payments, adjustments, dueEnd: a.close } })
     aprCloseTotal += a.close

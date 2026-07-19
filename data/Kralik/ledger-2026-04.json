@@ -1,6 +1,6 @@
 {
  "periodCode": "2026-04",
- "_doc": "Per-unit per-fund April ledger from Data sheet. opening=2026-04 restanțe, charges=2026-04 current (EXPENSES=sum services incl water Val+ValDif+interfon+curatenie), closing=2026-05 opening (= April dueEnd for the balance chain). Funds: EXPENSES,RULMENT,REPARATII,REABILITARE_1(Proiect+Reab),REABILITARE_2(Pod-Fatada),REABILITARE_3,PENALIZARI.",
+ "_doc": "Per-unit per-fund April ledger from Data sheet. opening=2026-04 restanțe, charges=2026-04 current (EXPENSES=sum services incl water Val+ValDif+interfon+curatenie), closing=2026-05 opening (= April dueEnd for the balance chain). Funds: EXPENSES,RULMENT,REPARATII,REABILITARE_1(Proiect+Reab),REABILITARE_2(Pod-Fatada),REABILITARE_3,PENALIZARI. [Penalty closing (May opening) taken from Data-MAI col17 Penalizari-Total so the forgiveness residual carries: only AP1/B + AP11 nonzero.]",
  "byUnit": {
   "400191-C1-U5-SAD 1": {
    "opening": {
@@ -411,7 +411,8 @@
     "REPARATII": 194.84,
     "REABILITARE_1": 6766.19,
     "REABILITARE_2": 37879.1,
-    "REABILITARE_3": 4918.28
+    "REABILITARE_3": 4918.28,
+    "PENALIZARI": 9.42
    }
   },
   "400191-C1-U29-AP 9": {
@@ -489,7 +490,8 @@
     "REPARATII": 43.2,
     "REABILITARE_1": -5743.0,
     "REABILITARE_2": 12928.71,
-    "REABILITARE_3": 4807.02
+    "REABILITARE_3": 4807.02,
+    "PENALIZARI": 3.7
    }
   },
   "400191-C1-U33-AP 11B": {

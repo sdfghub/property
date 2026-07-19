@@ -65,6 +65,16 @@ export class FinanceController {
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier/adjustments')
+  explainAdjustments(
+    @Param('communityId') c: string,
+    @Query('period') period: string,
+    @Query('be') be: string,
+  ) {
+    return this.finance.explainAdjustments(c, period, be)
+  }
+
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('avizier/explain-penalty')
   explainPenalty(
     @Param('communityId') c: string,
