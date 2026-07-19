@@ -198,6 +198,19 @@ export class FinanceService {
       penMonth.set(beId, round2(mo)); penTotal.set(beId, round2(to))
     }
 
+    // Manual penalty overrides live as two ADJUSTMENT legs (CHG_OVR_*) on the penalty fund. For display
+    // we fold their net (override − computed) INTO the penalty figure (so the avizier shows the approved
+    // penalty, not the gross) and OUT of the adjustments column (so it isn't double-counted). The ledger
+    // keeps both legs for the audit trail; totalDue (from be_statement) is already net either way.
+    const ovrRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select l.billing_entity_id as "beId", coalesce(sum(l.amount),0)::float8 as delta
+         from be_ledger_entry l join fund f on f.id = l.fund_id
+        where l.community_id = $1 and l.period_id = $2 and l.ref_type in ('CHG_OVR_REV','CHG_OVR_SET') and f.code = 'PENALIZARI'
+        group by l.billing_entity_id`,
+      communityId, period.id,
+    )
+    const overrideDelta = new Map<string, number>(ovrRows.map((r) => [r.beId, Number(r.delta)]))
+
     // per-BE per-category current charges
     const lineRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select ccl.billing_entity_id as "beId",
@@ -275,6 +288,14 @@ export class FinanceService {
         const s = stmt.get(be.id)
         const charges = byBe.get(be.id) ?? {}
         const curTotal = round2(Object.values(charges).reduce((x, v) => x + v, 0))
+        const delta = overrideDelta.get(be.id) ?? 0 // net (override − computed); folded into penalty display
+        const grossMonth = penMonth.get(be.id) ?? 0
+        const pbf = penaltyByFund.get(be.id)
+        const penByFundOut: Record<string, { month: number; total: number }> = {}
+        if (pbf) for (const [f, v] of pbf) {
+          const share = delta === 0 ? 0 : grossMonth !== 0 ? v.month / grossMonth : 1 / pbf.size
+          penByFundOut[f] = { month: round2(v.month + delta * share), total: round2(v.total + delta * share) }
+        }
         return {
           beCode: be.code,
           beName: be.name,
@@ -282,12 +303,12 @@ export class FinanceService {
           units: unitsByBe.get(be.id) ?? [],
           soldPrecedent: round2(Number(s?.sold ?? 0)),
           charges,
-          curentTotal: curTotal,
-          penaltyMonth: round2(penMonth.get(be.id) ?? 0),
-          penaltyTotal: round2(penTotal.get(be.id) ?? 0),
-          penaltyByFund: Object.fromEntries(penaltyByFund.get(be.id) ?? []),
+          curentTotal: round2(curTotal + delta),
+          penaltyMonth: round2(grossMonth + delta),
+          penaltyTotal: round2((penTotal.get(be.id) ?? 0) + delta),
+          penaltyByFund: penByFundOut,
           payments: round2(Number(s?.pay ?? 0)),
-          adjustments: round2(Number(s?.adj ?? 0)),
+          adjustments: round2(Number(s?.adj ?? 0) - delta),
           totalDue: round2(Number(s?.total ?? 0)),
         }
       })
