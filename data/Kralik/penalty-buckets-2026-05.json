@@ -1,0 +1,349 @@
+{
+  "400191-C1-U28-AP 1/B": {
+    "buckets": [
+      {
+        "originMonth": "2021-01",
+        "scadenta": "2021-04-18",
+        "zile": 1912,
+        "restanta": 10088.65,
+        "rate": 0.0002,
+        "seedAccrued": 3793.33,
+        "mayCharge": 64.57
+      },
+      {
+        "originMonth": "2021-10",
+        "scadenta": "2022-01-17",
+        "zile": 1638,
+        "restanta": 49.59,
+        "rate": 0.0002,
+        "seedAccrued": 15.93,
+        "mayCharge": 0.32
+      },
+      {
+        "originMonth": "2021-11",
+        "scadenta": "2022-02-15",
+        "zile": 1609,
+        "restanta": 50.3,
+        "rate": 0.0002,
+        "seedAccrued": 15.86,
+        "mayCharge": 0.32
+      },
+      {
+        "originMonth": "2021-12",
+        "scadenta": "2022-03-20",
+        "zile": 1576,
+        "restanta": 75.46,
+        "rate": 0.0002,
+        "seedAccrued": 23.3,
+        "mayCharge": 0.48
+      },
+      {
+        "originMonth": "2022-01",
+        "scadenta": "2022-04-23",
+        "zile": 1542,
+        "restanta": 36.73,
+        "rate": 0.0002,
+        "seedAccrued": 11.09,
+        "mayCharge": 0.24
+      },
+      {
+        "originMonth": "2022-02",
+        "scadenta": "2022-05-16",
+        "zile": 1519,
+        "restanta": 79.89,
+        "rate": 0.0002,
+        "seedAccrued": 23.76,
+        "mayCharge": 0.51
+      },
+      {
+        "originMonth": "2022-03",
+        "scadenta": "2022-06-28",
+        "zile": 1476,
+        "restanta": 63.81,
+        "rate": 0.0002,
+        "seedAccrued": 18.43,
+        "mayCharge": 0.41
+      },
+      {
+        "originMonth": "2022-04",
+        "scadenta": "2022-07-18",
+        "zile": 1456,
+        "restanta": 64.34,
+        "rate": 0.0002,
+        "seedAccrued": 18.32,
+        "mayCharge": 0.41
+      },
+      {
+        "originMonth": "2022-05",
+        "scadenta": "2022-08-22",
+        "zile": 1421,
+        "restanta": 78.99,
+        "rate": 0.0002,
+        "seedAccrued": 21.94,
+        "mayCharge": 0.51
+      },
+      {
+        "originMonth": "2022-06",
+        "scadenta": "2022-10-02",
+        "zile": 1380,
+        "restanta": 68.49,
+        "rate": 0.0002,
+        "seedAccrued": 18.46,
+        "mayCharge": 0.44
+      },
+      {
+        "originMonth": "2022-07",
+        "scadenta": "2022-10-30",
+        "zile": 1352,
+        "restanta": 45.21,
+        "rate": 0.0002,
+        "seedAccrued": 11.94,
+        "mayCharge": 0.29
+      },
+      {
+        "originMonth": "2022-08",
+        "scadenta": "2022-11-27",
+        "zile": 1324,
+        "restanta": 39.5,
+        "rate": 0.0002,
+        "seedAccrued": 10.21,
+        "mayCharge": 0.25
+      },
+      {
+        "originMonth": "2022-09",
+        "scadenta": "2022-12-27",
+        "zile": 1294,
+        "restanta": 94.17,
+        "rate": 0.0002,
+        "seedAccrued": 23.77,
+        "mayCharge": 0.6
+      },
+      {
+        "originMonth": "2022-10",
+        "scadenta": "2023-01-22",
+        "zile": 1268,
+        "restanta": 39.07,
+        "rate": 0.0002,
+        "seedAccrued": 9.66,
+        "mayCharge": 0.25
+      },
+      {
+        "originMonth": "2022-11",
+        "scadenta": "2023-02-19",
+        "zile": 1240,
+        "restanta": 34.71,
+        "rate": 0.0002,
+        "seedAccrued": 8.39,
+        "mayCharge": 0.22
+      },
+      {
+        "originMonth": "2022-12",
+        "scadenta": "2023-03-26",
+        "zile": 1205,
+        "restanta": 75.79,
+        "rate": 0.0002,
+        "seedAccrued": 17.78,
+        "mayCharge": 0.49
+      },
+      {
+        "originMonth": "2023-01",
+        "scadenta": "2023-04-22",
+        "zile": 1178,
+        "restanta": 47.52,
+        "rate": 0.0002,
+        "seedAccrued": 10.89,
+        "mayCharge": 0.3
+      },
+      {
+        "originMonth": "2023-02",
+        "scadenta": "2023-05-20",
+        "zile": 1150,
+        "restanta": 90.43,
+        "rate": 0.0002,
+        "seedAccrued": 20.22,
+        "mayCharge": 0.58
+      },
+      {
+        "originMonth": "2023-03",
+        "scadenta": "2023-07-03",
+        "zile": 1106,
+        "restanta": 59.08,
+        "rate": 0.0002,
+        "seedAccrued": 12.69,
+        "mayCharge": 0.38
+      },
+      {
+        "originMonth": "2023-04",
+        "scadenta": "2023-07-29",
+        "zile": 1080,
+        "restanta": 88.93,
+        "rate": 0.0002,
+        "seedAccrued": 18.64,
+        "mayCharge": 0.57
+      },
+      {
+        "originMonth": "2023-05",
+        "scadenta": "2023-09-01",
+        "zile": 1046,
+        "restanta": 36.42,
+        "rate": 0.0002,
+        "seedAccrued": 7.39,
+        "mayCharge": 0.23
+      },
+      {
+        "originMonth": "2023-06",
+        "scadenta": "2023-10-06",
+        "zile": 1011,
+        "restanta": 39.77,
+        "rate": 0.0002,
+        "seedAccrued": 7.79,
+        "mayCharge": 0.25
+      }
+    ],
+    "count": 22,
+    "seedAccruedTotal": 4119.79,
+    "mayChargeTotal": 72.62
+  },
+  "400191-C1-U32-AP 11": {
+    "buckets": [
+      {
+        "originMonth": "2021-11",
+        "scadenta": "2022-01-16",
+        "zile": 1610,
+        "restanta": 84.17,
+        "rate": 0.0002,
+        "seedAccrued": 26.56,
+        "mayCharge": 0.54
+      },
+      {
+        "originMonth": "2021-12",
+        "scadenta": "2022-02-18",
+        "zile": 1577,
+        "restanta": 147.07,
+        "rate": 0.0002,
+        "seedAccrued": 45.44,
+        "mayCharge": 0.94
+      },
+      {
+        "originMonth": "2022-01",
+        "scadenta": "2022-03-24",
+        "zile": 1543,
+        "restanta": 23.92,
+        "rate": 0.0002,
+        "seedAccrued": 7.23,
+        "mayCharge": 0.15
+      },
+      {
+        "originMonth": "2022-02",
+        "scadenta": "2022-04-16",
+        "zile": 1520,
+        "restanta": 32.9,
+        "rate": 0.0002,
+        "seedAccrued": 9.79,
+        "mayCharge": 0.21
+      },
+      {
+        "originMonth": "2022-08",
+        "scadenta": "2022-10-28",
+        "zile": 1325,
+        "restanta": 14.15,
+        "rate": 0.0002,
+        "seedAccrued": 3.66,
+        "mayCharge": 0.09
+      },
+      {
+        "originMonth": "2022-09",
+        "scadenta": "2022-11-27",
+        "zile": 1295,
+        "restanta": 36.87,
+        "rate": 0.0002,
+        "seedAccrued": 9.31,
+        "mayCharge": 0.24
+      },
+      {
+        "originMonth": "2022-10",
+        "scadenta": "2022-12-23",
+        "zile": 1269,
+        "restanta": 24.79,
+        "rate": 0.0002,
+        "seedAccrued": 6.13,
+        "mayCharge": 0.16
+      },
+      {
+        "originMonth": "2022-11",
+        "scadenta": "2023-01-20",
+        "zile": 1241,
+        "restanta": 23.25,
+        "rate": 0.0002,
+        "seedAccrued": 5.62,
+        "mayCharge": 0.15
+      },
+      {
+        "originMonth": "2022-12",
+        "scadenta": "2023-02-24",
+        "zile": 1206,
+        "restanta": 25.17,
+        "rate": 0.0002,
+        "seedAccrued": 5.91,
+        "mayCharge": 0.16
+      },
+      {
+        "originMonth": "2023-01",
+        "scadenta": "2023-03-23",
+        "zile": 1179,
+        "restanta": 35.64,
+        "rate": 0.0002,
+        "seedAccrued": 8.18,
+        "mayCharge": 0.23
+      },
+      {
+        "originMonth": "2023-02",
+        "scadenta": "2023-04-20",
+        "zile": 1151,
+        "restanta": 22.28,
+        "rate": 0.0002,
+        "seedAccrued": 4.99,
+        "mayCharge": 0.14
+      },
+      {
+        "originMonth": "2023-03",
+        "scadenta": "2023-06-03",
+        "zile": 1107,
+        "restanta": 23.63,
+        "rate": 0.0002,
+        "seedAccrued": 5.08,
+        "mayCharge": 0.15
+      },
+      {
+        "originMonth": "2023-04",
+        "scadenta": "2023-06-29",
+        "zile": 1081,
+        "restanta": 35.57,
+        "rate": 0.0002,
+        "seedAccrued": 7.46,
+        "mayCharge": 0.23
+      },
+      {
+        "originMonth": "2023-05",
+        "scadenta": "2023-08-02",
+        "zile": 1047,
+        "restanta": 24.83,
+        "rate": 0.0002,
+        "seedAccrued": 5.04,
+        "mayCharge": 0.16
+      },
+      {
+        "originMonth": "2023-06",
+        "scadenta": "2023-09-06",
+        "zile": 1012,
+        "restanta": 26.31,
+        "rate": 0.0002,
+        "seedAccrued": 5.16,
+        "mayCharge": 0.17
+      }
+    ],
+    "count": 15,
+    "seedAccruedTotal": 155.56,
+    "mayChargeTotal": 3.72
+  }
+}

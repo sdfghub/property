@@ -126,10 +126,22 @@ export class PenaltyLedgerService {
    * the per-source penalty charges (reusing the community_charge / be_ledger shape + unit split).
    */
   async advance(tx: TxOrClient, communityId: string, periodId: string, opts: { commit: boolean }) {
-    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true, startDate: true, endDate: true } })
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true, startDate: true, endDate: true, afisareDate: true } })
     if (!period) return
-    const pStart = new Date(period.startDate)
-    const pEnd = new Date(period.endDate)
+    // Penalty accrual window: prefer the afisare-to-afisare span (prev.afisareDate+1 .. this.afisareDate)
+    // when afisare/posting dates are stamped; otherwise fall back to the calendar period bounds so every
+    // other community is unaffected.
+    const afis = (period as any).afisareDate as Date | null | undefined
+    const pEnd = afis ? new Date(afis) : new Date(period.endDate)
+    let pStart = new Date(period.startDate)
+    if (afis) {
+      const prev = await tx.period.findFirst({
+        where: { communityId, seq: { lt: period.seq } },
+        orderBy: { seq: 'desc' },
+        select: { afisareDate: true },
+      })
+      if (prev?.afisareDate) pStart = new Date(new Date(prev.afisareDate).getTime() + DAY)
+    }
     const funds = await this.penalFunds(tx, communityId)
     if (!funds.length) return
     const fundById = new Map(funds.map((f) => [f.id, f]))

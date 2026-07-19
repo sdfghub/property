@@ -23,8 +23,10 @@ import { PrismaService } from '../modules/user/prisma.service'
 class ScriptModule {}
 
 const COMM = 'Kralik'
-const APR = { code: '2026-04', start: '2026-04-01', end: '2026-04-30', due: '2026-05-15' }
-const MAY = { code: '2026-05', start: '2026-05-01', end: '2026-05-31', due: '2026-06-15' }
+// afisare = the vendor's posting/display date (Data-Config). The penalty engine accrues over the
+// afisare-to-afisare window (May = 2026-06-11+1 .. 2026-07-13 = 32 days), reproducing the vendor total.
+const APR = { code: '2026-04', start: '2026-04-01', end: '2026-04-30', due: '2026-05-15', afisare: '2026-06-11' }
+const MAY = { code: '2026-05', start: '2026-05-01', end: '2026-05-31', due: '2026-06-15', afisare: '2026-07-13' }
 const REF = 'APRIL_INJECT'
 
 function loadJson(f: string) { return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', COMM, f), 'utf8')) }
@@ -63,6 +65,9 @@ async function main() {
 
   // ── config patches (same as seed-kralik-may) ──
   await prisma.community.update({ where: { id: COMM }, data: { penaltyGraceDays: 30 } })
+  // ensure the penalty engine runs on prepare/approve (default is on; set explicitly for safety)
+  const commFeat = await prisma.community.findUnique({ where: { id: COMM }, select: { features: true } })
+  await prisma.community.update({ where: { id: COMM }, data: { features: { ...((commFeat?.features as any) || {}), penalties: true } } })
   const cpiRule = (def.allocationRules || []).find((r: any) => r.code === 'BY_CPI')
   const cpiWeights = cpiRule?.params?.weights || cpiByCode
   for (const f of await prisma.fund.findMany({ where: { communityId: COMM } })) {
@@ -86,8 +91,8 @@ async function main() {
   const [ay, am] = APR.code.split('-').map(Number)
   const aprPeriod = await prisma.period.upsert({
     where: { communityId_code: { communityId: COMM, code: APR.code } },
-    update: { status: 'CLOSED', seq: ay * 12 + am, startDate: new Date(APR.start), endDate: new Date(APR.end), dueDate: new Date(APR.due) },
-    create: { communityId: COMM, code: APR.code, seq: ay * 12 + am, status: 'CLOSED', preparedAt: new Date(APR.end), closedAt: new Date(APR.end), startDate: new Date(APR.start), endDate: new Date(APR.end), dueDate: new Date(APR.due) },
+    update: { status: 'CLOSED', seq: ay * 12 + am, startDate: new Date(APR.start), endDate: new Date(APR.end), dueDate: new Date(APR.due), afisareDate: new Date(APR.afisare) },
+    create: { communityId: COMM, code: APR.code, seq: ay * 12 + am, status: 'CLOSED', preparedAt: new Date(APR.end), closedAt: new Date(APR.end), startDate: new Date(APR.start), endDate: new Date(APR.end), dueDate: new Date(APR.due), afisareDate: new Date(APR.afisare) },
   })
   // clear prior injection artifacts (idempotent)
   const priorLe = await prisma.beLedgerEntry.findMany({ where: { communityId: COMM, periodId: aprPeriod.id, refType: { in: [REF, REF + '_PAY', REF + '_ADJ'] } }, select: { id: true } })
@@ -176,12 +181,36 @@ async function main() {
     await prisma.communityChargeLine.createMany({ data: s.lines.map((l) => ({ chargeId: cc.id, communityId: COMM, periodId: aprPeriod.id, billingEntityId: beIds.get(l.be)!, unitId: unitIds.get(l.unit)!, amount: l.amount, meta: { source: REF, service: s.service, fund: s.fund } })) })
   }
 
+  // ── 1b) import penalty buckets from the vendor's per-bucket list (rate>0 only) ──
+  // These carry the historical accrued penalty (seedPenaltyAccrued) that April forgives above, and drive
+  // May-forward penalties via the engine: advance() ages each bucket over the afisare window. No
+  // PenaltyBucketPeriod rows — advance()'s no-prior-period fallback starts from principalOriginal +
+  // seedPenaltyAccrued (penalty-ledger.service.ts). The May charge = restanta·rate·32 (=72.62 / 3.72).
+  const penBuckets = loadJson('penalty-buckets-2026-05.json')
+  await prisma.penaltyBucket.deleteMany({ where: { communityId: COMM, originKey: { startsWith: 'migrated-debt:' } } })
+  const expFundId = funds.get('EXPENSES')!, penFundId = funds.get('PENALIZARI')!
+  let seededBuckets = 0
+  for (const [uc, rec] of Object.entries<any>(penBuckets)) {
+    const be = beByCode[uc]; const beId = be ? beIds.get(be) : null; const unitId = unitIds.get(uc)
+    if (!beId || !unitId) { console.log(`  ⚠ penalty bucket: no be/unit for ${uc}`); continue }
+    for (const b of rec.buckets || []) {
+      const scad = new Date(b.scadenta) // buckets are years past-due; firstPenalDay only needs to precede May
+      await prisma.penaltyBucket.create({ data: {
+        communityId: COMM, billingEntityId: beId, unitId, fundId: expFundId, targetFundId: penFundId,
+        originKey: `migrated-debt:${uc}:${b.originMonth}`, dueDate: scad, firstPenalDay: scad,
+        principalOriginal: b.restanta, seedPenaltyAccrued: b.seedAccrued, ratePerDayPct: b.rate * 100, status: 'OPEN',
+      } })
+      seededBuckets++
+    }
+  }
+  console.log(`  seeded ${seededBuckets} penalty buckets across ${Object.keys(penBuckets).length} units`)
+
   // ── 2) compute May 2026-05 (chains from April beStatement.dueEnd) ──
   const [my, mm] = MAY.code.split('-').map(Number)
   const mayPeriod = await prisma.period.upsert({
     where: { communityId_code: { communityId: COMM, code: MAY.code } },
-    update: { startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), status: 'OPEN', preparedAt: null, closedAt: null },
-    create: { communityId: COMM, code: MAY.code, seq: my * 12 + mm, status: 'OPEN', startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due) },
+    update: { startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare), status: 'OPEN', preparedAt: null, closedAt: null },
+    create: { communityId: COMM, code: MAY.code, seq: my * 12 + mm, status: 'OPEN', startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare) },
   })
   const units = await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })
   const byUnit = packet.unitMeasures?.byUnit || {}

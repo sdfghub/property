@@ -391,7 +391,7 @@
   "400191-C1-U28-AP 1/B": {
    "opening": {
     "EXPENSES": 13494.09,
-    "PENALIZARI": 4123.38,
+    "PENALIZARI": 4119.79,
     "RULMENT": 294.52,
     "REPARATII": 172.74,
     "REABILITARE_1": 6866.19,
@@ -400,7 +400,6 @@
    },
    "charges": {
     "EXPENSES": 39.92,
-    "PENALIZARI": 31.73,
     "RULMENT": 14.52,
     "REPARATII": 22.1,
     "REABILITARE_3": 2459.14
@@ -411,8 +410,7 @@
     "REPARATII": 194.84,
     "REABILITARE_1": 6766.19,
     "REABILITARE_2": 37879.1,
-    "REABILITARE_3": 4918.28,
-    "PENALIZARI": 9.42
+    "REABILITARE_3": 4918.28
    }
   },
   "400191-C1-U29-AP 9": {
@@ -470,7 +468,7 @@
   "400191-C1-U32-AP 11": {
    "opening": {
     "EXPENSES": 1769.25,
-    "PENALIZARI": 151.85,
+    "PENALIZARI": 155.56,
     "RULMENT": 224.52,
     "REPARATII": 21.6,
     "REABILITARE_1": -5743.0,
@@ -479,7 +477,6 @@
    },
    "charges": {
     "EXPENSES": 122.25,
-    "PENALIZARI": 3.49,
     "RULMENT": 14.52,
     "REPARATII": 21.6,
     "REABILITARE_3": 2403.51
@@ -490,8 +487,7 @@
     "REPARATII": 43.2,
     "REABILITARE_1": -5743.0,
     "REABILITARE_2": 12928.71,
-    "REABILITARE_3": 4807.02,
-    "PENALIZARI": 3.7
+    "REABILITARE_3": 4807.02
    }
   },
   "400191-C1-U33-AP 11B": {

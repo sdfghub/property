@@ -254,6 +254,7 @@ model Period {
   startDate   DateTime     @map("start_date")
   endDate     DateTime     @map("end_date")
   dueDate     DateTime?    @map("due_date")
+  afisareDate DateTime?    @map("afisare_date") // posting/display date; penalty accrual window is prev.afisareDate+1 .. afisareDate (falls back to start/endDate)
   seq         Int          @map("seq")
   timezone    String       @default("Europe/Bucharest") @map("timezone")
   status      PeriodStatus @default(OPEN)
