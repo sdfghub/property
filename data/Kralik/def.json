@@ -2,6 +2,7 @@
   "id": "Kralik",
   "name": "AP Gh Lazar 4",
   "expenseFundCode": "EXPENSES",
+  "waterDifferenceMethod": "APA_DIF",
   "period": {
     "code": "2026-03",
     "start": "2026-03-01",

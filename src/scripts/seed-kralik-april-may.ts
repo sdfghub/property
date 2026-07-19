@@ -207,10 +207,14 @@ async function main() {
 
   // ── 2) compute May 2026-05 (chains from April beStatement.dueEnd) ──
   const [my, mm] = MAY.code.split('-').map(Number)
+  // Cold-water allocation mode from the bare data (def.json). Sets the EXISTING per-period switch
+  // (period.waterDifferenceMethod) before the water bill is allocated below: APA_DIF = each unit's
+  // metered cold + the branch difference (branșament − Σ contoare) broken out as its own line.
+  const waterMethod = (def.waterDifferenceMethod as 'PROPORTIONAL' | 'APA_DIF') || 'PROPORTIONAL'
   const mayPeriod = await prisma.period.upsert({
     where: { communityId_code: { communityId: COMM, code: MAY.code } },
-    update: { startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare), status: 'OPEN', preparedAt: null, closedAt: null },
-    create: { communityId: COMM, code: MAY.code, seq: my * 12 + mm, status: 'OPEN', startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare) },
+    update: { startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare), waterDifferenceMethod: waterMethod, status: 'OPEN', preparedAt: null, closedAt: null },
+    create: { communityId: COMM, code: MAY.code, seq: my * 12 + mm, status: 'OPEN', startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), afisareDate: new Date(MAY.afisare), waterDifferenceMethod: waterMethod },
   })
   const units = await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })
   const byUnit = packet.unitMeasures?.byUnit || {}
