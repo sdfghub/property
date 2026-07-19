@@ -12,7 +12,7 @@ const CAT_LABEL: Record<string, string> = {
   APA_RECE: 'Apă rece', APA_METEO: 'Apă meteo', CURENT_SCARA: 'Curent scară', SALUBRITATE: 'Salubritate',
   CURATENIE: 'Curățenie', ADMINISTRARE: 'Administrare', COMISION_BANCA: 'Comision', INTERFON: 'Interfon',
   RULMENT: 'Rulment', REPARATII: 'Reparații', REABILITARE_1: 'Reab. 1', REABILITARE_2: 'Reab. 2',
-  REABILITARE_3: 'Reab. 3', PENALIZARI: 'Penalizări',
+  REABILITARE_3: 'Reab. 3', PENALIZARI: 'Penalizări', APA_DIF: 'Apă - diferență',
 }
 
 // Category label, incl. per-fund penalty codes `PEN:<fund>` → "Penaliz. <fund>".

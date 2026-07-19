@@ -215,6 +215,7 @@ export class FinanceService {
     const lineRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select ccl.billing_entity_id as "beId",
               case when cc.source_key like 'penalty:%' then 'PEN:' || split_part(cc.source_key, ':', 2)
+                   when ccl.meta->>'splitNodeId' like '%DIFERENTA' then 'APA_DIF'
                    when cc.source_type = 'FUND' then f.code
                    else coalesce(cc.allocation_snapshot->>'expenseType', 'ALTELE') end as label,
               sum(ccl.amount)::float8 as amt
@@ -273,6 +274,10 @@ export class FinanceService {
     )
     const catToGroup = new Map<string, { key: string; label: string }>()
     catFundRows.forEach((r) => catToGroup.set(r.label, { key: r.fundGroup, label: r.fundName }))
+    // APA_DIF is derived at the line level (the water-difference split), so it isn't in the charge-level
+    // catFundRows above — place it in the same group as apa rece (Expenses).
+    const waterGrp = catToGroup.get('APA_RECE') ?? catToGroup.get('CANALIZARE')
+    if (waterGrp && !catToGroup.has('APA_DIF')) catToGroup.set('APA_DIF', waterGrp)
     const groupRank = (k: string) => (k === 'EXPENSES' ? 0 : k === 'PENALIZARI' ? 9 : 1)
     const groupMap = new Map<string, { key: string; label: string; categories: string[] }>()
     for (const c of categories) {
