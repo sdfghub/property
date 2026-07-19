@@ -538,9 +538,20 @@ export class FinanceService {
       // hide buckets that never accrued anything up to this period; keep creation-date order (SQL)
       .filter((b) => b.penaltyToDate > 0.0001 || b.penaltyThisPeriod > 0.0001)
 
+    // Manual correction (if any) applied to this BE's penalty for the period — shown as a banner so the
+    // drilldown reconciles with the (net) avizier figure.
+    const penFund = await this.prisma.fund.findFirst({ where: { communityId, code: 'PENALIZARI' }, select: { id: true } })
+    const ovrRow = penFund ? await this.prisma.chargeOverride.findFirst({
+      where: { communityId, periodId: period.id, billingEntityId: be.id, fundId: penFund.id }, orderBy: { createdAt: 'desc' },
+    }) : null
+    const override = ovrRow && ovrRow.overrideAmount != null
+      ? { computed: round2(Number(ovrRow.computedAmount)), approved: round2(Number(ovrRow.overrideAmount)), comment: ovrRow.comment, actor: ovrRow.actor, at: ovrRow.createdAt }
+      : null
+
     return {
       beCode, beName: be.name, periodCode: p.code, sourceFund: sourceFund ?? null,
       monthTotal: round2(monthTotal), grandTotal: round2(grandTotal),
+      override,
       buckets,
     }
   }
@@ -610,6 +621,7 @@ export class FinanceService {
               sum(d.amount)::float8 as amount, max(d.meta->>'reason') as reason
          from be_ledger_entry_detail d left join fund f on f.id = d.fund_id
         where d.community_id = $1 and d.period_id = $2 and d.billing_entity_id = $3 and d.kind = 'ADJUSTMENT'
+          and not (d.ref_type in ('CHG_OVR_REV','CHG_OVR_SET') and f.code = 'PENALIZARI')
         group by f.code, f.name
        having abs(sum(d.amount)) > 0.0001
         order by coalesce(f.name, f.code)`,
