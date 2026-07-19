@@ -135,6 +135,15 @@ async function main() {
   }
   console.log(`injected April: ${bf.size} (BE,fund) statements; Σ dueEnd (=May opening) = ${aprCloseTotal.toFixed(2)}`)
 
+  // April community_statement = rollup of its per-BE statements (same definition the engine now uses),
+  // so April is a complete closed period.
+  const aprAgg = await prisma.beStatement.aggregate({ where: { communityId: COMM, periodId: aprPeriod.id }, _sum: { dueStart: true, charges: true, payments: true, adjustments: true, dueEnd: true } })
+  const cs = { dueStart: Number(aprAgg._sum.dueStart ?? 0), charges: Number(aprAgg._sum.charges ?? 0), payments: Number(aprAgg._sum.payments ?? 0), adjustments: Number(aprAgg._sum.adjustments ?? 0), dueEnd: Number(aprAgg._sum.dueEnd ?? 0), currency: 'RON' }
+  await prisma.communityStatement.upsert({
+    where: { communityId_periodId: { communityId: COMM, periodId: aprPeriod.id } },
+    update: cs, create: { communityId: COMM, periodId: aprPeriod.id, ...cs },
+  })
+
   // community_charge/lines so the April avizier shows charge columns (per-fund; EXPENSES lumped as
   // INTRETINERE since the sheet's April maintenance is carried as one bucket here).
   const priorCC = await prisma.communityCharge.findMany({ where: { communityId: COMM, periodId: aprPeriod.id, allocationStrategy: REF }, select: { id: true } })

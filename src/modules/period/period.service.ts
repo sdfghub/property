@@ -1325,69 +1325,27 @@ export class PeriodService {
   }
 
   private async computeCommunityStatements(tx: TxOrClient, communityId: string, periodId: string) {
-    const period = await tx.period.findUnique({
-      where: { id: periodId },
-      select: { seq: true },
+    // Community statement = exact rollup of this period's per-BE statements. It is NOT rebuilt from the
+    // community_ledger flows, so fund→vendor outflows (FUND_SPEND) can't inflate the community-wide
+    // owner-debt total — it always equals Σ be_statement. The per-BE statements already carry the live
+    // opening (chained from the prior CLOSED period), so no separate community-level chain is needed.
+    const agg = await tx.beStatement.aggregate({
+      where: { communityId, periodId },
+      _sum: { dueStart: true, charges: true, payments: true, adjustments: true, dueEnd: true },
     })
-    const previousPeriod = await tx.period.findFirst({
-      where: { communityId, seq: { lt: period?.seq ?? 0 }, status: 'CLOSED' },
-      orderBy: { seq: 'desc' },
-      select: { id: true },
-    })
-    const previousStatement = previousPeriod
-      ? await tx.communityStatement.findUnique({
-          where: { communityId_periodId: { communityId, periodId: previousPeriod.id } },
-          select: { dueEnd: true, currency: true },
-        })
-      : null
-    const opening = await tx.communityOpeningBalance.findUnique({
-      where: { communityId_periodId: { communityId, periodId } },
-      select: { amount: true, currency: true },
-    })
-
-    const [chargesAgg, paymentsAgg, adjustmentsAgg] = await Promise.all([
-      tx.communityLedgerEntry.aggregate({
-        _sum: { amount: true },
-        where: { communityId, periodId, kind: 'REVENUE', lane: 'ACCRUAL' },
-      }),
-      tx.communityLedgerEntry.aggregate({
-        _sum: { amount: true },
-        where: { communityId, periodId, kind: 'PAYMENT', lane: 'CASH' },
-      }),
-      tx.communityLedgerEntry.aggregate({
-        _sum: { amount: true },
-        where: { communityId, periodId, kind: { in: ['ADJUSTMENT', 'FUND_SPEND'] }, lane: 'ACCRUAL' },
-      }),
-    ])
-
-    const dueStart = Number(previousStatement?.dueEnd ?? opening?.amount ?? 0)
-    const charges = Number(chargesAgg._sum.amount ?? 0)
-    const payments = Number(paymentsAgg._sum.amount ?? 0)
-    const adjustments = Number(adjustmentsAgg._sum.amount ?? 0)
-    const dueEnd = dueStart + charges - payments + adjustments
+    const dueStart = Number(agg._sum.dueStart ?? 0)
+    const charges = Number(agg._sum.charges ?? 0)
+    const payments = Number(agg._sum.payments ?? 0)
+    const adjustments = Number(agg._sum.adjustments ?? 0)
+    const dueEnd = Number(agg._sum.dueEnd ?? 0)
+    const currency = (await tx.beStatement.findFirst({ where: { communityId, periodId }, select: { currency: true } }))?.currency ?? 'RON'
 
     await this.recomputeCommunityRunningDue(tx, communityId, periodId, dueStart)
 
     await tx.communityStatement.upsert({
       where: { communityId_periodId: { communityId, periodId } },
-      update: {
-        dueStart,
-        charges,
-        payments,
-        adjustments,
-        dueEnd,
-        currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
-      },
-      create: {
-        communityId,
-        periodId,
-        dueStart,
-        charges,
-        payments,
-        adjustments,
-        dueEnd,
-        currency: previousStatement?.currency ?? opening?.currency ?? 'RON',
-      },
+      update: { dueStart, charges, payments, adjustments, dueEnd, currency },
+      create: { communityId, periodId, dueStart, charges, payments, adjustments, dueEnd, currency },
     })
   }
 
