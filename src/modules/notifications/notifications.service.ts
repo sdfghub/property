@@ -1,8 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common'
 import { NotificationChannel } from '@prisma/client'
 import { PrismaService } from '../user/prisma.service'
+import { NOTIFICATION_CHANNEL_META, metaKeys } from '../../common/enums-meta'
 
-const CHANNELS: NotificationChannel[] = ['IN_APP', 'PUSH', 'EMAIL']
+const CHANNELS: NotificationChannel[] = metaKeys(NOTIFICATION_CHANNEL_META) as NotificationChannel[]
 const IN_APP_CHANNEL: NotificationChannel = 'IN_APP'
 
 @Injectable()

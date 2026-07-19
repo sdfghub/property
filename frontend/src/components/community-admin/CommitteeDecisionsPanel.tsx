@@ -1,18 +1,17 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { useMetadata } from '../../hooks/useMetadata'
 
 const money = (n: number | null | undefined, ccy = 'RON') =>
   n == null ? '' : `${Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`
-
-const STATUS_BADGE: Record<string, string> = {
-  OPEN: 'tertiary', APPROVED: 'positive', REJECTED: 'negative', CANCELLED: 'secondary',
-}
 
 export function CommitteeDecisionsPanel({ communityId }: { communityId: string }) {
   const { api, activeRole } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const meta = useMetadata()
+  const statusMeta = (s: string) => meta?.committeeDecisionStatuses?.find((m) => m.key === s)
 
   const role = activeRole?.role
   const isAdmin = role === 'COMMUNITY_ADMIN' || role === 'SYSTEM_ADMIN'
@@ -109,7 +108,7 @@ export function CommitteeDecisionsPanel({ communityId }: { communityId: string }
               {d.description ? <div className="muted" style={{ fontSize: 13 }}>{d.description}</div> : null}
               <div className="muted" style={{ fontSize: 12 }}>{new Date(d.createdAt).toLocaleDateString('ro-RO')}</div>
             </div>
-            <span className={`badge ${STATUS_BADGE[d.status] || 'secondary'}`}>{t(`committee.status.${d.status}`, d.status)}</span>
+            <span className={`badge ${statusMeta(d.status)?.tone || 'secondary'}`}>{t(`committee.status.${d.status}`, statusMeta(d.status)?.label || d.status)}</span>
           </div>
           <div className="row" style={{ gap: 12, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="badge positive">✓ {d.approveCount}</span>

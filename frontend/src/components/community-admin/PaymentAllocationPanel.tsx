@@ -2,16 +2,10 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 
-// Keep in sync with backend AllocationStrategy (src/modules/billing/payment-allocation.ts).
-const STRATEGIES: Array<{ key: string; label: string; hint: string }> = [
-  { key: 'FIFO', label: 'Cronologic (FIFO)', hint: 'Cele mai vechi datorii se sting primele (comportament implicit).' },
-  { key: 'LEGAL_PER_PERIOD', label: 'Legal — pe perioade', hint: 'Cea mai veche lună întâi; în cadrul fiecărei luni, penalizările înaintea principalului (Cod civil art. 1509).' },
-  { key: 'LEGAL_PENALTIES_FIRST', label: 'Legal — penalizări întâi', hint: 'Toate penalizările (cele mai vechi întâi) înaintea oricărui principal.' },
-  { key: 'FUND_PRIORITY', label: 'Ordine fonduri', hint: 'Fondurile se sting în ordinea de prioritate stabilită mai jos.' },
-]
-
+// The strategy registry (codes + labels + hints) is served by the backend.
 type Fund = { code: string; name: string }
-type Config = { strategy: string; fundOrder?: string[]; funds: Fund[] }
+type Strategy = { key: string; label: string; hint: string }
+type Config = { strategy: string; fundOrder?: string[]; funds: Fund[]; strategies?: Strategy[] }
 
 export function PaymentAllocationPanel({ communityId }: { communityId: string }) {
   const { api } = useAuth()
@@ -72,7 +66,7 @@ export function PaymentAllocationPanel({ communityId }: { communityId: string })
       {!cfg ? <div className="empty">{t('common.loading', 'Loading…')}</div> : (
         <div className="stack" style={{ gap: 10 }}>
           <div className="stack" style={{ gap: 4 }}>
-            {STRATEGIES.map((s) => (
+            {(cfg.strategies ?? []).map((s) => (
               <label key={s.key} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: '6px 0', borderTop: '1px solid var(--border,#eee)', cursor: 'pointer' }}>
                 <input type="radio" name="alloc-strategy" checked={strategy === s.key} onChange={() => setStrategy(s.key)} style={{ marginTop: 3 }} />
                 <div className="stack" style={{ gap: 0 }}>

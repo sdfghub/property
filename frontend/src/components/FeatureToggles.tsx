@@ -2,25 +2,15 @@ import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useI18n } from '../i18n/useI18n'
 
-const FLAGS: Array<{ key: string; label: string; hint?: string }> = [
-  { key: 'cenzor', label: 'Cenzor', hint: 'Rol cenzor + semnătură închidere' },
-  { key: 'committee', label: 'Comitet executiv', hint: 'Rol comitet + decizii/vot' },
-  { key: 'funds', label: 'Fonduri', hint: 'Fonduri de rezervă/reparații' },
-  { key: 'penalties', label: 'Penalizări', hint: 'Penalizări de întârziere' },
-  { key: 'meters', label: 'Contoare', hint: 'Citiri contoare / repartizare pe consum' },
-  { key: 'announcements', label: 'Anunțuri' },
-  { key: 'polls', label: 'Sondaje' },
-  { key: 'events', label: 'Evenimente' },
-  { key: 'inventory', label: 'Inventar' },
-  { key: 'notifications', label: 'Notificări' },
-  { key: 'tickets', label: 'Sarcini & incidente' },
-]
+// The feature catalog (codes + labels/hints) comes from the backend registry.
+type FeatureMeta = { key: string; label: string; hint?: string }
 
 export function FeatureToggles({ communityId }: { communityId: string }) {
   const { api } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [flags, setFlags] = React.useState<Record<string, boolean> | null>(null)
+  const [catalog, setCatalog] = React.useState<FeatureMeta[]>([])
   const [busy, setBusy] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -30,6 +20,9 @@ export function FeatureToggles({ communityId }: { communityId: string }) {
     api.get<Record<string, boolean>>(`/communities/${communityId}/features`)
       .then((f: Record<string, boolean>) => setFlags(f))
       .catch(() => setFlags(null))
+    api.get<FeatureMeta[]>(`/communities/${communityId}/features/registry`)
+      .then((r: FeatureMeta[]) => setCatalog(r || []))
+      .catch(() => setCatalog([]))
   }, [api, communityId])
 
   async function toggle(key: string) {
@@ -51,7 +44,7 @@ export function FeatureToggles({ communityId }: { communityId: string }) {
       {error && <div className="badge negative">{error}</div>}
       {!flags ? <div className="empty">{t('common.loading', 'Loading…')}</div> : (
         <div className="stack" style={{ gap: 2 }}>
-          {FLAGS.map((f) => {
+          {catalog.map((f) => {
             const on = flags[f.key] !== false
             return (
               <label key={f.key} className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '6px 0', borderTop: '1px solid var(--border,#eee)', cursor: 'pointer' }}>

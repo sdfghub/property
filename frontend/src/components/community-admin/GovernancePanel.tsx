@@ -1,20 +1,10 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { useMetadata, labelOf } from '../../hooks/useMetadata'
 
 type Member = { assignmentId: string; userId: string; email: string; name?: string | null; role: string; createdAt?: string }
 type Pending = { id: string; email: string; role: string; createdAt?: string; expiresAt?: string }
-
-const ROLE_LABEL: Record<string, string> = {
-  COMMUNITY_ADMIN: 'Administrator',
-  CENSOR: 'Cenzor',
-  EXECUTIVE_COMITEE_MEMBER: 'Comitet executiv',
-}
-const GROUPS: Array<{ role: string }> = [
-  { role: 'COMMUNITY_ADMIN' },
-  { role: 'CENSOR' },
-  { role: 'EXECUTIVE_COMITEE_MEMBER' },
-]
 
 export function GovernancePanel({ communityId, features }: { communityId: string; features?: Record<string, boolean> | null }) {
   const cenzorOn = features ? features.cenzor !== false : true
@@ -22,7 +12,9 @@ export function GovernancePanel({ communityId, features }: { communityId: string
   const { api, user } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
-  const rl = (r: string) => t(`role.${r}`, ROLE_LABEL[r] || r)
+  const meta = useMetadata()
+  const governanceRoles = meta?.governanceRoles ?? []
+  const rl = (r: string) => t(`role.${r}`, labelOf(meta?.roles, r))
 
   const [members, setMembers] = React.useState<Member[]>([])
   const [pending, setPending] = React.useState<Pending[]>([])
@@ -89,9 +81,11 @@ export function GovernancePanel({ communityId, features }: { communityId: string
         <div className="stack" style={{ gap: 4 }}>
           <label className="label">{t('gov.role', 'Rol')}</label>
           <select className="input" value={invite.role} onChange={(e) => setInvite((s) => ({ ...s, role: e.target.value }))}>
-            <option value="COMMUNITY_ADMIN">{rl('COMMUNITY_ADMIN')}</option>
-            {cenzorOn && <option value="CENSOR">{rl('CENSOR')}</option>}
-            {committeeOn && <option value="EXECUTIVE_COMITEE_MEMBER">{rl('EXECUTIVE_COMITEE_MEMBER')}</option>}
+            {governanceRoles.map((g) => {
+              if (g.key === 'CENSOR' && !cenzorOn) return null
+              if (g.key === 'EXECUTIVE_COMITEE_MEMBER' && !committeeOn) return null
+              return <option key={g.key} value={g.key}>{rl(g.key)}</option>
+            })}
           </select>
         </div>
         <button className="btn primary" type="submit" disabled={busy === 'invite'}>
@@ -103,7 +97,7 @@ export function GovernancePanel({ communityId, features }: { communityId: string
       </div>
 
       {/* Members grouped by role */}
-      {GROUPS.map(({ role }) => {
+      {governanceRoles.map(({ key: role }) => {
         const rows = members.filter((m) => m.role === role)
         return (
           <div key={role} className="card">

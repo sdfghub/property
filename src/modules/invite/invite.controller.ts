@@ -3,6 +3,7 @@ import { InviteService } from './invite.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
+import { GOVERNANCE_ROLE_KEYS } from '../../common/enums-meta'
 
 @Controller('invites')
 export class InviteController{
@@ -56,7 +57,7 @@ export class InviteController{
       throw new ForbiddenException('Community admin required')
     }
     const normalizedRole = (role || 'COMMUNITY_ADMIN') as any
-    const allowedCommunityRoles = ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER']
+    const allowedCommunityRoles = GOVERNANCE_ROLE_KEYS
     if (!allowedCommunityRoles.includes(normalizedRole)) {
       throw new ForbiddenException('Unsupported community role')
     }

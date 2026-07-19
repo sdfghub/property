@@ -2,12 +2,14 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { AnnouncementAudienceType, AnnouncementImpactTag, BillingEntityRole } from '@prisma/client'
 import { PrismaService } from '../user/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AUDIENCE_TYPE_META, BE_ROLE_META, IMPACT_TAG_META, metaKeys } from '../../common/enums-meta'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
-const AUDIENCE_TYPES = new Set(['COMMUNITY', 'UNIT_GROUP'])
-const IMPACT_TAGS = new Set(['WATER', 'HEAT', 'ELEVATOR', 'ELECTRICITY', 'ACCESS', 'OTHER'])
-const BE_ROLE_TYPES: BillingEntityRole[] = ['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE']
+// Code sets derived from the central registry so the taxonomy has a single source of truth.
+const AUDIENCE_TYPES = new Set(metaKeys(AUDIENCE_TYPE_META))
+const IMPACT_TAGS = new Set(metaKeys(IMPACT_TAG_META))
+const BE_ROLE_TYPES: BillingEntityRole[] = metaKeys(BE_ROLE_META) as BillingEntityRole[]
 const BE_ROLE_SET = new Set<BillingEntityRole>(BE_ROLE_TYPES)
 
 @Injectable()

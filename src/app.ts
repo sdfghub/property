@@ -24,6 +24,7 @@ import { InventoryModule } from './modules/inventory/inventory.module'
 import { FinanceModule } from './modules/finance/finance.module'
 import { CommitteeModule } from './modules/committee/committee.module'
 import { FeaturesModule } from './modules/features/features.module'
+import { MetadataModule } from './modules/metadata/metadata.module'
 
 @Controller()
 class HealthController {
@@ -58,6 +59,7 @@ class HealthController {
     FinanceModule,
     CommitteeModule,
     FeaturesModule,
+    MetadataModule,
   ],
   controllers: [HealthController],
 })

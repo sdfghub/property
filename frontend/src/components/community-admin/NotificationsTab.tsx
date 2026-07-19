@@ -1,12 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
-
-const CHANNEL_LABELS: Record<string, string> = {
-  IN_APP: 'In-app',
-  PUSH: 'Push',
-  EMAIL: 'Email',
-}
+import { useMetadata, labelOf } from '../../hooks/useMetadata'
 
 type NotificationItem = {
   id: string
@@ -30,6 +25,7 @@ type Props = {
 export function NotificationsTab({ readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
+  const meta = useMetadata()
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
   const [prefs, setPrefs] = React.useState<PreferenceItem[]>([])
   const [unreadOnly, setUnreadOnly] = React.useState(false)
@@ -197,7 +193,7 @@ export function NotificationsTab({ readOnly = false }: Props) {
                 onChange={(e) => updatePref(pref.channel, e.target.checked)}
                 disabled={prefsLoading}
               />
-              <span>{CHANNEL_LABELS[pref.channel] || pref.channel}</span>
+              <span>{labelOf(meta?.notificationChannels, pref.channel)}</span>
             </label>
           ))}
         </div>

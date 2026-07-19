@@ -19,6 +19,23 @@ export const FEATURE_DEFAULTS = {
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS
 export const FEATURE_KEYS = Object.keys(FEATURE_DEFAULTS) as FeatureKey[]
 
+// Display registry for the toggle list — the source of truth for the feature codes
+// and their default labels/hints. The frontend renders whatever this returns (and may
+// still apply an i18n override keyed by `features.flag.<key>`).
+export const FEATURE_META: Array<{ key: FeatureKey; label: string; hint?: string }> = [
+  { key: 'cenzor', label: 'Cenzor', hint: 'Rol cenzor + semnătură închidere' },
+  { key: 'committee', label: 'Comitet executiv', hint: 'Rol comitet + decizii/vot' },
+  { key: 'funds', label: 'Fonduri', hint: 'Fonduri de rezervă/reparații' },
+  { key: 'penalties', label: 'Penalizări', hint: 'Penalizări de întârziere' },
+  { key: 'meters', label: 'Contoare', hint: 'Citiri contoare / repartizare pe consum' },
+  { key: 'announcements', label: 'Anunțuri' },
+  { key: 'polls', label: 'Sondaje' },
+  { key: 'events', label: 'Evenimente' },
+  { key: 'inventory', label: 'Inventar' },
+  { key: 'notifications', label: 'Notificări' },
+  { key: 'tickets', label: 'Sarcini & incidente' },
+]
+
 @Injectable()
 export class FeaturesService {
   constructor(private readonly prisma: PrismaService) {}

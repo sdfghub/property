@@ -1,10 +1,8 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
-
-const IMPACT_TAGS = ['WATER', 'HEAT', 'ELEVATOR', 'ELECTRICITY', 'ACCESS', 'OTHER'] as const
-const AUDIENCE_TYPES = ['COMMUNITY', 'UNIT_GROUP'] as const
-const BE_ROLES = ['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE'] as const
+import { useMetadata, labelOf } from '../../hooks/useMetadata'
+// Impact tags, audience types and target BE-roles come from the backend metadata registry.
 
 type UnitGroup = {
   id: string
@@ -45,6 +43,11 @@ function toDateTimeInput(value?: string | null) {
 export function CommunicationsTab({ communityId, unitGroups, readOnly = false }: Props) {
   const { api } = useAuth()
   const { t } = useI18n()
+  const meta = useMetadata()
+  const impactTags = meta?.impactTags ?? []
+  const audienceTypes = meta?.audienceTypes ?? []
+  const beRoles = meta?.beRoles ?? []
+  const beRoleKeys = React.useMemo(() => beRoles.map((r) => r.key), [beRoles])
   const [items, setItems] = React.useState<AnnouncementItem[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -60,7 +63,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
     audienceType: 'COMMUNITY',
     impactTags: [] as string[],
     audienceGroupIds: [] as string[],
-    targetRoles: [...BE_ROLES],
+    targetRoles: [] as string[],
   })
 
   const [editForm, setEditForm] = React.useState({
@@ -71,8 +74,14 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
     audienceType: 'COMMUNITY',
     impactTags: [] as string[],
     audienceGroupIds: [] as string[],
-    targetRoles: [...BE_ROLES],
+    targetRoles: [] as string[],
   })
+
+  // Default a fresh create form to "all roles" once the registry has loaded.
+  React.useEffect(() => {
+    if (!beRoleKeys.length) return
+    setForm((f) => (f.targetRoles.length ? f : { ...f, targetRoles: beRoleKeys }))
+  }, [beRoleKeys])
 
   const loadAnnouncements = React.useCallback(async () => {
     if (!communityId) return
@@ -135,7 +144,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
       audienceType: 'COMMUNITY',
       impactTags: [],
       audienceGroupIds: [],
-      targetRoles: [...BE_ROLES],
+      targetRoles: beRoleKeys,
     })
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -152,7 +161,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
         audienceType: form.audienceType,
         impactTags: form.impactTags,
         audienceGroupIds: form.audienceType === 'UNIT_GROUP' ? form.audienceGroupIds : [],
-        targetRoles: form.targetRoles.length ? form.targetRoles : BE_ROLES,
+        targetRoles: form.targetRoles.length ? form.targetRoles : beRoleKeys,
       })
       resetForm()
       await loadAnnouncements()
@@ -173,7 +182,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
       audienceType: item.audienceType || 'COMMUNITY',
       impactTags: (item.impactTags || []).map((tag) => tag.tag),
       audienceGroupIds: (item.audienceGroups || []).map((g) => g.unitGroupId),
-      targetRoles: (item.targetRoles || []).length ? (item.targetRoles || []).map((r) => r.role) : [...BE_ROLES],
+      targetRoles: (item.targetRoles || []).length ? (item.targetRoles || []).map((r) => r.role) : beRoleKeys,
     })
   }
 
@@ -191,7 +200,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
         audienceType: editForm.audienceType,
         impactTags: editForm.impactTags,
         audienceGroupIds: editForm.audienceType === 'UNIT_GROUP' ? editForm.audienceGroupIds : [],
-        targetRoles: editForm.targetRoles.length ? editForm.targetRoles : BE_ROLES,
+        targetRoles: editForm.targetRoles.length ? editForm.targetRoles : beRoleKeys,
       })
       setEditingId(null)
       await loadAnnouncements()
@@ -255,7 +264,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
                       <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                         {item.impactTags.map((tag) => (
                           <span key={tag.tag} className="badge">
-                            {tag.tag}
+                            {labelOf(impactTags, tag.tag)}
                           </span>
                         ))}
                       </div>
@@ -264,7 +273,7 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
                       <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                         {item.targetRoles.map((role) => (
                           <span key={role.role} className="badge">
-                            {role.role}
+                            {labelOf(beRoles, role.role)}
                           </span>
                         ))}
                       </div>
@@ -343,9 +352,9 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
                 }))
               }
             >
-              {AUDIENCE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              {audienceTypes.map((type) => (
+                <option key={type.key} value={type.key}>
+                  {type.label}
                 </option>
               ))}
             </select>
@@ -370,14 +379,14 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
           <div>
             <label className="label">{t('communications.targetRoles', 'Target user types')}</label>
             <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-              {BE_ROLES.map((role) => (
-                <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+              {beRoles.map((role) => (
+                <label key={role.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
                   <input
                     type="checkbox"
-                    checked={form.targetRoles.includes(role)}
-                    onChange={() => toggleTargetRole(role, false)}
+                    checked={form.targetRoles.includes(role.key)}
+                    onChange={() => toggleTargetRole(role.key, false)}
                   />
-                  <span>{role}</span>
+                  <span>{role.label}</span>
                 </label>
               ))}
             </div>
@@ -385,10 +394,10 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
           <div>
             <label className="label">{t('communications.impact', 'Impact tags')}</label>
             <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-              {IMPACT_TAGS.map((tag) => (
-                <label key={tag} className="row" style={{ gap: 6, alignItems: 'center' }}>
-                  <input type="checkbox" checked={form.impactTags.includes(tag)} onChange={() => toggleImpact(tag, false)} />
-                  <span>{tag}</span>
+              {impactTags.map((tag) => (
+                <label key={tag.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                  <input type="checkbox" checked={form.impactTags.includes(tag.key)} onChange={() => toggleImpact(tag.key, false)} />
+                  <span>{tag.label}</span>
                 </label>
               ))}
             </div>
@@ -454,9 +463,9 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
                   }))
                 }
               >
-                {AUDIENCE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
+                {audienceTypes.map((type) => (
+                  <option key={type.key} value={type.key}>
+                    {type.label}
                   </option>
                 ))}
               </select>
@@ -481,14 +490,14 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
             <div>
               <label className="label">{t('communications.targetRoles', 'Target user types')}</label>
               <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                {BE_ROLES.map((role) => (
-                  <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                {beRoles.map((role) => (
+                  <label key={role.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
                     <input
                       type="checkbox"
-                      checked={editForm.targetRoles.includes(role)}
-                      onChange={() => toggleTargetRole(role, true)}
+                      checked={editForm.targetRoles.includes(role.key)}
+                      onChange={() => toggleTargetRole(role.key, true)}
                     />
-                    <span>{role}</span>
+                    <span>{role.label}</span>
                   </label>
                 ))}
               </div>
@@ -496,14 +505,14 @@ export function CommunicationsTab({ communityId, unitGroups, readOnly = false }:
             <div>
               <label className="label">{t('communications.impact', 'Impact tags')}</label>
               <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                {IMPACT_TAGS.map((tag) => (
-                  <label key={tag} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                {impactTags.map((tag) => (
+                  <label key={tag.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
                     <input
                       type="checkbox"
-                      checked={editForm.impactTags.includes(tag)}
-                      onChange={() => toggleImpact(tag, true)}
+                      checked={editForm.impactTags.includes(tag.key)}
+                      onChange={() => toggleImpact(tag.key, true)}
                     />
-                    <span>{tag}</span>
+                    <span>{tag.label}</span>
                   </label>
                 ))}
               </div>

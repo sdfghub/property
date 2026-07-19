@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { randomBytes } from 'crypto'
 import { MailService } from '../mail/mail.service'
+import { ROLE_META } from '../../common/enums-meta'
 
 @Injectable()
 export class InviteService{
@@ -12,14 +13,7 @@ export class InviteService{
   ){}
 
   private roleLabel(role: string): string {
-    const map: Record<string, string> = {
-      SYSTEM_ADMIN: 'Administrator sistem',
-      COMMUNITY_ADMIN: 'Administrator asociație',
-      CENSOR: 'Cenzor',
-      EXECUTIVE_COMITEE_MEMBER: 'Membru comitet executiv',
-      BILLING_ENTITY_USER: 'Proprietar / rezident',
-    }
-    return map[role] ?? role
+    return ROLE_META.find((r) => r.key === role)?.label ?? role
   }
 
   private button(href: string, label: string): string {

@@ -20,6 +20,15 @@ export const ALLOCATION_STRATEGIES: AllocationStrategy[] = [
   'FUND_PRIORITY',
 ]
 
+// Display registry for the strategy picker — the single source of truth for the
+// codes AND their labels/hints. The frontend renders whatever this returns.
+export const ALLOCATION_STRATEGY_META: Array<{ key: AllocationStrategy; label: string; hint: string }> = [
+  { key: 'FIFO', label: 'Cronologic (FIFO)', hint: 'Cele mai vechi datorii se sting primele (comportament implicit).' },
+  { key: 'LEGAL_PER_PERIOD', label: 'Legal — pe perioade', hint: 'Cea mai veche lună întâi; în cadrul fiecărei luni, penalizările înaintea principalului (Cod civil art. 1509).' },
+  { key: 'LEGAL_PENALTIES_FIRST', label: 'Legal — penalizări întâi', hint: 'Toate penalizările (cele mai vechi întâi) înaintea oricărui principal.' },
+  { key: 'FUND_PRIORITY', label: 'Ordine fonduri', hint: 'Fondurile se sting în ordinea de prioritate stabilită mai jos.' },
+]
+
 export type PaymentAllocationConfig = {
   strategy: AllocationStrategy
   fundOrder?: string[] // fund codes, priority order; only used by FUND_PRIORITY

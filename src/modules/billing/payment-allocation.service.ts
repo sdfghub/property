@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
-import { resolveAllocationConfig, type PaymentAllocationConfig } from './payment-allocation'
+import { ALLOCATION_STRATEGY_META, resolveAllocationConfig, type PaymentAllocationConfig } from './payment-allocation'
 
-type ConfigWithFunds = PaymentAllocationConfig & { funds: Array<{ code: string; name: string }> }
+type ConfigWithFunds = PaymentAllocationConfig & {
+  funds: Array<{ code: string; name: string }>
+  strategies: typeof ALLOCATION_STRATEGY_META
+}
 
 @Injectable()
 export class PaymentAllocationService {
@@ -21,7 +24,7 @@ export class PaymentAllocationService {
       select: { code: true, name: true },
       orderBy: { code: 'asc' },
     })
-    return { ...cfg, funds }
+    return { ...cfg, funds, strategies: ALLOCATION_STRATEGY_META }
   }
 
   /** Persist the allocation config (normalized; unknown strategy falls back to FIFO). */
