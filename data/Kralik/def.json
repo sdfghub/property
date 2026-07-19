@@ -1647,6 +1647,42 @@
       ]
     },
     {
+      "id": "SPLIT_CANAL",
+      "expenseTypeCode": "CANALIZARE",
+      "name": "Canalizare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_APA",
+      "expenseTypeCode": "PENALITATI_APA",
+      "name": "Penalități apă rece",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
       "id": "SPLIT_APA_METEO",
       "expenseTypeCode": "APA_METEO",
       "name": "Apa Meteo",
@@ -1709,7 +1745,7 @@
               "type": "GROUP",
               "code": "SVC_CURATENIE"
             },
-            "ruleCode": "BY_RESIDENTS"
+            "ruleCode": "BY_CPI"
           }
         }
       ]
@@ -1760,7 +1796,7 @@
               "type": "GROUP",
               "code": "SVC_INTERFON"
             },
-            "ruleCode": "BY_CPI"
+            "ruleCode": "EQUAL"
           }
         }
       ]

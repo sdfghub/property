@@ -1,0 +1,56 @@
+{
+  "periodCode": "2026-05",
+  "_note": "Real supplier invoices for 2026-05 (ingested from data/kralik/may/bills/). Aquatim invoice TMA10/1015526960 (total 1934.29) is split across two bill templates: BILL_APA_RECE now carries three separate lines — apa rece potabilă 907.16 + canalizare 878.57 + penalități 34.08 = 1819.81 (invoice gross) — and BILL_APA_METEO carries canal apă meteorică 114.48. FLAGS: (1) per-unit WATER_COLD submeter readings are NOT available for May — without them the water split falls back to equal; branch branșament reading is 106 m³ (index 916→1022). (2) Retim billed 21 persoane (potential residents update). (3) Curățenie 840.00 invoice (RICH CLEAN RC 0093, 08.07.2026) is for service month IUNIE 2026 — confirm it belongs to the May close. (4) ADMINISTRARE/COMISION_BANCA/INTERFON amounts (800/12/336) were user-supplied — no PDF in the folder. (5) PPC is billed to an individual (KORB ADRIAN) and nets a -3.95 credit; curent scară is charged at 68.88 (total de plată, net of credit) to match the association's Data-MAI sheet, though the invoice gross is 72.83. Allocation methods for interfon (EQUAL) and curățenie (BY_CPI) were corrected in def.json to match that sheet. (6) No 2026-04 period exists yet — this is the May packet.",
+  "meters": {
+    "community": { "COMMUNITY_WATER_COLD": 106 },
+    "_note": "Branch (branșament) cold-water reading for apa-dif: index nou 1022 − index vechi 916 = 106 m³ (period 22.04–21.05.2026)."
+  },
+  "unitMeasures": {
+    "_note": "Per-unit May readings ingested from the 'Data - MAI' sheet of 'Gh Lazar 4 - Date Istorice - 202615.xlsx': water_cold = column 'Apa rece-Consum(m³)', residents = column 'Pers. Prez.'. To be loaded as UNIT PeriodMeasure for 2026-05 (WATER_COLD/ADMIN, RESIDENTS/DECLARATION). FLAGS: (a) Σ submeters = 41.20 m³ vs branch 106 m³ → residual 64.80 m³ (~61%); high, likely unread submeters or a period mismatch (branch covers 22.04–21.05, sheet may be mid-entry) — affects APA_DIF mode only, not PROPORTIONAL. (b) AP 31 (U25) water_cold = -8.97 is a negative meter correction carried from source. Σ residents = 26.",
+    "byUnit": {
+    "400191-C1-U5-SAD 1": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U6-AP 1": { "water_cold": 5.159, "residents": 1 },
+    "400191-C1-U7-AP 6": { "water_cold": 2.888, "residents": 1 },
+    "400191-C1-U8-AP 3": { "water_cold": 1.448, "residents": 1 },
+    "400191-C1-U9-AP 2/1": { "water_cold": 0, "residents": 1 },
+    "400191-C1-U10-AP 4A": { "water_cold": 4.9, "residents": 2 },
+    "400191-C1-U11-AP 6A": { "water_cold": 3.93, "residents": 1 },
+    "400191-C1-U12-AP 4 (I)": { "water_cold": 3.561, "residents": 1 },
+    "400191-C1-U14-AP 11A": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U16-SAD 2/1": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U17-SAD 2/2": { "water_cold": 3, "residents": 0 },
+    "400191-C1-U18-AP 8": { "water_cold": 1, "residents": 1 },
+    "400191-C1-U19-AP 2/2": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U20-AP 5 (I-A)": { "water_cold": 1.4, "residents": 1 },
+    "400191-C1-U21-AP 5 (I-B)": { "water_cold": 5.2, "residents": 2 },
+    "400191-C1-U23-SPAȚIU COMERCIAL": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U25-AP 31": { "water_cold": -8.97, "residents": 2 },
+    "400191-C1-U26-AP 32": { "water_cold": 0.776, "residents": 1 },
+    "400191-C1-U27-AP 10B": { "water_cold": 1.225, "residents": 2 },
+    "400191-C1-U28-AP 1/B": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U29-AP 9": { "water_cold": 3.046, "residents": 1 },
+    "400191-C1-U30-AP 4 (III)": { "water_cold": 1, "residents": 1 },
+    "400191-C1-U31-AP 5 (III)": { "water_cold": 1.339, "residents": 1 },
+    "400191-C1-U32-AP 11": { "water_cold": 1.25, "residents": 1 },
+    "400191-C1-U33-AP 11B": { "water_cold": 3.68, "residents": 1 },
+    "400191-C1-U34-AP 12 (SAD 4/A)": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U34-AP 12 (SAD 4/B)": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U34-AP 12 (SAD 4/C)": { "water_cold": 0, "residents": 0 },
+    "400191-C1-U35-AP 14A": { "water_cold": 2.373, "residents": 2 },
+    "400191-C1-U36-AP 14B": { "water_cold": 0.655, "residents": 1 },
+    "400191-C1-U37-AP 10A": { "water_cold": 2.344, "residents": 1 }
+    }
+  },
+  "items": [
+    { "templateCode": "BILL_APA_RECE", "detailKey": "apa_rece", "amount": 907.16, "invoiceNumber": "TMA10/1015526960", "invoiceGross": 1819.81, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_APA_RECE", "detailKey": "canal", "amount": 878.57, "invoiceNumber": "TMA10/1015526960", "invoiceGross": 1819.81, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_APA_RECE", "detailKey": "penalitati", "amount": 34.08, "invoiceNumber": "TMA10/1015526960", "invoiceGross": 1819.81, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_APA_METEO", "detailKey": "apa_meteo", "amount": 114.48, "invoiceNumber": "TMA10/1015526960", "invoiceGross": 114.48, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_CURENT_SCARA", "detailKey": "curent_scara", "amount": 68.88, "invoiceNumber": "26EI09370543", "invoiceGross": 72.83, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05", "_note": "amount = 68.88 (total de plată, net of -3.95 PPC credit); invoice gross 72.83" },
+    { "templateCode": "BILL_SALUBRITATE", "detailKey": "salubritate", "amount": 645.67, "invoiceNumber": "TM19543339", "invoiceGross": 645.67, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_CURATENIE", "detailKey": "curatenie", "amount": 840.00, "invoiceNumber": "RC-0093", "invoiceGross": 840.00, "serviceStartPeriod": "2026-06", "serviceEndPeriod": "2026-06" },
+    { "templateCode": "BILL_ADMINISTRARE", "detailKey": "administrare", "amount": 800.00, "invoiceNumber": "RUSAVIT-2026-05", "invoiceGross": 800.00, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_COMISION_BANCA", "detailKey": "comision_banca", "amount": 12.00, "invoiceNumber": "LIBRA-2026-05", "invoiceGross": 12.00, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" },
+    { "templateCode": "BILL_INTERFON", "detailKey": "interfon", "amount": 336.00, "invoiceNumber": "SCHMIDT-2026-05", "invoiceGross": 336.00, "serviceStartPeriod": "2026-05", "serviceEndPeriod": "2026-05" }
+  ]
+}

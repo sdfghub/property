@@ -25,10 +25,24 @@
       "items": [
         {
           "key": "apa_rece",
-          "label": "Factură Apa Rece - Aquatim",
+          "label": "Apă rece (potabilă) - Aquatim",
           "kind": "charge",
           "expenseTypeCode": "APA_RECE",
           "expenseSplitId": "SPLIT_APA_RECE"
+        },
+        {
+          "key": "canal",
+          "label": "Canalizare - Aquatim",
+          "kind": "charge",
+          "expenseTypeCode": "CANALIZARE",
+          "expenseSplitId": "SPLIT_CANAL"
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități apă rece - Aquatim",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_APA",
+          "expenseSplitId": "SPLIT_PENALITATI_APA"
         },
         {
           "key": "branch_water_m3",
