@@ -64,10 +64,11 @@ export const MEASURE_MODE_META: EnumMeta[] = [
   { key: 'INDEX', label: 'Index' },
 ]
 
-// Water-difference allocation methods (period.waterDifferenceMethod).
+// Water-difference allocation methods (period.waterDifferenceMethod). `hint` is the longer
+// description used in the close-period picker.
 export const WATER_METHOD_META: EnumMeta[] = [
-  { key: 'PROPORTIONAL', label: 'Proporțional' },
-  { key: 'APA_DIF', label: 'Apă - diferență' },
+  { key: 'PROPORTIONAL', label: 'Proporțional', hint: 'Proporțional cu consumul (o linie)' },
+  { key: 'APA_DIF', label: 'Apă - diferență', hint: 'Contorizat + diferență separată (apa-dif)' },
 ]
 
 /** Everything the frontend needs to render these taxonomies, served in one payload. */

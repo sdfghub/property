@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { useMetadata } from '../../hooks/useMetadata'
 
 type MeterType = { code: string; name?: string | null; unit?: string | null; mode: 'INDEX' | 'CONSUMPTION' }
 
@@ -8,6 +9,8 @@ export function MeasureModePanel({ communityId }: { communityId: string }) {
   const { api } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const meta = useMetadata()
+  const meterModes = meta?.meterModes ?? []
   const [types, setTypes] = React.useState<MeterType[] | null>(null)
   const [busy, setBusy] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -47,11 +50,11 @@ export function MeasureModePanel({ communityId }: { communityId: string }) {
                 <span>{tp.name || tp.code} <span className="muted">({tp.code}{tp.unit ? ` · ${tp.unit}` : ''})</span></span>
               </div>
               <div className="row" style={{ gap: 4 }}>
-                {(['CONSUMPTION', 'INDEX'] as const).map((m) => (
-                  <button key={m} type="button" disabled={busy === tp.code}
-                    className={`btn small ${tp.mode === m ? 'primary' : 'ghost'}`}
-                    onClick={() => setMode(tp.code, m)}>
-                    {m === 'INDEX' ? t('meterMode.index', 'Index') : t('meterMode.consumption', 'Consum')}
+                {meterModes.map((m) => (
+                  <button key={m.key} type="button" disabled={busy === tp.code}
+                    className={`btn small ${tp.mode === m.key ? 'primary' : 'ghost'}`}
+                    onClick={() => setMode(tp.code, m.key as 'INDEX' | 'CONSUMPTION')}>
+                    {t(`meterMode.${m.key.toLowerCase()}`, m.label)}
                   </button>
                 ))}
               </div>

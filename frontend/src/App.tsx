@@ -4,6 +4,7 @@ import React from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { CommunityExplorer } from './components/CommunityExplorer'
 import { I18nProvider, useI18n } from './i18n/useI18n'
+import { useMetadata, labelOf } from './hooks/useMetadata'
 import { SystemAdminPanel } from './components/SystemAdminPanel'
 import { CommunityAdminDashboard, type CommunityAdminTabKey } from './components/community-admin/CommunityAdminDashboard'
 import { BillingEntityResponsibleDashboard } from './components/BillingEntityResponsibleDashboard'
@@ -403,13 +404,13 @@ function RolePicker({
   accessibleCommunities: Array<{ id: string; code: string; name: string }>
 }) {
   const { t } = useI18n()
+  const meta = useMetadata()
   if (!roles.length) return null
-  const roleLabels: Record<string, string> = {
-    SYSTEM_ADMIN: t('role.systemAdmin') || 'System admin',
-    COMMUNITY_ADMIN: t('role.communityAdmin') || 'Community admin',
-    BILLING_ENTITY_USER: t('role.billingEntityUser') || 'Billing entity user',
-    CENSOR: t('role.censor') || 'Cenzor',
-    EXECUTIVE_COMITEE_MEMBER: t('role.executive') || 'Comitet executiv',
+  // Prefer a localized i18n label, else fall back to the backend role registry.
+  const roleLabel = (role: string) => {
+    const key = `role.${role}`
+    const localized = t(key as any)
+    return localized && localized !== key ? localized : labelOf(meta?.roles, role)
   }
   const communityIndex = React.useMemo(() => {
     const map: Record<string, string> = { ...communityNames }
@@ -437,12 +438,12 @@ function RolePicker({
   }
   const options = roles.map((r, idx) => {
     const scopeName = resolveScopeName(r.scopeType, r.scopeId)
-    const label = [roleLabels[r.role] || r.role, scopeName].filter((val) => val != null && val !== '').join(' · ')
+    const label = [roleLabel(r.role), scopeName].filter((val) => val != null && val !== '').join(' · ')
     return { label, value: `${label}__${idx}`, role: r }
   })
   const activeLabel =
     activeRole &&
-    [roleLabels[activeRole.role] || activeRole.role, resolveScopeName(activeRole.scopeType, activeRole.scopeId)]
+    [roleLabel(activeRole.role), resolveScopeName(activeRole.scopeType, activeRole.scopeId)]
       .filter((val) => val != null && val !== '')
       .join(' · ')
   const [open, setOpen] = React.useState(false)

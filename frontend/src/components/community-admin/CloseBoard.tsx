@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { useMetadata } from '../../hooks/useMetadata'
 import type { CommunityAdminTabKey } from './CommunityAdminDashboard'
 import { UnitAttributesTable } from './UnitAttributesTable'
 
@@ -25,6 +26,7 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
   const { api } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const meta = useMetadata()
 
   const [ed, setEd] = React.useState<Editable>(null)
   const [loading, setLoading] = React.useState(true)
@@ -152,8 +154,9 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
           <span className="muted" style={{ fontSize: 12 }}>{t('close.waterMethod', 'Alocare apă rece')}:</span>
           <select className="input" value={waterMethod} disabled={busy === 'water' || st !== 'OPEN' || isMarked('allocate')} style={{ width: 260 }}
             onChange={(e) => { const v = e.target.value as 'PROPORTIONAL' | 'APA_DIF'; setWaterMethod(v); act('water', () => post('settings', { waterDifferenceMethod: v })) }}>
-            <option value="PROPORTIONAL">{t('close.waterProportional', 'Proporțional cu consumul (o linie)')}</option>
-            <option value="APA_DIF">{t('close.waterApaDif', 'Contorizat + diferență separată (apa-dif)')}</option>
+            {(meta?.waterMethods ?? []).map((m) => (
+              <option key={m.key} value={m.key}>{m.hint || m.label}</option>
+            ))}
           </select>
           {busy === 'water' ? <span className="muted" style={{ fontSize: 12 }}>…</span>
             : <span className="muted" style={{ fontSize: 12 }}>{t('close.waterMethodHint', 'se aplică la salvarea facturii de apă rece')}</span>}

@@ -2,6 +2,7 @@ import React from 'react'
 // Users tab: manage billing entity responsibles and pending invites for the community.
 import { useAuth } from '../hooks/useAuth'
 import { useI18n } from '../i18n/useI18n'
+import { useMetadata } from '../hooks/useMetadata'
 
 type PendingInvite = {
   id: string
@@ -12,8 +13,7 @@ type PendingInvite = {
   expiresAt: string
 }
 
-const BE_ROLES = ['OWNER', 'RESIDENT', 'EXPENSE_RESPONSIBLE'] as const
-
+// Billing-entity roles come from the backend metadata registry.
 type BeUser = {
   userId: string
   email: string
@@ -35,6 +35,8 @@ type PushStatus = { status: 'success' | 'error'; message: string }
 export function CommunityUsersPanel({ communityId }: { communityId: string }) {
   const { api, user, refreshSession } = useAuth()
   const { t } = useI18n()
+  const meta = useMetadata()
+  const beRoles = meta?.beRoles ?? []
   const [beRows, setBeRows] = React.useState<BeRow[]>([])
   const [beInviteEmail, setBeInviteEmail] = React.useState<Record<string, string>>({})
   const [beInviteRoles, setBeInviteRoles] = React.useState<Record<string, string[]>>({})
@@ -222,20 +224,20 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                                     <div className="muted">{u.name ?? '—'}</div>
                                   </div>
                                   <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                                    {BE_ROLES.map((role) => (
-                                      <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                                    {beRoles.map((br) => (
+                                      <label key={br.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
                                         <input
                                           type="checkbox"
                                           disabled={busy}
-                                          checked={u.roles.includes(role)}
+                                          checked={u.roles.includes(br.key)}
                                           onChange={() => {
-                                            const next = u.roles.includes(role)
-                                              ? u.roles.filter((r) => r !== role)
-                                              : [...u.roles, role]
+                                            const next = u.roles.includes(br.key)
+                                              ? u.roles.filter((r) => r !== br.key)
+                                              : [...u.roles, br.key]
                                             updateUserRoles(be.id, u.userId, next)
                                           }}
                                         />
-                                        <span>{role}</span>
+                                        <span>{br.label}</span>
                                       </label>
                                     ))}
                                     <button
@@ -278,22 +280,22 @@ export function CommunityUsersPanel({ communityId }: { communityId: string }) {
                           required
                         />
                         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                          {BE_ROLES.map((role) => (
-                            <label key={role} className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          {beRoles.map((br) => (
+                            <label key={br.key} className="row" style={{ gap: 6, alignItems: 'center' }}>
                               <input
                                 type="checkbox"
-                                checked={(beInviteRoles[be.id] ?? ['EXPENSE_RESPONSIBLE']).includes(role)}
+                                checked={(beInviteRoles[be.id] ?? ['EXPENSE_RESPONSIBLE']).includes(br.key)}
                                 onChange={() =>
                                   setBeInviteRoles((prev) => {
                                     const current = prev[be.id] ?? ['EXPENSE_RESPONSIBLE']
-                                    const next = current.includes(role)
-                                      ? current.filter((r) => r !== role)
-                                      : [...current, role]
+                                    const next = current.includes(br.key)
+                                      ? current.filter((r) => r !== br.key)
+                                      : [...current, br.key]
                                     return { ...prev, [be.id]: next }
                                   })
                                 }
                               />
-                              <span>{role}</span>
+                              <span>{br.label}</span>
                             </label>
                           ))}
                         </div>
