@@ -260,6 +260,7 @@ model Period {
   preparedAt  DateTime?    @map("prepared_at")
   closedAt    DateTime?    @map("closed_at")
   checklist   Json?        @map("checklist") // per-area monthly-close completion: { [areaKey]: { at, by } }
+  waterDifferenceMethod String? @map("water_difference_method") // BY_CONSUMPTION | EQUAL; null => BY_CONSUMPTION default
 
   community                  Community                    @relation(fields: [communityId], references: [id])
   PeriodMeasure              PeriodMeasure[]

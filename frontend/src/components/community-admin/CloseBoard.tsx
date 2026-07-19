@@ -31,11 +31,17 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
   const [busy, setBusy] = React.useState<string | null>(null)
   const [err, setErr] = React.useState<string | null>(null)
   const [dueInput, setDueInput] = React.useState('')
+  const [waterMethod, setWaterMethod] = React.useState<'PROPORTIONAL' | 'APA_DIF'>('PROPORTIONAL')
 
   const load = React.useCallback(async () => {
     const e = await api.get<Editable>(`/communities/${communityId}/periods/editable`).catch(() => null)
     setEd(e as Editable)
     setDueInput(toDateInput((e as any)?.period?.dueDate))
+    const pcode = (e as any)?.period?.code
+    if (pcode) {
+      const s = await api.get<any>(`/communities/${communityId}/periods/${pcode}/settings`).catch(() => null)
+      setWaterMethod(((s as any)?.waterDifferenceMethod as 'PROPORTIONAL' | 'APA_DIF') || 'PROPORTIONAL')
+    }
     setLoading(false)
   }, [api, communityId])
 
@@ -139,6 +145,18 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
           <input type="date" className="input" value={dueInput} disabled={isMarked('allocate')} onChange={(e) => setDueInput(e.target.value)} style={{ width: 160 }} />
           <button className="btn secondary small" disabled={busy === 'due' || !dueInput || isMarked('allocate')} onClick={() => act('due', () => post('due-date', { dueDate: dueInput }))}>{busy === 'due' ? '…' : t('close.saveDue', 'Save scadență')}</button>
           {isMarked('allocate') ? <span className="muted" style={{ fontSize: 12 }}>🔒 {t('close.locked', 'Finalizat — doar citire. Anulează pentru a edita.')}</span> : null}
+        </div>
+        )}
+        {!readOnly && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          <span className="muted" style={{ fontSize: 12 }}>{t('close.waterMethod', 'Alocare apă rece')}:</span>
+          <select className="input" value={waterMethod} disabled={busy === 'water' || st !== 'OPEN' || isMarked('allocate')} style={{ width: 260 }}
+            onChange={(e) => { const v = e.target.value as 'PROPORTIONAL' | 'APA_DIF'; setWaterMethod(v); act('water', () => post('settings', { waterDifferenceMethod: v })) }}>
+            <option value="PROPORTIONAL">{t('close.waterProportional', 'Proporțional cu consumul (o linie)')}</option>
+            <option value="APA_DIF">{t('close.waterApaDif', 'Contorizat + diferență separată (apa-dif)')}</option>
+          </select>
+          {busy === 'water' ? <span className="muted" style={{ fontSize: 12 }}>…</span>
+            : <span className="muted" style={{ fontSize: 12 }}>{t('close.waterMethodHint', 'se aplică la salvarea facturii de apă rece')}</span>}
         </div>
         )}
       </Step>

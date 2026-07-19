@@ -381,6 +381,10 @@ export class PeriodService {
       },
       graceDays: Number((community as any)?.penaltyGraceDays ?? 30),
       penaltyFunds,
+      // Water allocation mode for this period. PROPORTIONAL = whole cold-water invoice split ∝ each
+      // unit's metered consumption (previous behavior, one line). APA_DIF = metered cold billed per
+      // unit + the difference (branșament − Σ contoare) broken out as its own line. null => PROPORTIONAL.
+      waterDifferenceMethod: (period as any).waterDifferenceMethod || 'PROPORTIONAL',
     }
   }
 
@@ -416,6 +420,15 @@ export class PeriodService {
         await this.prisma.fund.update({ where: { id: fund.id }, data: { allocation: { ...alloc, penaltyPerDayPct: pct } } })
       }
       out.penaltyRates = body.penaltyRates
+    }
+
+    if (body?.waterDifferenceMethod !== undefined) {
+      if (period.status === 'CLOSED') throw new BadRequestException('Cannot change water allocation on a closed period')
+      const m = body.waterDifferenceMethod
+      if (m !== 'PROPORTIONAL' && m !== 'APA_DIF' && m !== null)
+        throw new BadRequestException('Invalid waterDifferenceMethod')
+      await this.prisma.period.update({ where: { id: period.id }, data: { waterDifferenceMethod: m } })
+      out.waterDifferenceMethod = m || 'PROPORTIONAL'
     }
 
     return out

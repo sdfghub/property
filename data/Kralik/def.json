@@ -954,6 +954,16 @@
       "unit": "m3"
     },
     {
+      "code": "WATER_TOTAL",
+      "name": "Apă total",
+      "unit": "m3"
+    },
+    {
+      "code": "WATER_RESIDUAL",
+      "name": "Apă diferență",
+      "unit": "m3"
+    },
+    {
       "code": "ELECTRICITY_TOTAL",
       "name": "Energie electrică",
       "unit": "kWh"
@@ -971,12 +981,28 @@
   ],
   "meters": [
     {
-      "name": "Contor comunitate - Apa Rece",
+      "name": "Contor comunitate - Apa Rece (total branșament)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "Kralik",
+      "typeCode": "WATER_TOTAL",
+      "meterId": "COMMUNITY_WATER_COLD",
+      "origin": "METER"
+    },
+    {
+      "name": "Apă rece însumată contoare (calculat)",
       "scopeType": "COMMUNITY",
       "scopeCode": "Kralik",
       "typeCode": "WATER_COLD",
-      "meterId": "COMMUNITY_WATER_COLD",
-      "origin": "METER"
+      "meterId": "COMMUNITY_WATER_COLD_CALC",
+      "origin": "DERIVED"
+    },
+    {
+      "name": "Diferență apă rece (calculat)",
+      "scopeType": "COMMUNITY",
+      "scopeCode": "Kralik",
+      "typeCode": "WATER_RESIDUAL",
+      "meterId": "COMMUNITY_WATER_RESIDUAL",
+      "origin": "DERIVED"
     },
     {
       "name": "Contor - Apa Rece 1",
@@ -1554,7 +1580,13 @@
       "params": {}
     }
   ],
-  "aggregations": [],
+  "aggregations": [
+    {
+      "targetType": "WATER_TOTAL",
+      "unitTypes": ["WATER_COLD"],
+      "residualType": "WATER_RESIDUAL"
+    }
+  ],
   "derivedMeters": [],
   "expenseSplits": [
     {
@@ -1563,6 +1595,9 @@
       "name": "Apa Rece",
       "splits": [
         {
+          "id": "APA_RECE_PROPORTIONAL",
+          "name": "Apa rece (proporțional cu consumul)",
+          "mode": "PROPORTIONAL",
           "share": 1,
           "allocation": {
             "basis": {
@@ -1570,6 +1605,42 @@
               "code": "SVC_APA_RECE"
             },
             "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "APA_RECE_CONTORIZATA",
+          "name": "Apa rece contorizată",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_COLD_CALC"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "APA_RECE_DIFERENTA",
+          "name": "Diferență citire apă rece",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
             "weightSource": "WATER_COLD"
           }
         }

@@ -108,14 +108,15 @@ export function BillForm({
     setLoading(true)
     setMessage(null)
     try {
-      const calls: Array<Promise<any>> = []
+      const meterCalls: Array<Promise<any>> = []
+      const expenseCalls: Array<Promise<any>> = []
       items.forEach((item) => {
         const val = values[item.key]
         if (val === undefined || val === null || val === '') return
         const num = Number(val)
         if (Number.isNaN(num)) return
         if (item.kind === 'meter') {
-          calls.push(
+          meterCalls.push(
             api.post(`/communities/${communityId}/periods/${periodCode}/meters`, {
               meterId: item.meterId,
               value: num,
@@ -124,7 +125,7 @@ export function BillForm({
         } else {
           const expType = expenseTypeMap[item.expenseTypeCode]
           if (!expType?.id) return
-          calls.push(
+          expenseCalls.push(
             api.post(`/communities/${communityId}/periods/${periodCode}/expenses`, {
               description: item.description || expType.name || item.label,
               amount: num,
@@ -134,7 +135,10 @@ export function BillForm({
           )
         }
       })
-      await Promise.all(calls)
+      // Save meter readings first: a meter reading recomputes aggregations/derived measures
+      // (e.g. the water branch → residual), which the expense allocation then reads.
+      await Promise.all(meterCalls)
+      await Promise.all(expenseCalls)
       setMessage('Saved')
       setBillState('FILLED')
       if (template.code) {

@@ -65,6 +65,13 @@ export class AllocationService {
     if (typeof input.amount !== 'number' || Number.isNaN(input.amount)) {
       throw new ForbiddenException('Amount required')
     }
+    // Per-period water allocation mode. A split leaf may carry `mode`; only leaves whose mode matches
+    // (or leaves with no `mode`) are processed. PROPORTIONAL = whole invoice ∝ consumption (previous,
+    // single leaf); APA_DIF = metered cold + broken-out difference (two derivedShare leaves).
+    // null defaults to PROPORTIONAL.
+    const wdMethod =
+      (await this.prisma.period.findUnique({ where: { id: period.id }, select: { waterDifferenceMethod: true } }))
+        ?.waterDifferenceMethod || 'PROPORTIONAL'
     let expenseTypeCode: string | null = input.expenseTypeCode ?? null
     if (input.expenseTypeId || input.expenseTypeCode) {
       const type = await this.prisma.expenseType.findFirst({
@@ -789,8 +796,11 @@ export class AllocationService {
       }
 
       const processSplits = async (nodes: any[], amount: number, _parentId: string | null, trail: any[]) => {
-        await resolveShares(nodes)
-        for (const node of nodes) {
+        // A leaf may be tagged with `mode` (e.g. water PROPORTIONAL vs APA_DIF); keep only the leaves
+        // active for this period's mode so shares normalize over the active set. Untagged leaves always run.
+        const active = nodes.filter((n) => !n?.mode || n.mode === wdMethod)
+        await resolveShares(active)
+        for (const node of active) {
           const share = node._resolvedShare ?? node.share
           if (share == null) throw new ForbiddenException('Split share missing')
           const splitAmount = amount * Number(share)

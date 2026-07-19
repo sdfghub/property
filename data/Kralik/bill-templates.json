@@ -29,6 +29,12 @@
           "kind": "charge",
           "expenseTypeCode": "APA_RECE",
           "expenseSplitId": "SPLIT_APA_RECE"
+        },
+        {
+          "key": "branch_water_m3",
+          "label": "Consum contor branșament apă rece (m³) — pentru alocarea „apa dif”",
+          "kind": "meter",
+          "meterId": "COMMUNITY_WATER_COLD"
         }
       ]
     }
