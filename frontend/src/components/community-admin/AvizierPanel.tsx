@@ -18,6 +18,10 @@ const CAT_LABEL: Record<string, string> = {
 const catLabel = (c: string) =>
   c.startsWith('PEN:') ? `Penaliz. ${CAT_LABEL[c.slice(4)] || c.slice(4)}` : (CAT_LABEL[c] || c)
 
+// Readable owner name from a raw BE code ("BE_MATEI_VIOREL" → "Matei Viorel").
+const prettyBe = (s?: string) =>
+  !s ? '' : s.replace(/^BE_/, '').split('_').map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w)).join(' ')
+
 export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityId: string; cenzorEnabled?: boolean }) {
   const { api, activeRole } = useAuth()
   const { t: rawT } = useI18n()
@@ -32,6 +36,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
 
   const isCensor = activeRole?.role === 'CENSOR' && cenzorEnabled
   const isAdmin = activeRole?.role === 'COMMUNITY_ADMIN'
+  const [hoverBe, setHoverBe] = React.useState<string | null>(null)
   const reloadAvizier = () => {
     const q = period ? `?period=${encodeURIComponent(period)}` : ''
     api.get<any>(`/communities/${communityId}/finance/avizier${q}`).then((d: any) => setData(d)).catch(() => {})
@@ -220,7 +225,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, whiteSpace: 'nowrap' }}>
             <thead>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.entity', 'Apartament / Entitate')}</th>
+                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>{t('avizier.entity', 'Apartament')}</th>
                 <th style={{ padding: '8px 10px' }}>{t('avizier.soldPrec', 'Sold precedent')}</th>
                 {cols.map((col, i) => {
                   if (col.kind === 'cat') return (
@@ -250,11 +255,17 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {rows.map((r) => (
-                <tr key={r.beCode} style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right' }}>
-                  <td style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--bg, #fff)' }}>
-                    <span>{r.units?.join(', ') || r.beCode}</span>
-                    {r.beName ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{r.beName}</span> : null}
+              {rows.map((r) => {
+                const hov = hoverBe === r.beCode
+                const rowBg = hov ? 'var(--hover-bg, #eef4ff)' : undefined
+                return (
+                <tr key={r.beCode} onMouseEnter={() => setHoverBe(r.beCode)} onMouseLeave={() => setHoverBe(null)}
+                  style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
+                  <td title={`${r.units?.join(', ') || r.beCode}${r.beName ? ' · ' + prettyBe(r.beName) : ''}`}
+                    style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : 'var(--bg, #fff)',
+                      maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontWeight: 600 }}>{r.units?.join(', ') || r.beCode}</span>
+                    {r.beName ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{prettyBe(r.beName)}</span> : null}
                   </td>
                   <td style={{ padding: '6px 10px' }}>
                     {r.soldPrecedent ? (
@@ -324,7 +335,8 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   ) : ''}</td>}
                   <td style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.totalDue)}</td>
                 </tr>
-              ))}
+                )
+              })}
               {totals ? (
                 <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)' }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.totalRow', 'TOTAL')}</td>
