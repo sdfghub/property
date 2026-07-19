@@ -1682,6 +1682,9 @@
       "name": "Canalizare",
       "splits": [
         {
+          "id": "CANAL_PROPORTIONAL",
+          "name": "Canalizare (proporțional cu consumul)",
+          "mode": "PROPORTIONAL",
           "share": 1,
           "allocation": {
             "basis": {
@@ -1689,6 +1692,42 @@
               "code": "SVC_APA_RECE"
             },
             "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "CANAL_CONTORIZATA",
+          "name": "Canalizare contorizată",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_COLD_CALC"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "CANAL_DIFERENTA",
+          "name": "Diferență canalizare",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
             "weightSource": "WATER_COLD"
           }
         }
@@ -1700,6 +1739,9 @@
       "name": "Penalități apă rece",
       "splits": [
         {
+          "id": "PENAL_PROPORTIONAL",
+          "name": "Penalități apă (proporțional cu consumul)",
+          "mode": "PROPORTIONAL",
           "share": 1,
           "allocation": {
             "basis": {
@@ -1707,6 +1749,42 @@
               "code": "SVC_APA_RECE"
             },
             "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "PENAL_CONTORIZATA",
+          "name": "Penalități apă contorizată",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_COLD_CALC"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "PENAL_DIFERENTA",
+          "name": "Diferență penalități apă",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
             "weightSource": "WATER_COLD"
           }
         }
