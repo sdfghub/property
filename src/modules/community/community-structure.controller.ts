@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
@@ -153,6 +153,22 @@ export class CommunityStructureController {
       },
     })
     return { ok: true, created: true, billingEntity }
+  }
+
+  // Admin: set/clear a billing entity's display name (empty → clear, falls back to the computed default).
+  @Patch('billing-entities/:beCode/display-name')
+  async setBillingEntityDisplayName(@Param('communityId') communityId: string, @Param('beCode') beCode: string, @Body() body: any) {
+    const community = await this.resolveCommunity(communityId)
+    const raw = body?.displayName
+    const displayName = raw == null || String(raw).trim() === '' ? null : String(raw).trim()
+    const be = await this.prisma.billingEntity.findUnique({
+      where: { code_communityId: { code: beCode, communityId: community.id } }, select: { id: true },
+    })
+    if (!be) throw new NotFoundException('Billing entity not found')
+    const updated = await this.prisma.billingEntity.update({
+      where: { id: be.id }, data: { displayName } as any, select: { code: true, name: true, displayName: true },
+    })
+    return { ok: true, billingEntity: updated }
   }
 
   @Post('billing-entities/:beId/members')

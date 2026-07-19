@@ -334,6 +334,7 @@ model BillingEntity {
   code        String @map("code")
   order       Int    @default(0) @map("order")
   name        String @map("name")
+  displayName String? @map("display_name") // admin-set label; falls back to computed (short unit + owner)
 
   community Community               @relation(fields: [communityId], references: [id])
   members   BillingEntityMember[]

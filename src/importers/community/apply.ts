@@ -369,10 +369,11 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
         beOrder.set(m.billingEntityCode, next)
         return next
       })()
+      const meta = plan.billingEntityMeta?.[m.billingEntityCode] || {}
       const be = await prisma.billingEntity.upsert({
         where: { code_communityId: { code: m.billingEntityCode, communityId } },
-        update: { order: ord } as any,
-        create: { communityId, code: m.billingEntityCode, name: m.billingEntityCode, order: ord } as any
+        update: { order: ord, name: meta.name ?? m.billingEntityCode, displayName: meta.displayName ?? null } as any,
+        create: { communityId, code: m.billingEntityCode, name: meta.name ?? m.billingEntityCode, displayName: meta.displayName ?? null, order: ord } as any
       })
       stats.billingEntities += 1 // counts upserts; duplicates are minimal
       const overlap = await prisma.billingEntityMember.findFirst({ where: { billingEntityId: be.id, unitId: u, startSeq: { lte: e?.seq ?? INT4_MAX }, OR: [{ endSeq: null }, { endSeq: { gte: s.seq } }] }, select: { id:true } })

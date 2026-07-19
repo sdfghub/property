@@ -69,137 +69,164 @@
     {
       "code": "BE_GUTULEAC_ALEXANDRU_GUTULEAC_ALINA",
       "name": "Guțuleac Alexandru, Guțuleac Alina",
-      "order": 1
+      "order": 1,
+      "displayName": "Ap 1 · Guțuleac Alexandru, Guțuleac Alina"
     },
     {
       "code": "BE_MATEI_VIOREL",
       "name": "Matei Viorel",
-      "order": 2
+      "order": 2,
+      "displayName": "Ap 1/B · Matei Viorel"
     },
     {
       "code": "BE_GEORGE_RADU_GABRIEL",
       "name": "George Radu Gabriel",
-      "order": 3
+      "order": 3,
+      "displayName": "Ap 2/1 · George Radu Gabriel"
     },
     {
       "code": "BE_GAMPE_FRANCISC",
       "name": "Gampe Francisc",
-      "order": 4
+      "order": 4,
+      "displayName": "Ap 2/2 · Gampe Francisc"
     },
     {
       "code": "BE_CODREA_RUXANDRA_GEORGETA",
       "name": "Codrea Ruxandra-Georgeta",
-      "order": 5
+      "order": 5,
+      "displayName": "Ap 3 · Codrea Ruxandra-Georgeta"
     },
     {
       "code": "BE_PETREAN_DELIA",
       "name": "Petrean Delia",
-      "order": 6
+      "order": 6,
+      "displayName": "Ap 4 (I) · Petrean Delia"
     },
     {
       "code": "BE_CATARGIU_CONSTANTIN",
       "name": "Catargiu Constantin",
-      "order": 7
+      "order": 7,
+      "displayName": "Ap 4A · Catargiu Constantin"
     },
     {
       "code": "BE_OLARU_POSIAR_LUCIAN",
       "name": "Olaru-Posiar Lucian",
-      "order": 8
+      "order": 8,
+      "displayName": "Ap 5 (I-A) · Olaru-Posiar Lucian"
     },
     {
       "code": "BE_KARACS_BEBE",
       "name": "Karacs Bebe",
-      "order": 9
+      "order": 9,
+      "displayName": "Ap 5 (I-B) · Karacs Bebe"
     },
     {
       "code": "BE_FLOREA_LUCIAN",
       "name": "Florea Lucian",
-      "order": 10
+      "order": 10,
+      "displayName": "Ap 6 · Florea Lucian"
     },
     {
       "code": "BE_GAMPE_DORINA_SVETLANA",
       "name": "Gampe Dorina Svetlana",
-      "order": 11
+      "order": 11,
+      "displayName": "Ap 6A · Gampe Dorina Svetlana"
     },
     {
       "code": "BE_RADOI_ANA_MARIA",
       "name": "Rădoi Ana-Maria",
-      "order": 12
+      "order": 12,
+      "displayName": "Ap 8 · Rădoi Ana-Maria"
     },
     {
       "code": "BE_MARES_MARIAN_MIHAI",
       "name": "Mareș Marian-Mihai ",
-      "order": 13
+      "order": 13,
+      "displayName": "Ap 9 · Mareș Marian-Mihai "
     },
     {
       "code": "BE_BOITI_ZOLTAN_EMANUEL",
       "name": "Boiti Zoltán-Emanuel",
-      "order": 14
+      "order": 14,
+      "displayName": "Ap 10A · Boiti Zoltán-Emanuel"
     },
     {
       "code": "BE_CABINET_AV_COLCEA_MIHAI_MIHNEA_RADU",
       "name": "Cabinet Av.Colcea Mihai, Mihnea Radu",
-      "order": 15
+      "order": 15,
+      "displayName": "Ap 10B · Cabinet Av.Colcea Mihai, Mihnea Radu"
     },
     {
       "code": "BE_FIKL_EMIL",
       "name": "Fikl Emil",
-      "order": 16
+      "order": 16,
+      "displayName": "Ap 31 · Fikl Emil"
     },
     {
       "code": "BE_DASCAL_ADRIANA",
       "name": "Dascāl Adriana",
-      "order": 17
+      "order": 17,
+      "displayName": "Ap 32 · Dascāl Adriana"
     },
     {
       "code": "BE_GROSU_ALEXANDRU_PRICOP_ALEXANDRA",
       "name": "Grosu Alexandru, Pricop Alexandra",
-      "order": 18
+      "order": 18,
+      "displayName": "Ap 4 (III) · Grosu Alexandru, Pricop Alexandra"
     },
     {
       "code": "BE_JARDA_GHEORGHE",
       "name": "Jarda Gheorghe",
-      "order": 19
+      "order": 19,
+      "displayName": "Ap 5 (III) · Jarda Gheorghe"
     },
     {
       "code": "BE_MACRI_NICODEMO_MACRI_FRANCESCO_MACRI_ANTONIO",
       "name": "Macri Nicodemo, Macri Francesco, Macri Antonio",
-      "order": 20
+      "order": 20,
+      "displayName": "Ap 11, Ap 11A · Macri Nicodemo, Macri Francesco, Macri Antonio"
     },
     {
       "code": "BE_SOAMES_MARIANA",
       "name": "Soames Mariana",
-      "order": 21
+      "order": 21,
+      "displayName": "Ap 11B · Soames Mariana"
     },
     {
       "code": "BE_PRIMARIE_TM_UAT",
       "name": "Primārie TM UAT",
-      "order": 22
+      "order": 22,
+      "displayName": "Ap 12 (SAD 4/A), Ap 12 (SAD 4/B), Ap 12 (SAD 4/C) · Primārie TM UAT"
     },
     {
       "code": "BE_JARDA_CRISTIAN",
       "name": "Jarda Cristian",
-      "order": 23
+      "order": 23,
+      "displayName": "Ap 14A · Jarda Cristian"
     },
     {
       "code": "BE_DAVID_MARIUS",
       "name": "David Marius",
-      "order": 24
+      "order": 24,
+      "displayName": "Ap 14B · David Marius"
     },
     {
       "code": "BE_SC_MINI_MARKET_MELTES_SRL",
       "name": "Sc Mini Market Meltes Srl",
-      "order": 25
+      "order": 25,
+      "displayName": "SPAȚIU COMERCIAL · Sc Mini Market Meltes Srl"
     },
     {
       "code": "BE_SEMENESCU_MARIA_DANIELA",
       "name": "Semenescu Maria-Daniela",
-      "order": 26
+      "order": 26,
+      "displayName": "SAD 2/1 · Semenescu Maria-Daniela"
     },
     {
       "code": "BE_BRINZEU_ADINA",
       "name": "Brînzeu Adina",
-      "order": 27
+      "order": 27,
+      "displayName": "SAD 2/2, SAD 1 · Brînzeu Adina"
     }
   ],
   "structure": [
@@ -1583,7 +1610,9 @@
   "aggregations": [
     {
       "targetType": "WATER_TOTAL",
-      "unitTypes": ["WATER_COLD"],
+      "unitTypes": [
+        "WATER_COLD"
+      ],
       "residualType": "WATER_RESIDUAL"
     }
   ],

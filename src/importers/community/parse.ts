@@ -51,10 +51,13 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
     }
   }
   const beOrders: Record<string, number> = {}
+  const billingEntityMeta: Record<string, { name?: string; displayName?: string }> = {}
   if ((def as any).billingEntities && Array.isArray((def as any).billingEntities)) {
     ;(def as any).billingEntities.forEach((be: any) => {
       const code = be.code || be.name
-      if (code && typeof be.order === 'number') beOrders[String(code)] = be.order
+      if (!code) return
+      if (typeof be.order === 'number') beOrders[String(code)] = be.order
+      billingEntityMeta[String(code)] = { name: be.name, displayName: be.displayName }
     })
   }
   if ((def as any).billingEntityOrder && typeof (def as any).billingEntityOrder === 'object') {
@@ -121,6 +124,7 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   return {
     communityId: def.id,
     communityName: def.name,
+    billingEntityMeta,
     periodCode: def.period.code,
     periodStart: def.period.start,
     periodEnd: def.period.end,

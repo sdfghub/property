@@ -228,7 +228,7 @@ export class FinanceService {
 
     const bes = await this.prisma.billingEntity.findMany({
       where: { communityId },
-      select: { id: true, code: true, name: true, order: true },
+      select: { id: true, code: true, name: true, order: true, displayName: true },
     })
     const members = await this.prisma.billingEntityMember.findMany({
       where: { billingEntity: { communityId }, startSeq: { lte: p?.seq ?? 0 }, OR: [{ endSeq: null }, { endSeq: { gte: p?.seq ?? 0 } }] },
@@ -299,6 +299,7 @@ export class FinanceService {
         return {
           beCode: be.code,
           beName: be.name,
+          displayName: be.displayName ?? null,
           order: be.order,
           units: unitsByBe.get(be.id) ?? [],
           soldPrecedent: round2(Number(s?.sold ?? 0)),
@@ -668,7 +669,7 @@ export class FinanceService {
     if (!penFund) return { period: { code: period.code, status: p?.status ?? null }, rows: [], totalComputed: 0, totalNet: 0 }
     const [stmts, bes, ovAll] = await Promise.all([
       this.prisma.beStatement.findMany({ where: { communityId, periodId: period.id, fundId: penFund.id }, select: { billingEntityId: true, charges: true } }),
-      this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true } }),
+      this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true, displayName: true } }),
       this.prisma.chargeOverride.findMany({ where: { communityId, periodId: period.id, fundId: penFund.id }, orderBy: { createdAt: 'desc' } }),
     ])
     const beById = new Map(bes.map((b) => [b.id, b]))
@@ -680,7 +681,7 @@ export class FinanceService {
         const ov = activeOv.get(s.billingEntityId)
         const override = ov && ov.overrideAmount != null ? round2(Number(ov.overrideAmount)) : null
         const be = beById.get(s.billingEntityId)
-        return { beCode: be?.code, beName: be?.name, computed, override, net: override != null ? override : computed }
+        return { beCode: be?.code, beName: be?.name, displayName: (be as any)?.displayName ?? null, computed, override, net: override != null ? override : computed }
       })
       .filter((r) => r.computed > 0.005 || r.override != null)
       .sort((a, b) => b.net - a.net)

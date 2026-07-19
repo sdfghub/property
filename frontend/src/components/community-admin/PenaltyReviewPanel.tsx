@@ -2,6 +2,7 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { PenaltyOverrideModal } from './PenaltyOverrideModal'
+import { beLabel } from './beLabel'
 
 const money = (n?: number | null) => (n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
@@ -70,7 +71,7 @@ export function PenaltyReviewPanel({ communityId }: { communityId: string }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.beCode} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)' }}>
-                <td style={{ textAlign: 'left', padding: '6px 10px' }}>{r.beName || r.beCode}</td>
+                <td style={{ textAlign: 'left', padding: '6px 10px' }}>{beLabel(r).primary}</td>
                 <td style={{ padding: '6px 10px', color: 'var(--danger,#b45309)' }}>{money(r.computed)}</td>
                 <td style={{ padding: '6px 10px', color: r.override != null ? 'var(--info,#1565c0)' : 'var(--muted,#999)', fontWeight: r.override != null ? 700 : 400 }}>
                   {r.override != null ? money(r.override) : '—'}

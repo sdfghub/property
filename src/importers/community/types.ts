@@ -62,6 +62,7 @@ export type StructureRow = {
 export type CommunityImportPlan = {
   communityId: string
   communityName: string
+  billingEntityMeta?: Record<string, { name?: string; displayName?: string }>
   periodCode: string
   periodStart?: string
   periodEnd?: string

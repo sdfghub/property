@@ -2,6 +2,7 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { PenaltyOverrideModal } from './PenaltyOverrideModal'
+import { beLabel } from './beLabel'
 
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -17,10 +18,6 @@ const CAT_LABEL: Record<string, string> = {
 // Category label, incl. per-fund penalty codes `PEN:<fund>` → "Penaliz. <fund>".
 const catLabel = (c: string) =>
   c.startsWith('PEN:') ? `Penaliz. ${CAT_LABEL[c.slice(4)] || c.slice(4)}` : (CAT_LABEL[c] || c)
-
-// Readable owner name from a raw BE code ("BE_MATEI_VIOREL" → "Matei Viorel").
-const prettyBe = (s?: string) =>
-  !s ? '' : s.replace(/^BE_/, '').split('_').map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w)).join(' ')
 
 // Numeric-column headers wrap (multi-word labels stack) so columns shrink to the small numbers below.
 const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 80 }
@@ -40,6 +37,14 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const isCensor = activeRole?.role === 'CENSOR' && cenzorEnabled
   const isAdmin = activeRole?.role === 'COMMUNITY_ADMIN'
   const [hoverBe, setHoverBe] = React.useState<string | null>(null)
+  const [editBe, setEditBe] = React.useState<{ be: string; value: string } | null>(null)
+  const saveDisplayName = async () => {
+    if (!editBe) return
+    try {
+      await api.patch(`/communities/${communityId}/billing-entities/${encodeURIComponent(editBe.be)}/display-name`, { displayName: editBe.value })
+      setEditBe(null); reloadAvizier()
+    } catch { setEditBe(null) }
+  }
   const reloadAvizier = () => {
     const q = period ? `?period=${encodeURIComponent(period)}` : ''
     api.get<any>(`/communities/${communityId}/finance/avizier${q}`).then((d: any) => setData(d)).catch(() => {})
@@ -264,11 +269,29 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                 return (
                 <tr key={r.beCode} onMouseEnter={() => setHoverBe(r.beCode)} onMouseLeave={() => setHoverBe(null)}
                   style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
-                  <td title={`${r.units?.join(', ') || r.beCode}${r.beName ? ' · ' + prettyBe(r.beName) : ''}`}
-                    style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : 'var(--bg, #fff)',
-                      maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <span style={{ fontWeight: 600 }}>{r.units?.join(', ') || r.beCode}</span>
-                    {r.beName ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{prettyBe(r.beName)}</span> : null}
+                  <td style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : 'var(--bg, #fff)',
+                      maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={(() => { const l = beLabel(r); return `${l.primary}${l.secondary ? ' · ' + l.secondary : ''}` })()}>
+                    {editBe?.be === r.beCode ? (
+                      <span className="row" style={{ gap: 4, alignItems: 'center' }}>
+                        <input className="input" autoFocus value={editBe.value} placeholder={beLabel({ ...r, displayName: null }).primary}
+                          onChange={(e) => setEditBe({ be: r.beCode, value: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditBe(null) }}
+                          style={{ fontSize: 12, padding: '2px 4px', width: 150 }} />
+                        <button type="button" className="btn ghost small" onClick={saveDisplayName} title={t('common.save', 'Salvează')}>✓</button>
+                      </span>
+                    ) : (() => {
+                      const l = beLabel(r)
+                      return (
+                        <span>
+                          <span style={{ fontWeight: 600 }}>{l.primary}</span>
+                          {l.secondary ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{l.secondary}</span> : null}
+                          {isAdmin && hov ? <button type="button" title={t('avizier.rename', 'Redenumește')}
+                            onClick={() => setEditBe({ be: r.beCode, value: r.displayName || '' })}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 6, padding: 0 }}>✎</button> : null}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td style={{ padding: '6px 10px' }}>
                     {r.soldPrecedent ? (
