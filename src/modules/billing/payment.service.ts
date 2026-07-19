@@ -966,17 +966,28 @@ export class PaymentService {
     const chargeIds = charges.map((c: { id: string }) => c.id)
     await (client as any).paymentApplication.deleteMany({ where: { chargeId: { in: chargeIds } } })
 
+    // A payment tagged with a collection cycle (providerMeta.cycleCode — e.g. imported cash-register
+    // receipts) belongs to that cycle only. Without this scope, a prior cycle's receipt is re-applied
+    // to a later period's charges, over-settling it and tripping "Payment exceeds open charges" on a
+    // reopen→prepare. Untagged payments (no cycleCode) keep the cross-period net-out behavior.
+    const period = await (client as any).period.findUnique({ where: { id: periodId }, select: { code: true } })
+    const periodCode: string | null = period?.code ?? null
+
     this.logger.log(
       `[PAY] Reapplying payments for period=${periodId} community=${communityId} charges=${charges.length}`,
     )
 
     const beIds = Array.from(new Set(charges.map((c: { billingEntityId: string }) => c.billingEntityId))) as string[]
     for (const beId of beIds) {
-      const payments: Array<{ id: string; amount: number; allocationSpec?: any; currency?: string }> = (await (client as any).payment.findMany({
+      const allPayments: Array<{ id: string; amount: number; allocationSpec?: any; currency?: string; providerMeta?: any }> = (await (client as any).payment.findMany({
         where: { communityId, billingEntityId: beId },
         orderBy: { ts: 'asc' },
-        select: { id: true, amount: true, allocationSpec: true, currency: true },
-      })) as Array<{ id: string; amount: number; allocationSpec?: any; currency?: string }>
+        select: { id: true, amount: true, allocationSpec: true, currency: true, providerMeta: true },
+      })) as Array<{ id: string; amount: number; allocationSpec?: any; currency?: string; providerMeta?: any }>
+      const payments = allPayments.filter((p) => {
+        const cc = (p.providerMeta as any)?.cycleCode
+        return !cc || !periodCode || cc === periodCode
+      })
       const beChargeIds = charges
         .filter((c: { billingEntityId: string }) => c.billingEntityId === beId)
         .map((c: { id: string }) => c.id)
