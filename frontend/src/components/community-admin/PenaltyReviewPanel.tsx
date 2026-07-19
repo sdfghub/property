@@ -13,27 +13,47 @@ export function PenaltyReviewPanel({ communityId }: { communityId: string }) {
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [data, setData] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
+  const [periods, setPeriods] = React.useState<any[]>([])
+  const [period, setPeriod] = React.useState<string>('')
   const [ovrTarget, setOvrTarget] = React.useState<{ be: string; beName?: string; computed: number } | null>(null)
   const isAdmin = activeRole?.role === 'COMMUNITY_ADMIN'
 
-  const load = React.useCallback(() => {
-    setLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/penalties`).then((d: any) => { setData(d); setLoading(false) }).catch(() => { setData(null); setLoading(false) })
+  // Default to the newest period (the one being worked on), with the option to pick an earlier one.
+  React.useEffect(() => {
+    api.get<any[]>(`/communities/${communityId}/periods`).then((rows) => {
+      const sorted = (rows || []).slice().sort((a: any, b: any) => (b.seq ?? 0) - (a.seq ?? 0))
+      setPeriods(sorted)
+      setPeriod((cur) => cur || sorted[0]?.code || '')
+      if (!sorted.length) setLoading(false)
+    }).catch(() => setLoading(false))
   }, [api, communityId])
+
+  const load = React.useCallback(() => {
+    if (!period) return
+    setLoading(true)
+    api.get<any>(`/communities/${communityId}/finance/penalties?period=${encodeURIComponent(period)}`).then((d: any) => { setData(d); setLoading(false) }).catch(() => { setData(null); setLoading(false) })
+  }, [api, communityId, period])
   React.useEffect(() => { load() }, [load])
 
-  if (loading) return <div className="empty">{t('common.loading', 'Loading…')}</div>
-  const period = data?.period
-  const canOverride = isAdmin && period?.status === 'PREPARED'
+  const dp = data?.period
+  const canOverride = isAdmin && dp?.status === 'PREPARED'
   const rows: any[] = data?.rows || []
 
   return (
     <div className="card ops-card">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <h4 style={{ margin: 0 }}>{t('penreview.title', 'Penalizări — revizuire')} {period?.code ? <strong>{period.code}</strong> : null}
-          {period?.status ? <span className={`badge ${period.status === 'CLOSED' ? 'secondary' : 'tertiary'}`} style={{ marginLeft: 8 }}>{period.status}</span> : null}</h4>
-        <button className="btn ghost small" onClick={load}>{t('common.refresh', 'Refresh')}</button>
+        <h4 style={{ margin: 0 }}>{t('penreview.title', 'Penalizări — revizuire')}
+          {dp?.status ? <span className={`badge ${dp.status === 'CLOSED' ? 'secondary' : 'tertiary'}`} style={{ marginLeft: 8 }}>{dp.status}</span> : null}</h4>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
+          </select>
+          <button className="btn ghost small" onClick={load}>{t('common.refresh', 'Refresh')}</button>
+        </div>
       </div>
+      {loading ? <div className="empty" style={{ marginTop: 10 }}>{t('common.loading', 'Loading…')}</div> : (
+      <>
+      {isAdmin && !canOverride ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t('penreview.prepareFirst', 'Ajustările manuale sunt disponibile după „Prepare”.')}</div> : null}
       {isAdmin && !canOverride ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t('penreview.prepareFirst', 'Ajustările manuale sunt disponibile după „Prepare”.')}</div> : null}
       {!rows.length ? (
         <div className="empty" style={{ marginTop: 10 }}>{t('penreview.none', 'Nicio penalizare în această perioadă.')}</div>
@@ -71,8 +91,10 @@ export function PenaltyReviewPanel({ communityId }: { communityId: string }) {
           </tbody>
         </table>
       )}
-      {ovrTarget && period?.code && (
-        <PenaltyOverrideModal communityId={communityId} period={period.code}
+      </>
+      )}
+      {ovrTarget && period && (
+        <PenaltyOverrideModal communityId={communityId} period={period}
           be={ovrTarget.be} beName={ovrTarget.beName} computed={ovrTarget.computed}
           onClose={() => setOvrTarget(null)} onSaved={() => { setOvrTarget(null); load() }} />
       )}
