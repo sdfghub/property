@@ -23,6 +23,7 @@ import { DebtorsPanel } from '../money/DebtorsPanel'
 import { UnpaidInvoicesPanel } from '../money/UnpaidInvoicesPanel'
 import { MoneyHub } from '../money/MoneyHub'
 import { AvizierPanel } from './AvizierPanel'
+import { PenaltyReviewPanel } from './PenaltyReviewPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { GovernancePanel } from './GovernancePanel'
 
@@ -30,6 +31,7 @@ export type CommunityAdminTabKey =
   | 'today'
   | 'close'
   | 'avizier'
+  | 'penalties'
   | 'debtors'
   | 'unpaidInvoices'
   | 'overview'
@@ -65,8 +67,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -641,6 +643,7 @@ export function CommunityAdminDashboard({
                 <PeriodSettingsPanel communityId={communityId} readOnly={readOnly} />
               )}
               {activeTab === 'avizier' && <AvizierPanel communityId={communityId} cenzorEnabled={features ? features.cenzor !== false : true} />}
+              {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
               {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
               {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}

@@ -176,7 +176,7 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
 
       <Step n={7} status={effStat('penalties', prepared ? 'optional' : 'todo')} {...area('penalties')} title={t('close.penalties', 'Penalty review & adjustments')}
         desc={prepared ? t('close.penaltiesDesc', 'Review the computed penalties and apply any manual overrides (with a note) before publishing.') : t('close.penaltiesTodo', 'Available after the list is prepared.')}>
-        <button className="btn secondary small" disabled={!prepared} onClick={() => onNavigate('avizier')}>{prepared ? t('close.reviewPenalties', 'Review penalties') : t('close.afterPrepare', 'După prepare')}</button>
+        <button className="btn secondary small" disabled={!prepared} onClick={() => onNavigate('penalties')}>{prepared ? t('close.reviewPenalties', 'Review penalties') : t('close.afterPrepare', 'După prepare')}</button>
       </Step>
 
       <Step n={8} status={effStat('cenzor', stat('cenzor', closed))} {...area('cenzor')} title={t('close.cenzor', 'Cenzor sign-off & publish')}

@@ -622,6 +622,43 @@ export class FinanceService {
     return { beCode, beName: be.name, fundCode, periodCode: period.code, active: out[0] ?? null, rows: out }
   }
 
+  /**
+   * Focused penalty-review list for the close wizard: per billing entity, the computed penalty charge
+   * (be_statement.charges for the penalty fund) + any active manual override, newest-net first.
+   */
+  async penaltyReview(communityId: string, periodCode: string, fundCode = 'PENALIZARI') {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { period: null, rows: [], totalComputed: 0, totalNet: 0 }
+    const penFund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true } })
+    const p = await this.prisma.period.findFirst({ where: { communityId, code: period.code }, select: { status: true } })
+    if (!penFund) return { period: { code: period.code, status: p?.status ?? null }, rows: [], totalComputed: 0, totalNet: 0 }
+    const [stmts, bes, ovAll] = await Promise.all([
+      this.prisma.beStatement.findMany({ where: { communityId, periodId: period.id, fundId: penFund.id }, select: { billingEntityId: true, charges: true } }),
+      this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true } }),
+      this.prisma.chargeOverride.findMany({ where: { communityId, periodId: period.id, fundId: penFund.id }, orderBy: { createdAt: 'desc' } }),
+    ])
+    const beById = new Map(bes.map((b) => [b.id, b]))
+    const activeOv = new Map<string, any>()
+    for (const o of ovAll) if (!activeOv.has(o.billingEntityId)) activeOv.set(o.billingEntityId, o)
+    const rows = stmts
+      .map((s) => {
+        const computed = round2(Number(s.charges))
+        const ov = activeOv.get(s.billingEntityId)
+        const override = ov && ov.overrideAmount != null ? round2(Number(ov.overrideAmount)) : null
+        const be = beById.get(s.billingEntityId)
+        return { beCode: be?.code, beName: be?.name, computed, override, net: override != null ? override : computed }
+      })
+      .filter((r) => r.computed > 0.005 || r.override != null)
+      .sort((a, b) => b.net - a.net)
+    return {
+      period: { code: period.code, status: p?.status ?? null },
+      fundCode,
+      rows,
+      totalComputed: round2(rows.reduce((s, r) => s + r.computed, 0)),
+      totalNet: round2(rows.reduce((s, r) => s + r.net, 0)),
+    }
+  }
+
   /** Collection rate for a period: charged (be_statement.charges) vs collected (payments). */
   async collection(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
