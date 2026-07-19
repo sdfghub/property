@@ -174,26 +174,6 @@ async function main() {
     update: { startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due), status: 'OPEN', preparedAt: null, closedAt: null },
     create: { communityId: COMM, code: MAY.code, seq: my * 12 + mm, status: 'OPEN', startDate: new Date(MAY.start), endDate: new Date(MAY.end), dueDate: new Date(MAY.due) },
   })
-
-  // Roll April's closing balances forward to May's opening — exactly what a real close does in
-  // PeriodService.approve() (period.service.ts:250-304): each closed-period be_statement.dueEnd becomes
-  // the next period's be_opening_balance, plus the community opening. The May compute still reads
-  // dueStart from April's beStatement.dueEnd (chain-first); this makes the opening an explicit,
-  // first-class "starting balance" record like the normal flow, rather than only an implicit chain.
-  const aprStatements = await prisma.beStatement.findMany({ where: { communityId: COMM, periodId: aprPeriod.id }, select: { billingEntityId: true, fundId: true, currency: true, dueEnd: true } })
-  await prisma.beOpeningBalance.deleteMany({ where: { communityId: COMM, periodId: mayPeriod.id } })
-  for (const s of aprStatements) {
-    if (!s.fundId) continue
-    await prisma.beOpeningBalance.create({ data: { communityId: COMM, periodId: mayPeriod.id, billingEntityId: s.billingEntityId, fundId: s.fundId, unitId: null, amount: s.dueEnd, currency: s.currency } })
-  }
-  const aprCommTotal = Number(aprStatements.reduce((t, s) => t + Number(s.dueEnd), 0).toFixed(2))
-  await prisma.communityOpeningBalance.upsert({
-    where: { communityId_periodId: { communityId: COMM, periodId: mayPeriod.id } },
-    update: { amount: aprCommTotal, currency: 'RON' },
-    create: { communityId: COMM, periodId: mayPeriod.id, amount: aprCommTotal, currency: 'RON' },
-  })
-  console.log(`rolled April close → May opening: ${aprStatements.length} be_opening_balance rows, community ${aprCommTotal.toFixed(2)}`)
-
   const units = await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })
   const byUnit = packet.unitMeasures?.byUnit || {}
   for (const u of units) {
