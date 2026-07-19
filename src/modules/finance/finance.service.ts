@@ -243,8 +243,14 @@ export class FinanceService {
       unitsByBe.set(m.billingEntityId, arr)
     })
 
-    const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true } })
+    const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true } })
     const fundCodes = new Set(funds.map((f) => f.code))
+    // Column display labels come from the data (expense-type / fund names) — the frontend renders these
+    // rather than hardcoding a code→label map. APA_DIF is the synthetic water-difference column.
+    const expTypes = await this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true } })
+    const categoryLabels: Record<string, string> = { APA_DIF: 'Apă - diferență' }
+    for (const e of expTypes) if (e.name) categoryLabels[e.code] = e.name
+    for (const f of funds) if (f.name) categoryLabels[f.code] = f.name
     const rank = (label: string) => (label === 'PENALIZARI' || label.startsWith('PEN:') ? 2 : fundCodes.has(label) ? 1 : 0)
 
     // charges per BE keyed by category. Penalty (`PEN:<fund>`) amounts stay in the charge map so they
@@ -347,7 +353,7 @@ export class FinanceService {
     const groupOrder = new Map(groups.map((g, i) => [g.key, i]))
     const penaltyFunds = [...penaltyFundSet].sort((a, b) => (groupOrder.get(a) ?? 99) - (groupOrder.get(b) ?? 99))
 
-    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate }, categories, groups, penaltyFunds, rows, totals }
+    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate }, categories, categoryLabels, groups, penaltyFunds, rows, totals }
   }
 
   /**

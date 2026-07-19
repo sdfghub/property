@@ -7,17 +7,8 @@ import { beLabel } from './beLabel'
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Short, friendly column headers for the known category codes (falls back to the code).
-const CAT_LABEL: Record<string, string> = {
-  APA_RECE: 'Apă rece', APA_METEO: 'Apă meteo', CURENT_SCARA: 'Curent scară', SALUBRITATE: 'Salubritate',
-  CURATENIE: 'Curățenie', ADMINISTRARE: 'Administrare', COMISION_BANCA: 'Comision', INTERFON: 'Interfon',
-  RULMENT: 'Rulment', REPARATII: 'Reparații', REABILITARE_1: 'Reab. 1', REABILITARE_2: 'Reab. 2',
-  REABILITARE_3: 'Reab. 3', PENALIZARI: 'Penalizări', APA_DIF: 'Apă - diferență',
-}
-
-// Category label, incl. per-fund penalty codes `PEN:<fund>` → "Penaliz. <fund>".
-const catLabel = (c: string) =>
-  c.startsWith('PEN:') ? `Penaliz. ${CAT_LABEL[c.slice(4)] || c.slice(4)}` : (CAT_LABEL[c] || c)
+// Column labels come from the backend (avizier.categoryLabels — expense-type/fund names + APA_DIF);
+// the frontend no longer hardcodes any code→label knowledge and falls back to the raw code.
 
 // Numeric-column headers wrap (multi-word labels stack) so columns shrink to the small numbers below.
 const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 80 }
@@ -158,6 +149,9 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
     data?.groups ?? cats.map((c) => ({ key: c, label: catLabel(c), categories: [c] }))
   const penaltyFunds: string[] = data?.penaltyFunds ?? []
   const canOverride = isAdmin && data?.period?.status === 'PREPARED'
+  // Column labels are supplied by the backend; fall back to the raw code.
+  const catLabels: Record<string, string> = (data as any)?.categoryLabels ?? {}
+  const catLabel = (c: string) => (c.startsWith('PEN:') ? `Penaliz. ${catLabels[c.slice(4)] ?? c.slice(4)}` : (catLabels[c] ?? c))
   type Col =
     | { kind: 'cat'; cat: string }
     | { kind: 'total'; group: { key: string; label: string; categories: string[] } }
@@ -241,7 +235,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   )
                   if (col.kind === 'pen') return (
                     <th key={`p${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}
-                      title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Total penalizări acumulate') : t('avizier.penMonthHint', 'Penalizări luna aceasta')} — ${CAT_LABEL[col.fund] || col.fund}`}>
+                      title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Total penalizări acumulate') : t('avizier.penMonthHint', 'Penalizări luna aceasta')} — ${catLabels[col.fund] ?? col.fund}`}>
                       {col.scope === 'total' ? t('avizier.penTotalShort', 'Pen. total') : t('avizier.penMonthShort', 'Pen. lună')}
                     </th>
                   )
@@ -524,7 +518,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
           <div className="card" onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 640, width: '90%', maxHeight: '80vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0 }}>{t('avizier.howCalc', 'Cum s-a calculat')}: {CAT_LABEL[explain.cat] || explain.cat}</h4>
+              <h4 style={{ margin: 0 }}>{t('avizier.howCalc', 'Cum s-a calculat')}: {catLabels[explain.cat] ?? explain.cat}</h4>
               <button className="btn ghost small" onClick={() => setExplain(null)}>✕</button>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{explain.data?.beName || explain.be} · {data?.period?.code}</div>
@@ -569,7 +563,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <h4 style={{ margin: 0 }}>
                 {penDetail.fund
-                  ? `${t('avizier.penTitleFund', 'Penalizări')} ${CAT_LABEL[penDetail.fund] || penDetail.fund} — ${t('avizier.penTitleCalc', 'detaliu de calcul')}`
+                  ? `${t('avizier.penTitleFund', 'Penalizări')} ${catLabels[penDetail.fund] ?? penDetail.fund} — ${t('avizier.penTitleCalc', 'detaliu de calcul')}`
                   : t('avizier.penTitle', 'Penalizări — detaliu de calcul')}
               </h4>
               <button className="btn ghost small" onClick={() => setPenDetail(null)}>✕</button>
