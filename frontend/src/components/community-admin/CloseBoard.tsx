@@ -104,8 +104,8 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
     t,
   })
   // an area counts toward progress if manually marked OR derived-done
-  const derivedDone: Record<string, boolean> = { residents: false, meters: metersDone, invoices: billsDone, allocate: dueSet, debtors: false, prepare: prepared, cenzor: closed }
-  const AREA_KEYS = ['residents', 'meters', 'invoices', 'allocate', 'debtors', 'prepare', 'cenzor']
+  const derivedDone: Record<string, boolean> = { residents: false, meters: metersDone, invoices: billsDone, allocate: dueSet, debtors: false, prepare: prepared, penalties: false, cenzor: closed }
+  const AREA_KEYS = ['residents', 'meters', 'invoices', 'allocate', 'debtors', 'prepare', 'penalties', 'cenzor']
   const doneCount = AREA_KEYS.filter((k) => isMarked(k) || derivedDone[k]).length
 
   return (
@@ -174,7 +174,12 @@ export function CloseBoard({ communityId, onNavigate, readOnly = false }: Props)
         </div>
       </Step>
 
-      <Step n={7} status={effStat('cenzor', stat('cenzor', closed))} {...area('cenzor')} title={t('close.cenzor', 'Cenzor sign-off & publish')}
+      <Step n={7} status={effStat('penalties', prepared ? 'optional' : 'todo')} {...area('penalties')} title={t('close.penalties', 'Penalty review & adjustments')}
+        desc={prepared ? t('close.penaltiesDesc', 'Review the computed penalties and apply any manual overrides (with a note) before publishing.') : t('close.penaltiesTodo', 'Available after the list is prepared.')}>
+        <button className="btn secondary small" disabled={!prepared} onClick={() => onNavigate('avizier')}>{prepared ? t('close.reviewPenalties', 'Review penalties') : t('close.afterPrepare', 'După prepare')}</button>
+      </Step>
+
+      <Step n={8} status={effStat('cenzor', stat('cenzor', closed))} {...area('cenzor')} title={t('close.cenzor', 'Cenzor sign-off & publish')}
         desc={closed ? t('close.published', 'Published & closed. Balances rolled to next month.') : st === 'PREPARED' ? t('close.waitCenzor', 'Awaiting cenzor approval (requires CENSOR role).') : t('close.cenzorTodo', 'Available after the list is prepared.')}>
         {!readOnly && st === 'PREPARED' ? (
           <div className="row" style={{ gap: 8 }}>

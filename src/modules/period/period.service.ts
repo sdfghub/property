@@ -195,6 +195,9 @@ export class PeriodService {
         await this.penaltyLedger.advance(tx, communityId, period.id, { commit: false })
       }
 
+      // apply admin manual charge overrides (two ADJUSTMENT legs) after all charges are staged
+      await this.applyChargeOverrides(tx, communityId, period.id)
+
       // statements reflect staged charges, applied payments, and posted penalties
       await this.computeStatements(tx, communityId, period.id)
       await this.computeCommunityStatements(tx, communityId, period.id)
@@ -242,6 +245,9 @@ export class PeriodService {
       })
       // freeze the penalty bucket state for this period (provisional → committed)
       await this.penaltyLedger.commitPeriod(tx, communityId, period.id)
+
+      // re-derive admin charge overrides against the promoted (final) charges
+      await this.applyChargeOverrides(tx, communityId, period.id)
 
       // ensure statements exist/updated (idempotent)
       await this.computeStatements(tx, communityId, period.id)
@@ -703,6 +709,79 @@ export class PeriodService {
     })
     if (!period) throw new BadRequestException('Period not found')
     return period
+  }
+
+  /**
+   * Re-derive the manual charge-override ledger legs for a period. Each active override (latest
+   * ChargeOverride row per BE+fund; overrideAmount=null = cleared) becomes two ADJUSTMENT legs on that
+   * fund: CHG_OVR_REV = −(engine-computed charge) and CHG_OVR_SET = +(admin value). be_statement.charges
+   * keeps the engine value; adjustments carry (override − computed), so the net dueEnd contribution
+   * equals the admin value. Deleted + re-derived on every prepare/approve/write so it tracks the current
+   * computed charge and survives statement recompute. Generic — PENALIZARI is the first consumer.
+   */
+  async applyChargeOverrides(tx: TxOrClient, communityId: string, periodId: string) {
+    const prior = await tx.beLedgerEntry.findMany({
+      where: { communityId, periodId, refType: { in: ['CHG_OVR_REV', 'CHG_OVR_SET'] } },
+      select: { id: true },
+    })
+    if (prior.length) {
+      await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
+      await tx.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
+    }
+    const overrides = await tx.chargeOverride.findMany({ where: { communityId, periodId }, orderBy: { createdAt: 'desc' } })
+    const seen = new Set<string>()
+    for (const o of overrides) {
+      const key = `${o.billingEntityId}::${o.fundId}`
+      if (seen.has(key)) continue // only the latest row per (BE, fund) is active
+      seen.add(key)
+      if (o.overrideAmount == null) continue // cleared → no legs, statement falls back to computed
+      const computed = await this.computedFundCharge(tx, communityId, periodId, o.billingEntityId, o.fundId)
+      const target = Number(o.overrideAmount)
+      for (const leg of [
+        { refType: 'CHG_OVR_REV', amount: -computed, reason: 'override-reverse' },
+        { refType: 'CHG_OVR_SET', amount: target, reason: 'override-set' },
+      ]) {
+        const le = await tx.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: leg.amount, currency: 'RON', refType: leg.refType, refId: periodId, fundId: o.fundId } })
+        await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', fundId: o.fundId, currency: 'RON', refType: leg.refType, refId: periodId, unitId: null, amount: leg.amount, meta: { reason: leg.reason, overrideId: o.id, computed, override: target, comment: o.comment, actor: o.actor } } })
+      }
+    }
+  }
+
+  /** The value computeStatements books as `charges` for a (BE, fund): CHARGE / ACCRUAL / ¬OPENING_BALANCE. */
+  private async computedFundCharge(tx: TxOrClient, communityId: string, periodId: string, billingEntityId: string, fundId: string): Promise<number> {
+    const agg = await tx.beLedgerEntry.aggregate({
+      _sum: { amount: true },
+      where: { communityId, periodId, billingEntityId, fundId, kind: 'CHARGE', lane: 'ACCRUAL', NOT: { refType: 'OPENING_BALANCE' } },
+    })
+    return Number(agg._sum.amount ?? 0)
+  }
+
+  /**
+   * Admin: override a billing entity's computed charge for a fund in the current (PREPARED) period,
+   * with a mandatory comment. Append-only (each call = a new audit row; latest wins; amount=null clears).
+   * Applied immediately so the avizier reflects it, and re-derived at approve. Fund defaults to PENALIZARI.
+   */
+  async overrideCharge(communityId: string, periodCode: string, args: { be: string; fund?: string; amount: number | null; comment: string }, actor: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    if (period.status === 'CLOSED') throw new BadRequestException('Period is closed — reopen it to change charges')
+    if (period.status !== 'PREPARED') throw new BadRequestException('Prepare the period first — there are no computed charges to override yet')
+    const comment = String(args.comment ?? '').trim()
+    if (!comment) throw new BadRequestException('A comment is required for a manual override')
+    const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: args.be }, select: { id: true } })
+    if (!be) throw new BadRequestException('Billing entity not found')
+    const fundCode = args.fund || 'PENALIZARI'
+    const fund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true } })
+    if (!fund) throw new BadRequestException(`Fund ${fundCode} not found`)
+    const amount = args.amount == null ? null : Number(args.amount)
+    if (amount != null && !Number.isFinite(amount)) throw new BadRequestException('Override amount must be a number')
+    const computed = await this.computedFundCharge(this.prisma, communityId, period.id, be.id, fund.id)
+    await this.prisma.$transaction(async (tx) => {
+      await tx.chargeOverride.create({ data: { communityId, periodId: period.id, billingEntityId: be.id, fundId: fund.id, computedAmount: computed, overrideAmount: amount, comment, actor } })
+      await this.applyChargeOverrides(tx, communityId, period.id)
+      await this.computeStatements(tx, communityId, period.id)
+      await this.computeCommunityStatements(tx, communityId, period.id)
+    })
+    return { ok: true, computed, override: amount }
   }
 
   private async nextPeriodId(tx: TxOrClient, communityId: string, seq: number): Promise<string | null> {

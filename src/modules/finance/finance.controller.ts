@@ -1,13 +1,14 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Param, Query, Body, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
 import { FinanceService } from './finance.service'
+import { PeriodService } from '../period/period.service'
 
 @Controller('communities/:communityId/finance')
 @UseGuards(JwtAuthGuard, ScopesGuard)
 export class FinanceController {
-  constructor(private readonly finance: FinanceService) {}
+  constructor(private readonly finance: FinanceService, private readonly periods: PeriodService) {}
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('receivables')
@@ -72,6 +73,29 @@ export class FinanceController {
     @Query('be') be: string,
   ) {
     return this.finance.explainAdjustments(c, period, be)
+  }
+
+  // Manual charge override (generic; PENALIZARI = penalty). Admin-only, applied on a PREPARED period,
+  // realized as two ADJUSTMENT legs (−computed, +override) with a mandatory comment + audit trail.
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Post('avizier/charge-override')
+  overrideCharge(
+    @Param('communityId') c: string,
+    @Body() body: { period: string; be: string; fund?: string; amount: number | null; comment: string },
+    @Req() req: any,
+  ) {
+    return this.periods.overrideCharge(c, body.period, { be: body.be, fund: body.fund, amount: body.amount, comment: body.comment }, req?.user?.email || 'unknown')
+  }
+
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier/charge-override')
+  chargeOverrideHistory(
+    @Param('communityId') c: string,
+    @Query('period') period: string,
+    @Query('be') be: string,
+    @Query('fund') fund?: string,
+  ) {
+    return this.finance.chargeOverrideHistory(c, period, be, fund || 'PENALIZARI')
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })

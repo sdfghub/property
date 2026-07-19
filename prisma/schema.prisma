@@ -1156,6 +1156,27 @@ model PenaltyBucketPeriod {
   @@map("penalty_bucket_period")
 }
 
+// Admin manual override of a billing entity's computed charge for a fund in a period (generic —
+// PENALIZARI is the first consumer). Append-only audit log: the latest row per
+// (community, period, BE, fund) is the active override (overrideAmount = null ⇒ cleared/revert to
+// computed). Realized durably as two ADJUSTMENT ledger legs (−computed, +override) re-derived each
+// prepare/approve, so it survives statement recompute.
+model ChargeOverride {
+  id              String   @id @default(cuid())
+  communityId     String   @map("community_id")
+  periodId        String   @map("period_id")
+  billingEntityId String   @map("billing_entity_id")
+  fundId          String   @map("fund_id")
+  computedAmount  Decimal  @map("computed_amount")  // engine value snapshotted when the override was made
+  overrideAmount  Decimal? @map("override_amount")  // admin's target; null = cleared
+  comment         String   @map("comment")
+  actor           String   @map("actor")            // acting user's email
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([communityId, periodId, billingEntityId, fundId, createdAt])
+  @@map("charge_override")
+}
+
 // ---------- Ledger (charges, payments, adjustments) ----------
 
 model BeLedgerEntryDetail {

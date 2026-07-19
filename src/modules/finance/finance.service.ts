@@ -598,6 +598,30 @@ export class FinanceService {
     return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
   }
 
+  /**
+   * Manual charge-override audit history for a (BE, fund) in a period: every amendment with its actor,
+   * comment, computed value and target. The newest row is the active override (null target = cleared).
+   */
+  async chargeOverrideHistory(communityId: string, periodCode: string, beCode: string, fundCode = 'PENALIZARI') {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { rows: [], active: null }
+    const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: beCode }, select: { id: true, name: true } })
+    const fund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true } })
+    if (!be || !fund) return { rows: [], active: null }
+    const rows = await this.prisma.chargeOverride.findMany({
+      where: { communityId, periodId: period.id, billingEntityId: be.id, fundId: fund.id },
+      orderBy: { createdAt: 'desc' },
+    })
+    const out = rows.map((r) => ({
+      at: r.createdAt,
+      actor: r.actor,
+      comment: r.comment,
+      computed: round2(Number(r.computedAmount)),
+      override: r.overrideAmount == null ? null : round2(Number(r.overrideAmount)),
+    }))
+    return { beCode, beName: be.name, fundCode, periodCode: period.code, active: out[0] ?? null, rows: out }
+  }
+
   /** Collection rate for a period: charged (be_statement.charges) vs collected (payments). */
   async collection(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)

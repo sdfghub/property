@@ -30,6 +30,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const [signMsg, setSignMsg] = React.useState<string | null>(null)
 
   const isCensor = activeRole?.role === 'CENSOR' && cenzorEnabled
+  const isAdmin = activeRole?.role === 'COMMUNITY_ADMIN'
   const reloadAvizier = () => {
     const q = period ? `?period=${encodeURIComponent(period)}` : ''
     api.get<any>(`/communities/${communityId}/finance/avizier${q}`).then((d: any) => setData(d)).catch(() => {})
@@ -93,6 +94,25 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
       .catch(() => setPenDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
   }
 
+  // Admin manual penalty override (two adjustment legs; audit-logged). Editable only on a PREPARED period.
+  const [ovr, setOvr] = React.useState<{ be: string; beName?: string; computed: number; amount: string; comment: string; history: any[]; active?: any; busy?: boolean; err?: string } | null>(null)
+  const openOverride = (beCode: string, beName: string, computed: number) => {
+    setOvr({ be: beCode, beName, computed, amount: '', comment: '', history: [] })
+    api.get<any>(`/communities/${communityId}/finance/avizier/charge-override?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}&fund=PENALIZARI`)
+      .then((d: any) => setOvr((cur) => (cur && cur.be === beCode ? { ...cur, history: d?.rows || [], active: d?.active ?? null, amount: d?.active?.override != null ? String(d.active.override) : '' } : cur)))
+      .catch(() => {})
+  }
+  const submitOverride = async (clear: boolean) => {
+    if (!ovr) return
+    if (!ovr.comment.trim()) { setOvr({ ...ovr, err: t('avizier.ovrCommentReq', 'Adaugă un comentariu (motivul).') }); return }
+    if (!clear && !(Number.isFinite(Number(ovr.amount)) && ovr.amount.trim() !== '')) { setOvr({ ...ovr, err: t('avizier.ovrAmountReq', 'Introdu o sumă validă.') }); return }
+    setOvr({ ...ovr, busy: true, err: undefined })
+    try {
+      await api.post(`/communities/${communityId}/finance/avizier/charge-override`, { period: data?.period?.code || period, be: ovr.be, fund: 'PENALIZARI', amount: clear ? null : Number(ovr.amount), comment: ovr.comment.trim() })
+      setOvr(null); reloadAvizier()
+    } catch (e: any) { setOvr((cur) => (cur ? { ...cur, busy: false, err: e?.message || t('common.error', 'Eroare') } : cur)) }
+  }
+
   // Cell click router: penalty columns go to the rich per-bucket drilldown (per fund for a `PEN:<fund>`
   // category, all funds for the aggregate PENALIZARI); every other category keeps the generic per-unit
   // formula.
@@ -137,6 +157,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const groups: { key: string; label: string; categories: string[] }[] =
     data?.groups ?? cats.map((c) => ({ key: c, label: catLabel(c), categories: [c] }))
   const penaltyFunds: string[] = data?.penaltyFunds ?? []
+  const canOverride = isAdmin && data?.period?.status === 'PREPARED'
   type Col =
     | { kind: 'cat'; cat: string }
     | { kind: 'total'; group: { key: string; label: string; categories: string[] } }
@@ -272,6 +293,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     }
                     if (col.kind === 'pen') {
                       const v = r.penaltyByFund?.[col.fund]?.[col.scope]
+                      const editable = canOverride && col.scope === 'month'
                       return (
                         <td key={`p${i}`} style={{ padding: '6px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}>
                           {v ? (
@@ -280,6 +302,10 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                               {money(v)}
                             </button>
                           ) : ''}
+                          {editable ? (
+                            <button type="button" onClick={() => openOverride(r.beCode, r.beName, Number(v) || 0)} title={t('avizier.override', 'Ajustează manual penalizarea')}
+                              style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12 }}>✎</button>
+                          ) : null}
                         </td>
                       )
                     }
@@ -457,6 +483,55 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {ovr && (
+        <div onClick={() => setOvr(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 460, width: '90%', maxHeight: '85vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ margin: 0 }}>{t('avizier.ovrTitle', 'Ajustează manual penalizarea')}</h4>
+              <button className="btn ghost small" onClick={() => setOvr(null)}>✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{ovr.beName || ovr.be} · {data?.period?.code}</div>
+            <div className="stack" style={{ gap: 8 }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">{t('avizier.ovrComputed', 'Penalizare calculată')}</span>
+                <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money(ovr.computed)}</strong>
+              </div>
+              <label className="stack" style={{ gap: 4 }}>
+                <span className="muted" style={{ fontSize: 12 }}>{t('avizier.ovrAmount', 'Penalizare aprobată (RON)')}</span>
+                <input className="input" type="number" step="0.01" value={ovr.amount} placeholder={String(ovr.computed)}
+                  onChange={(e) => setOvr({ ...ovr, amount: e.target.value })} />
+              </label>
+              <label className="stack" style={{ gap: 4 }}>
+                <span className="muted" style={{ fontSize: 12 }}>{t('avizier.ovrComment', 'Motiv (obligatoriu)')}</span>
+                <textarea className="input" rows={2} value={ovr.comment} onChange={(e) => setOvr({ ...ovr, comment: e.target.value })} />
+              </label>
+              {ovr.err ? <div className="badge negative">{ovr.err}</div> : null}
+              <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+                {ovr.active?.override != null ? (
+                  <button className="btn ghost small" disabled={ovr.busy} onClick={() => submitOverride(true)}>{ovr.busy ? '…' : t('avizier.ovrClear', 'Revino la calculat')}</button>
+                ) : null}
+                <button className="btn primary small" disabled={ovr.busy} onClick={() => submitOverride(false)}>{ovr.busy ? '…' : t('avizier.ovrSave', 'Salvează ajustarea')}</button>
+              </div>
+              <div className="muted" style={{ fontSize: 11 }}>{t('avizier.ovrHint', 'Se înregistrează ca două ajustări (−calculat, +aprobat) cu urmă de audit.')}</div>
+              {(ovr.history || []).length ? (
+                <div style={{ marginTop: 2, borderTop: '1px solid var(--border,#eee)', paddingTop: 6 }}>
+                  <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>{t('avizier.ovrHistory', 'Istoric ajustări')}</div>
+                  {(ovr.history || []).map((h: any, i: number) => (
+                    <div key={i} style={{ fontSize: 12, padding: '3px 0', borderTop: i ? '1px dotted var(--border,#eee)' : undefined }}>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(h.computed)} → {h.override == null ? t('avizier.ovrCleared', 'calculat') : money(h.override)}</span>
+                      <span className="muted"> · {h.actor} · {new Date(h.at).toLocaleString('ro-RO')}</span>
+                      {h.comment ? <div className="muted" style={{ fontStyle: 'italic' }}>“{h.comment}”</div> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
