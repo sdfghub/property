@@ -1209,8 +1209,11 @@ export class PeriodService {
     })
 
     for (const be of bes) {
+      // Opening chains off the most recent CLOSED period's dueEnd (live) — a closed period is frozen
+      // (this fn only ever runs on OPEN/PREPARED periods), so a still-open/in-flux prior period must not
+      // leak into the carry.
       const previousPeriod = await tx.period.findFirst({
-        where: { communityId, seq: { lt: period?.seq ?? 0 } },
+        where: { communityId, seq: { lt: period?.seq ?? 0 }, status: 'CLOSED' },
         orderBy: { seq: 'desc' },
         select: { id: true },
       })
@@ -1327,7 +1330,7 @@ export class PeriodService {
       select: { seq: true },
     })
     const previousPeriod = await tx.period.findFirst({
-      where: { communityId, seq: { lt: period?.seq ?? 0 } },
+      where: { communityId, seq: { lt: period?.seq ?? 0 }, status: 'CLOSED' },
       orderBy: { seq: 'desc' },
       select: { id: true },
     })
