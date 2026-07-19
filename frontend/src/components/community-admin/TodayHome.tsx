@@ -12,6 +12,7 @@ type Props = {
 
 type Editable = {
   period?: { code: string; status: string } | null
+  lastClosed?: { code: string } | null
   meters?: { total: number; closed: number; open?: string[] }
   bills?: { total: number; closed: number; open?: string[] }
   canPrepare?: boolean
@@ -51,6 +52,7 @@ export function TodayHome({ communityId, onNavigate, viewerRole }: Props) {
   const [collection, setCollection] = React.useState<any>(null)
   const [decisions, setDecisions] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
+  const [reopenBusy, setReopenBusy] = React.useState(false)
 
   React.useEffect(() => {
     if (!communityId) return
@@ -100,6 +102,17 @@ export function TodayHome({ communityId, onNavigate, viewerRole }: Props) {
       ? { label: pendingForMe > 0 ? `${t('today.action.vote', 'Votează deciziile')} (${pendingForMe})` : t('today.action.viewDecisions', 'Vezi deciziile'), tab: 'decisions' }
       : nextAction(editable, t)
 
+  // When nothing is open, let the admin reopen the last closed period straight from the home.
+  const lastClosedCode = !editable?.period ? editable?.lastClosed?.code : undefined
+  const doReopen = async () => {
+    if (!lastClosedCode) return
+    setReopenBusy(true)
+    try {
+      await api.post(`/communities/${communityId}/periods/${lastClosedCode}/reopen`)
+      onNavigate('close')
+    } catch { setReopenBusy(false) }
+  }
+
   return (
     <div className="stack" style={{ gap: 16 }}>
       {/* Next action strip */}
@@ -114,7 +127,15 @@ export function TodayHome({ communityId, onNavigate, viewerRole }: Props) {
           </div>
           <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
             <div className="muted">{t('today.nextStep', 'Next step')}</div>
-            <button className="btn primary" onClick={() => onNavigate(action.tab)}>{action.label} →</button>
+            <div className="row" style={{ gap: 8 }}>
+              {isAdmin && lastClosedCode ? (
+                <button className="btn secondary" disabled={reopenBusy} onClick={doReopen}
+                  title={t('today.reopenHint', 'Redeschide ultima lună închisă pentru corecții')}>
+                  {reopenBusy ? '…' : `${t('today.reopen', 'Redeschide')} ${lastClosedCode}`}
+                </button>
+              ) : null}
+              <button className="btn primary" onClick={() => onNavigate(action.tab)}>{action.label} →</button>
+            </div>
           </div>
         </div>
         {isAdmin && editable?.period ? (

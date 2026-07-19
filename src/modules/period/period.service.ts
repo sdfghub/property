@@ -92,7 +92,11 @@ export class PeriodService {
       where: { communityId, status: { not: 'CLOSED' } },
       orderBy: { seq: 'asc' },
     })
-    if (!period) return { period: null, meters: { total: 0, closed: 0, open: [] }, bills: { total: 0, closed: 0, open: [] }, canClose: false }
+    if (!period) {
+      // nothing open — surface the latest closed period so the admin can reopen it from the home CTA
+      const lastClosed = await this.prisma.period.findFirst({ where: { communityId, status: 'CLOSED' }, orderBy: { seq: 'desc' }, select: { code: true } })
+      return { period: null, lastClosed, meters: { total: 0, closed: 0, open: [] }, bills: { total: 0, closed: 0, open: [] }, canClose: false }
+    }
     const meterTemplates = await (this.prisma as any).meterEntryTemplate.findMany({ where: { communityId }, select: { code: true, name: true } })
     const meterInstances = await (this.prisma as any).meterEntryTemplateInstance.findMany({
       where: { communityId, periodId: period.id },
