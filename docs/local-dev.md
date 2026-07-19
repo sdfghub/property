@@ -39,8 +39,10 @@ npm run seed                  # create the root admin (see below)
 npm run dev                   # ts-node-dev --respawn on :3100  → http://localhost:3100/api
 ```
 
-- **Schema changes**: this project uses `prisma db push`, not migrations. After editing
-  `prisma/schema.prisma`, run `npx prisma db push --skip-generate && npm run generate`.
+- **Schema changes**: this project uses `prisma db push`, not migrations (there is no
+  `prisma/migrations/` folder). After editing `prisma/schema.prisma`, run
+  `npx prisma db push --skip-generate && npm run generate`. ⚠️ Ignore the `migrate`-based
+  npm scripts (`dev:db`, `prestart`) — they're stale and would try to create a migration.
 - **Hot reload**: `npm run dev` watches `src/`. A `touch src/app.ts` forces a restart.
 - **Health check**: `curl http://localhost:3100/api/healthz`.
 
