@@ -1,0 +1,71 @@
+{
+ "periodCode": "2026-05",
+ "_doc": "Owner payments collected 11.06-13.07.2026 (bank Registru Banca + petty-cash Registru Casa) against the April 2026 cycle. In the ledger these are represented per (BE,fund) by the balance-chain plug in ledger-2026-04.json (dueStart+charges-dueEnd). byUnitRegister = actual per-unit register receipts (audit). specialHandling = the 6 units whose transactions need cycle/penalty treatment; see memory kralik-debt-special-transactions.",
+ "totalOwnerReceipts": 195323.15,
+ "byUnitRegister": {
+  "400191-C1-U26-AP 32": 17265.32,
+  "400191-C1-U34-AP 12 (SAD 4/C)": 42.0,
+  "400191-C1-U25-AP 31": 10446.04,
+  "400191-C1-U8-AP 3": 203.55,
+  "400191-C1-U35-AP 14A": 180.0,
+  "400191-C1-U19-AP 2/2": 1119.58,
+  "400191-C1-U11-AP 6A": 33622.34,
+  "400191-C1-U17-SAD 2/2": 4284.03,
+  "400191-C1-U5-SAD 1": 17823.17,
+  "400191-C1-U23-SPAȚIU COMERCIAL": 10460.93,
+  "400191-C1-U28-AP 1/B": 300.0,
+  "400191-C1-U29-AP 9": 5455.14,
+  "400191-C1-U9-AP 2/1": 71665.11,
+  "400191-C1-U20-AP 5 (I-A)": 2640.53,
+  "400191-C1-U18-AP 8": 11000.0,
+  "400191-C1-U36-AP 14B": 2841.21,
+  "400191-C1-U30-AP 4 (III)": 4122.7,
+  "400191-C1-U21-AP 5 (I-B)": 1500.0,
+  "400191-C1-U6-AP 1": 193.1,
+  "400191-C1-U33-AP 11B": 158.4
+ },
+ "specialHandling": [
+  {
+   "unit": "400191-C1-U26-AP 32",
+   "label": "AP 32",
+   "amount": 13612.0,
+   "type": "prior-cycle",
+   "note": "reab-3 payment (bank #2, 11.06) booked to March cycle; already in April opening credit. Exclude from April-window payment."
+  },
+  {
+   "unit": "400191-C1-U20-AP 5 (I-A)",
+   "label": "AP 5 (I-A)",
+   "amount": 2500.0,
+   "type": "prior-cycle",
+   "note": "pod-fatada payment (casa #1, 11.06) booked to March cycle; already in April opening. Exclude from April-window payment."
+  },
+  {
+   "unit": "400191-C1-U28-AP 1/B",
+   "label": "AP 1/B",
+   "amount": 4123.38,
+   "type": "penalty-writeoff",
+   "note": "Penalizari-Restante 4123.38 -> ~9 (May), administrative cancellation. Balance adjustment, not a payment."
+  },
+  {
+   "unit": "400191-C1-U32-AP 11",
+   "label": "AP 11",
+   "amount": 151.85,
+   "type": "penalty-writeoff",
+   "note": "Penalizari-Restante 151.85 -> 0. Administrative cancellation."
+  },
+  {
+   "unit": "400191-C1-U10-AP 4A",
+   "label": "AP 4A",
+   "amount": 393.2,
+   "type": "kept-current",
+   "note": "small April intretinere kept current, not carried to May restanta."
+  },
+  {
+   "unit": "400191-C1-U34-AP 12 (SAD 4/A)",
+   "label": "AP 12 (SAD 4/A)",
+   "amount": 78.98,
+   "type": "kept-current",
+   "note": "small April intretinere kept current."
+  }
+ ]
+}
