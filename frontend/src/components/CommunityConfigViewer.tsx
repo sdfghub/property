@@ -12,7 +12,6 @@ type Props = {
 export function CommunityConfigViewer({ config, metersConfig }: Props) {
   const { t } = useI18n()
   const { api } = useAuth()
-  if (!config) return null
 
   const {
     community,
@@ -31,7 +30,7 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
     billingEntities = [],
     beResponsibles = [],
     bePendingInvites = [],
-  } = config
+  } = config || {}
   const meters = metersConfig?.meters ?? cfgMeters
   const aggregationRules = metersConfig?.aggregationRules ?? cfgAgg
   const derivedMeters = metersConfig?.derivedMeters ?? cfgDerived
@@ -94,6 +93,9 @@ export function CommunityConfigViewer({ config, metersConfig }: Props) {
       mounted = false
     }
   }, [api, community?.code, community?.id])
+
+  // Nothing to render yet — guard sits below the hooks to keep the hook order stable.
+  if (!config) return null
 
   return (
     <div className="stack" style={{ gap: 12 }}>

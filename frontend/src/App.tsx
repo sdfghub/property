@@ -405,7 +405,6 @@ function RolePicker({
 }) {
   const { t } = useI18n()
   const meta = useMetadata()
-  if (!roles.length) return null
   // Prefer a localized i18n label, else fall back to the backend role registry.
   const roleLabel = (role: string) => {
     const key = `role.${role}`
@@ -461,6 +460,10 @@ function RolePicker({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
+
+  // Bail out only after every hook has run — an early return above would change the
+  // hook count between renders (users with no roles vs. roles loaded in).
+  if (!roles.length) return null
 
   const displayLabel = activeLabel || options[0]?.label || ''
   return (

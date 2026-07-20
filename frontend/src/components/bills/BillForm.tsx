@@ -26,13 +26,13 @@ export function BillForm({
   onChanged?: () => void
   canEdit?: boolean
 }) {
-  // Defensive guard – if the template is malformed, bail out early so we don't crash the UI.
+  // Defensive guard – if the template is malformed we bail out, but only after every hook has
+  // run (see the `if (!template)` below), so the hook order stays identical across renders.
   const safeItems = Array.isArray(template?.items) ? template.items : []
-  if (!template || !safeItems) return null
 
   const { api } = useAuth()
   const [values, setValues] = React.useState<Record<string, string>>(
-    () => Object.fromEntries(Object.entries(template.values || {}).map(([k, v]) => [k, String(v)])),
+    () => Object.fromEntries(Object.entries(template?.values || {}).map(([k, v]) => [k, String(v)])),
   )
   const [expenseTypeMap, setExpenseTypeMap] = React.useState<Record<string, { id: string; currency?: string | null; name?: string }>>({})
   // Self-reported (non-admin) marker per meter item, for admin highlight.
@@ -45,15 +45,15 @@ export function BillForm({
   const invoiceCfg: any = (template as any)?.output?.invoice
   const isInvoice = (template as any)?.output?.mode === 'VENDOR_INVOICE'
   const dueDateKey: string = invoiceCfg?.dueDateKey || 'invoiceDueDate'
-  const hasPrefill = Object.keys(template.values || {}).length > 0
-  const [billState, setBillState] = React.useState<'NEW' | 'FILLED' | 'CLOSED'>(template.state || (hasPrefill ? 'FILLED' : 'NEW'))
+  const hasPrefill = Object.keys(template?.values || {}).length > 0
+  const [billState, setBillState] = React.useState<'NEW' | 'FILLED' | 'CLOSED'>(template?.state || (hasPrefill ? 'FILLED' : 'NEW'))
 
   // Reset local state when switching templates
   React.useEffect(() => {
-    const nextValues = Object.fromEntries(Object.entries(template.values || {}).map(([k, v]) => [k, String(v)]))
+    const nextValues = Object.fromEntries(Object.entries(template?.values || {}).map(([k, v]) => [k, String(v)]))
     setValues(nextValues)
     const hasPrefillNow = Object.keys(nextValues).length > 0
-    setBillState(template.state || (hasPrefillNow ? 'FILLED' : 'NEW'))
+    setBillState(template?.state || (hasPrefillNow ? 'FILLED' : 'NEW'))
   }, [template])
 
   // Preload expense types (for expenses) and current values (meters + expenses)
@@ -62,7 +62,7 @@ export function BillForm({
     setMessage(null)
     const tmplItems = Array.isArray(template?.items) ? template.items : []
     // seed with values passed from backend template, if any
-    if (template.values) {
+    if (template?.values) {
       setValues((prev) => ({ ...Object.fromEntries(Object.entries(template.values).map(([k, v]) => [k, String(v)])), ...prev }))
     }
     Promise.all([
@@ -101,6 +101,9 @@ export function BillForm({
           .catch(() => null)
       })
   }, [api, communityId, periodCode, template?.items])
+
+  // Malformed template: bail out here, below every hook, so the hook count never changes.
+  if (!template) return null
 
   const onChange = (key: string, val: string) => setValues((prev) => ({ ...prev, [key]: val }))
 
