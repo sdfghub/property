@@ -66,6 +66,17 @@ export class ReportsService {
    * Measures are not necessarily written every period, so take each unit's most recent value at
    * or before P — that is what "per-period override" means. Units are attached to their billing
    * entity through the temporal membership window.
+   *
+   * Two forward-fallbacks handle injected history, which predates both the first recorded measure
+   * and the first membership window (def.json declares memberships from the current period, while
+   * history is injected per-BE for years before it):
+   *   - no measure at or before P      → the unit's earliest measure
+   *   - no membership covering P       → the unit's earliest membership
+   * CPI is a structural property of the building, not a monthly reading, so reporting 0 for
+   * historical periods would silently zero the column for years. Both fallbacks only fire when
+   * nothing covers P, so a community with real ownership changes is unaffected wherever it has
+   * data — but note that before the first recorded membership a unit is attributed to its
+   * earliest known billing entity.
    */
   private async cpiByBe(communityId: string, seq: number): Promise<Map<string, number>> {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
@@ -74,16 +85,24 @@ export class ReportsService {
            from period_measure pm
            join period p on p.id = pm.period_id
           where pm.community_id = $1 and pm.type_code = 'SQM'
-            and pm.scope_type = 'UNIT' and p.seq <= $2
-          order by pm.scope_id, p.seq desc
+            and pm.scope_type = 'UNIT'
+          order by pm.scope_id,
+                   (p.seq <= $2) desc,                                    -- prefer at-or-before P
+                   case when p.seq <= $2 then -p.seq else p.seq end asc    -- newest before, else oldest after
+       ),
+       mem as (
+         select distinct on (bem.unit_id) bem.unit_id, bem.billing_entity_id
+           from billing_entity_member bem
+           join billing_entity be on be.id = bem.billing_entity_id
+          where be.community_id = $1
+          order by bem.unit_id,
+                   (bem.start_seq <= $2 and (bem.end_seq is null or bem.end_seq >= $2)) desc,
+                   bem.start_seq asc
        )
-       select bem.billing_entity_id as be_id, sum(latest.value)::float8 as cpi
+       select mem.billing_entity_id as be_id, sum(latest.value)::float8 as cpi
          from latest
-         join billing_entity_member bem
-           on bem.unit_id = latest.unit_id
-          and bem.start_seq <= $2
-          and (bem.end_seq is null or bem.end_seq >= $2)
-        group by bem.billing_entity_id`,
+         join mem on mem.unit_id = latest.unit_id
+        group by mem.billing_entity_id`,
       communityId, seq,
     )
     return new Map(rows.map((r) => [r.be_id, Number(r.cpi ?? 0)]))
