@@ -11,6 +11,7 @@ Vite/React frontend, Postgres).
 | [data-reseed.md](./data-reseed.md) | Wiping and rebuilding a community's data from its committed source (Kralik April/May flow + the `rebuild-*.sh` scripts). |
 | [kralik.md](./kralik.md) | Kralik-specific modelling: afisare penalty window, back-penalty forgiveness, apa-dif water split, charge overrides, data caveats. |
 | [deployment.md](./deployment.md) | Shipping to the prod host (`wend` / vicusia.ro): Docker Compose stack, Caddy + Cloudflare, the `push-to-wend.sh` flow. |
+| [reports/collection-rate.md](./reports/collection-rate.md) | The "grad de colectare" report: the owed/paid/outstanding identity, fund domains, CPI, and the deliberate deviations from the source spec. |
 
 > The repo-root `README.md` predates this setup and documents an older AWS/CDK target
 > (ports 3000/5432). Treat the docs in this folder as the source of truth for how the

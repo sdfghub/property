@@ -26,6 +26,7 @@ import { AvizierPanel } from './AvizierPanel'
 import { PenaltyReviewPanel } from './PenaltyReviewPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { GovernancePanel } from './GovernancePanel'
+import { CollectionRatePanel } from './CollectionRatePanel'
 
 export type CommunityAdminTabKey =
   | 'today'
@@ -53,6 +54,7 @@ export type CommunityAdminTabKey =
   | 'health'
   | 'periodFocus'
   | 'periodSettings'
+  | 'collectionRate'
 
 type Props = {
   forceCommunityId?: string
@@ -67,8 +69,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'unpaidInvoices', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'unpaidInvoices', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -220,6 +222,7 @@ export function CommunityAdminDashboard({
         { key: 'debtors', label: t('tab.debtors') || 'Debtors' },
         { key: 'unpaidInvoices', label: t('tab.unpaidInvoices') || 'Unpaid invoices' },
         { key: 'funds', label: t('tab.funds') || 'Funds' },
+        { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
       ],
     },
     {
@@ -645,6 +648,7 @@ export function CommunityAdminDashboard({
               {activeTab === 'avizier' && <AvizierPanel communityId={communityId} cenzorEnabled={features ? features.cenzor !== false : true} />}
               {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
+              {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
               {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
               {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
               {activeTab === 'unpaidInvoices' && <UnpaidInvoicesPanel communityId={communityId} />}

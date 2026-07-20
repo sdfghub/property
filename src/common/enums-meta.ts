@@ -71,6 +71,18 @@ export const WATER_METHOD_META: EnumMeta[] = [
   { key: 'APA_DIF', label: 'Apă - diferență', hint: 'Contorizat + diferență separată (apa-dif)' },
 ]
 
+// Fund domains — the strategic grouping a fund belongs to, read from `Fund.allocation.type`
+// (see data/<COMM>/funds.json). Not a Prisma enum: the value lives in the allocation JSON, so
+// `key` here is the lowercased form and matching is case-insensitive. Funds whose allocation
+// carries no `type` fall back to `other` rather than being dropped from reports.
+// `sortOrder` drives the display order (operational money first, long-horizon funds last).
+export const FUND_DOMAIN_META: (EnumMeta & { sortOrder: number })[] = [
+  { key: 'operational', label: 'Operațional', hint: 'Cheltuieli curente și fond de rulment', sortOrder: 0 },
+  { key: 'tactic', label: 'Tactic', hint: 'Fonduri pe termen mediu (reparații)', sortOrder: 1 },
+  { key: 'strategic', label: 'Strategic', hint: 'Fonduri de investiții pe termen lung (reabilitare)', sortOrder: 2 },
+  { key: 'other', label: 'Altele', hint: 'Fonduri fără domeniu configurat', sortOrder: 9 },
+]
+
 /** Everything the frontend needs to render these taxonomies, served in one payload. */
 export const COMMUNITY_METADATA = {
   roles: ROLE_META,
@@ -82,6 +94,7 @@ export const COMMUNITY_METADATA = {
   audienceTypes: AUDIENCE_TYPE_META,
   meterModes: MEASURE_MODE_META,
   waterMethods: WATER_METHOD_META,
+  fundDomains: FUND_DOMAIN_META,
 }
 
 /** Helper for the validation Sets that used to hardcode their own code lists. */

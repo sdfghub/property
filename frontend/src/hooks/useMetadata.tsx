@@ -14,6 +14,7 @@ export type CommunityMetadata = {
   audienceTypes: EnumMeta[]
   meterModes: EnumMeta[]
   waterMethods: EnumMeta[]
+  fundDomains: (EnumMeta & { sortOrder: number })[]
 }
 
 export const labelOf = (list: EnumMeta[] | undefined, key: string): string =>
