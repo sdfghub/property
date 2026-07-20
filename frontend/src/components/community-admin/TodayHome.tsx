@@ -152,7 +152,7 @@ export function TodayHome({ communityId, onNavigate, viewerRole }: Props) {
           main={money(receivables?.totalDebt)} sub={`${receivables?.debtorCount ?? 0} ${t('today.units', 'units')}`} tone="warn" />
         <Widget title={t('today.unpaidInvoices', 'Unpaid supplier invoices')} onClick={() => onNavigate('unpaidInvoices')}
           main={money(unpaid?.totalOutstanding)} sub={`${unpaid?.count ?? 0} ${t('today.invoices', 'invoices')}`} tone="danger" />
-        <Widget title={t('today.collection', 'Collection this period')}
+        <Widget title={t('today.collection', 'Collection this period')} onClick={() => onNavigate('collectionRate')}
           main={collection?.ratePct == null ? '—' : `${collection.ratePct}%`}
           sub={`${money(collection?.collected)} / ${money(collection?.charged)}`} tone="info" />
         {isAdmin && (
