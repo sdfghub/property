@@ -49,11 +49,14 @@ async function main() {
 
     // 2. The accounting identity, at every level.
     check('identity owed − paid == outstanding (root)', r.checks.identityOk, `residual=${money(r.checks.residual)}`)
-    const badDomain = r.domains.filter((d: any) => Math.abs(d.owed - d.paid - d.outstanding) >= 0.01)
+    // Each level is rounded independently, so a leaf can sit one rounding unit (0.01) off while
+    // the chain is exact at full precision — the root residual above is the real check.
+    const EPS = 0.015
+    const badDomain = r.domains.filter((d: any) => Math.abs(d.owed - d.paid - d.outstanding) >= EPS)
     check('identity holds for every domain', badDomain.length === 0, `${badDomain.length} bad`)
-    const badFund = r.domains.flatMap((d: any) => d.funds).filter((f: any) => Math.abs(f.owed - f.paid - f.outstanding) >= 0.01)
+    const badFund = r.domains.flatMap((d: any) => d.funds).filter((f: any) => Math.abs(f.owed - f.paid - f.outstanding) >= EPS)
     check('identity holds for every fund', badFund.length === 0, `${badFund.length} bad`)
-    const badBe = r.rows.filter((x: any) => Math.abs(x.owed - x.paid - x.outstanding) >= 0.01)
+    const badBe = r.rows.filter((x: any) => Math.abs(x.owed - x.paid - x.outstanding) >= EPS)
     check('identity holds for every billing entity', badBe.length === 0, `${badBe.length} bad`)
 
     // 3. Rollups sum to the totals.
