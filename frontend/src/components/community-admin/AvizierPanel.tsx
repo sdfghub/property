@@ -228,15 +228,15 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
             <thead>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>{t('avizier.entity', 'Apartament')}</th>
-                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Sold precedent')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Restanțe')}</th>
                 {cols.map((col, i) => {
                   if (col.kind === 'cat') return (
                     <th key={`c${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}>{catLabel(col.cat)}</th>
                   )
                   if (col.kind === 'pen') return (
                     <th key={`p${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}
-                      title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Total penalizări acumulate') : t('avizier.penMonthHint', 'Penalizări luna aceasta')} — ${catLabels[col.fund] ?? col.fund}`}>
-                      {col.scope === 'total' ? t('avizier.penTotalShort', 'Pen. total') : t('avizier.penMonthShort', 'Pen. lună')}
+                      title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Penalizări restante (rămase de plată, acumulate)') : t('avizier.penMonthHint', 'Penalizări curente (luna aceasta)')} — ${catLabels[col.fund] ?? col.fund}`}>
+                      {col.scope === 'total' ? t('avizier.penTotalShort', 'Penaliz. restante') : t('avizier.penMonthShort', 'Penaliz. curente')}
                     </th>
                   )
                   return (
@@ -250,7 +250,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     </th>
                   )
                 })}
-                <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.curent', 'Total lună')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{t('avizier.curent', 'Total lună')}</th>
                 <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.incasari', 'Încasări')}</th>
                 {hasAdj && <th style={{ ...TH_WRAP, padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}>{t('avizier.adjustments', 'Ajustări')}</th>}
                 <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{t('avizier.total', 'Total de plată')}</th>
@@ -330,7 +330,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     const single = col.group.categories.length === 1
                     const v = sumCats(r.charges, col.group.categories)
                     return (
-                      <td key={`t${i}`} style={{ padding: '6px 10px', fontWeight: expanded.has(col.group.key) ? 700 : 400 }}>
+                      <td key={`t${i}`} style={{ padding: '6px 10px', fontWeight: col.group.categories.length > 1 ? 700 : 400 }}>
                         {v ? (single ? (
                           <button type="button" onClick={() => openCell(r.beCode, col.group.categories[0])} title={t('avizier.explain', 'Cum s-a calculat?')}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
@@ -340,7 +340,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       </td>
                     )
                   })}
-                  <td style={{ padding: '6px 10px' }}>{money(r.curentTotal)}</td>
+                  <td style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.curentTotal)}</td>
                   <td style={{ padding: '6px 10px' }}>{r.payments ? (
                     <button type="button" onClick={() => openPayments(r.beCode)} title={t('avizier.paymentsLog', 'Jurnal încasări')}
                       style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
@@ -385,7 +385,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
           <div className="card" onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: 460, width: '90%', maxHeight: '80vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0 }}>{t('avizier.soldTitle', 'Sold precedent — pe fonduri')}</h4>
+              <h4 style={{ margin: 0 }}>{t('avizier.soldTitle', 'Restanțe — pe fonduri')}</h4>
               <button className="btn ghost small" onClick={() => setSoldDetail(null)}>✕</button>
             </div>
             <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{soldDetail.data?.beName || soldDetail.be} · {data?.period?.code}</div>
@@ -394,7 +394,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
             ) : soldDetail.data.error ? (
               <div className="badge negative">{t('common.error', 'Error')}</div>
             ) : !(soldDetail.data.rows || []).length ? (
-              <div className="empty">{t('avizier.soldNone', 'Fără sold precedent.')}</div>
+              <div className="empty">{t('avizier.soldNone', 'Fără restanțe.')}</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
                 <tbody>
@@ -581,11 +581,11 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
               <div className="stack" style={{ gap: 12 }}>
                 <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
                   <div className="card soft" style={{ flex: 1, minWidth: 160 }}>
-                    <div className="muted" style={{ fontSize: 12 }}>{t('avizier.penMonth', 'Penalizări luna aceasta')}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{t('avizier.penMonth', 'Penalizări curente')}</div>
                     <strong style={{ fontSize: 18, color: 'var(--danger, #b45309)' }}>{money(penDetail.data.monthTotal)}</strong>
                   </div>
                   <div className="card soft" style={{ flex: 1, minWidth: 160 }}>
-                    <div className="muted" style={{ fontSize: 12 }}>{t('avizier.penTotal', 'Total acumulat')}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{t('avizier.penTotal', 'Penalizări restante')}</div>
                     <strong style={{ fontSize: 18, color: 'var(--danger, #b45309)' }}>{money(penDetail.data.grandTotal)}</strong>
                   </div>
                 </div>
