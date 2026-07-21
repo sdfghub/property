@@ -142,6 +142,12 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
     return () => { alive = false }
   }, [api, communityId, period])
 
+  // #8: apply the community's default view once (first time config arrives); user toggles then stick.
+  const viewInit = React.useRef(false)
+  React.useEffect(() => {
+    if (!viewInit.current && data?.config?.defaultView) { setViewMode(data.config.defaultView); viewInit.current = true }
+  }, [data])
+
   const cats: string[] = data?.categories ?? []
   const rows: any[] = data?.rows ?? []
   const totals = data?.totals
@@ -195,6 +201,10 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const detailed = viewMode === 'fond'
   const midCols = detailed ? cols : []
   const showSuperGroups = hasSuperGroups && detailed
+  // #8 configurator: which INFO columns the community enabled, and how many are visible now.
+  const infoCfg = (data?.config?.info ?? { cpi: true, residents: true, consumption: true }) as { cpi: boolean; residents: boolean; consumption: boolean }
+  const infoVis = { cpi: showInfo && infoCfg.cpi !== false, residents: showInfo && infoCfg.residents !== false, consumption: showInfo && infoCfg.consumption !== false }
+  const infoCount = (infoVis.cpi ? 1 : 0) + (infoVis.residents ? 1 : 0) + (infoVis.consumption ? 1 : 0)
   const sumCats = (charges: Record<string, number>, keys: string[]) => keys.reduce((s, c) => s + (Number(charges?.[c]) || 0), 0)
 
   return (
@@ -276,7 +286,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
             <thead>
               {showSuperGroups && (
                 <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
-                  <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={2 + (showInfo ? 3 : 0)} />
+                  <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={2 + infoCount} />
                   {sgRuns.map((run, i) => (
                     <th key={`sg${i}`} colSpan={run.span}
                       style={{ padding: '4px 10px', textAlign: 'center', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600, color: 'var(--muted, #666)', borderLeft: run.label ? '1px solid var(--border, #e5e5e5)' : 'none' }}>
@@ -288,11 +298,9 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
               )}
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>{t('avizier.entity', 'Apartament')}</th>
-                {showInfo && (<>
-                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}>{t('avizier.cpi', 'CPI')}</th>
-                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.persHint', 'Număr persoane')}>{t('avizier.pers', 'Pers.')}</th>
-                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}>{t('avizier.apa', 'Apă (mc)')}</th>
-                </>)}
+                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}>{t('avizier.cpi', 'CPI')}</th>}
+                {infoVis.residents && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.persHint', 'Număr persoane')}>{t('avizier.pers', 'Pers.')}</th>}
+                {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}>{t('avizier.apa', 'Apă (mc)')}</th>}
                 <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Restanțe')}</th>
                 {midCols.map((col, i) => {
                   if (col.kind === 'cat') return (
@@ -352,11 +360,9 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       )
                     })()}
                   </td>
-                  {showInfo && (<>
-                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.cpi != null ? money(r.cpi) : ''}</td>
-                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.residents != null ? r.residents : ''}</td>
-                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.consumption != null ? money(r.consumption) : ''}</td>
-                  </>)}
+                  {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
+                  {infoVis.residents && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.residents != null ? r.residents : ''}</td>}
+                  {infoVis.consumption && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.consumption != null ? money(r.consumption) : ''}</td>}
                   <td style={{ padding: '6px 10px' }}>
                     {r.soldPrecedent ? (
                       <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.soldDetail', 'Din ce fonduri e compus?')}
@@ -430,11 +436,9 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
               {totals ? (
                 <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)' }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.totalRow', 'TOTAL')}</td>
-                  {showInfo && (<>
-                    <td style={{ padding: '8px 10px' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>
-                    <td style={{ padding: '8px 10px' }}>{totals.residents != null ? totals.residents : ''}</td>
-                    <td style={{ padding: '8px 10px' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>
-                  </>)}
+                  {infoVis.cpi && <td style={{ padding: '8px 10px' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
+                  {infoVis.residents && <td style={{ padding: '8px 10px' }}>{totals.residents != null ? totals.residents : ''}</td>}
+                  {infoVis.consumption && <td style={{ padding: '8px 10px' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>}
                   <td style={{ padding: '8px 10px' }}>{money(totals.soldPrecedent)}</td>
                   {midCols.map((col, i) => col.kind === 'cat' ? (
                     <td key={`c${i}`} style={{ padding: '8px 10px', fontWeight: 400 }}>{money(totals.byCategory?.[col.cat])}</td>

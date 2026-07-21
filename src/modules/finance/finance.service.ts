@@ -1,6 +1,24 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
+
+// #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
+type AvizierConfig = {
+  info: { cpi: boolean; residents: boolean; consumption: boolean }
+  defaultView: 'fond' | 'stare'
+  fundGroupOverrides: Record<string, string> // fund code → avizier super-group key
+  fundGroupLabels: Record<string, string>     // super-group key → label override
+}
+const normalizeAvizierConfig = (raw: any): AvizierConfig => {
+  const info = raw?.info || {}
+  const obj = (v: any) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+  return {
+    info: { cpi: info.cpi !== false, residents: info.residents !== false, consumption: info.consumption !== false },
+    defaultView: raw?.defaultView === 'stare' ? 'stare' : 'fond',
+    fundGroupOverrides: obj(raw?.fundGroupOverrides),
+    fundGroupLabels: obj(raw?.fundGroupLabels),
+  }
+}
 
 /**
  * Read-only community finance signals for the admin "Today" home / command center:
@@ -142,9 +160,30 @@ export class FinanceService {
    * (sold precedent), this-period charges broken down by category (services / funds / penalties),
    * payments, and total due. Categories are ordered services → funds → penalties.
    */
+  /** #8: read the per-community avizier display config (normalized with defaults). */
+  async getAvizierConfig(communityId: string): Promise<AvizierConfig> {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] }, select: { features: true },
+    })
+    return normalizeAvizierConfig(((c?.features as any) || {}).avizierConfig)
+  }
+
+  /** #8: persist the avizier config under Community.features.avizierConfig (merges, other flags survive). */
+  async setAvizierConfig(communityId: string, body: any): Promise<AvizierConfig> {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] }, select: { id: true, features: true },
+    })
+    if (!c) throw new NotFoundException('Community not found')
+    const features = ((c.features as any) || {})
+    const next = normalizeAvizierConfig({ ...(features.avizierConfig || {}), ...body })
+    await this.prisma.community.update({ where: { id: c.id }, data: { features: { ...features, avizierConfig: next } } })
+    return next
+  }
+
   async avizier(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { period: null, categories: [], rows: [], totals: null }
+    const cfg = await this.getAvizierConfig(communityId)
     const p = await this.prisma.period.findUnique({
       where: { id: period.id },
       select: { code: true, status: true, dueDate: true, afisareDate: true, seq: true },
@@ -344,17 +383,20 @@ export class FinanceService {
     // strategic (reabilitare) funds → Fond Reabilitare, everything else → Fond Operațional. Derived
     // from the fund's domain (allocation.type), not per-code hardcoded.
     const superGroupMeta = new Map(AVIZIER_FUND_GROUP_META.map((g) => [g.key, g]))
+    // #8: an admin-set override (config.fundGroupOverrides[fundCode]) wins over the domain-derived bucket.
     const superGroupKeyOf = (groupKey: string) =>
-      groupKey === 'EXPENSES' ? 'intretinere'
-        : groupKey === 'PENALIZARI' ? 'penalizari'
-          : fundDomain.get(groupKey) === 'strategic' ? 'reabilitare'
-            : 'operational'
+      cfg.fundGroupOverrides[groupKey]
+        ?? (groupKey === 'EXPENSES' ? 'intretinere'
+          : groupKey === 'PENALIZARI' ? 'penalizari'
+            : fundDomain.get(groupKey) === 'strategic' ? 'reabilitare'
+              : 'operational')
+    const sgLabelOf = (sgKey: string, fallback: string) => cfg.fundGroupLabels[sgKey] ?? superGroupMeta.get(sgKey)?.label ?? fallback
     const groupMap = new Map<string, { key: string; label: string; superGroup: { key: string; label: string }; categories: string[] }>()
     for (const c of categories) {
       const g = catToGroup.get(c) || { key: 'ALTELE', label: 'Altele' }
       const sgKey = superGroupKeyOf(g.key)
       const entry = groupMap.get(g.key)
-        ?? { key: g.key, label: g.label, superGroup: { key: sgKey, label: superGroupMeta.get(sgKey)?.label ?? g.label }, categories: [] }
+        ?? { key: g.key, label: g.label, superGroup: { key: sgKey, label: sgLabelOf(sgKey, g.label) }, categories: [] }
       entry.categories.push(c)
       groupMap.set(g.key, entry)
     }
@@ -429,7 +471,7 @@ export class FinanceService {
     const groupOrder = new Map(groups.map((g, i) => [g.key, i]))
     const penaltyFunds = [...penaltyFundSet].sort((a, b) => (groupOrder.get(a) ?? 99) - (groupOrder.get(b) ?? 99))
 
-    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, penaltyFunds, rows, totals }
+    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, rows, totals }
   }
 
   /**

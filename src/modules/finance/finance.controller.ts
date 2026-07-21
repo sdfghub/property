@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, Req, UseGuards } from '@nestjs/common'
+import { Controller, Get, Patch, Post, Param, Query, Body, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
@@ -32,6 +32,20 @@ export class FinanceController {
   @Get('avizier')
   avizier(@Param('communityId') c: string, @Query('period') period?: string) {
     return this.finance.avizier(c, period)
+  }
+
+  // #8 Avizier configurator — per-community display config (INFO columns, default view, fund-group
+  // labels & membership overrides), persisted under Community.features.avizierConfig.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier-config')
+  getAvizierConfig(@Param('communityId') c: string) {
+    return this.finance.getAvizierConfig(c)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Patch('avizier-config')
+  setAvizierConfig(@Param('communityId') c: string, @Body() body: any) {
+    return this.finance.setAvizierConfig(c, body)
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
