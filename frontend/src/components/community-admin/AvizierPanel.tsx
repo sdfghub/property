@@ -57,6 +57,8 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const [soldDetail, setSoldDetail] = React.useState<{ be: string; data: any } | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [showInfo, setShowInfo] = React.useState(true) // #7 INFO columns (CPI / persoane / consum apă)
+  const [publicMode, setPublicMode] = React.useState(false) // #10 GDPR: hide owner names (posted/exported view)
+  const [viewMode, setViewMode] = React.useState<'fond' | 'stare' | 'risc'>('fond') // #5/#14 avizier views
 
   const openSold = (beCode: string) => {
     setSoldDetail({ be: beCode, data: null })
@@ -187,6 +189,12 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
     else sgRuns.push({ key, label, span: 1 })
   }
   const hasSuperGroups = cols.some((c) => c.sg?.label) && new Set(cols.map((c) => c.sg?.key ?? '_')).size > 1
+  // #5/#14 views: "Per fond" shows the full fund/service breakdown; "Per stare" collapses it to just
+  // Restanțe (arrears) vs Curente (this month) — the fund columns and super-group band drop out, the
+  // Restanțe / Total lună / Încasări / Total de plată columns stay. "Per risc" is deferred (Phase 4, #13).
+  const detailed = viewMode === 'fond'
+  const midCols = detailed ? cols : []
+  const showSuperGroups = hasSuperGroups && detailed
   const sumCats = (charges: Record<string, number>, keys: string[]) => keys.reduce((s, c) => s + (Number(charges?.[c]) || 0), 0)
 
   return (
@@ -204,6 +212,11 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           {data?.period?.afisareDate ? <span className="muted">{t('avizier.afisare', 'Data afișare')}: {new Date(data.period.afisareDate).toLocaleDateString('ro-RO')}</span> : null}
           {data?.period?.dueDate ? <span className="muted">{t('avizier.due', 'Scadență')}: {new Date(data.period.dueDate).toLocaleDateString('ro-RO')}</span> : null}
+          <select className="input" value={viewMode} onChange={(e) => setViewMode(e.target.value as any)} title={t('avizier.viewTitle', 'Mod de afișare')}>
+            <option value="fond">{t('avizier.viewFond', 'Per fond')}</option>
+            <option value="stare">{t('avizier.viewStare', 'Per stare (curent/restant)')}</option>
+            <option value="risc" disabled>{t('avizier.viewRisc', 'Per risc (în curând)')}</option>
+          </select>
           <button
             type="button"
             className="btn ghost small"
@@ -212,6 +225,15 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
             aria-pressed={showInfo}
           >
             {showInfo ? '☑ ' : '☐ '}{t('avizier.info', 'Info')}
+          </button>
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => setPublicMode((v) => !v)}
+            title={t('avizier.publicToggle', 'Mod public: ascunde numele proprietarilor (GDPR) pentru afișare/print')}
+            aria-pressed={publicMode}
+          >
+            {publicMode ? '🙈 ' : '👁 '}{publicMode ? t('avizier.publicOn', 'Public') : t('avizier.publicOff', 'Nume')}
           </button>
           <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
             {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
@@ -252,7 +274,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
         <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              {hasSuperGroups && (
+              {showSuperGroups && (
                 <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                   <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={2 + (showInfo ? 3 : 0)} />
                   {sgRuns.map((run, i) => (
@@ -272,7 +294,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}>{t('avizier.apa', 'Apă (mc)')}</th>
                 </>)}
                 <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Restanțe')}</th>
-                {cols.map((col, i) => {
+                {midCols.map((col, i) => {
                   if (col.kind === 'cat') return (
                     <th key={`c${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}>{catLabel(col.cat)}</th>
                   )
@@ -293,7 +315,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     </th>
                   )
                 })}
-                <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{t('avizier.curent', 'Total lună')}</th>
+                <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{detailed ? t('avizier.curent', 'Total lună') : t('avizier.curente', 'Curente')}</th>
                 <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.incasari', 'Încasări')}</th>
                 {hasAdj && <th style={{ ...TH_WRAP, padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}>{t('avizier.adjustments', 'Ajustări')}</th>}
                 <th style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}>{t('avizier.total', 'Total de plată')}</th>
@@ -308,7 +330,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                   style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
                   <td style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : 'var(--bg, #fff)',
                       maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                    title={(() => { const l = beLabel(r); return `${l.primary}${l.secondary ? ' · ' + l.secondary : ''}` })()}>
+                    title={(() => { const l = beLabel(r, { publicMode }); return `${l.primary}${l.secondary ? ' · ' + l.secondary : ''}` })()}>
                     {editBe?.be === r.beCode ? (
                       <span className="row" style={{ gap: 4, alignItems: 'center' }}>
                         <input className="input" autoFocus value={editBe.value} placeholder={beLabel({ ...r, displayName: null }).primary}
@@ -318,12 +340,12 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                         <button type="button" className="btn ghost small" onClick={saveDisplayName} title={t('common.save', 'Salvează')}>✓</button>
                       </span>
                     ) : (() => {
-                      const l = beLabel(r)
+                      const l = beLabel(r, { publicMode })
                       return (
                         <span>
                           <span style={{ fontWeight: 600 }}>{l.primary}</span>
                           {l.secondary ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{l.secondary}</span> : null}
-                          {isAdmin && hov ? <button type="button" title={t('avizier.rename', 'Redenumește')}
+                          {isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.rename', 'Redenumește')}
                             onClick={() => setEditBe({ be: r.beCode, value: r.displayName || '' })}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 6, padding: 0 }}>✎</button> : null}
                         </span>
@@ -343,7 +365,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       </button>
                     ) : ''}
                   </td>
-                  {cols.map((col, i) => {
+                  {midCols.map((col, i) => {
                     if (col.kind === 'cat') {
                       const v = r.charges[col.cat]
                       return (
@@ -414,7 +436,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                     <td style={{ padding: '8px 10px' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>
                   </>)}
                   <td style={{ padding: '8px 10px' }}>{money(totals.soldPrecedent)}</td>
-                  {cols.map((col, i) => col.kind === 'cat' ? (
+                  {midCols.map((col, i) => col.kind === 'cat' ? (
                     <td key={`c${i}`} style={{ padding: '8px 10px', fontWeight: 400 }}>{money(totals.byCategory?.[col.cat])}</td>
                   ) : col.kind === 'pen' ? (
                     <td key={`p${i}`} style={{ padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}>{money(totals.penaltyByFund?.[col.fund]?.[col.scope])}</td>
