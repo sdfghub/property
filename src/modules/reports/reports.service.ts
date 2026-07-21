@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
-import { FUND_DOMAIN_META } from '../../common/enums-meta'
+import { FUND_DOMAIN_META, RISK_TIER_META } from '../../common/enums-meta'
 
 /**
  * Reports built on top of the already-computed statement snapshots.
@@ -327,6 +327,91 @@ export class ReportsService {
         identityOk: Math.abs(totals.owed - totals.paid - totals.outstanding) < 0.01,
         residual: round2(totals.owed - totals.paid - totals.outstanding),
       },
+    }
+  }
+
+  /**
+   * Risk exposure (#13): classify each billing entity by how old its oldest unpaid arrear is,
+   * measured in days overdue from the scadență (due date) through the target period's end. The age
+   * comes from the penalty-aging ledger — each OPEN `PenaltyBucket` (one per penalizable due) whose
+   * latest `principalRemaining` is still > 0 — so it reflects debt that is actually tracked for
+   * aging (the penalty-bearing funds). The max age over a BE's open buckets maps to a tier:
+   * 0–30 fără risc · 31–59 penalități · 60–119 sarcină în CF · ≥120 acțiune în instanță.
+   *
+   * Note: arrears in non-penalty funds carry no per-origination aging, so they don't add buckets
+   * here; this is an aging view of penalized debt, a companion to the collection-rate outstanding.
+   */
+  async riskExposure(communityId: string, periodCode?: string) {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    const tiers = RISK_TIER_META
+    if (!period) return { period: null, tiers: tiers.map((t) => ({ ...t, count: 0, outstanding: 0 })), rows: [], totals: { count: 0, outstanding: 0 }, riskTiers: tiers }
+
+    const pSeq = Number(period.seq)
+    const per = await this.prisma.period.findUnique({ where: { id: period.id }, select: { endDate: true } })
+    const endDate = per?.endDate ? new Date(per.endDate) : new Date()
+
+    // latest principal_remaining per bucket at-or-before P, joined to its OPEN bucket's due date.
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `with latest as (
+         select distinct on (pbp.bucket_id) pbp.bucket_id, pbp.principal_remaining::float8 as rem
+           from penalty_bucket_period pbp
+           join period pr on pr.id = pbp.period_id
+          where pr.community_id = $1 and pr.seq <= $2
+          order by pbp.bucket_id, pr.seq desc
+       )
+       select pb.billing_entity_id as "beId", pb.due_date as "dueDate", latest.rem as "rem"
+         from penalty_bucket pb
+         join latest on latest.bucket_id = pb.id
+        where pb.community_id = $1 and pb.status = 'OPEN' and latest.rem > 0.005`,
+      communityId, pSeq,
+    )
+
+    const DAY = 24 * 60 * 60 * 1000
+    const daysOverdue = (due: Date | null) => (!due || due >= endDate ? 0 : Math.floor((endDate.getTime() - due.getTime()) / DAY))
+    const tierOf = (days: number) => tiers.find((t) => t.maxDays == null || days <= t.maxDays) ?? tiers[tiers.length - 1]
+
+    // reduce each BE to its oldest open arrear + total penalized principal remaining
+    const byBe = new Map<string, { days: number; outstanding: number }>()
+    for (const r of rows) {
+      const d = daysOverdue(r.dueDate ? new Date(r.dueDate) : null)
+      const cur = byBe.get(r.beId) ?? { days: 0, outstanding: 0 }
+      cur.days = Math.max(cur.days, d)
+      cur.outstanding = round2(cur.outstanding + Number(r.rem))
+      byBe.set(r.beId, cur)
+    }
+
+    const bes = await this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true, displayName: true, order: true } })
+    const members = await this.prisma.billingEntityMember.findMany({
+      where: { billingEntity: { communityId }, startSeq: { lte: pSeq }, OR: [{ endSeq: null }, { endSeq: { gte: pSeq } }] },
+      select: { billingEntityId: true, unit: { select: { code: true } } },
+    })
+    const unitsByBe = new Map<string, string[]>()
+    members.forEach((m) => { if (m.unit) { const a = unitsByBe.get(m.billingEntityId) ?? []; a.push(m.unit.code); unitsByBe.set(m.billingEntityId, a) } })
+
+    const outRows = bes
+      .map((be) => {
+        const v = byBe.get(be.id)
+        if (!v || v.outstanding <= 0.005) return null
+        const tier = tierOf(v.days)
+        return {
+          beCode: be.code, beName: be.name, displayName: be.displayName ?? null, units: unitsByBe.get(be.id) ?? [],
+          order: be.order, oldestArrearDays: v.days, tier: tier.key, tierLabel: tier.label, action: tier.action, outstanding: round2(v.outstanding),
+        }
+      })
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .sort((a, b) => b.oldestArrearDays - a.oldestArrearDays || b.outstanding - a.outstanding)
+
+    const tierSummary = tiers.map((t) => {
+      const inTier = outRows.filter((r) => r.tier === t.key)
+      return { ...t, count: inTier.length, outstanding: round2(inTier.reduce((s, r) => s + r.outstanding, 0)) }
+    })
+
+    return {
+      period: { code: period.code, seq: pSeq, status: period.status, endDate },
+      tiers: tierSummary,
+      rows: outRows,
+      totals: { count: outRows.length, outstanding: round2(outRows.reduce((s, r) => s + r.outstanding, 0)) },
+      riskTiers: tiers,
     }
   }
 }

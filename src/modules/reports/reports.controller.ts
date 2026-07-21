@@ -22,4 +22,14 @@ export class ReportsController {
   ) {
     return this.reports.collectionRate(c, period, domain)
   }
+
+  /**
+   * Risk exposure ("risc de expunere"): each billing entity's oldest unpaid arrear age → risk tier
+   * (fără risc / penalități / sarcină în CF / acțiune în instanță), measured from the scadență.
+   */
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('risk')
+  riskExposure(@Param('communityId') c: string, @Query('period') period?: string) {
+    return this.reports.riskExposure(c, period)
+  }
 }
