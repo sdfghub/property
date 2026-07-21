@@ -2,6 +2,7 @@ import React from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { FundDetails } from '../FundDetails'
 import { useAuth } from '../../hooks/useAuth'
+import { FundEditor } from './FundEditor'
 
 type Props = {
   funds: any[]
@@ -287,6 +288,9 @@ export function FundsTab({ funds, fundError, communityCode, onRefreshFunds, read
           </button>
         </div>
       </div>
+      )}
+      {!readOnly && communityCode && (
+        <FundEditor communityCode={communityCode} fund={activeFund ?? null} onSaved={onRefreshFunds} />
       )}
       {!fundError && funds.length > 0 ? (
         <div className="stack">
