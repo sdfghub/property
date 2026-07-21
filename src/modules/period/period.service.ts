@@ -383,6 +383,7 @@ export class PeriodService {
         code: period.code,
         status: period.status,
         dueDate: period.dueDate,
+        afisareDate: (period as any).afisareDate ?? null,
         startDate: period.startDate,
         endDate: period.endDate,
         preparedAt: period.preparedAt,
@@ -409,6 +410,16 @@ export class PeriodService {
       if (body.dueDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid dueDate')
       await this.prisma.period.update({ where: { id: period.id }, data: { dueDate: d } })
       out.dueDate = d
+    }
+
+    if (body?.afisareDate !== undefined) {
+      // Data afișare (#1): the notice's posting date. It also anchors the penalty accrual window
+      // (prev.afisareDate+1 .. afisareDate), so changing it on a CLOSED period would rewrite history.
+      if (period.status === 'CLOSED') throw new BadRequestException('Cannot change afișare date on a closed period')
+      const d = body.afisareDate ? new Date(body.afisareDate) : null
+      if (body.afisareDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid afisareDate')
+      await this.prisma.period.update({ where: { id: period.id }, data: { afisareDate: d } })
+      out.afisareDate = d
     }
 
     if (body?.graceDays !== undefined && body.graceDays !== null) {

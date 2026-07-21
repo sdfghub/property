@@ -6,7 +6,7 @@ import { UnitAttributesTable } from './UnitAttributesTable'
 type PenaltyFund = { code: string; name: string; penaltyFundCode: string; ratePerDayPct: number; stamped: boolean }
 type Settings = {
   period: {
-    code: string; status: string; dueDate: string | null; startDate: string; endDate: string
+    code: string; status: string; dueDate: string | null; afisareDate: string | null; startDate: string; endDate: string
     preparedAt: string | null; closedAt: string | null; editable: boolean
   }
   graceDays: number
@@ -25,6 +25,7 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
   const [code, setCode] = React.useState<string>('')
   const [s, setS] = React.useState<Settings | null>(null)
   const [dueDate, setDueDate] = React.useState<string>('')
+  const [afisareDate, setAfisareDate] = React.useState<string>('')
   const [graceDays, setGraceDays] = React.useState<string>('')
   const [rates, setRates] = React.useState<Record<string, string>>({})
   const [busy, setBusy] = React.useState(false)
@@ -51,6 +52,7 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
       .then((data: Settings) => {
         setS(data)
         setDueDate(data.period.dueDate ? String(data.period.dueDate).slice(0, 10) : '')
+        setAfisareDate(data.period.afisareDate ? String(data.period.afisareDate).slice(0, 10) : '')
         setGraceDays(String(data.graceDays ?? ''))
         setRates(Object.fromEntries(data.penaltyFunds.map((f) => [f.code, String(f.ratePerDayPct)])))
       })
@@ -66,6 +68,7 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
       const body: any = { graceDays: Number(graceDays) }
       if (editable) {
         body.dueDate = dueDate || null
+        body.afisareDate = afisareDate || null
         body.penaltyRates = Object.fromEntries(
           s.penaltyFunds.filter((f) => !f.stamped).map((f) => [f.code, Number(rates[f.code] ?? f.ratePerDayPct)]),
         )
@@ -99,6 +102,11 @@ export function PeriodSettingsPanel({ communityId, readOnly }: { communityId: st
           </div>
 
           <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+            <div className="stack" style={{ gap: 2 }}>
+              <label className="label">{t('periodSettings.afisareDate', 'Data afișare')}</label>
+              <input type="date" value={afisareDate} disabled={!editable} onChange={(e) => setAfisareDate(e.target.value)} />
+              <span className="muted" style={{ fontSize: 11 }}>{t('periodSettings.afisareHint', 'data publicării avizierului')}</span>
+            </div>
             <div className="stack" style={{ gap: 2 }}>
               <label className="label">{t('periodSettings.dueDate', 'Scadență')}</label>
               <input type="date" value={dueDate} disabled={!editable} onChange={(e) => setDueDate(e.target.value)} />

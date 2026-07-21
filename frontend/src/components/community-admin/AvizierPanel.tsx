@@ -56,6 +56,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const toggleGroup = (k: string) => setExpanded((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const [soldDetail, setSoldDetail] = React.useState<{ be: string; data: any } | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
+  const [showInfo, setShowInfo] = React.useState(true) // #7 INFO columns (CPI / persoane / consum apă)
 
   const openSold = (beCode: string) => {
     setSoldDetail({ be: beCode, data: null })
@@ -145,7 +146,11 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const hasAdj = Math.abs(Number(totals?.adjustments ?? 0)) > 0.005
 
   // Group category columns under their owning fund; each group is a collapsible total column.
-  const groups: { key: string; label: string; categories: string[] }[] =
+  // `superGroup` is the coarse avizier bucket (#2: Întreținere / Fond Operațional / Fond Reabilitare)
+  // the backend assigns each fund group, used to band the columns under a spanning header row.
+  type SuperGroup = { key: string; label: string }
+  type Group = { key: string; label: string; superGroup?: SuperGroup; categories: string[] }
+  const groups: Group[] =
     data?.groups ?? cats.map((c) => ({ key: c, label: catLabel(c), categories: [c] }))
   const penaltyFunds: string[] = data?.penaltyFunds ?? []
   const canOverride = isAdmin && data?.period?.status === 'PREPARED'
@@ -153,24 +158,35 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const catLabels: Record<string, string> = (data as any)?.categoryLabels ?? {}
   const catLabel = (c: string) => (c.startsWith('PEN:') ? `Penaliz. ${catLabels[c.slice(4)] ?? c.slice(4)}` : (catLabels[c] ?? c))
   type Col =
-    | { kind: 'cat'; cat: string }
-    | { kind: 'total'; group: { key: string; label: string; categories: string[] } }
-    | { kind: 'pen'; fund: string; scope: 'month' | 'total' }
+    | { kind: 'cat'; cat: string; sg?: SuperGroup }
+    | { kind: 'total'; group: Group; sg?: SuperGroup }
+    | { kind: 'pen'; fund: string; scope: 'month' | 'total'; sg?: SuperGroup }
   const cols: Col[] = []
   for (const g of groups) {
+    const sg = g.superGroup
     const isMulti = g.categories.length > 1
     if (isMulti && expanded.has(g.key)) {
-      g.categories.forEach((c) => cols.push({ kind: 'cat', cat: c }))
-      cols.push({ kind: 'total', group: g })
+      g.categories.forEach((c) => cols.push({ kind: 'cat', cat: c, sg }))
+      cols.push({ kind: 'total', group: g, sg })
     } else {
-      cols.push({ kind: 'total', group: g })
+      cols.push({ kind: 'total', group: g, sg })
     }
     // a fund's penalties (this month + cumulative) sit immediately to the right of the fund's column
     if (penaltyFunds.includes(g.key)) {
-      cols.push({ kind: 'pen', fund: g.key, scope: 'month' })
-      cols.push({ kind: 'pen', fund: g.key, scope: 'total' })
+      cols.push({ kind: 'pen', fund: g.key, scope: 'month', sg })
+      cols.push({ kind: 'pen', fund: g.key, scope: 'total', sg })
     }
   }
+  // #2: contiguous runs of columns sharing a super-group, for the spanning header band.
+  const sgRuns: { key: string; label: string; span: number }[] = []
+  for (const col of cols) {
+    const key = col.sg?.key ?? '_'
+    const label = col.sg?.label ?? ''
+    const last = sgRuns[sgRuns.length - 1]
+    if (last && last.key === key) last.span++
+    else sgRuns.push({ key, label, span: 1 })
+  }
+  const hasSuperGroups = cols.some((c) => c.sg?.label) && new Set(cols.map((c) => c.sg?.key ?? '_')).size > 1
   const sumCats = (charges: Record<string, number>, keys: string[]) => keys.reduce((s, c) => s + (Number(charges?.[c]) || 0), 0)
 
   return (
@@ -186,7 +202,17 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
           {data?.period?.status ? <span className={`badge ${data.period.status === 'CLOSED' ? 'secondary' : 'tertiary'}`} style={{ marginLeft: 8 }}>{data.period.status}</span> : null}
         </h4>
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          {data?.period?.afisareDate ? <span className="muted">{t('avizier.afisare', 'Data afișare')}: {new Date(data.period.afisareDate).toLocaleDateString('ro-RO')}</span> : null}
           {data?.period?.dueDate ? <span className="muted">{t('avizier.due', 'Scadență')}: {new Date(data.period.dueDate).toLocaleDateString('ro-RO')}</span> : null}
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => setShowInfo((v) => !v)}
+            title={t('avizier.infoToggle', 'Arată/ascunde coloanele informative (CPI, persoane, consum apă)')}
+            aria-pressed={showInfo}
+          >
+            {showInfo ? '☑ ' : '☐ '}{t('avizier.info', 'Info')}
+          </button>
           <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
             {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
           </select>
@@ -226,8 +252,25 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
         <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
+              {hasSuperGroups && (
+                <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
+                  <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={2 + (showInfo ? 3 : 0)} />
+                  {sgRuns.map((run, i) => (
+                    <th key={`sg${i}`} colSpan={run.span}
+                      style={{ padding: '4px 10px', textAlign: 'center', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600, color: 'var(--muted, #666)', borderLeft: run.label ? '1px solid var(--border, #e5e5e5)' : 'none' }}>
+                      {run.label}
+                    </th>
+                  ))}
+                  <th colSpan={3 + (hasAdj ? 1 : 0)} />
+                </tr>
+              )}
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>{t('avizier.entity', 'Apartament')}</th>
+                {showInfo && (<>
+                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}>{t('avizier.cpi', 'CPI')}</th>
+                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.persHint', 'Număr persoane')}>{t('avizier.pers', 'Pers.')}</th>
+                  <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}>{t('avizier.apa', 'Apă (mc)')}</th>
+                </>)}
                 <th style={{ ...TH_WRAP, padding: '8px 10px' }}>{t('avizier.soldPrec', 'Restanțe')}</th>
                 {cols.map((col, i) => {
                   if (col.kind === 'cat') return (
@@ -287,6 +330,11 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
                       )
                     })()}
                   </td>
+                  {showInfo && (<>
+                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.cpi != null ? money(r.cpi) : ''}</td>
+                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.residents != null ? r.residents : ''}</td>
+                    <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.consumption != null ? money(r.consumption) : ''}</td>
+                  </>)}
                   <td style={{ padding: '6px 10px' }}>
                     {r.soldPrecedent ? (
                       <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.soldDetail', 'Din ce fonduri e compus?')}
@@ -360,6 +408,11 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
               {totals ? (
                 <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)' }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.totalRow', 'TOTAL')}</td>
+                  {showInfo && (<>
+                    <td style={{ padding: '8px 10px' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>
+                    <td style={{ padding: '8px 10px' }}>{totals.residents != null ? totals.residents : ''}</td>
+                    <td style={{ padding: '8px 10px' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>
+                  </>)}
                   <td style={{ padding: '8px 10px' }}>{money(totals.soldPrecedent)}</td>
                   {cols.map((col, i) => col.kind === 'cat' ? (
                     <td key={`c${i}`} style={{ padding: '8px 10px', fontWeight: 400 }}>{money(totals.byCategory?.[col.cat])}</td>

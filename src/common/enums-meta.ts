@@ -83,6 +83,21 @@ export const FUND_DOMAIN_META: (EnumMeta & { sortOrder: number })[] = [
   { key: 'other', label: 'Altele', hint: 'Fonduri fără domeniu configurat', sortOrder: 9 },
 ]
 
+// Avizier fund grouping — the coarse buckets the avizier groups its fund columns under, distinct
+// from the report's FUND_DOMAIN_META (which is a 4-way strategic taxonomy). Here services
+// (Întreținere) and penalties stand apart, and the remaining contribution funds collapse into just
+// two buckets the way owners read the notice: operating funds vs. rehabilitation funds. Note the
+// intended mapping puts REPARATII (a Tactic fund in FUND_DOMAIN_META) under `operational`, so this
+// is deliberately its own taxonomy. Membership is derived (not per-code hardcoded): a contribution
+// fund whose domain is `strategic` → `reabilitare`, otherwise → `operational`; the services fund and
+// the penalties fund get their own buckets.
+export const AVIZIER_FUND_GROUP_META: (EnumMeta & { sortOrder: number })[] = [
+  { key: 'intretinere', label: 'Întreținere', hint: 'Servicii curente (cheltuieli lunare)', sortOrder: 0 },
+  { key: 'operational', label: 'Fond Operațional', hint: 'Rulment, reparații', sortOrder: 1 },
+  { key: 'reabilitare', label: 'Fond Reabilitare', hint: 'Proiectare + reabilitare, pod + fațadă, reabilitare 3', sortOrder: 2 },
+  { key: 'penalizari', label: 'Penalizări', hint: 'Penalizări de întârziere, pe fond', sortOrder: 9 },
+]
+
 /** Everything the frontend needs to render these taxonomies, served in one payload. */
 export const COMMUNITY_METADATA = {
   roles: ROLE_META,
@@ -95,6 +110,7 @@ export const COMMUNITY_METADATA = {
   meterModes: MEASURE_MODE_META,
   waterMethods: WATER_METHOD_META,
   fundDomains: FUND_DOMAIN_META,
+  avizierFundGroups: AVIZIER_FUND_GROUP_META,
 }
 
 /** Helper for the validation Sets that used to hardcode their own code lists. */
