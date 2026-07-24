@@ -142,8 +142,11 @@ async function main() {
     // chain by a cent and make `owed − paid == outstanding` fail for every later period.
     const dueStart = source.get(k) ?? 0
     const dueEnd = target.get(k) ?? 0
-    // PENALIZARI is computed elsewhere (not billed here), so it carries no real "charge".
-    const charges = fundCode === 'PENALIZARI' ? 0 : (marchCharge.get(k) ?? 0)
+    // PENALIZARI is computed elsewhere (not billed here). REABILITARE_1 (Proiect+Reabilitare) has no
+    // real monthly billing — its March `-Lună` row is a per-unit REALLOCATION (e.g. SAD 1 +15,717,
+    // SAD 2/1 −13,482 …) that nets to ~3 and doesn't move any balance; it's already carried in the
+    // arrears, so booking it as a charge would double-count and force spurious offsetting flows.
+    const charges = (fundCode === 'PENALIZARI' || fundCode === 'REABILITARE_1') ? 0 : (marchCharge.get(k) ?? 0)
     // net = dueStart + charges − dueEnd. Split the residual the way the seed does (seed-kralik-april-may:
     // 126-137) — explicit, reasoned entries, not a blind plug:
     //  · PENALIZARI residual is never a "payment" — it's a forgiveness (scutire-penalizari).
