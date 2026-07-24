@@ -782,4 +782,44 @@ export class CommunityService {
       },
     }
   }
+
+  /** #11 Configurare Asociație: the association's general settings (name, timezone, grace days). */
+  async getSettings(communityId: string) {
+    const community = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { code: true, name: true, timezone: true, penaltyGraceDays: true },
+    })
+    if (!community) throw new NotFoundException('Community not found')
+    return community
+  }
+
+  /** #11: update the association's general settings (admin). Only provided keys are applied; `code`
+   *  is immutable. `penaltyGraceDays` is the same Community scalar the period-settings panel edits. */
+  async updateSettings(communityId: string, body: any) {
+    const community = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { id: true },
+    })
+    if (!community) throw new NotFoundException('Community not found')
+    const data: any = {}
+    if (body?.name !== undefined) {
+      const name = String(body.name).trim()
+      if (!name) throw new BadRequestException('name is required')
+      data.name = name
+    }
+    if (body?.timezone !== undefined) {
+      const tz = String(body.timezone).trim()
+      if (!tz) throw new BadRequestException('timezone is required')
+      try { new Intl.DateTimeFormat('en-US', { timeZone: tz }) } catch { throw new BadRequestException(`Invalid timezone: ${tz}`) }
+      data.timezone = tz
+    }
+    if (body?.penaltyGraceDays !== undefined && body.penaltyGraceDays !== null) {
+      const g = Math.round(Number(body.penaltyGraceDays))
+      if (!Number.isFinite(g) || g < 0 || g > 365) throw new BadRequestException('penaltyGraceDays must be 0–365')
+      data.penaltyGraceDays = g
+    }
+    if (Object.keys(data).length === 0) throw new BadRequestException('No settings provided')
+    await this.prisma.community.update({ where: { id: community.id }, data })
+    return this.getSettings(community.id)
+  }
 }

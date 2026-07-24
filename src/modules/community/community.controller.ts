@@ -50,6 +50,19 @@ export class CommunityController {
     return this.svc.listCommunityRoles(communityId)
   }
 
+  // #11 Configurare Asociație — general association settings (name, timezone, penalty grace days).
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get(':communityId/settings')
+  async getSettings(@Param('communityId') communityId: string) {
+    return this.svc.getSettings(communityId)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Patch(':communityId/settings')
+  async updateSettings(@Param('communityId') communityId: string, @Body() body: any) {
+    return this.svc.updateSettings(communityId, body)
+  }
+
   @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Delete(':communityId/roles/:userId/:role')
   async removeRole(
