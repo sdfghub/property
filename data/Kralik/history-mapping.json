@@ -1,56 +1,189 @@
 {
-  "_doc": "Maps an external history export (matrix.csv + penalties.csv) onto this community. Reusable: another association supplies its own mapping. Units auto-match the export column label to a def.json unit by name (minus an optional prefix); overrides handle mismatches. Every metric (Cheltuiala) must be classified or the parser reports it (no inference).",
-  "unitLabelPrefix": "AP ",
-  "_unification": "Multiple export columns may map to ONE unit code (units merged over time); the parser SUMS them. E.g. the three '12 (SAD 4/*)' columns and both 'SAD 2/2' columns each collapse into a single surviving unit.",
-  "unitOverrides": {
-    "SP COM": "400191-C1-U23-SPAȚIU COMERCIAL",
-    "SAD 2/2 (2)": "400191-C1-U17-SAD 2/2"
+ "_doc": "Maps an external history export (matrix.csv + penalties.csv) onto this community. Reusable: another association supplies its own mapping. Units auto-match the export column label to a def.json unit by name (minus an optional prefix); overrides handle mismatches. Every metric (Cheltuiala) must be classified or the parser reports it (no inference).",
+ "unitLabelPrefix": "AP ",
+ "_unification": "Multiple export columns may map to ONE unit code (units merged over time); the parser SUMS them. E.g. the three '12 (SAD 4/*)' columns and both 'SAD 2/2' columns each collapse into a single surviving unit.",
+ "unitOverrides": {
+  "SP COM": "400191-C1-U23-SPAȚIU COMERCIAL",
+  "SAD 2/2 (2)": "400191-C1-U17-SAD 2/2"
+ },
+ "metrics": {
+  "Nr. Ap.": {
+   "kind": "ignore"
   },
-  "metrics": {
-    "Nr. Ap.": { "kind": "ignore" },
-    "Nume Proprietar": { "kind": "ignore" },
-    "CPI (SUP)": { "kind": "driver", "driver": "cpi" },
-    "Pers. Prez.": { "kind": "driver", "driver": "residents" },
-    "Apa rece-Consum(m³)": { "kind": "driver", "driver": "water_cold" },
-
-    "Apa rece-Val(lei)": { "kind": "charge", "fund": "EXPENSES", "service": "APA_RECE" },
-    "Apa rece-Val Dif(lei)": { "kind": "charge", "fund": "EXPENSES", "service": "APA_RECE_DIF" },
-    "APA METEO": { "kind": "charge", "fund": "EXPENSES", "service": "APA_METEO" },
-    "Curent scara": { "kind": "charge", "fund": "EXPENSES", "service": "CURENT_SCARA" },
-    "Salubritate": { "kind": "charge", "fund": "EXPENSES", "service": "SALUBRITATE" },
-    "Curatenie": { "kind": "charge", "fund": "EXPENSES", "service": "CURATENIE" },
-    "Administrare": { "kind": "charge", "fund": "EXPENSES", "service": "ADMINISTRARE" },
-    "Comision Banca": { "kind": "charge", "fund": "EXPENSES", "service": "COMISION_BANCA" },
-    "Demontare Clima": { "kind": "charge", "fund": "EXPENSES", "service": "DEMONTARE_CLIMA" },
-    "Interfon": { "kind": "charge", "fund": "EXPENSES", "service": "INTERFON" },
-    "Total Cheltuieli Lună": { "kind": "ignore", "_why": "aggregate of the EXPENSES charges" },
-
-    "Penalizări-Curente": { "kind": "penalty", "fund": "PENALIZARI", "role": "posted" },
-    "Penalizări-Restante": { "kind": "penalty", "fund": "PENALIZARI", "role": "arrears" },
-    "Penalizări-Total": { "kind": "ignore", "_why": "curente+restante" },
-    "Restanţe": { "kind": "balance", "fund": "EXPENSES", "role": "arrears" },
-
-    "FOND RULMENT-Lună": { "kind": "fund", "fund": "RULMENT" },
-    "FOND RULMENT-Plătit(sold)": { "kind": "balance", "fund": "RULMENT", "role": "sold" },
-    "FOND RULMENT-Restanțe": { "kind": "balance", "fund": "RULMENT", "role": "arrears" },
-    "Fond Rulment-Restante": { "kind": "balance", "fund": "RULMENT", "role": "arrears" },
-
-    "FOND DE REPARATII-Curente": { "kind": "fund", "fund": "REPARATII" },
-    "FOND DE REPARATII-Sold": { "kind": "balance", "fund": "REPARATII", "role": "sold" },
-    "FOND DE REPARATII-Restante": { "kind": "balance", "fund": "REPARATII", "role": "arrears" },
-
-    "FOND PROIECT+REABILITARE-Lună": { "kind": "fund", "fund": "REABILITARE_1", "_confirm": "source 'PROIECT+REABILITARE' -> REABILITARE_1?" },
-    "FOND PROIECT+REABILITARE-Plătit(sold)": { "kind": "balance", "fund": "REABILITARE_1", "role": "sold" },
-    "FOND PROIECT+REABILITARE-Platit (Sold)": { "kind": "balance", "fund": "REABILITARE_1", "role": "sold" },
-    "FOND PROIECT+REABILITARE-Restanțe": { "kind": "balance", "fund": "REABILITARE_1", "role": "arrears" },
-
-    "Fond Pod si Fatada-Lună": { "kind": "fund", "fund": "REABILITARE_2", "_confirm": "source 'Pod si Fatada' -> REABILITARE_2?" },
-    "Fond Pod si Fatada-Curente": { "kind": "fund", "fund": "REABILITARE_2" },
-    "Fond Pod si Fatada-Platit (Sold)": { "kind": "balance", "fund": "REABILITARE_2", "role": "sold" },
-    "Fond Pod si Fatada-Restanțe": { "kind": "balance", "fund": "REABILITARE_2", "role": "arrears" },
-
-    "Fond Reabilitare 3-Lună": { "kind": "fund", "fund": "REABILITARE_3", "_confirm": "source 'Reabilitare 3' -> REABILITARE_3?" },
-
-    "Total General": { "kind": "ignore", "_why": "grand total" }
+  "Nume Proprietar": {
+   "kind": "ignore"
+  },
+  "CPI (SUP)": {
+   "kind": "driver",
+   "driver": "cpi"
+  },
+  "Pers. Prez.": {
+   "kind": "driver",
+   "driver": "residents"
+  },
+  "Apa rece-Consum(m³)": {
+   "kind": "driver",
+   "driver": "water_cold"
+  },
+  "Apa rece-Val(lei)": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "APA_RECE"
+  },
+  "Apa rece-Val Dif(lei)": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "APA_RECE_DIF"
+  },
+  "APA METEO": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "APA_METEO"
+  },
+  "Curent scara": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "CURENT_SCARA"
+  },
+  "Salubritate": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "SALUBRITATE"
+  },
+  "Curatenie": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "CURATENIE"
+  },
+  "Administrare": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "ADMINISTRARE"
+  },
+  "Comision Banca": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "COMISION_BANCA"
+  },
+  "Demontare Clima": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "DEMONTARE_CLIMA"
+  },
+  "Interfon": {
+   "kind": "charge",
+   "fund": "EXPENSES",
+   "service": "INTERFON"
+  },
+  "Total Cheltuieli Lună": {
+   "kind": "ignore",
+   "_why": "aggregate of the EXPENSES charges"
+  },
+  "Penalizări-Curente": {
+   "kind": "penalty",
+   "fund": "PENALIZARI",
+   "role": "posted"
+  },
+  "Penalizări-Restante": {
+   "kind": "penalty",
+   "fund": "PENALIZARI",
+   "role": "arrears"
+  },
+  "Penalizări-Total": {
+   "kind": "ignore",
+   "_why": "curente+restante"
+  },
+  "Restanţe": {
+   "kind": "balance",
+   "fund": "EXPENSES",
+   "role": "arrears"
+  },
+  "FOND RULMENT-Lună": {
+   "kind": "fund",
+   "fund": "RULMENT"
+  },
+  "FOND RULMENT-Plătit(sold)": {
+   "kind": "balance",
+   "fund": "RULMENT",
+   "role": "sold"
+  },
+  "FOND RULMENT-Restanțe": {
+   "kind": "balance",
+   "fund": "RULMENT",
+   "role": "arrears"
+  },
+  "Fond Rulment-Restante": {
+   "kind": "balance",
+   "fund": "RULMENT",
+   "role": "arrears"
+  },
+  "FOND DE REPARATII-Curente": {
+   "kind": "fund",
+   "fund": "REPARATII"
+  },
+  "FOND DE REPARATII-Sold": {
+   "kind": "balance",
+   "fund": "REPARATII",
+   "role": "sold"
+  },
+  "FOND DE REPARATII-Restante": {
+   "kind": "balance",
+   "fund": "REPARATII",
+   "role": "arrears"
+  },
+  "FOND PROIECT+REABILITARE-Lună": {
+   "kind": "fund",
+   "fund": "REABILITARE_1",
+   "_confirm": "source 'PROIECT+REABILITARE' -> REABILITARE_1?"
+  },
+  "FOND PROIECT+REABILITARE-Plătit(sold)": {
+   "kind": "balance",
+   "fund": "REABILITARE_1",
+   "role": "sold"
+  },
+  "FOND PROIECT+REABILITARE-Platit (Sold)": {
+   "kind": "balance",
+   "fund": "REABILITARE_1",
+   "role": "sold"
+  },
+  "FOND PROIECT+REABILITARE-Restanțe": {
+   "kind": "balance",
+   "fund": "REABILITARE_1",
+   "role": "arrears"
+  },
+  "Fond Pod si Fatada-Lună": {
+   "kind": "fund",
+   "fund": "REABILITARE_2",
+   "_confirm": "source 'Pod si Fatada' -> REABILITARE_2?"
+  },
+  "Fond Pod si Fatada-Curente": {
+   "kind": "fund",
+   "fund": "REABILITARE_2"
+  },
+  "Fond Pod si Fatada-Platit (Sold)": {
+   "kind": "balance",
+   "fund": "REABILITARE_2",
+   "role": "sold"
+  },
+  "Fond Pod si Fatada-Restanțe": {
+   "kind": "balance",
+   "fund": "REABILITARE_2",
+   "role": "arrears"
+  },
+  "Fond Reabilitare 3-Lună": {
+   "kind": "fund",
+   "fund": "REABILITARE_3",
+   "_confirm": "source 'Reabilitare 3' -> REABILITARE_3?"
+  },
+  "Total General": {
+   "kind": "ignore",
+   "_why": "grand total"
+  },
+  "Fond Reabilitare 3-Restante": {
+   "kind": "balance",
+   "role": "arrears",
+   "fund": "REABILITARE_3",
+   "_note": "REAB3 arrears (newer export 20260713)"
   }
+ }
 }
