@@ -3,7 +3,8 @@ set -euo pipefail
 # Rebuild Kralik with the FULL timeline: injected history + bridge + April/May actuals.
 #
 #   2021-11 .. 2026-02   history:inject          (vendor export, exact by construction)
-#   2026-03              bridge-2026-03          (plug: Feb close → April opening)
+#   2026-03              bridge-2026-03          (REAL March charges from the export; close
+#                                                 anchored to April opening, payments = plug)
 #   2026-04 .. 2026-05   seed-kralik-april-may   (vendor actuals) + import:cash
 #
 # This supersedes rebuild-kralik.sh, which stops at a *computed* 2026-03 that overshoots the
