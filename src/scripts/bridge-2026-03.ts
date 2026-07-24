@@ -154,7 +154,7 @@ async function main() {
     //  · a non-penalty balance that rose beyond its charges is a data reconciliation → reconciliere-numerar.
     // Either way `dueEnd = dueStart + charges − payments + adjustments` holds exactly.
     const net = dueStart + charges - dueEnd
-    let payments = 0, adjustments = 0, reason: string | null = null
+    let payments = 0, adjustments = 0, reason: string | null = null, note: string | undefined
     if (fundCode === 'PENALIZARI') {
       adjustments = dueEnd - dueStart - charges // = −net; negative when the penalty was forgiven
       reason = 'scutire-penalizari'
@@ -163,6 +163,13 @@ async function main() {
     } else {
       adjustments = -net
       reason = 'reconciliere-numerar'
+      // KNOWN residual: a history CREDIT (dueStart < 0) the authoritative April ledger doesn't carry.
+      // This is the synthetic REAB_1 reallocation artifact — e.g. Soames (Ap 11B) shows a −3,821
+      // REABILITARE_1 credit in the export's March 'Restante-Afisat' (= the reallocation), but the
+      // ledger opens at 0. Not a real overpayment; reconciled to the ledger. See memory
+      // property-kralik-timeline-bridge. Flagged so it stays traceable if the source is later fixed.
+      if (fundCode === 'REABILITARE_1' && dueStart < -0.005)
+        note = 'history REAB_1 credit not carried by the April ledger — reconciled to it (synthetic reallocation artifact, e.g. Soames −3,821)'
     }
     if (dueStart === 0 && dueEnd === 0 && charges === 0) continue
 
@@ -187,7 +194,7 @@ async function main() {
         data: { communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF_ADJ, refId: period.id },
       })
       await prisma.beLedgerEntryDetail.create({
-        data: { ledgerEntryId: le.id, communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'ADJUSTMENT', currency: 'RON', refType: REF_ADJ, refId: period.id, unitId: null, amount: adjustments, meta: { source: REF, reason } },
+        data: { ledgerEntryId: le.id, communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'ADJUSTMENT', currency: 'RON', refType: REF_ADJ, refId: period.id, unitId: null, amount: adjustments, meta: { source: REF, reason, ...(note ? { note } : {}) } },
       })
     }
 
