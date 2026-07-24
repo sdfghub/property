@@ -13,23 +13,28 @@
  *
  * March's CHARGES are REAL — read from the export (matrix.csv, via parse-export), which does
  * contain March: the full REABILITARE_3 monthly billing (111,273.50), plus întreținere, rulment,
- * reparații, etc. The period still lands exactly on the vendor's April opening
- * (data/Kralik/ledger-2026-04.json) per (BE, fund); PAYMENTS are the residual plug:
+ * reparații, etc. The period lands exactly on the vendor's April opening
+ * (data/Kralik/ledger-2026-04.json) per (BE, fund), and the residual is booked as EXPLICIT, reasoned
+ * entries — the same way seed-kralik-april-may:126-137 seeds April (real values + reasoned
+ * adjustments), not an anonymous plug:
  *
  *     dueStart = 2026-02 due_end                (per BE, fund)
  *     dueEnd   = April opening                  (data/Kralik/ledger-2026-04.json)
  *     charges  = March's real billing           (from the export)
  *     net      = dueStart + charges − dueEnd
- *        net > 0 → PAYMENT (net)                net < 0 → ADJUSTMENT (−net)
+ *        PENALIZARI residual → ADJUSTMENT reason 'scutire-penalizari'  (penalty forgiveness)
+ *        non-penalty, balance fell → PAYMENT (net)                     (real paydown)
+ *        non-penalty, balance rose → ADJUSTMENT reason 'reconciliere-numerar'
  *
  * so `dueEnd = dueStart + charges − payments + adjustments` holds exactly and the ledger runs
  * unbroken 2021-11 → 2026-05.
  *
- * Why still a "bridge" and not plain history injection: the export's April arrears are incomplete
- * for REABILITARE_3 (that fund started 2026-03), and the injector COMPUTES penalties while the seed
- * READS them from the ledger — so only anchoring March's close to the ledger opening keeps the
- * chain exact. What's inferred here is now just March's PAYMENTS (no March cash exists); its
- * CHARGES are real. Entries tagged refType 'BRIDGE_2603'.
+ * Why anchor to the ledger at all: the committed export's April arrears are incomplete for
+ * REABILITARE_3 (that fund started 2026-03), and the injector COMPUTES penalties while the seed
+ * READS them from the ledger. Anchoring March's close to the ledger opening keeps the chain exact;
+ * the mismatch it absorbs is now booked as the SAME explicit forgiveness/reconciliation adjustments
+ * the seed uses for April. Charge leg tagged 'BRIDGE_2603', payment 'BRIDGE_2603P', adjustment
+ * 'BRIDGE_2603A'.
  *
  * Idempotent: re-running replaces its own artifacts.
  */
@@ -42,9 +47,10 @@ const COMM = process.env.COMM || 'Kralik'
 const PREV = '2026-02'
 const CODE = '2026-03'
 const REF = 'BRIDGE_2603'
-// BeLedgerEntry is unique on (community, period, BE, ref_type, ref_id, fund), so the charge and
-// payment legs of the same (BE, fund) must use distinct ref_types.
+// BeLedgerEntry is unique on (community, period, BE, ref_type, ref_id, fund), so the charge,
+// payment, and adjustment legs of the same (BE, fund) must use distinct ref_types.
 const REF_PAY = 'BRIDGE_2603P'
+const REF_ADJ = 'BRIDGE_2603A'
 
 const loadJson = (f: string) => JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', COMM, f), 'utf8'))
 const r2 = (n: number) => Number(n.toFixed(2))
@@ -136,13 +142,25 @@ async function main() {
     // chain by a cent and make `owed − paid == outstanding` fail for every later period.
     const dueStart = source.get(k) ?? 0
     const dueEnd = target.get(k) ?? 0
-    // PENALIZARI is computed elsewhere (not billed here), so it carries no real "charge" — it plugs.
+    // PENALIZARI is computed elsewhere (not billed here), so it carries no real "charge".
     const charges = fundCode === 'PENALIZARI' ? 0 : (marchCharge.get(k) ?? 0)
-    // net = dueStart + charges − dueEnd; the residual is a payment (net>0) or an adjustment (net<0),
-    // so `dueEnd = dueStart + charges − payments + adjustments` holds exactly.
+    // net = dueStart + charges − dueEnd. Split the residual the way the seed does (seed-kralik-april-may:
+    // 126-137) — explicit, reasoned entries, not a blind plug:
+    //  · PENALIZARI residual is never a "payment" — it's a forgiveness (scutire-penalizari).
+    //  · a non-penalty balance that fell is a real paydown → PAYMENT.
+    //  · a non-penalty balance that rose beyond its charges is a data reconciliation → reconciliere-numerar.
+    // Either way `dueEnd = dueStart + charges − payments + adjustments` holds exactly.
     const net = dueStart + charges - dueEnd
-    const payments = net > 0 ? net : 0
-    const adjustments = net < 0 ? -net : 0
+    let payments = 0, adjustments = 0, reason: string | null = null
+    if (fundCode === 'PENALIZARI') {
+      adjustments = dueEnd - dueStart - charges // = −net; negative when the penalty was forgiven
+      reason = 'scutire-penalizari'
+    } else if (net >= 0) {
+      payments = net
+    } else {
+      adjustments = -net
+      reason = 'reconciliere-numerar'
+    }
     if (dueStart === 0 && dueEnd === 0 && charges === 0) continue
 
     if (charges > 0.005) {
@@ -158,7 +176,15 @@ async function main() {
         data: { communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF_PAY, refId: period.id },
       })
       await prisma.beLedgerEntryDetail.create({
-        data: { ledgerEntryId: le.id, communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'PAYMENT', currency: 'RON', refType: REF_PAY, refId: period.id, unitId: null, amount: payments, meta: { source: REF, note: 'plug payment: March close anchored to April opening (March cash not itemized)' } },
+        data: { ledgerEntryId: le.id, communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'PAYMENT', currency: 'RON', refType: REF_PAY, refId: period.id, unitId: null, amount: payments, meta: { source: REF, note: 'March balance paydown (cash not itemized)' } },
+      })
+    }
+    if (Math.abs(adjustments) > 0.005) {
+      const le = await prisma.beLedgerEntry.create({
+        data: { communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF_ADJ, refId: period.id },
+      })
+      await prisma.beLedgerEntryDetail.create({
+        data: { ledgerEntryId: le.id, communityId: COMM, periodId: period.id, billingEntityId: beId, fundId, kind: 'ADJUSTMENT', currency: 'RON', refType: REF_ADJ, refId: period.id, unitId: null, amount: adjustments, meta: { source: REF, reason } },
       })
     }
 
@@ -174,8 +200,8 @@ async function main() {
   console.log(`bridge ${CODE}: ${n} (BE,fund) statements`)
   console.log(`  dueStart (${PREV} close) = ${sumStart.toFixed(2)}`)
   console.log(`  charges  (real, export)  = ${sumChg.toFixed(2)}`)
-  console.log(`  payments (plug)          = ${sumPay.toFixed(2)}`)
-  console.log(`  adjustments (plug)       = ${sumAdj.toFixed(2)}`)
+  console.log(`  payments (paydown)       = ${sumPay.toFixed(2)}`)
+  console.log(`  adjustments (scutire/rec)= ${sumAdj.toFixed(2)}`)
   console.log(`  dueEnd   (April opening) = ${sumEnd.toFixed(2)}`)
   const resid = r2(sumStart + sumChg - sumPay + sumAdj - sumEnd)
   console.log(`  identity residual       = ${resid.toFixed(2)} ${Math.abs(resid) < 0.01 ? '✅' : '❌'}`)
