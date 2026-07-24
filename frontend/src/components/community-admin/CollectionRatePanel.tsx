@@ -54,6 +54,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
   const [data, setData] = React.useState<Report | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({})
+  const [chartHistory, setChartHistory] = React.useState<HistoryPoint[]>([])
 
   React.useEffect(() => {
     if (!communityId) return
@@ -61,6 +62,16 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
       .then((rows: any[]) => setPeriods(rows || []))
       .catch(() => setPeriods([]))
   }, [api, communityId])
+
+  // Full-timeline history for the chart (latest period), independent of the selected-period detail —
+  // the per-period report truncates history to ≤ selected, so this keeps the chart complete.
+  React.useEffect(() => {
+    if (!communityId) return
+    const q = domain ? `?domain=${encodeURIComponent(domain)}` : ''
+    api.get<Report>(`/communities/${communityId}/reports/collection-rate${q}`)
+      .then((r: Report) => setChartHistory(r.history ?? []))
+      .catch(() => setChartHistory([]))
+  }, [api, communityId, domain])
 
   React.useEffect(() => {
     if (!communityId) return
@@ -109,6 +120,14 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
         </div>
       ) : data ? (
         <>
+          {/* History overview — click a period to load its detail below */}
+          {chartHistory.length > 1 ? <HistoryChart history={chartHistory} selected={data.period?.code || period} onSelect={setPeriod} /> : null}
+
+          {/* Per-period detail */}
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {t('collection.detailFor', 'Detaliu perioadă')}: <strong>{data.period?.code || period}</strong>
+          </div>
+
           {/* Totals */}
           <div className="card">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
@@ -130,9 +149,6 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
               </div>
             ) : null}
           </div>
-
-          {/* History: collection rate + outstanding over periods */}
-          {data.history && data.history.length > 1 ? <HistoryChart history={data.history} /> : null}
 
           {/* Tree: domain → fund → billing entity */}
           <div className="card">
@@ -179,7 +195,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
 
 // Hand-rolled SVG chart (no charting dependency): collection rate % as a line (left, 0–100%),
 // outstanding debt as a scaled area behind it, period on the horizontal axis. Hover for exact values.
-function HistoryChart({ history }: { history: HistoryPoint[] }) {
+function HistoryChart({ history, selected, onSelect }: { history: HistoryPoint[]; selected?: string; onSelect: (code: string) => void }) {
   const [hi, setHi] = React.useState<number | null>(null)
   const firstNZ = history.findIndex((h) => h.owed > 0.005 || Math.abs(h.outstanding) > 0.005)
   const pts = firstNZ >= 0 ? history.slice(firstNZ) : history
@@ -198,11 +214,14 @@ function HistoryChart({ history }: { history: HistoryPoint[] }) {
   const step = Math.max(1, Math.ceil(n / 10))
   const showLabel = (i: number) => pts[i].periodCode.endsWith('-01') || i === 0 || i === n - 1 || i % step === 0
   const cur = hi != null ? pts[hi] : null
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const selIdx = pts.findIndex((p) => p.periodCode === selected)
+  const idxFromEvent = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = ((e.clientX - rect.left) / rect.width) * W
-    setHi(Math.max(0, Math.min(n - 1, Math.round(((px - padL) / plotW) * (n - 1)))))
+    return Math.max(0, Math.min(n - 1, Math.round(((px - padL) / plotW) * (n - 1))))
   }
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => setHi(idxFromEvent(e))
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => onSelect(pts[idxFromEvent(e)].periodCode)
   return (
     <div className="card">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
@@ -213,8 +232,8 @@ function HistoryChart({ history }: { history: HistoryPoint[] }) {
         </span>
       </div>
       <div style={{ position: 'relative', marginTop: 6 }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" style={{ display: 'block', overflow: 'visible' }}
-          onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" style={{ display: 'block', overflow: 'visible', cursor: 'pointer' }}
+          onMouseMove={onMove} onMouseLeave={() => setHi(null)} onClick={onClick}>
           {[0, 25, 50, 75, 100].map((g) => (
             <g key={g}>
               <line x1={padL} x2={W - padR} y1={yRate(g)} y2={yRate(g)} stroke="var(--border, #e5e5e5)" strokeWidth={0.6} strokeDasharray={g === 0 ? '' : '3 3'} />
@@ -226,6 +245,12 @@ function HistoryChart({ history }: { history: HistoryPoint[] }) {
           {pts.map((p, i) => showLabel(i)
             ? <text key={i} x={X(i)} y={H - 8} fontSize={9} fill="var(--muted, #999)" textAnchor="middle">{p.periodCode.slice(2)}</text>
             : null)}
+          {selIdx >= 0 ? (
+            <g>
+              <line x1={X(selIdx)} x2={X(selIdx)} y1={padT} y2={padT + plotH} stroke="#2563eb" strokeWidth={1.4} strokeDasharray="4 2" />
+              <circle cx={X(selIdx)} cy={yRate(pts[selIdx].ratePct)} r={4} fill="#2563eb" stroke="var(--bg, #fff)" strokeWidth={1.5} />
+            </g>
+          ) : null}
           {cur && hi != null ? (
             <g>
               <line x1={X(hi)} x2={X(hi)} y1={padT} y2={padT + plotH} stroke="var(--muted, #94a3b8)" strokeWidth={0.8} />
