@@ -7,11 +7,13 @@ type Metric = { owed: number; paid: number; outstanding: number; ratePct: number
 type FundNode = Metric & { code: string; label: string; shortName: string | null; cpi: number }
 type DomainNode = Metric & { key: string; label: string; cpi: number; funds: FundNode[] }
 type BeRow = Metric & { beId: string; code: string | null; displayName: string; cpi: number; byFund: Record<string, Metric> }
+type HistoryPoint = { periodCode: string; status: string; owed: number; paid: number; outstanding: number; ratePct: number | null }
 type Report = {
   period: { code: string; status: string } | null
   totals: Metric & { cpi: number }
   domains: DomainNode[]
   rows: BeRow[]
+  history?: HistoryPoint[]
   checks: { identityOk: boolean; residual: number }
 }
 
@@ -129,6 +131,9 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
             ) : null}
           </div>
 
+          {/* History: collection rate + outstanding over periods */}
+          {data.history && data.history.length > 1 ? <HistoryChart history={data.history} /> : null}
+
           {/* Tree: domain → fund → billing entity */}
           <div className="card">
             <div className="row" style={{ gap: 12, padding: '0 4px 6px', fontSize: 12 }}>
@@ -168,6 +173,74 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
           </div>
         </>
       ) : null}
+    </div>
+  )
+}
+
+// Hand-rolled SVG chart (no charting dependency): collection rate % as a line (left, 0–100%),
+// outstanding debt as a scaled area behind it, period on the horizontal axis. Hover for exact values.
+function HistoryChart({ history }: { history: HistoryPoint[] }) {
+  const [hi, setHi] = React.useState<number | null>(null)
+  const firstNZ = history.findIndex((h) => h.owed > 0.005 || Math.abs(h.outstanding) > 0.005)
+  const pts = firstNZ >= 0 ? history.slice(firstNZ) : history
+  const n = pts.length
+  if (n < 2) return null
+  const W = 860, H = 240, padL = 8, padR = 8, padT = 16, padB = 28
+  const plotW = W - padL - padR, plotH = H - padT - padB
+  const maxOut = Math.max(1, ...pts.map((p) => p.outstanding))
+  const X = (i: number) => padL + (i * plotW) / (n - 1)
+  const yRate = (r: number | null) => padT + plotH - (Math.max(0, Math.min(100, r ?? 0)) / 100) * plotH
+  const yOut = (o: number) => padT + plotH - (Math.max(0, o) / maxOut) * plotH
+  const rateLine = pts.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${yRate(p.ratePct).toFixed(1)}`).join(' ')
+  const area = `M${X(0).toFixed(1)},${(padT + plotH).toFixed(1)} `
+    + pts.map((p, i) => `L${X(i).toFixed(1)},${yOut(p.outstanding).toFixed(1)}`).join(' ')
+    + ` L${X(n - 1).toFixed(1)},${(padT + plotH).toFixed(1)} Z`
+  const step = Math.max(1, Math.ceil(n / 10))
+  const showLabel = (i: number) => pts[i].periodCode.endsWith('-01') || i === 0 || i === n - 1 || i % step === 0
+  const cur = hi != null ? pts[hi] : null
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - rect.left) / rect.width) * W
+    setHi(Math.max(0, Math.min(n - 1, Math.round(((px - padL) / plotW) * (n - 1)))))
+  }
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+        <span className="muted" style={{ fontSize: 12 }}>Evoluție pe perioade — grad de colectare & restanță</span>
+        <span className="row" style={{ gap: 12, fontSize: 11 }}>
+          <span style={{ color: '#2563eb' }}>▬ grad (%)</span>
+          <span className="muted">▧ restanță (scalat)</span>
+        </span>
+      </div>
+      <div style={{ position: 'relative', marginTop: 6 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" style={{ display: 'block', overflow: 'visible' }}
+          onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+          {[0, 25, 50, 75, 100].map((g) => (
+            <g key={g}>
+              <line x1={padL} x2={W - padR} y1={yRate(g)} y2={yRate(g)} stroke="var(--border, #e5e5e5)" strokeWidth={0.6} strokeDasharray={g === 0 ? '' : '3 3'} />
+              <text x={padL} y={yRate(g) - 2} fontSize={9} fill="var(--muted, #999)">{g}%</text>
+            </g>
+          ))}
+          <path d={area} fill="var(--muted, #94a3b8)" opacity={0.16} />
+          <path d={rateLine} fill="none" stroke="#2563eb" strokeWidth={1.6} />
+          {pts.map((p, i) => showLabel(i)
+            ? <text key={i} x={X(i)} y={H - 8} fontSize={9} fill="var(--muted, #999)" textAnchor="middle">{p.periodCode.slice(2)}</text>
+            : null)}
+          {cur && hi != null ? (
+            <g>
+              <line x1={X(hi)} x2={X(hi)} y1={padT} y2={padT + plotH} stroke="var(--muted, #94a3b8)" strokeWidth={0.8} />
+              <circle cx={X(hi)} cy={yRate(cur.ratePct)} r={3} fill="#2563eb" />
+            </g>
+          ) : null}
+        </svg>
+        {cur ? (
+          <div style={{ position: 'absolute', top: 0, right: 0, background: 'var(--bg, #fff)', border: '1px solid var(--border, #e5e5e5)', borderRadius: 6, padding: '4px 8px', fontSize: 11, pointerEvents: 'none' }}>
+            <strong>{cur.periodCode}</strong>{' · '}
+            <span style={{ color: rateColor(cur.ratePct) }}>{cur.ratePct == null ? '—' : `${cur.ratePct}%`}</span>{' · '}
+            {money(cur.outstanding)}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
