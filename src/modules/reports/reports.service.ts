@@ -18,7 +18,9 @@ import { FUND_DOMAIN_META } from '../../common/enums-meta'
  *     owed        = due_start(first period) + Σ charges + Σ adjustments
  *     paid        = Σ payments
  *     outstanding = due_end(P)                    ← read directly, never recomputed
- *     rate%       = paid / owed × 100             ≡ (1 − outstanding/owed) × 100
+ *     rate%       = paid / Σ charges × 100        ← "grad de colectare": paid over INVOICED
+ *                                                   (charges only — not owed, which also carries
+ *                                                   opening arrears + adjustments/re-basings)
  *
  * `owed − paid == outstanding` therefore holds exactly. It is derived independently here
  * (rather than defining owed as outstanding + paid) precisely so the identity is a real check;
@@ -362,10 +364,13 @@ function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
 function shape(a: Acc) {
   const owed = round2(a.owed)
   const paid = round2(a.paid)
+  const charges = round2(a.charges)
   return {
     owed, paid, outstanding: round2(a.outstanding),
-    opening: round2(a.opening), charges: round2(a.charges), adjustments: round2(a.adjustments),
-    ratePct: owed > 0 ? round2((paid / owed) * 100) : null,
+    opening: round2(a.opening), charges, adjustments: round2(a.adjustments),
+    // Grad de colectare = Plătit / Facturat (paid over invoiced) — the denominator is the actual
+    // billing, NOT `owed` (which also carries opening arrears + adjustments/re-basings).
+    ratePct: charges > 0 ? round2((paid / charges) * 100) : null,
   }
 }
 

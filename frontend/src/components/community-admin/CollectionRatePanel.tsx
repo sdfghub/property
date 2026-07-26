@@ -146,7 +146,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
               <Stat label="CPI" value={String(data.totals.cpi)} />
             </div>
             <div className="muted" style={{ marginTop: 6, fontSize: 11 }}>
-              {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări')}
+              {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări · Grad = Plătit / Facturat')}
             </div>
             {!data.checks.identityOk ? (
               <div className="muted" style={{ marginTop: 8, color: '#dc2626' }}>
