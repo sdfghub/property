@@ -130,7 +130,7 @@ async function main() {
       const periodId = period.id
 
       // Idempotency: drop our prior artifacts for this period.
-      const prior = await prisma.beLedgerEntry.findMany({ where: { communityId, periodId, refType: { in: [REF, REF + '_PAY'] } }, select: { id: true } })
+      const prior = await prisma.beLedgerEntry.findMany({ where: { communityId, periodId, refType: { in: [REF, REF + '_PAY', REF + '_ADJ'] } }, select: { id: true } })
       if (prior.length) {
         await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
         await prisma.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
@@ -213,6 +213,15 @@ async function main() {
       }
       const closing = arrearsByCode.get(nextCode.get(m.code) || '') // dueEnd = NEXT month's opening arrears
       const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys(), ...(closing ? closing.keys() : [])])
+      // Pre-compute dueStart/charges/dueEnd/plug for every key BEFORE booking, so we can recognise
+      // ZERO-SUM share re-basing periods. A fund whose billing has ended can still have its per-unit
+      // shares RE-BASED — the source encodes this as a post-billing "-Lună" reallocation + an arrears
+      // reshuffle that nets to ~0. The naïve plug books each rise as an adjustment (owed↑) and each
+      // fall as a payment (paid↑), inflating BOTH owed and paid though no cash moved (this is what
+      // pushed REABILITARE_1's owed from 390k to 419k). When we detect the reallocation we instead
+      // book the whole signed delta as an ADJUSTMENT (owed dimension only), so the moves cancel in the
+      // fund total. dueEnd is identical either way, so continuity + the collection-rate identity hold.
+      const calc: Array<{ k: string; be: string; fund: string; dueStart: number; charges: number; dueEnd: number; plug: number }> = []
       for (const k of keys) {
         const [be, fund] = k.split('::')
         // Opening: chain from the prior period's close; on a key's FIRST appearance (the first injected
@@ -229,11 +238,42 @@ async function main() {
           : (closing ? (closing.get(k) ?? 0) : (arrears.has(k) ? (arrears.get(k) as number) : (dueStart + charges)))
         if (fund !== 'PENALIZARI' && !closing && !arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
         const plug = Number((dueStart + charges - dueEnd).toFixed(4))
-        const payments = plug >= 0 ? plug : 0
-        const adjustments = plug < 0 ? -plug : 0
+        calc.push({ k, be, fund, dueStart, charges, dueEnd, plug })
+      }
+      // Reallocation detection, per fund: no billing this period, movement in BOTH directions, and the
+      // net (Σ plug) negligible vs the gross (Σ|plug|) ⇒ a zero-sum share re-basing, not real cash.
+      const reallocFunds = new Set<string>()
+      const byFund = new Map<string, typeof calc>()
+      for (const c of calc) { const a = byFund.get(c.fund) ?? []; a.push(c); byFund.set(c.fund, a) }
+      for (const [fund, cs] of byFund) {
+        if (fund === 'PENALIZARI') continue
+        if (cs.reduce((a, c) => a + Math.abs(c.charges), 0) > 0.005) continue // still billing ⇒ real activity
+        const nUp = cs.filter((c) => c.plug < -0.005).length
+        const nDown = cs.filter((c) => c.plug > 0.005).length
+        if (!nUp || !nDown) continue                                          // needs both directions
+        const gross = cs.reduce((a, c) => a + Math.abs(c.plug), 0)
+        const net = Math.abs(cs.reduce((a, c) => a + c.plug, 0))
+        if (gross >= 100 && net <= Math.max(1, 0.02 * gross)) {
+          reallocFunds.add(fund)
+          console.log(`  ↔ re-basing: ${m.code} ${fund} gross=${gross.toFixed(0)} net=${net.toFixed(2)} (${nUp}↑/${nDown}↓) → owed-adjustments, no phantom payments`)
+        }
+      }
+
+      for (const { k, be, fund, dueStart, charges, dueEnd, plug } of calc) {
+        const isRealloc = reallocFunds.has(fund)
+        // Normal: fall (plug≥0) → payment, rise → positive adjustment. Re-basing: the whole delta →
+        // a signed adjustment (fall → negative/credit, rise → positive), so owed nets to ~0 fund-wide.
+        const payments = isRealloc ? 0 : (plug >= 0 ? plug : 0)
+        const adjustments = isRealloc ? Number((-plug).toFixed(4)) : (plug < 0 ? -plug : 0)
         if (payments > 0.005) {
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF + '_PAY', refId: periodId, fundId: fid(fund) } })
           await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_PAY', refId: periodId, unitId: null, amount: payments, meta: { source: REF } } })
+        }
+        if (isRealloc && Math.abs(adjustments) > 0.005) {
+          // Book the re-basing leg in the ledger too (kind ADJUSTMENT) — closes the statement↔ledger
+          // gap for these legs and gives the avizier a reasoned line instead of a phantom payment.
+          const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF + '_ADJ', refId: periodId, fundId: fid(fund) } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: 'rerepartizare-cote' } } })
         }
         await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges, payments, adjustments, dueEnd } })
         running.set(k, dueEnd)
