@@ -200,7 +200,10 @@ export class ReportsService {
     const metricOf = (c: Cell) => {
       const owed = c.opening + c.charges + c.adjustments
       const paid = c.payments
-      return { owed, paid, outstanding: c.dueEnd }
+      // opening/charges/adjustments are surfaced so every level can show what makes up `owed`
+      // (owed = opening + charges + adjustments) — charges is the actual billing, distinct from
+      // balance re-basings/reconciliations that land in adjustments.
+      return { owed, paid, outstanding: c.dueEnd, opening: c.opening, charges: c.charges, adjustments: c.adjustments }
     }
 
     // ── Roll up ───────────────────────────────────────────────────────────────────────────
@@ -288,16 +291,18 @@ export class ReportsService {
       e.adjustments += Number(r.adjustments)
       e.dueEnd += Number(r.due_end)
     }
-    let owedCum = 0, paidCum = 0, prevOwed = 0, prevPaid = 0
+    let owedCum = 0, paidCum = 0, openCum = 0, chargesCum = 0, adjCum = 0, prevOwed = 0, prevPaid = 0
     const history = [...perPeriod.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([seq, e]) => {
-        owedCum += (openingAtSeq.get(seq) ?? 0) + e.charges + e.adjustments
+        const openThis = openingAtSeq.get(seq) ?? 0
+        openCum += openThis; chargesCum += e.charges; adjCum += e.adjustments
+        owedCum += openThis + e.charges + e.adjustments
         paidCum += e.payments
         const point = {
           periodCode: e.code,
           status: e.status,
-          ...shape({ owed: owedCum, paid: paidCum, outstanding: e.dueEnd }),
+          ...shape({ owed: owedCum, paid: paidCum, outstanding: e.dueEnd, opening: openCum, charges: chargesCum, adjustments: adjCum }),
           deltaOwed: round2(owedCum - prevOwed),
           deltaPaid: round2(paidCum - prevPaid),
         }
@@ -331,9 +336,12 @@ export class ReportsService {
   }
 }
 
-type Acc = { owed: number; paid: number; outstanding: number }
-const newAcc = (): Acc => ({ owed: 0, paid: 0, outstanding: 0 })
-const add = (a: Acc, b: Acc) => { a.owed += b.owed; a.paid += b.paid; a.outstanding += b.outstanding }
+type Acc = { owed: number; paid: number; outstanding: number; opening: number; charges: number; adjustments: number }
+const newAcc = (): Acc => ({ owed: 0, paid: 0, outstanding: 0, opening: 0, charges: 0, adjustments: 0 })
+const add = (a: Acc, b: Acc) => {
+  a.owed += b.owed; a.paid += b.paid; a.outstanding += b.outstanding
+  a.opening += b.opening; a.charges += b.charges; a.adjustments += b.adjustments
+}
 
 function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
   let v = m.get(k)
@@ -354,7 +362,11 @@ function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
 function shape(a: Acc) {
   const owed = round2(a.owed)
   const paid = round2(a.paid)
-  return { owed, paid, outstanding: round2(a.outstanding), ratePct: owed > 0 ? round2((paid / owed) * 100) : null }
+  return {
+    owed, paid, outstanding: round2(a.outstanding),
+    opening: round2(a.opening), charges: round2(a.charges), adjustments: round2(a.adjustments),
+    ratePct: owed > 0 ? round2((paid / owed) * 100) : null,
+  }
 }
 
 const sumCpi = (bes: Set<string>, cpi: Map<string, number>) =>
@@ -366,7 +378,7 @@ function emptyReport(period: any, domain: string | null = null) {
       ? { code: period.code, seq: Number(period.seq), status: period.status, afisareDate: period.afisare_date ?? null, dueDate: period.due_date ?? null }
       : null,
     domain,
-    totals: { owed: 0, paid: 0, outstanding: 0, ratePct: null, cpi: 0 },
+    totals: { owed: 0, paid: 0, outstanding: 0, opening: 0, charges: 0, adjustments: 0, ratePct: null, cpi: 0 },
     domains: [],
     rows: [],
     history: [],

@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { useMetadata } from '../../hooks/useMetadata'
 
-type Metric = { owed: number; paid: number; outstanding: number; ratePct: number | null }
+type Metric = { owed: number; paid: number; outstanding: number; opening: number; charges: number; adjustments: number; ratePct: number | null }
 type FundNode = Metric & { code: string; label: string; shortName: string | null; cpi: number }
 type DomainNode = Metric & { key: string; label: string; cpi: number; funds: FundNode[] }
 type BeRow = Metric & { beId: string; code: string | null; displayName: string; cpi: number; byFund: Record<string, Metric> }
@@ -138,10 +138,15 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
             </div>
             <div style={{ marginTop: 8 }}><Bar pct={data.totals.ratePct} /></div>
             <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+              <Stat label={t('collection.charges', 'Facturat')} value={money(data.totals.charges)} />
+              <Stat label={t('collection.adjustments', 'Ajustări')} value={money(data.totals.adjustments)} />
               <Stat label={t('collection.owed', 'Datorat')} value={money(data.totals.owed)} />
               <Stat label={t('collection.paid', 'Plătit')} value={money(data.totals.paid)} />
               <Stat label={t('collection.outstanding', 'Restant')} value={money(data.totals.outstanding)} />
               <Stat label="CPI" value={String(data.totals.cpi)} />
+            </div>
+            <div className="muted" style={{ marginTop: 6, fontSize: 11 }}>
+              {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări')}
             </div>
             {!data.checks.identityOk ? (
               <div className="muted" style={{ marginTop: 8, color: '#dc2626' }}>
@@ -155,6 +160,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
             <div className="row" style={{ gap: 12, padding: '0 4px 6px', fontSize: 12 }}>
               <span className="muted" style={{ flex: 1 }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
               <span className="muted" style={{ width: 190, textAlign: 'right' }}>{t('collection.rate', 'Grad')}</span>
+              <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.charges', 'Facturat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.owed', 'Datorat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.paid', 'Plătit')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.outstanding', 'Restant')}</span>
@@ -313,6 +319,7 @@ function TreeRow({ depth, name, m, cpi, open, onToggle, strong }: {
           {m.ratePct == null ? '—' : `${m.ratePct}%`}
         </span>
       </span>
+      <span style={{ width: 130, textAlign: 'right' }} title={money(m.adjustments) + ' ajustări'}>{money(m.charges)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.owed)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.paid)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.outstanding)}</span>
