@@ -226,6 +226,16 @@ async function main() {
     const oldLe = await prisma.beLedgerEntry.findMany({ where: { communityId: COMM, periodId: aprP!.id, refType: { in: ['MIGRATED_PAY', 'MIGRATED_ADJ'] } }, select: { id: true } })
     if (oldLe.length) { await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: oldLe.map((x: any) => x.id) } } }); await prisma.beLedgerEntry.deleteMany({ where: { id: { in: oldLe.map((x: any) => x.id) } } }) }
     const fundCodeById = new Map<string, string>([...funds.entries()].map(([code, id]) => [id as string, code]))
+    // Payment reattributions: money credited to the WRONG fund. Reverse it there as a PAYMENT
+    // (not an owed-adjustment), so the fund's Datorat stays flat and only its outstanding shifts.
+    const reattrib = new Map<string, { amount: number; toFund: string }>() // beId::fromFund -> {amount, toFund}
+    try {
+      for (const r of (loadJson('payments-2026-05.json').paymentReattributions || [])) {
+        const beId = beIds.get(beByCode[r.unit]); if (!beId) continue
+        reattrib.set(`${beId}::${r.fromFund}`, { amount: Number(r.amount), toFund: r.toFund })
+      }
+    } catch { /* file optional */ }
+    if (reattrib.size) console.log(`  ↹ ${reattrib.size} payment reattribution(s) loaded (booked as payment reversals, Datorat-flat)`)
     let patched = 0, forgiven = 0
     for (const s of await prisma.beStatement.findMany({ where: { communityId: COMM, periodId: aprP!.id } })) {
       const fund = fundCodeById.get(s.fundId as string)
@@ -236,12 +246,14 @@ async function main() {
       const gross = Number(s.dueStart) + Number(s.charges) - target
       let payments = 0, adjustments = 0, reason: string | undefined
       if (fund === 'PENALIZARI') { adjustments = -gross; reason = 'scutire-penalizari'; forgiven += gross }
+      else if (reattrib.has(`${s.billingEntityId}::${fund}`)) { payments = gross; reason = 'reatribuire-plata' } // credit removed via payment reversal (gross<0 ⇒ negative payment), Datorat-flat
       else if (gross >= 0) { payments = gross }
       else { adjustments = -gross; reason = 'reconciliere-numerar' }
       await prisma.beStatement.update({ where: { id: s.id }, data: { payments, adjustments, dueEnd: target } })
-      if (payments > 0.005) {
+      if (Math.abs(payments) > 0.005) { // negative amount = a reattribution reversal (misdirected credit removed)
+        const note = reason === 'reatribuire-plata' ? 'payment reattribution: misdirected credit reversed' : 'April paydown to ledger closing (May opening)'
         const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, fundId: s.fundId } })
-        await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', fundId: s.fundId, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, unitId: null, amount: payments, meta: { source: 'MIGRATED', note: 'April paydown to ledger closing (May opening)' } } })
+        await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', fundId: s.fundId, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, unitId: null, amount: payments, meta: { source: 'MIGRATED', reason, note } } })
       }
       if (Math.abs(adjustments) > 0.005) {
         const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: 'MIGRATED_ADJ', refId: aprP!.id, fundId: s.fundId } })

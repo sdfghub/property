@@ -67,5 +67,15 @@
    "type": "kept-current",
    "note": "small April intretinere kept current."
   }
+ ],
+ "paymentReattributions": [
+  {
+   "unit": "400191-C1-U8-AP 3",
+   "label": "AP 3 (Codrea)",
+   "fromFund": "REABILITARE_2",
+   "toFund": "REABILITARE_3",
+   "amount": 7000,
+   "note": "7.000 credited to Pod-Fatada (REAB_2) actually belonged to Reabilitare-3, where it already sits. Reverse the REAB_2 credit as a PAYMENT (Datorat-flat) instead of an owed-adjustment, so neither fund's Datorat inflates."
+  }
  ]
 }
