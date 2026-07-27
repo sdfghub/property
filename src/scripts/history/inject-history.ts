@@ -17,6 +17,10 @@ const REF = 'MIGRATED'
 async function main() {
   const dir = process.argv[2] || './data/Kralik'
   const cutover = process.env.HISTORY_CUTOVER || '2026-03'
+  // KRALIK_SOURCE_PENALTIES=1: drive PENALIZARI from the export's own figures (Penalizări-Curente as
+  // the charge, Penalizări-Restanțe as the arrears/closing, chained like any fund) instead of the
+  // computed penalty engine. No computed accrual, no computed buckets → nothing to reconcile.
+  const SOURCE_PEN = process.env.KRALIK_SOURCE_PENALTIES === '1'
   const prisma = new PrismaService()
   await prisma.$connect()
   try {
@@ -61,7 +65,8 @@ async function main() {
       for (const [unitCode, u] of Object.entries<any>(mm.units)) {
         const be = unitBe.get(unitCode); if (!be) continue
         for (const [fund, v] of Object.entries<any>(u.arrearsByFund)) addA(be, fund, v as number)
-        // imported penalty arrears intentionally excluded — PENALIZARI balances are computed.
+        // computed mode: imported penalty arrears excluded (PENALIZARI computed). source mode: use them.
+        if (SOURCE_PEN && u.penArrears) addA(be, 'PENALIZARI', Number(u.penArrears))
       }
       return a
     }
@@ -160,8 +165,8 @@ async function main() {
         const be = unitBe.get(unitCode); if (!be) continue
         for (const [service, amt] of Object.entries(u.charges)) add(be, 'EXPENSES', unitCode, service, amt)
         for (const [fund, amt] of Object.entries(u.funds)) add(be, fund, unitCode, 'CONTRIB', amt)
-        const cp = penByCodeUnit.get(m.code)?.get(unitCode) || 0
-        if (cp > 0) add(be, 'PENALIZARI', unitCode, 'penalty:EXPENSES', cp) // COMPUTED penalty charge (our math, not imported)
+        const cp = SOURCE_PEN ? Number(u.penPosted || 0) : (penByCodeUnit.get(m.code)?.get(unitCode) || 0)
+        if (cp > 0) add(be, 'PENALIZARI', unitCode, SOURCE_PEN ? 'penalty:SOURCE' : 'penalty:EXPENSES', cp) // source Penalizări-Curente, or computed
       }
 
       // CommunityCharge + lines (avizier reads these). Tag each charge the way the avizier's column
@@ -209,7 +214,8 @@ async function main() {
       for (const [unitCode, u] of Object.entries(m.units)) {
         const be = unitBe.get(unitCode); if (!be) continue
         for (const [fund, v] of Object.entries(u.arrearsByFund)) addArr(be, fund, v)
-        // NOTE: imported penalty arrears (u.penArrears) are intentionally NOT used — PENALIZARI is computed.
+        // computed mode: imported penalty arrears NOT used. source mode: PENALIZARI chains off them.
+        if (SOURCE_PEN && u.penArrears) addArr(be, 'PENALIZARI', Number(u.penArrears))
       }
       const closing = arrearsByCode.get(nextCode.get(m.code) || '') // dueEnd = NEXT month's opening arrears
       const keys = new Set<string>([...beFundTotal.keys(), ...arrears.keys(), ...running.keys(), ...(closing ? closing.keys() : [])])
@@ -233,10 +239,11 @@ async function main() {
         // PENALIZARI is now COMPUTED (our math): it isn't tracked as source arrears, so it simply
         // accumulates (dueEnd = dueStart + this period's computed penalty; no penalty payments in the data).
         // All other funds close at next month's opening balance (a key absent there was paid to zero).
-        const dueEnd = fund === 'PENALIZARI'
+        const penComputed = fund === 'PENALIZARI' && !SOURCE_PEN // computed mode: accumulate; source mode: chain like a fund
+        const dueEnd = penComputed
           ? dueStart + charges
           : (closing ? (closing.get(k) ?? 0) : (arrears.has(k) ? (arrears.get(k) as number) : (dueStart + charges)))
-        if (fund !== 'PENALIZARI' && !closing && !arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
+        if (!penComputed && !closing && !arrears.has(k) && (charges || dueStart)) noArrears.add(fund)
         const plug = Number((dueStart + charges - dueEnd).toFixed(4))
         calc.push({ k, be, fund, dueStart, charges, dueEnd, plug })
       }
@@ -282,7 +289,8 @@ async function main() {
       // ── Penalty buckets: create each imported-debt bucket at its origin period, then write this period's
       //    computed aging row (from the pure pre-pass above) for every bucket created so far. One continuous
       //    per-bucket timeline; the penalty CHARGES were already posted (computed) via Layer 1 above.
-      for (const bd of bucketDefs) {
+      //    SOURCE_PEN mode has no computed accrual → no buckets (avoids the May engine aging them).
+      for (const bd of (SOURCE_PEN ? [] : bucketDefs)) {
         if (bd.originCode !== m.code) continue
         const b = await prisma.penaltyBucket.create({
           data: { communityId, billingEntityId: bid(bd.be) as string, unitId: uid(bd.uc) as string, fundId: fid('EXPENSES') as string, targetFundId: fid('PENALIZARI') as string, originKey: `migrated-debt:${bd.key}`, dueDate: bd.dueDate, firstPenalDay: bd.firstPenal, principalOriginal: bd.principal, ratePerDayPct: bd.rate * 100, status: 'OPEN' } as any,

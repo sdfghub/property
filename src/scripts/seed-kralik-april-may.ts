@@ -88,6 +88,12 @@ async function main() {
   const unitIds = new Map<string, string>((await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })).map((u: any) => [u.code, u.id]))
 
   // ── 1) inject April 2026-04 ──
+  // KRALIK_SKIP_APRIL=1 (no-bridge pipeline): April is already injected by history:inject
+  // (HISTORY_CUTOVER=2026-05, so March+April come straight from matrix.csv), and its penalty
+  // buckets are created by the injector — so skip the ledger-based April injection + bucket seeding
+  // here and go straight to computing May on top of the history-injected April.
+  const SKIP_APRIL = process.env.KRALIK_SKIP_APRIL === '1'
+  if (!SKIP_APRIL) {
   const [ay, am] = APR.code.split('-').map(Number)
   const aprPeriod = await prisma.period.upsert({
     where: { communityId_code: { communityId: COMM, code: APR.code } },
@@ -204,6 +210,47 @@ async function main() {
     }
   }
   console.log(`  seeded ${seededBuckets} penalty buckets across ${Object.keys(penBuckets).length} units`)
+  } // end if(!SKIP_APRIL)
+  if (SKIP_APRIL) {
+    // No-bridge pipeline: March + April were injected from the export, but the export leaves the
+    // final month's (May) arrears blank, so history closed April at 0. Import ONLY May's starting
+    // balances (= April's closing) from the authoritative ledger to COMPLETE April, then compute May.
+    console.log('  ↷ April from history; importing May starting balances (= April closing) from the ledger to complete April...')
+    const close = new Map<string, number>() // beId::fund -> April closing (= May opening)
+    for (const [uc, rec] of Object.entries<any>(ledger.byUnit || {})) {
+      const beId = beIds.get(beByCode[uc]); if (!beId) continue // key by BE *id* (matches beStatement.billingEntityId)
+      for (const [fund, v] of Object.entries<any>(rec.closing || {})) { const k = `${beId}::${fund}`; close.set(k, (close.get(k) || 0) + Number(v || 0)) }
+    }
+    const aprP = await prisma.period.findUnique({ where: { communityId_code: { communityId: COMM, code: APR.code } } })
+    // drop the injector's (wrong, dueEnd=0) April payment/adjustment legs; charges (MIGRATED) stay
+    const oldLe = await prisma.beLedgerEntry.findMany({ where: { communityId: COMM, periodId: aprP!.id, refType: { in: ['MIGRATED_PAY', 'MIGRATED_ADJ'] } }, select: { id: true } })
+    if (oldLe.length) { await prisma.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: oldLe.map((x: any) => x.id) } } }); await prisma.beLedgerEntry.deleteMany({ where: { id: { in: oldLe.map((x: any) => x.id) } } }) }
+    const fundCodeById = new Map<string, string>([...funds.entries()].map(([code, id]) => [id as string, code]))
+    let patched = 0, forgiven = 0
+    for (const s of await prisma.beStatement.findMany({ where: { communityId: COMM, periodId: aprP!.id } })) {
+      const fund = fundCodeById.get(s.fundId as string)
+      if (!fund) continue
+      // PENALIZARI is absent from the ledger closing → target 0: the association FORGIVES the accrued
+      // penalty at the April seam (scutire-penalizări), matching the bridge (which zeroes it by April).
+      const target = close.get(`${s.billingEntityId}::${fund}`) ?? 0
+      const gross = Number(s.dueStart) + Number(s.charges) - target
+      let payments = 0, adjustments = 0, reason: string | undefined
+      if (fund === 'PENALIZARI') { adjustments = -gross; reason = 'scutire-penalizari'; forgiven += gross }
+      else if (gross >= 0) { payments = gross }
+      else { adjustments = -gross; reason = 'reconciliere-numerar' }
+      await prisma.beStatement.update({ where: { id: s.id }, data: { payments, adjustments, dueEnd: target } })
+      if (payments > 0.005) {
+        const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, fundId: s.fundId } })
+        await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', fundId: s.fundId, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, unitId: null, amount: payments, meta: { source: 'MIGRATED', note: 'April paydown to ledger closing (May opening)' } } })
+      }
+      if (Math.abs(adjustments) > 0.005) {
+        const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: 'MIGRATED_ADJ', refId: aprP!.id, fundId: s.fundId } })
+        await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'ADJUSTMENT', fundId: s.fundId, currency: 'RON', refType: 'MIGRATED_ADJ', refId: aprP!.id, unitId: null, amount: adjustments, meta: { source: 'MIGRATED', reason, note: reason === 'scutire-penalizari' ? 'April penalty forgiveness (ledger carries no penalty balance)' : 'April closing reconciled to ledger (May opening)' } } })
+      }
+      patched++
+    }
+    console.log(`  ✓ completed April: patched ${patched} (BE,fund); forgave ${forgiven.toFixed(2)} penalties (scutire); Σ non-penalty April dueEnd = ${[...close.values()].reduce((a, b) => a + b, 0).toFixed(2)}`)
+  }
 
   // ── 2) compute May 2026-05 (chains from April beStatement.dueEnd) ──
   const [my, mm] = MAY.code.split('-').map(Number)
