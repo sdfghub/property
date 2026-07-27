@@ -13,10 +13,27 @@ const money = (n: number | null | undefined) =>
 // Numeric-column headers wrap (multi-word labels stack) so columns shrink to the small numbers below.
 const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 80 }
 
-export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityId: string; cenzorEnabled?: boolean }) {
+export function AvizierPanel({
+  communityId,
+  cenzorEnabled = true,
+  reportPath,
+  periodsPath,
+  readOnly = false,
+}: {
+  communityId: string
+  cenzorEnabled?: boolean
+  // Resident (read-only) mode: point the fetches at the me/ + closed-periods routes and drop every
+  // interactive drilldown / admin control (residents only get the whole-community table to read).
+  reportPath?: string
+  periodsPath?: string
+  readOnly?: boolean
+}) {
   const { api, activeRole } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const avizierBase = reportPath ?? `/communities/${communityId}/finance/avizier`
+  const periodsBase = periodsPath ?? `/communities/${communityId}/periods`
+  const RO = !!readOnly
 
   const [periods, setPeriods] = React.useState<any[]>([])
   const [period, setPeriod] = React.useState<string>('')
@@ -25,8 +42,8 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const [signBusy, setSignBusy] = React.useState<string | null>(null)
   const [signMsg, setSignMsg] = React.useState<string | null>(null)
 
-  const isCensor = activeRole?.role === 'CENSOR' && cenzorEnabled
-  const isAdmin = activeRole?.role === 'COMMUNITY_ADMIN'
+  const isCensor = !RO && activeRole?.role === 'CENSOR' && cenzorEnabled
+  const isAdmin = !RO && activeRole?.role === 'COMMUNITY_ADMIN'
   const [hoverBe, setHoverBe] = React.useState<string | null>(null)
   const [editBe, setEditBe] = React.useState<{ be: string; value: string } | null>(null)
   const saveDisplayName = async () => {
@@ -38,7 +55,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   }
   const reloadAvizier = () => {
     const q = period ? `?period=${encodeURIComponent(period)}` : ''
-    api.get<any>(`/communities/${communityId}/finance/avizier${q}`).then((d: any) => setData(d)).catch(() => {})
+    api.get<any>(`${avizierBase}${q}`).then((d: any) => setData(d)).catch(() => {})
   }
   const signOff = async (action: 'approve' | 'reject') => {
     if (!data?.period?.code) return
@@ -58,6 +75,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const [fullscreen, setFullscreen] = React.useState(false)
 
   const openSold = (beCode: string) => {
+    if (RO) return
     setSoldDetail({ be: beCode, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/explain-sold?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
       .then((d) => setSoldDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
@@ -66,6 +84,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
 
   const [payDetail, setPayDetail] = React.useState<{ be: string; data: any } | null>(null)
   const openPayments = (beCode: string) => {
+    if (RO) return
     setPayDetail({ be: beCode, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/payments?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
       .then((d: any) => setPayDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
@@ -74,6 +93,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
 
   const [adjDetail, setAdjDetail] = React.useState<{ be: string; data: any } | null>(null)
   const openAdjustments = (beCode: string) => {
+    if (RO) return
     setAdjDetail({ be: beCode, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/adjustments?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
       .then((d: any) => setAdjDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
@@ -81,6 +101,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   }
 
   const openExplain = (beCode: string, category: string) => {
+    if (RO) return
     setExplain({ be: beCode, cat: category, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/explain?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}&category=${encodeURIComponent(category)}`)
       .then((d) => setExplain((cur) => (cur && cur.be === beCode && cur.cat === category ? { ...cur, data: d } : cur)))
@@ -91,6 +112,7 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
   const [penExpanded, setPenExpanded] = React.useState<Set<number>>(new Set())
   const togglePenBucket = (i: number) => setPenExpanded((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })
   const openPenalty = (beCode: string, scope: 'month' | 'total', fund?: string) => {
+    if (RO) return
     setPenExpanded(new Set())
     setPenDetail({ be: beCode, scope, fund, data: null })
     const fq = fund ? `&fund=${encodeURIComponent(fund)}` : ''
@@ -120,24 +142,24 @@ export function AvizierPanel({ communityId, cenzorEnabled = true }: { communityI
 
   React.useEffect(() => {
     if (!communityId) return
-    api.get<any[]>(`/communities/${communityId}/periods`).then((rows) => {
+    api.get<any[]>(periodsBase).then((rows) => {
       const sorted = (rows || []).slice().sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0))
       setPeriods(sorted)
       // default to the newest period (the one being closed), not the latest CLOSED one
       if (sorted.length) setPeriod((cur) => cur || sorted[0].code)
       else setLoading(false)
     }).catch(() => { setPeriods([]); setLoading(false) })
-  }, [api, communityId])
+  }, [api, communityId, periodsBase])
 
   React.useEffect(() => {
     if (!communityId || !period) return
     let alive = true
     setLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/avizier?period=${encodeURIComponent(period)}`)
+    api.get<any>(`${avizierBase}?period=${encodeURIComponent(period)}`)
       .then((d) => { if (alive) { setData(d); setLoading(false) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
-  }, [api, communityId, period])
+  }, [api, communityId, period, avizierBase])
 
   const cats: string[] = data?.categories ?? []
   const rows: any[] = data?.rows ?? []

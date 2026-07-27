@@ -8,5 +8,6 @@ import { PeriodModule } from '../period/period.module'
   imports: [PeriodModule],
   controllers: [FinanceController],
   providers: [FinanceService, PrismaService],
+  exports: [FinanceService],
 })
 export class FinanceModule {}

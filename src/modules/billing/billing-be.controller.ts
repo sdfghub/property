@@ -33,6 +33,13 @@ export class BillingBeController {
     return this.beQueries.getFinancials(beId, periodCode, req.user?.roles ?? [], req.user?.sub ?? req.user?.id)
   }
 
+  // Closed-period statement series (opening→closing per fund) — the monthly-ledger view. Any
+  // sub-role of the BE (owner/resident/expense-responsible) may see it; access enforced in-service.
+  @Get(':beId/statements')
+  statements(@Param('beId') beId: string, @Req() req: any) {
+    return this.beQueries.getStatementSeries(beId, req.user?.roles ?? [], req.user?.sub ?? req.user?.id)
+  }
+
   @Get(':beId/summary')
   summary(@Param('beId') beId: string, @Req() req: any) {
     return this.beQueries.getBeSummary(beId, req.user?.roles ?? [], req.user?.sub ?? req.user?.id)

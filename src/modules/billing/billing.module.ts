@@ -27,9 +27,14 @@ import { MeMeterController } from './me-meter.controller';
 import { CommunityDueController } from './community-due.controller';
 import { UserDashboardController } from './user-dashboard.controller';
 import { MePaymentController } from './me-payment.controller';
+import { MemberAccessService } from './member-access.service';
+import { MeReportsService } from './me-reports.service';
+import { MeReportsController } from './me-reports.controller';
+import { FinanceModule } from '../finance/finance.module';
+import { ReportsModule } from '../reports/reports.module';
 
 @Module({
-  imports: [EngagementModule, FundModule, CommunityModule],
+  imports: [EngagementModule, FundModule, CommunityModule, FinanceModule, ReportsModule],
   controllers: [
     BillingBeController,
     CommunityBillingEntityController,
@@ -43,6 +48,7 @@ import { MePaymentController } from './me-payment.controller';
     CommunityDueController,
     UserDashboardController,
     MePaymentController,
+    MeReportsController,
     CashController,
   ],
   providers: [
@@ -56,9 +62,11 @@ import { MePaymentController } from './me-payment.controller';
     PaymentAllocationService,
     MeasureModeService,
     MeMeterService,
+    MemberAccessService,
+    MeReportsService,
     CashService,
     PrismaService,
   ],
-  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService],
+  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, MemberAccessService],
 })
 export class BillingModule {}

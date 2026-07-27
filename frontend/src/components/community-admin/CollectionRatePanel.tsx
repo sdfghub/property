@@ -36,8 +36,19 @@ function Bar({ pct }: { pct: number | null }) {
   )
 }
 
-export function CollectionRatePanel({ communityId }: { communityId: string }) {
+export function CollectionRatePanel({
+  communityId,
+  reportPath,
+  periodsPath,
+}: {
+  communityId: string
+  // Resident (read-only) mode points these at the me/ + closed-periods routes; admin uses the defaults.
+  reportPath?: string
+  periodsPath?: string
+}) {
   const { api } = useAuth()
+  const reportBase = reportPath ?? `/communities/${communityId}/reports/collection-rate`
+  const periodsBase = periodsPath ?? `/communities/${communityId}/periods`
   const { t: rawT } = useI18n()
   // useI18n's t() returns the key itself when a translation is missing, so fall back explicitly.
   const t = (k: string, d = '') => {
@@ -55,10 +66,10 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
 
   React.useEffect(() => {
     if (!communityId) return
-    api.get<any[]>(`/communities/${communityId}/periods`)
+    api.get<any[]>(periodsBase)
       .then((rows: any[]) => setPeriods(rows || []))
       .catch(() => setPeriods([]))
-  }, [api, communityId])
+  }, [api, communityId, periodsBase])
 
   React.useEffect(() => {
     if (!communityId) return
@@ -67,11 +78,11 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
     const qs = new URLSearchParams()
     if (period) qs.set('period', period)
     if (domain) qs.set('domain', domain)
-    api.get<Report>(`/communities/${communityId}/reports/collection-rate${qs.toString() ? `?${qs}` : ''}`)
+    api.get<Report>(`${reportBase}${qs.toString() ? `?${qs}` : ''}`)
       .then((r: Report) => { if (alive) { setData(r); setLoading(false); if (!period && r?.period?.code) setPeriod(r.period.code) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
-  }, [api, communityId, period, domain])
+  }, [api, communityId, period, domain, reportBase])
 
   const toggle = (k: string) => setExpanded((e) => ({ ...e, [k]: !e[k] }))
 
