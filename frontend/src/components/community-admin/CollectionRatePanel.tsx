@@ -300,13 +300,15 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
       aria-expanded={clickable ? !!open : undefined}
       style={{
         gap: 12, alignItems: 'center', padding: '6px 4px',
-        paddingLeft: 4 + depth * 18,
         borderTop: '1px solid rgba(128,128,128,0.15)',
         cursor: clickable ? 'pointer' : 'default',
         fontWeight: strong ? 600 : 400,
       }}
     >
+      {/* Indent lives INSIDE the name cell so the value columns keep a fixed position and stay
+          aligned across drill levels (indenting the whole row shifted them rightward). */}
       <span style={{ flex: 1, minWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {depth > 0 ? <span style={{ display: 'inline-block', width: depth * 18 }} /> : null}
         {clickable ? <span className="muted" style={{ marginRight: 6 }}>{open ? '▾' : '▸'}</span> : null}
         {name}
       </span>
