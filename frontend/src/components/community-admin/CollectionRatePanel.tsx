@@ -144,9 +144,44 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
               <Stat label={t('collection.paid', 'Plătit')} value={money(data.totals.paid)} />
               <Stat label={t('collection.outstanding', 'Restant')} value={money(data.totals.outstanding)} />
             </div>
-            <div className="muted" style={{ marginTop: 6, fontSize: 11 }}>
-              {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări · Grad = Plătit / Facturat')}
-            </div>
+            <details className="muted" style={{ marginTop: 6, fontSize: 11 }}>
+              <summary style={{ cursor: 'pointer' }}>
+                {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări · Grad = Plătit / Facturat')}
+              </summary>
+              <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.55, maxWidth: 780 }}>
+                <p style={{ margin: '0 0 6px' }}>
+                  <strong>Facturat</strong> este suma efectiv emisă drept cote (facturarea propriu-zisă),
+                  cumulată pe perioade. Pentru un fond a cărui facturare s-a încheiat, această valoare rămâne fixă.
+                </p>
+                <p style={{ margin: '0 0 6px' }}>
+                  <strong>Datorat</strong> este cât se datorează în total. Pe lângă Facturat, mai include două
+                  elemente care <em>nu</em> sunt facturi noi:
+                </p>
+                <ul style={{ margin: '0 0 6px', paddingLeft: 18 }}>
+                  <li>
+                    <strong>Sold precedent</strong> ({money(data.totals.opening)}) — restanțe reportate
+                    dinaintea primei perioade afișate.
+                  </li>
+                  <li>
+                    <strong>Ajustări</strong> ({money(data.totals.adjustments)}) — corecții de sold:
+                    repartizări/reponderări de cote între proprietari, reconcilieri cu registrul contabil,
+                    ștergeri de credite. Acestea mută sau corectează datoria, fără o facturare nouă.
+                  </li>
+                </ul>
+                <p style={{ margin: '0 0 6px' }}>
+                  Pentru selecția curentă: <strong>{money(data.totals.charges)}</strong> (Facturat)
+                  {' + '}{money(data.totals.opening)} (Sold precedent)
+                  {' + '}{money(data.totals.adjustments)} (Ajustări)
+                  {' = '}<strong>{money(data.totals.owed)}</strong> (Datorat). Așadar diferența{' '}
+                  <strong>Datorat − Facturat = {money(data.totals.owed - data.totals.charges)}</strong>{' '}
+                  (= Sold precedent + Ajustări).
+                </p>
+                <p style={{ margin: 0 }}>
+                  Aceeași descompunere se aplică la fiecare nivel (domeniu, fond, proprietar). Gradul de
+                  colectare se raportează la <strong>Facturat</strong> (Plătit ÷ Facturat), nu la Datorat.
+                </p>
+              </div>
+            </details>
             {!data.checks.identityOk ? (
               <div className="muted" style={{ marginTop: 8, color: '#dc2626' }}>
                 {t('collection.identityWarn', 'Atenție: datorat − plătit ≠ restant')} ({money(data.checks.residual)})
