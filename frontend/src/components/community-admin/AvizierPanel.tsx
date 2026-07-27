@@ -310,24 +310,24 @@ export function AvizierPanel({
                     })()}
                   </td>
                   <td style={{ padding: '6px 10px' }}>
-                    {r.soldPrecedent ? (
+                    {r.soldPrecedent ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(r.soldPrecedent)}</span> : (
                       <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.soldDetail', 'Din ce fonduri e compus?')}
                         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
                         {money(r.soldPrecedent)}
                       </button>
-                    ) : ''}
+                    )) : ''}
                   </td>
                   {cols.map((col, i) => {
                     if (col.kind === 'cat') {
                       const v = r.charges[col.cat]
                       return (
                         <td key={`c${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>
-                          {v ? (
+                          {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> : (
                             <button type="button" onClick={() => openCell(r.beCode, col.cat)} title={t('avizier.explain', 'Cum s-a calculat?')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
                               {money(v)}
                             </button>
-                          ) : ''}
+                          )) : ''}
                         </td>
                       )
                     }
@@ -336,12 +336,12 @@ export function AvizierPanel({
                       const editable = canOverride && col.scope === 'month'
                       return (
                         <td key={`p${i}`} style={{ padding: '6px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}>
-                          {v ? (
+                          {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> : (
                             <button type="button" onClick={() => openPenalty(r.beCode, col.scope, col.fund)} title={t('avizier.explain', 'Cum s-a calculat?')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
                               {money(v)}
                             </button>
-                          ) : ''}
+                          )) : ''}
                           {editable ? (
                             <button type="button" onClick={() => setOvrTarget({ be: r.beCode, beName: r.beName, computed: Number(v) || 0 })} title={t('avizier.override', 'Ajustează manual penalizarea')}
                               style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12 }}>✎</button>
@@ -353,28 +353,28 @@ export function AvizierPanel({
                     const v = sumCats(r.charges, col.group.categories)
                     return (
                       <td key={`t${i}`} style={{ padding: '6px 10px', fontWeight: expanded.has(col.group.key) ? 700 : 400 }}>
-                        {v ? (single ? (
+                        {v ? (single ? (RO ? money(v) : (
                           <button type="button" onClick={() => openCell(r.beCode, col.group.categories[0])} title={t('avizier.explain', 'Cum s-a calculat?')}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
                             {money(v)}
                           </button>
-                        ) : money(v)) : ''}
+                        )) : money(v)) : ''}
                       </td>
                     )
                   })}
                   <td style={{ padding: '6px 10px' }}>{money(r.curentTotal)}</td>
-                  <td style={{ padding: '6px 10px' }}>{r.payments ? (
+                  <td style={{ padding: '6px 10px' }}>{r.payments ? (RO ? money(r.payments) : (
                     <button type="button" onClick={() => openPayments(r.beCode)} title={t('avizier.paymentsLog', 'Jurnal încasări')}
                       style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
                       {money(r.payments)}
                     </button>
-                  ) : ''}</td>
-                  {hasAdj && <td style={{ padding: '6px 10px' }}>{r.adjustments ? (
+                  )) : ''}</td>
+                  {hasAdj && <td style={{ padding: '6px 10px' }}>{r.adjustments ? (RO ? money(r.adjustments) : (
                     <button type="button" onClick={() => openAdjustments(r.beCode)} title={t('avizier.adjustments', 'Ajustări')}
                       style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
                       {money(r.adjustments)}
                     </button>
-                  ) : ''}</td>}
+                  )) : ''}</td>}
                   <td style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.totalDue)}</td>
                 </tr>
                 )
