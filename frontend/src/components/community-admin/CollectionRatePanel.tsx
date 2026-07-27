@@ -17,8 +17,8 @@ type Report = {
   checks: { identityOk: boolean; residual: number }
 }
 
-const money = (n: number | null | undefined, ccy = 'RON') =>
-  n == null ? '—' : `${Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`
+const money = (n: number | null | undefined) =>
+  n == null ? '—' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** Rate colour thresholds — higher is better. */
 function rateColor(pct: number | null): string {
