@@ -157,7 +157,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
           {/* Tree: domain → fund → billing entity */}
           <div className="card">
             <div className="row" style={{ gap: 12, padding: '0 4px 6px', fontSize: 12 }}>
-              <span className="muted" style={{ flex: 1, minWidth: 0 }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
+              <span className="muted" style={{ flex: 1, minWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
               <span className="muted" style={{ width: 190, textAlign: 'right' }}>{t('collection.rate', 'Grad')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.charges', 'Facturat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.owed', 'Datorat')}</span>
@@ -306,7 +306,7 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
         fontWeight: strong ? 600 : 400,
       }}
     >
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ flex: 1, minWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {clickable ? <span className="muted" style={{ marginRight: 6 }}>{open ? '▾' : '▸'}</span> : null}
         {name}
       </span>
