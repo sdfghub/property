@@ -236,6 +236,7 @@ async function main() {
       }
     } catch { /* file optional */ }
     if (reattrib.size) console.log(`  ↹ ${reattrib.size} payment reattribution(s) loaded (booked as payment reversals, Datorat-flat)`)
+    const REALLOC = new Set<string>(mp.shareReallocations?.funds ?? []) // charge re-split funds: reconciliation rises → CHARGE
     let patched = 0, forgiven = 0
     for (const s of await prisma.beStatement.findMany({ where: { communityId: COMM, periodId: aprP!.id } })) {
       const fund = fundCodeById.get(s.fundId as string)
@@ -244,12 +245,17 @@ async function main() {
       // penalty at the April seam (scutire-penalizări), matching the bridge (which zeroes it by April).
       const target = close.get(`${s.billingEntityId}::${fund}`) ?? 0
       const gross = Number(s.dueStart) + Number(s.charges) - target
-      let payments = 0, adjustments = 0, reason: string | undefined
+      let payments = 0, adjustments = 0, extraCharge = 0, reason: string | undefined
       if (fund === 'PENALIZARI') { adjustments = -gross; reason = 'scutire-penalizari'; forgiven += gross }
       else if (reattrib.has(`${s.billingEntityId}::${fund}`)) { payments = gross; reason = 'reatribuire-plata' } // credit removed via payment reversal (gross<0 ⇒ negative payment), Datorat-flat
+      else if (REALLOC.has(fund) && gross < -0.005) { extraCharge = -gross; reason = 'reponderare-cote' } // re-split: rise → regularization CHARGE (Datorat=Facturat)
       else if (gross >= 0) { payments = gross }
       else { adjustments = -gross; reason = 'reconciliere-numerar' }
-      await prisma.beStatement.update({ where: { id: s.id }, data: { payments, adjustments, dueEnd: target } })
+      await prisma.beStatement.update({ where: { id: s.id }, data: { charges: Number((Number(s.charges) + extraCharge).toFixed(4)), payments, adjustments, dueEnd: target } })
+      if (Math.abs(extraCharge) > 0.005) {
+        const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'CHARGE', lane: 'ACCRUAL', amount: extraCharge, currency: 'RON', refType: 'MIGRATED_RGL', refId: aprP!.id, fundId: s.fundId } })
+        await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'CHARGE', fundId: s.fundId, currency: 'RON', refType: 'MIGRATED_RGL', refId: aprP!.id, unitId: null, amount: extraCharge, meta: { source: 'MIGRATED', reason, note: 'April re-basing/regularization charge (Datorat via charges)' } } })
+      }
       if (Math.abs(payments) > 0.005) { // negative amount = a reattribution reversal (misdirected credit removed)
         const note = reason === 'reatribuire-plata' ? 'payment reattribution: misdirected credit reversed' : 'April paydown to ledger closing (May opening)'
         const le = await prisma.beLedgerEntry.create({ data: { communityId: COMM, periodId: aprP!.id, billingEntityId: s.billingEntityId, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: 'MIGRATED_PAY', refId: aprP!.id, fundId: s.fundId } })

@@ -294,21 +294,37 @@ async function main() {
 
       for (const { k, be, fund, dueStart, charges, dueEnd, plug } of calc) {
         const isRealloc = reallocFunds.has(fund)
-        // Normal: fall (plug≥0) → payment, rise → positive adjustment. Re-basing: the whole delta →
-        // a signed adjustment (fall → negative/credit, rise → positive), so owed nets to ~0 fund-wide.
-        const payments = isRealloc ? 0 : (plug >= 0 ? plug : 0)
-        const adjustments = isRealloc ? Number((-plug).toFixed(4)) : (plug < 0 ? -plug : 0)
+        // CHARGE RE-SPLIT: for a DECLARED reallocation fund, a re-basing or credit movement is booked as
+        // a regularization CHARGE (per-owner Facturat), not an adjustment — so Datorat = Facturat and the
+        // re-based shares live in each owner's Facturat. A balance FALL (plug>0) is still a real payment;
+        // a RISE or the whole reshuffle delta becomes a charge. Non-reallocation funds keep the old rule.
+        // Skip the re-split for the LAST injected period: its dueEnd is the (blank) next-month arrears,
+        // and it is fully re-done by the April completion patch — re-splitting it here would book a
+        // spurious charge from the empty look-ahead (e.g. a credit -13.482 → 0 read as a +13.482 rise).
+        const reSplit = REALLOC.has(fund) && m.code !== months[months.length - 1].code
+        let payments = 0, adjustments = 0, extraCharge = 0
+        if (reSplit) {
+          if (isRealloc) extraCharge = Number((-plug).toFixed(4))          // reshuffle: both signs → charge
+          else if (plug < -0.005) extraCharge = Number((-plug).toFixed(4)) // credit-clear / rise → charge
+          else payments = plug >= 0 ? plug : 0                             // real payment
+        } else {
+          payments = plug >= 0 ? plug : 0
+          adjustments = plug < 0 ? -plug : 0
+        }
+        const chargesFinal = Number((charges + extraCharge).toFixed(4))
         if (payments > 0.005) {
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF + '_PAY', refId: periodId, fundId: fid(fund) } })
           await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_PAY', refId: periodId, unitId: null, amount: payments, meta: { source: REF } } })
         }
+        if (Math.abs(extraCharge) > 0.005) { // regularization charge (reponderare-cote / credit-clear) — Datorat via charges
+          const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', lane: 'ACCRUAL', amount: extraCharge, currency: 'RON', refType: REF + '_RGL', refId: periodId, fundId: fid(fund) } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', fundId: fid(fund), currency: 'RON', refType: REF + '_RGL', refId: periodId, unitId: null, amount: extraCharge, meta: { source: REF, reason: 'reponderare-cote' } } })
+        }
         if (isRealloc && Math.abs(adjustments) > 0.005) {
-          // Book the re-basing leg in the ledger too (kind ADJUSTMENT) — closes the statement↔ledger
-          // gap for these legs and gives the avizier a reasoned line instead of a phantom payment.
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF + '_ADJ', refId: periodId, fundId: fid(fund) } })
           await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: 'reponderare-cote' } } })
         }
-        await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges, payments, adjustments, dueEnd } })
+        await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges: chargesFinal, payments, adjustments, dueEnd } })
         running.set(k, dueEnd)
       }
 
