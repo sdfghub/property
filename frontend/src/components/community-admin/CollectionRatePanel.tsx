@@ -143,7 +143,6 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
               <Stat label={t('collection.owed', 'Datorat')} value={money(data.totals.owed)} />
               <Stat label={t('collection.paid', 'Plătit')} value={money(data.totals.paid)} />
               <Stat label={t('collection.outstanding', 'Restant')} value={money(data.totals.outstanding)} />
-              <Stat label="CPI" value={String(data.totals.cpi)} />
             </div>
             <div className="muted" style={{ marginTop: 6, fontSize: 11 }}>
               {t('collection.owedFormula', 'Datorat = Sold precedent + Facturat + Ajustări · Grad = Plătit / Facturat')}
@@ -158,13 +157,12 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
           {/* Tree: domain → fund → billing entity */}
           <div className="card">
             <div className="row" style={{ gap: 12, padding: '0 4px 6px', fontSize: 12 }}>
-              <span className="muted" style={{ flex: 1 }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
+              <span className="muted" style={{ flex: 1, minWidth: 0 }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
               <span className="muted" style={{ width: 190, textAlign: 'right' }}>{t('collection.rate', 'Grad')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.charges', 'Facturat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.owed', 'Datorat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.paid', 'Plătit')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.outstanding', 'Restant')}</span>
-              <span className="muted" style={{ width: 60, textAlign: 'right' }}>CPI</span>
             </div>
 
             {data.domains.map((d) => {
@@ -172,7 +170,7 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
               return (
                 <div key={dk}>
                   <TreeRow depth={0} open={!!expanded[dk]} onToggle={() => toggle(dk)}
-                    name={d.label} m={d} cpi={d.cpi} strong />
+                    name={d.label} m={d} strong />
                   {expanded[dk] && d.funds.map((f) => {
                     const fk = `f:${d.key}:${f.code}`
                     const leaves = data.rows
@@ -182,9 +180,9 @@ export function CollectionRatePanel({ communityId }: { communityId: string }) {
                     return (
                       <div key={fk}>
                         <TreeRow depth={1} open={!!expanded[fk]} onToggle={() => toggle(fk)}
-                          name={f.shortName || f.label} m={f} cpi={f.cpi} />
+                          name={f.shortName || f.label} m={f} />
                         {expanded[fk] && leaves.map(({ row, m }) => (
-                          <TreeRow key={`${fk}:${row.beId}`} depth={2} name={row.displayName} m={m} cpi={row.cpi} />
+                          <TreeRow key={`${fk}:${row.beId}`} depth={2} name={row.displayName} m={m} />
                         ))}
                       </div>
                     )
@@ -285,11 +283,10 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function TreeRow({ depth, name, m, cpi, open, onToggle, strong }: {
+function TreeRow({ depth, name, m, open, onToggle, strong }: {
   depth: number
   name: string
   m: Metric
-  cpi?: number
   open?: boolean
   onToggle?: () => void
   strong?: boolean
@@ -323,7 +320,6 @@ function TreeRow({ depth, name, m, cpi, open, onToggle, strong }: {
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.owed)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.paid)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.outstanding)}</span>
-      <span className="muted" style={{ width: 60, textAlign: 'right' }}>{cpi == null ? '' : cpi}</span>
     </div>
   )
 }
