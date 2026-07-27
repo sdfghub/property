@@ -161,10 +161,29 @@ async function main() {
         let s = svc.get(sk); if (!s) { s = { fund, lines: [] }; svc.set(sk, s) }
         s.lines.push({ be, unit, amount: amt })
       }
+      // A fund's monthly (-Lună) line with BOTH positive and negative unit values is a CORRECTION
+      // (a re-basing/redistribution of shares), not billing. Exclude it from charges: the balance
+      // chain already carries its effect via the arrears look-ahead, and the re-basing detector books
+      // that movement as net-neutral owed-adjustments. Booking it as charges too double-counts the
+      // reshuffle (that was the +28.593 REABILITARE_1 artifact). Billing months are all same-sign.
+      const correctionFunds = new Set<string>()
+      {
+        const seen = new Map<string, { pos: boolean; neg: boolean }>()
+        for (const u of Object.values<any>(m.units)) {
+          for (const [fund, amt] of Object.entries<any>(u.funds || {})) {
+            const v = Number(amt); if (Math.abs(v) < 0.005) continue
+            const s = seen.get(fund) ?? { pos: false, neg: false }
+            if (v > 0) s.pos = true; else s.neg = true
+            seen.set(fund, s)
+          }
+        }
+        for (const [fund, s] of seen) if (s.pos && s.neg) correctionFunds.add(fund)
+      }
+      if (correctionFunds.size) console.log(`  ⚖ ${m.code}: correction line(s) excluded from charges (carried by the balance chain): ${[...correctionFunds].join(', ')}`)
       for (const [unitCode, u] of Object.entries(m.units)) {
         const be = unitBe.get(unitCode); if (!be) continue
         for (const [service, amt] of Object.entries(u.charges)) add(be, 'EXPENSES', unitCode, service, amt)
-        for (const [fund, amt] of Object.entries(u.funds)) add(be, fund, unitCode, 'CONTRIB', amt)
+        for (const [fund, amt] of Object.entries(u.funds)) { if (correctionFunds.has(fund)) continue; add(be, fund, unitCode, 'CONTRIB', amt) }
         const cp = SOURCE_PEN ? Number(u.penPosted || 0) : (penByCodeUnit.get(m.code)?.get(unitCode) || 0)
         if (cp > 0) add(be, 'PENALIZARI', unitCode, SOURCE_PEN ? 'penalty:SOURCE' : 'penalty:EXPENSES', cp) // source Penalizări-Curente, or computed
       }
