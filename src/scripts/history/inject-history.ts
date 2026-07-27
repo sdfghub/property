@@ -26,6 +26,12 @@ async function main() {
   try {
     const parsed = parseExport(dir)
     const communityId = parsed.community
+    // Explicit, declared share reallocations (reponderare de cote): funds whose post-billing monthly
+    // line is an administrative re-division of who owes the fund, NOT billing. Their net-zero per-unit
+    // movements are booked as 'reponderare-cote' owed-adjustments and excluded from charges. Declared
+    // in history-mapping.json.shareReallocations.funds — so the treatment is opt-in, not heuristic.
+    const REALLOC = new Set<string>((() => { try { const mp = JSON.parse(require('fs').readFileSync(require('path').join(dir, 'history-mapping.json'), 'utf8')); return mp.shareReallocations?.funds ?? [] } catch { return [] } })())
+    if (REALLOC.size) console.log(`share reallocations declared (reponderare-cote): ${[...REALLOC].join(', ')}`)
     const months = parsed.months.filter((m) => m.code < cutover && Object.keys(m.units).length)
     console.log(`community=${communityId}  injecting ${months.length} periods (< ${cutover}): ${months[0]?.code}..${months[months.length - 1]?.code}`)
 
@@ -177,7 +183,7 @@ async function main() {
             seen.set(fund, s)
           }
         }
-        for (const [fund, s] of seen) if (s.pos && s.neg) correctionFunds.add(fund)
+        for (const [fund, s] of seen) if (s.pos && s.neg && REALLOC.has(fund)) correctionFunds.add(fund) // only for DECLARED reallocation funds
       }
       if (correctionFunds.size) console.log(`  ⚖ ${m.code}: correction line(s) excluded from charges (carried by the balance chain): ${[...correctionFunds].join(', ')}`)
       for (const [unitCode, u] of Object.entries(m.units)) {
@@ -273,6 +279,7 @@ async function main() {
       for (const c of calc) { const a = byFund.get(c.fund) ?? []; a.push(c); byFund.set(c.fund, a) }
       for (const [fund, cs] of byFund) {
         if (fund === 'PENALIZARI') continue
+        if (!REALLOC.has(fund)) continue // only DECLARED reallocation funds (explicit, not heuristic)
         if (cs.reduce((a, c) => a + Math.abs(c.charges), 0) > 0.005) continue // still billing ⇒ real activity
         const nUp = cs.filter((c) => c.plug < -0.005).length
         const nDown = cs.filter((c) => c.plug > 0.005).length
@@ -299,7 +306,7 @@ async function main() {
           // Book the re-basing leg in the ledger too (kind ADJUSTMENT) — closes the statement↔ledger
           // gap for these legs and gives the avizier a reasoned line instead of a phantom payment.
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF + '_ADJ', refId: periodId, fundId: fid(fund) } })
-          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: 'rerepartizare-cote' } } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: 'reponderare-cote' } } })
         }
         await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges, payments, adjustments, dueEnd } })
         running.set(k, dueEnd)

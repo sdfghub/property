@@ -185,5 +185,11 @@
    "fund": "REABILITARE_3",
    "_note": "REAB3 arrears (newer export 20260713)"
   }
+ },
+ "shareReallocations": {
+  "_doc": "Funds whose post-billing monthly (-Luna) line is a cota-parte reallocation (reponderare de cote) — an administrative re-division of who owes the fund, NOT new billing. Their mixed-sign / net-zero per-unit movements are booked as explicit 'reponderare-cote' owed-adjustments (net-neutral) and excluded from charges. Verified against the export + ledger (2026-03 Proiect+Reabilitare: SAD 1 +15717, SAD 2/1 -13482, AP 11 -5743, ... net ~0).",
+  "funds": [
+   "REABILITARE_1"
+  ]
  }
 }
