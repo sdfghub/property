@@ -247,7 +247,13 @@ async function main() {
       const gross = Number(s.dueStart) + Number(s.charges) - target
       let payments = 0, adjustments = 0, extraCharge = 0, reason: string | undefined
       if (fund === 'PENALIZARI') { adjustments = -gross; reason = 'scutire-penalizari'; forgiven += gross }
-      else if (reattrib.has(`${s.billingEntityId}::${fund}`)) { payments = gross; reason = 'reatribuire-plata' } // credit removed via payment reversal (gross<0 ⇒ negative payment), Datorat-flat
+      else if (reattrib.has(`${s.billingEntityId}::${fund}`)) {
+        // AUTHORITATIVE: the declared reattribution amount must equal the reconciliation the source
+        // implies (−gross = the misdirected credit being reversed). Abort on any real mismatch.
+        const declared = reattrib.get(`${s.billingEntityId}::${fund}`)!.amount
+        if (Math.abs((-gross) - declared) > 0.5) throw new Error(`payment reattribution mismatch: ${fund} declared ${declared.toFixed(2)} but source reconciliation is ${(-gross).toFixed(2)}`)
+        payments = gross; reason = 'reatribuire-plata'
+      }
       else if (REALLOC.has(fund) && gross < -0.005) { extraCharge = -gross; reason = 'reponderare-cote' } // re-split: rise → regularization CHARGE (Datorat=Facturat)
       else if (gross >= 0) { payments = gross }
       else { adjustments = -gross; reason = 'reconciliere-numerar' }
@@ -268,6 +274,14 @@ async function main() {
       patched++
     }
     console.log(`  ✓ completed April: patched ${patched} (BE,fund); forgave ${forgiven.toFixed(2)} penalties (scutire); Σ non-penalty April dueEnd = ${[...close.values()].reduce((a, b) => a + b, 0).toFixed(2)}`)
+    // AUTHORITATIVE cross-check: total penalty forgiven must match the declared administrative write-offs
+    // (payments-2026-05.json penalty-writeoff), allowing for the small April current on top of the Restanțe.
+    const declaredWO = (loadJson('payments-2026-05.json').specialHandling || []).filter((e: any) => e.type === 'penalty-writeoff').reduce((a: number, e: any) => a + Number(e.amount || 0), 0)
+    if (declaredWO > 0) {
+      const drift = Math.abs(forgiven - declaredWO)
+      if (drift > declaredWO * 0.05 + 50) throw new Error(`penalty write-off mismatch: declared ${declaredWO.toFixed(2)} but forgave ${forgiven.toFixed(2)} (drift ${drift.toFixed(2)})`)
+      console.log(`  ✓ penalty write-off cross-check OK: declared ${declaredWO.toFixed(2)} ≈ forgave ${forgiven.toFixed(2)} (drift ${(forgiven - declaredWO).toFixed(2)} = April current)`)
+    }
   }
 
   // ── 2) compute May 2026-05 (chains from April beStatement.dueEnd) ──
