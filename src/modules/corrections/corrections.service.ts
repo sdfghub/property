@@ -56,13 +56,41 @@ export class CorrectionsService {
   }
 
   /**
-   * List corrections from the LEDGER (be_ledger_entry_detail with a meta.reason) — this surfaces BOTH
-   * admin-created corrections (refType='CORRECTION') AND seed/history-derived ones (MIGRATED_*), grouped
-   * per (period, reason, refType, refId). Admin-created groups carry their Correction id/status (voidable);
-   * historical ones are read-only.
+   * PRIMARY corrections view: the `Correction` declarations themselves (real DB rows — both seed/history-
+   * created and admin-created). This is the source of truth. Pass `debug='ledger'` to instead see the
+   * allocation RESULT (the derived ledger legs) — a debug view, per the model "the ledger is only for debug
+   * after allocation".
    */
-  async list(communityRef: string, periodCode?: string) {
+  async list(communityRef: string, periodCode?: string, debug?: string) {
     const communityId = await this.resolveCommunityId(communityRef)
+    if (debug === 'ledger') return this.listFromLedger(communityId, periodCode)
+    const rows = await this.prisma.correction.findMany({
+      where: { communityId, ...(periodCode ? { periodCode } : {}) },
+      orderBy: [{ periodCode: 'desc' }, { createdAt: 'desc' }],
+    })
+    const beIds = Array.from(new Set(rows.map((r) => r.billingEntityId).filter(Boolean))) as string[]
+    const bes = beIds.length
+      ? await this.prisma.billingEntity.findMany({ where: { id: { in: beIds } }, select: { id: true, code: true, name: true, displayName: true } })
+      : []
+    const beById = new Map(bes.map((b) => [b.id, b]))
+    return rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      reason: r.reason,
+      periodCode: r.periodCode,
+      billingEntity: r.billingEntityId ? (beById.get(r.billingEntityId) ?? { id: r.billingEntityId }) : null,
+      fundCode: r.fundCode,
+      amount: r.amount != null ? Number(r.amount) : null,
+      payload: r.payload,
+      note: r.note,
+      status: r.status,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt,
+    }))
+  }
+
+  /** DEBUG view: the derived ledger legs (allocation result), grouped per (period, reason, refId). Read-only. */
+  private async listFromLedger(communityId: string, periodCode?: string) {
     const legs: any[] = await this.prisma.$queryRawUnsafe(
       `select pr.code as period, pr.seq as seq, l.meta->>'reason' as reason, l.kind, l.ref_type as reftype,
               l.ref_id as refid, l.meta->>'correctionId' as cid, l.billing_entity_id as beid,

@@ -35,4 +35,7 @@ KRALIK_SKIP_APRIL=1 npx ts-node --transpile-only src/scripts/seed-kralik-april-m
 echo "💰 importing the cash register..."
 npm run import:cash
 
+echo "🧾 registering declared corrections as Correction rows (source of truth for the admin view)..."
+TS_NODE_COMPILER_OPTIONS='{"module":"commonjs"}' npx ts-node --transpile-only src/scripts/backfill-corrections.ts Kralik
+
 echo "✅ Kralik rebuilt WITHOUT the bridge: 2021-11 → 2026-05."

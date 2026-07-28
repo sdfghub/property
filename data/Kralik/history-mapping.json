@@ -189,9 +189,9 @@
  "creditTransfers": {
   "_doc": "A fund credit (prepayment / re-split credit) APPLIED to OTHER funds' dues — the credit leaves REABILITARE_1 as a PAYMENT reversal (reatribuire-plata), so the fund's Datorat stays flat (= Facturat) and only its outstanding shifts. NOT a charge, NOT a forgiveness. Confirmed with admin per case.",
   "entries": [
-   { "be": "BE_KARACS_BEBE", "period": "2025-11", "fund": "REABILITARE_1", "note": "credit -300 aplicat pe Intretinere 228.17 + Reab 2 71.83 — admin Adriana Dascal" },
-   { "be": "BE_DAVID_MARIUS", "period": "2026-04", "fund": "REABILITARE_1", "note": "credit re-split -627 aplicat pe Intretinere/Rulment/Reparatii 602.6 + Reab 3 24.4 — admin Adriana Dascal" },
-   { "be": "BE_SOAMES_MARIANA", "period": "2026-03", "fund": "REABILITARE_1", "note": "credit re-split -3821 (Corectie: Afisat -3821, Calculat cashflow 0) aplicat — admin Adriana Dascal" }
+   { "be": "BE_KARACS_BEBE", "period": "2025-11", "fund": "REABILITARE_1", "amount": -300, "note": "credit -300 aplicat pe Intretinere 228.17 + Reab 2 71.83 — admin Adriana Dascal" },
+   { "be": "BE_DAVID_MARIUS", "period": "2026-04", "fund": "REABILITARE_1", "amount": -627, "note": "credit re-split -627 aplicat pe Intretinere/Rulment/Reparatii 602.6 + Reab 3 24.4 — admin Adriana Dascal" },
+   { "be": "BE_SOAMES_MARIANA", "period": "2026-03", "fund": "REABILITARE_1", "amount": -3821, "note": "credit re-split -3821 (Corectie: Afisat -3821, Calculat cashflow 0) aplicat — admin Adriana Dascal" }
   ]
  },
  "shareReallocations": {

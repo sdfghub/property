@@ -13,8 +13,8 @@ export class CorrectionsController {
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get()
-  list(@Param('communityId') c: string, @Query('period') period?: string) {
-    return this.svc.list(c, period)
+  list(@Param('communityId') c: string, @Query('period') period?: string, @Query('debug') debug?: string) {
+    return this.svc.list(c, period, debug)
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
