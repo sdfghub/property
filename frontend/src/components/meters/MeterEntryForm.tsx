@@ -149,6 +149,29 @@ export function MeterEntryForm({
 
   const onChange = (key: string, val: string) => setValues((prev) => ({ ...prev, [key]: val }))
 
+  // Strip the building/stair prefix (e.g. "400191-C1-U6-AP 1" → "U6-AP 1") for a compact unit header.
+  const prettyUnit = (code?: string | null) => (code ? code.replace(/^\d+-C\d+-/, '') : '')
+  // A meter's contribution to its unit total: consumption (INDEX: entered − previous) or the raw value.
+  const effectiveValue = (item: any) => {
+    const entered = Number(values[item.key])
+    if (Number.isNaN(entered)) return 0
+    if (modeOf(item.typeCode) === 'INDEX') {
+      const prev = item.meterId ? prevByMeter[item.meterId] ?? null : null
+      return prev != null ? Math.max(0, entered - prev) : entered
+    }
+    return entered
+  }
+  // Group items by unit (community / no-unit first), preserving template order within each group.
+  const groupedItems = React.useMemo(() => {
+    const map = new Map<string, MeterItem[]>()
+    for (const it of items) {
+      const k = (it as any).unitCode || ''
+      if (!map.has(k)) map.set(k, [])
+      map.get(k)!.push(it)
+    }
+    return Array.from(map.entries())
+  }, [items])
+
   const save = async () => {
     setLoading(true)
     setMessage(null)
@@ -220,13 +243,16 @@ export function MeterEntryForm({
       {state === 'CLOSED' ? (
         <div className="stack" style={{ marginTop: 8 }}>
           <div className="muted">{t('meter.digest', 'Digest')}</div>
-          <ul className="muted" style={{ margin: 0, paddingLeft: 12 }}>
-            {items.map((item) => (
-              <li key={item.key}>
-                <strong>{item.label}</strong>: {values[item.key] ?? '—'}
-              </li>
-            ))}
-          </ul>
+          {groupedItems.map(([unitCode, groupItems]) => (
+            <div key={unitCode || '__community'} style={{ marginBottom: 4 }}>
+              <div className="muted" style={{ fontSize: 12 }}><strong>{unitCode ? `${t('meter.unit', 'Unitate')} ${prettyUnit(unitCode)}` : t('meter.community', 'Contoare comunitate')}</strong></div>
+              <ul className="muted" style={{ margin: 0, paddingLeft: 12 }}>
+                {groupItems.map((item) => (
+                  <li key={item.key}>{item.label}: {values[item.key] ?? '—'}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn secondary" type="button" onClick={() => updateState('FILLED')} disabled={loading}>
               Reopen
@@ -235,8 +261,16 @@ export function MeterEntryForm({
         </div>
       ) : (
         <>
-          <div className="stack" style={{ gap: 6 }}>
-            {items.map((item) => {
+          <div className="stack" style={{ gap: 12 }}>
+            {groupedItems.map(([unitCode, groupItems]) => (
+              <div key={unitCode || '__community'} className="stack" style={{ gap: 4, borderTop: '2px solid var(--border,#e5e5e5)', paddingTop: 8 }}>
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <strong style={{ fontSize: 13 }}>{unitCode ? `${t('meter.unit', 'Unitate')} ${prettyUnit(unitCode)}` : t('meter.community', 'Contoare comunitate')}</strong>
+                  {groupItems.filter((i) => i.kind === 'meter').length > 1 && (
+                    <span className="muted" style={{ fontSize: 12 }}>{t('meter.unitTotal', 'total unitate')}: <strong>{Number(groupItems.filter((i) => i.kind === 'meter').reduce((s, i) => s + effectiveValue(i), 0).toFixed(3))}</strong></span>
+                  )}
+                </div>
+                {groupItems.map((item) => {
               const mid = (item as any).meterId as string | undefined
               const mode = modeOf((item as any).typeCode)
               const prev = mid ? prevByMeter[mid] ?? null : null
@@ -308,6 +342,8 @@ export function MeterEntryForm({
               </div>
               )
             })}
+              </div>
+            ))}
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={save} disabled={loading}>

@@ -3,6 +3,9 @@
 export const translations = {
   // English translations
   en: {
+    "meter.unit": "Unit",
+    "meter.community": "Community meters",
+    "meter.unitTotal": "unit total",
     "alloc.allocated": "Allocated",
     "alloc.delta": "Delta",
     "alloc.expected": "Expected",
@@ -1193,6 +1196,9 @@ export const translations = {
   },
   // Romanian translations
   ro: {
+    "meter.unit": "Unitate",
+    "meter.community": "Contoare comunitate",
+    "meter.unitTotal": "total unitate",
     "alloc.allocated": "Alocat",
     "alloc.delta": "Diferență",
     "alloc.expected": "Așteptat",
