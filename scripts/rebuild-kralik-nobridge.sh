@@ -38,4 +38,10 @@ npm run import:cash
 echo "🧾 registering declared corrections as Correction rows (source of truth for the admin view)..."
 TS_NODE_COMPILER_OPTIONS='{"module":"commonjs"}' npx ts-node --transpile-only src/scripts/backfill-corrections.ts Kralik
 
+echo "🧹 pruning meters no longer in def.json (wipe can't — Meter has no communityId)..."
+TS_NODE_COMPILER_OPTIONS='{"module":"commonjs"}' npx ts-node --transpile-only src/scripts/prune-stale-meters.ts Kralik
+
+echo "🚿 seeding the raw MeterReading layer from per-unit measures (so the meter form shows values)..."
+TS_NODE_COMPILER_OPTIONS='{"module":"commonjs"}' npx ts-node --transpile-only src/scripts/backfill-meter-readings.ts Kralik
+
 echo "✅ Kralik rebuilt WITHOUT the bridge: 2021-11 → 2026-05."

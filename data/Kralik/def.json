@@ -595,7 +595,7 @@
       "code": "400191-C1-U25-AP 31",
       "name": "AP 31",
       "residents": 2,
-      "sqm": 120.0,
+      "sqm": 120,
       "cpi": 6.86,
       "billingEntity": "BE_FIKL_EMIL",
       "groupCodes": [
@@ -1033,499 +1033,251 @@
       "origin": "DERIVED"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U6-AP 1",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U6_AP_1_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U28-AP 1/B",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U9-AP 2/1",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U19-AP 2/2",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U8-AP 3",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U8_AP_3_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U12-AP 4 (I)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U12_AP_4_I__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U10-AP 4A",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U20-AP 5 (I-A)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U20_AP_5_I_A__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U21-AP 5 (I-B)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U21_AP_5_I_B__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U7-AP 6",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U7_AP_6_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U11-AP 6A",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U18-AP 8",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U18_AP_8_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U29-AP 9",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U29_AP_9_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U37-AP 10A",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U27-AP 10B",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U25-AP 31",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U25_AP_31_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U26-AP 32",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U26_AP_32_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U30-AP 4 (III)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U30_AP_4_III__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U31-AP 5 (III)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U31_AP_5_III__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U32-AP 11",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U32_AP_11_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U14-AP 11A",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U33-AP 11B",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U34-AP 12 (SAD 4/A)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_A__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U34-AP 12 (SAD 4/B)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_B__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U34-AP 12 (SAD 4/C)",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U34_AP_12_SAD_4_C__WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U35-AP 14A",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U36-AP 14B",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U23-SPAȚIU COMERCIAL",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U23_SPA_IU_COMERCIAL_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U16-SAD 2/1",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U17-SAD 2/2",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
+      "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD",
       "origin": "METER"
     },
     {
-      "name": "Contor - Apa Rece 1",
+      "name": "Apă rece",
       "scopeType": "UNIT",
       "scopeCode": "400191-C1-U5-SAD 1",
       "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BAIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 2",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U6-AP 1",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U6_AP_1_WATER_COLD_CONTOR_APA_RECE_2_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U28-AP 1/B",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U28_AP_1_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U9-AP 2/1",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U9_AP_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U19-AP 2/2",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U19_AP_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U8-AP 3",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U8_AP_3_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U12-AP 4 (I)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U12_AP_4_I_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U10-AP 4A",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U10_AP_4A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U20-AP 5 (I-A)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U20_AP_5_I_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U21-AP 5 (I-B)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U21_AP_5_I_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U7-AP 6",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U7_AP_6_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U11-AP 6A",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U11_AP_6A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U18-AP 8",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U18_AP_8_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U29-AP 9",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U29_AP_9_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U37-AP 10A",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U37_AP_10A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U27-AP 10B",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U27_AP_10B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U25-AP 31",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U25_AP_31_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U26-AP 32",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U26_AP_32_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U30-AP 4 (III)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U30_AP_4_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U31-AP 5 (III)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U31_AP_5_III_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U32-AP 11",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U32_AP_11_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U14-AP 11A",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U14_AP_11A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U33-AP 11B",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U33_AP_11B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/A)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/B)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U34-AP 12 (SAD 4/C)",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U34_AP_12_SAD_4_C_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U35-AP 14A",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U35_AP_14A_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U36-AP 14B",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U36_AP_14B_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U23-SPAȚIU COMERCIAL",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U23_SPATIU_COMERCIAL_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U16-SAD 2/1",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U16_SAD_2_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U17-SAD 2/2",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U17_SAD_2_2_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
-      "origin": "METER"
-    },
-    {
-      "name": "Contor - Apa Rece 1",
-      "scopeType": "UNIT",
-      "scopeCode": "400191-C1-U5-SAD 1",
-      "typeCode": "WATER_COLD",
-      "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD_CONTOR_APA_RECE_1_BUCATARIE",
+      "meterId": "M_400191_C1_U5_SAD_1_WATER_COLD",
       "origin": "METER"
     },
     {

@@ -22,6 +22,10 @@ async function main() {
   if (!community) throw new Error(`Community not found: ${ref}`)
   const cid = community.id
 
+  // Clean rebuild: the wipe step doesn't know about MeterReading, so clear this community's rows first
+  // (keeps reseeds idempotent — no accumulation / double-counting in the rollup).
+  await (prisma as any).meterReading.deleteMany({ where: { communityId: cid } })
+
   const meters = await prisma.meter.findMany({ select: { meterId: true, scopeType: true, scopeCode: true, typeCode: true } })
   const realIds = new Set(meters.map((m) => m.meterId))
   const byScope = new Map<string, string[]>() // scopeType|scopeCode|typeCode -> [meterId] (sorted, deterministic)
