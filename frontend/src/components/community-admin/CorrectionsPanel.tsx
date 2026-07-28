@@ -14,6 +14,20 @@ type Ctx = {
 const TYPES = ['MANUAL_ADJUSTMENT', 'CREDIT_TRANSFER', 'PENALTY_WRITEOFF', 'PAYMENT_REATTRIB', 'RESHUFFLE'] as const
 type Kind = (typeof TYPES)[number]
 
+// Ledger `meta.reason` → RO label (covers both admin-created and seed/historical correction legs).
+const REASON_LABELS: Record<string, string> = {
+  'reponderare-cote': 'Reponderare cote',
+  'reatribuire-plata': 'Reatribuire plată',
+  'scutire-penalizari': 'Scutire penalizări',
+  'ajustare-manuala': 'Ajustare manuală',
+  'reconciliere-numerar': 'Reconciliere numerar',
+  'ajustare-sold': 'Ajustare sold',
+  'fund-spend': 'Cheltuială fond',
+  'override-set': 'Ajustare charge (override)',
+  'override-reverse': 'Ajustare charge (storno)',
+}
+const reasonLabel = (r: string) => REASON_LABELS[r] || r
+
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -200,30 +214,33 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', background: 'var(--muted-bg, #f4f4f5)' }}>
+                <th style={{ padding: '8px 10px' }}>{t('corr.period', 'Perioadă')}</th>
                 <th style={{ padding: '8px 10px' }}>{t('corr.type', 'Tip')}</th>
                 <th style={{ padding: '8px 10px' }}>{t('corr.entity', 'Unitate / fond')}</th>
-                <th style={{ padding: '8px 10px' }}>{t('corr.period', 'Perioadă')}</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>{t('corr.amount', 'Sumă')}</th>
-                <th style={{ padding: '8px 10px' }}>{t('corr.status', 'Stare')}</th>
+                <th style={{ padding: '8px 10px' }}>{t('corr.source', 'Sursă')}</th>
                 <th style={{ padding: '8px 10px' }}></th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
               {rows.map((r) => (
-                <tr key={r.id} style={{ borderTop: '1px solid var(--border, #eee)', opacity: r.status === 'VOID' ? 0.55 : 1 }}>
-                  <td style={{ padding: '6px 10px' }}>{typeLabel(r.type)}</td>
+                <tr key={r.key} style={{ borderTop: '1px solid var(--border, #eee)', opacity: r.status === 'VOID' ? 0.55 : 1 }}>
+                  <td style={{ padding: '6px 10px' }}>{r.period}</td>
+                  <td style={{ padding: '6px 10px' }}>{reasonLabel(r.reason)}</td>
                   <td style={{ padding: '6px 10px' }}>
-                    {r.type === 'RESHUFFLE'
-                      ? `${Object.keys(r.payload?.perBe || {}).length} unități · ${r.fundCode || ''}`
-                      : `${r.billingEntity?.name || r.billingEntity?.code || '—'}${r.fundCode ? ' · ' + r.fundCode : ''}`}
+                    {r.scope || (r.funds?.length ? r.funds.join(', ') : '—')}
+                    {r.legs > 1 ? <span className="muted" style={{ fontSize: 11 }}> · {r.legs} {t('corr.legs', 'linii')}</span> : null}
                     {r.note ? <div className="muted" style={{ fontSize: 11 }}>{r.note}</div> : null}
                   </td>
-                  <td style={{ padding: '6px 10px' }}>{r.periodCode}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right' }}>{r.amount != null ? money(r.amount) : (r.type === 'RESHUFFLE' ? '—' : '')}</td>
-                  <td style={{ padding: '6px 10px' }}><span className={`badge ${statusMeta(r.status)?.tone || 'secondary'}`}>{statusMeta(r.status)?.label || r.status}</span></td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right' }}>{money(r.amount)}</td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <span className={`badge ${r.source === 'admin' ? 'tertiary' : 'secondary'}`}>
+                      {r.source === 'admin' ? t('corr.srcAdmin', 'Admin') : t('corr.srcHist', 'Istoric')}
+                    </span>
+                  </td>
                   <td style={{ padding: '6px 10px', textAlign: 'right' }}>
-                    {isAdmin && r.status === 'ACTIVE' && (
-                      <button className="btn ghost small" type="button" disabled={busy === r.id} onClick={() => voidCorrection(r.id)}>{t('corr.void', 'Anulează')}</button>
+                    {isAdmin && r.source === 'admin' && r.status === 'ACTIVE' && r.correctionId && (
+                      <button className="btn ghost small" type="button" disabled={busy === r.correctionId} onClick={() => voidCorrection(r.correctionId)}>{t('corr.void', 'Anulează')}</button>
                     )}
                   </td>
                 </tr>

@@ -55,32 +55,58 @@ export class CorrectionsService {
     }
   }
 
+  /**
+   * List corrections from the LEDGER (be_ledger_entry_detail with a meta.reason) — this surfaces BOTH
+   * admin-created corrections (refType='CORRECTION') AND seed/history-derived ones (MIGRATED_*), grouped
+   * per (period, reason, refType, refId). Admin-created groups carry their Correction id/status (voidable);
+   * historical ones are read-only.
+   */
   async list(communityRef: string, periodCode?: string) {
     const communityId = await this.resolveCommunityId(communityRef)
-    const rows = await this.prisma.correction.findMany({
-      where: { communityId, ...(periodCode ? { periodCode } : {}) },
-      orderBy: { createdAt: 'desc' },
-    })
-    // resolve BE code/name for display
-    const beIds = Array.from(new Set(rows.map((r) => r.billingEntityId).filter(Boolean))) as string[]
-    const bes = beIds.length
-      ? await this.prisma.billingEntity.findMany({ where: { id: { in: beIds } }, select: { id: true, code: true, name: true } })
-      : []
-    const beById = new Map(bes.map((b) => [b.id, b]))
-    return rows.map((r) => ({
-      id: r.id,
-      type: r.type,
-      reason: r.reason,
-      periodCode: r.periodCode,
-      billingEntity: r.billingEntityId ? (beById.get(r.billingEntityId) ?? { id: r.billingEntityId }) : null,
-      fundCode: r.fundCode,
-      amount: r.amount != null ? Number(r.amount) : null,
-      payload: r.payload,
-      note: r.note,
-      status: r.status,
-      createdBy: r.createdBy,
-      createdAt: r.createdAt,
-    }))
+    const legs: any[] = await this.prisma.$queryRawUnsafe(
+      `select pr.code as period, pr.seq as seq, l.meta->>'reason' as reason, l.kind, l.ref_type as reftype,
+              l.ref_id as refid, l.meta->>'correctionId' as cid, l.billing_entity_id as beid,
+              be.name as bename, be.code as becode, fu.code as fund, round(l.amount::numeric,2)::float8 as amount
+         from be_ledger_entry_detail l
+         join period pr on pr.id = l.period_id
+         left join billing_entity be on be.id = l.billing_entity_id
+         left join fund fu on fu.id = l.fund_id
+        where l.community_id = $1 and l.meta->>'reason' is not null
+          ${periodCode ? 'and pr.code = $2' : ''}`,
+      ...([communityId, ...(periodCode ? [periodCode] : [])] as any[]),
+    )
+    const groups = new Map<string, any>()
+    for (const r of legs) {
+      const key = `${r.period}|${r.reason}|${r.reftype}|${r.refid}`
+      let g = groups.get(key)
+      if (!g) g = groups.set(key, { key, period: r.period, seq: Number(r.seq), reason: r.reason, kind: r.kind, refType: r.reftype, correctionId: r.cid || null, amount: 0, legs: 0, bes: new Set<string>(), beName: null as string | null, funds: new Set<string>() }).get(key)
+      g.amount += Number(r.amount || 0); g.legs++
+      if (r.beid) { g.bes.add(r.beid); g.beName = r.bename || r.becode }
+      if (r.fund) g.funds.add(r.fund)
+    }
+    const cids = Array.from(groups.values()).map((g) => g.correctionId).filter(Boolean) as string[]
+    const corrs = cids.length ? await this.prisma.correction.findMany({ where: { id: { in: cids } }, select: { id: true, type: true, status: true, note: true } }) : []
+    const corrById = new Map(corrs.map((c) => [c.id, c]))
+    return Array.from(groups.values())
+      .sort((a, b) => b.seq - a.seq || String(a.reason).localeCompare(b.reason))
+      .map((g) => {
+        const c = g.correctionId ? corrById.get(g.correctionId) : null
+        return {
+          key: g.key,
+          period: g.period,
+          reason: g.reason,
+          kind: g.kind,
+          amount: Math.round(g.amount * 100) / 100,
+          legs: g.legs,
+          scope: g.bes.size === 1 ? g.beName : g.bes.size > 1 ? `${g.bes.size} unități` : null,
+          funds: Array.from(g.funds),
+          source: g.refType === 'CORRECTION' ? 'admin' : 'historical',
+          correctionId: g.correctionId,
+          correctionType: c?.type ?? null,
+          status: c?.status ?? null,
+          note: c?.note ?? null,
+        }
+      })
   }
 
   async create(communityRef: string, actor: string, body: any) {
