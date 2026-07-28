@@ -9,6 +9,7 @@ type Ctx = {
   funds: { code: string; name: string }[]
   billingEntities: { id: string; code: string; name: string }[]
   period: { code: string; status: string } | null
+  periods: { code: string; status: string }[]
 }
 const TYPES = ['MANUAL_ADJUSTMENT', 'CREDIT_TRANSFER', 'PENALTY_WRITEOFF', 'PAYMENT_REATTRIB', 'RESHUFFLE'] as const
 type Kind = (typeof TYPES)[number]
@@ -35,20 +36,26 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
   const [type, setType] = React.useState<Kind>('MANUAL_ADJUSTMENT')
   const [f, setF] = React.useState<any>({ billingEntityId: '', fundCode: '', amount: '', fromFund: '', toFund: '', note: '' })
   const [perBe, setPerBe] = React.useState<Record<string, string>>({})
+  const [filterPeriod, setFilterPeriod] = React.useState('') // '' = all periods (incl. closed)
 
-  const load = React.useCallback(() => {
+  const loadList = React.useCallback((period: string) => {
+    if (!communityId) return
+    const q = period ? `?period=${encodeURIComponent(period)}` : ''
+    api.get<any[]>(`/communities/${communityId}/corrections${q}`)
+      .then((l: any[]) => setRows(l || []))
+      .catch((e: any) => setError(e?.message || 'Failed to load'))
+  }, [api, communityId])
+
+  React.useEffect(() => {
     if (!communityId) return
     setLoading(true)
-    Promise.all([
-      api.get<any[]>(`/communities/${communityId}/corrections`),
-      api.get<Ctx>(`/communities/${communityId}/corrections/context`),
-    ])
-      .then(([list, c]: [any[], Ctx]) => { setRows(list || []); setCtx(c) })
+    api.get<Ctx>(`/communities/${communityId}/corrections/context`)
+      .then((c: Ctx) => setCtx(c))
       .catch((e: any) => setError(e?.message || 'Failed to load'))
       .finally(() => setLoading(false))
   }, [api, communityId])
 
-  React.useEffect(() => { load() }, [load])
+  React.useEffect(() => { loadList(filterPeriod) }, [loadList, filterPeriod])
 
   const reshuffleNet = Object.values(perBe).reduce((s, v) => s + (Number(v) || 0), 0)
 
@@ -69,13 +76,13 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
       }
       await api.post(`/communities/${communityId}/corrections`, body)
       setF({ billingEntityId: '', fundCode: '', amount: '', fromFund: '', toFund: '', note: '' }); setPerBe({}); setShowForm(false)
-      load()
+      loadList(filterPeriod)
     } catch (e: any) { setError(e?.message || 'Failed') } finally { setBusy(null) }
   }
 
   async function voidCorrection(id: string) {
     setBusy(id); setError(null)
-    try { await api.post(`/communities/${communityId}/corrections/${id}/void`, {}); load() }
+    try { await api.post(`/communities/${communityId}/corrections/${id}/void`, {}); loadList(filterPeriod) }
     catch (e: any) { setError(e?.message || 'Failed') } finally { setBusy(null) }
   }
 
@@ -102,10 +109,17 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
     <div className="stack" style={{ gap: 14 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <h4 style={{ margin: 0 }}>{t('corr.title', 'Corecții')}</h4>
+        <label className="row" style={{ gap: 6, alignItems: 'center', fontSize: 13 }}>
+          <span className="muted">{t('corr.filter', 'Perioadă')}:</span>
+          <select className="input" value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)} style={{ width: 'auto' }}>
+            <option value="">{t('corr.allPeriods', 'Toate')}</option>
+            {(ctx?.periods ?? []).map((pr) => <option key={pr.code} value={pr.code}>{pr.code} ({pr.status})</option>)}
+          </select>
+        </label>
         <div className="muted">
           {period
-            ? `${t('corr.targets', 'Se aplică pe perioada')}: ${period.code} (${period.status})`
-            : t('corr.noPeriod', 'Nicio perioadă deschisă')}
+            ? `${t('corr.targets', 'Corecțiile noi se aplică pe')}: ${period.code} (${period.status})`
+            : t('corr.noPeriod', 'Nicio perioadă deschisă pentru corecții noi')}
         </div>
         {isAdmin && period && (
           <button className="btn primary small" type="button" onClick={() => setShowForm((v) => !v)}>

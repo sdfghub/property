@@ -38,18 +38,20 @@ export class CorrectionsService {
     return p
   }
 
-  /** Funds + billing entities + the current target period — everything the create form needs. */
+  /** Funds + billing entities + the current target period + all periods — everything the panel needs. */
   async context(communityRef: string) {
     const communityId = await this.resolveCommunityId(communityRef)
-    const [funds, bes, period] = await Promise.all([
+    const [funds, bes, period, periods] = await Promise.all([
       this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true }, orderBy: { code: 'asc' } }),
       this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true, displayName: true }, orderBy: { order: 'asc' } }),
       this.prisma.period.findFirst({ where: { communityId, status: { in: ['OPEN', 'PREPARED'] } }, orderBy: { seq: 'desc' }, select: { code: true, status: true } }),
+      this.prisma.period.findMany({ where: { communityId }, select: { code: true, status: true }, orderBy: { seq: 'desc' } }),
     ])
     return {
       funds,
       billingEntities: bes.map((b) => ({ id: b.id, code: b.code, name: b.displayName || b.name })),
       period,
+      periods, // all periods (incl. CLOSED) so the panel can filter the list by any past period
     }
   }
 
