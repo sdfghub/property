@@ -201,6 +201,8 @@ export class PeriodService {
 
       // apply admin manual charge overrides (two ADJUSTMENT legs) after all charges are staged
       await this.applyChargeOverrides(tx, communityId, period.id)
+      // derive admin-created corrections (reshuffle/transfer/write-off/manual) into ledger legs
+      await this.applyCorrections(tx, communityId, period.id)
 
       // statements reflect staged charges, applied payments, and posted penalties
       await this.computeStatements(tx, communityId, period.id)
@@ -252,6 +254,7 @@ export class PeriodService {
 
       // re-derive admin charge overrides against the promoted (final) charges
       await this.applyChargeOverrides(tx, communityId, period.id)
+      await this.applyCorrections(tx, communityId, period.id)
 
       // ensure statements exist/updated (idempotent)
       await this.computeStatements(tx, communityId, period.id)
@@ -749,6 +752,75 @@ export class PeriodService {
         await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', fundId: o.fundId, currency: 'RON', refType: leg.refType, refId: periodId, unitId: null, amount: leg.amount, meta: { reason: leg.reason, overrideId: o.id, computed, override: target, comment: o.comment, actor: o.actor } } })
       }
     }
+  }
+
+  /**
+   * Derive admin-created Corrections into ledger legs for a period. A Correction is a declaration; this
+   * emits its ledger entries (refType='CORRECTION', refId=correction.id) which computeStatements then sums
+   * into be_statement (CHARGE→charges, PAYMENT→payments, ADJUSTMENT→adjustments). Delete-and-rederive =
+   * idempotent + status-agnostic, so it is safe to re-run every prepare/approve AND after a history import.
+   */
+  async applyCorrections(tx: TxOrClient, communityId: string, periodId: string) {
+    const prior = await tx.beLedgerEntry.findMany({ where: { communityId, periodId, refType: 'CORRECTION' }, select: { id: true } })
+    if (prior.length) {
+      await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
+      await tx.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
+    }
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { code: true } })
+    if (!period) return
+    const corrections = await tx.correction.findMany({ where: { communityId, periodCode: period.code, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } })
+    if (!corrections.length) return
+    const funds = await tx.fund.findMany({ where: { communityId }, select: { id: true, code: true } })
+    const fundIdByCode = new Map(funds.map((f) => [f.code, f.id]))
+    for (const c of corrections) {
+      for (const leg of this.deriveCorrectionLegs(c, fundIdByCode)) {
+        if (!leg.billingEntityId || !leg.fundId || Math.abs(leg.amount) < 0.005) continue
+        const le = await tx.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: leg.billingEntityId, kind: leg.kind, lane: leg.kind === 'PAYMENT' ? 'CASH' : 'ACCRUAL', amount: leg.amount, currency: 'RON', refType: 'CORRECTION', refId: c.id, fundId: leg.fundId } })
+        await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: leg.billingEntityId, kind: leg.kind, fundId: leg.fundId, currency: 'RON', refType: 'CORRECTION', refId: c.id, unitId: null, amount: leg.amount, meta: { reason: c.reason, correctionId: c.id, type: c.type, note: c.note ?? undefined, actor: c.createdBy } } })
+      }
+    }
+  }
+
+  /** Pure mapping from a Correction declaration to its ledger legs (see CorrectionType in schema). */
+  private deriveCorrectionLegs(
+    c: { type: string; billingEntityId: string | null; fundCode: string | null; amount: any; payload: any },
+    fundIdByCode: Map<string, string>,
+  ): Array<{ kind: 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT'; billingEntityId: string | null; fundId: string | null; amount: number }> {
+    const payload = (c.payload ?? {}) as any
+    const amt = Number(c.amount ?? 0)
+    const fId = (code: string | null | undefined) => (code ? fundIdByCode.get(code) ?? null : null)
+    switch (c.type) {
+      case 'MANUAL_ADJUSTMENT':
+        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: amt }]
+      case 'PENALTY_WRITEOFF':
+        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId('PENALIZARI'), amount: -Math.abs(amt) }]
+      case 'CREDIT_TRANSFER':
+        return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: -Math.abs(amt) }]
+      case 'PAYMENT_REATTRIB':
+        return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.fromFund), amount: -Math.abs(amt) }]
+      case 'RESHUFFLE': {
+        const fid = fId(c.fundCode)
+        return Object.entries(payload.perBe ?? {}).map(([beId, a]) => ({ kind: 'CHARGE' as const, billingEntityId: beId, fundId: fid, amount: Number(a) }))
+      }
+      default:
+        return []
+    }
+  }
+
+  /**
+   * Re-derive corrections + recompute statements for a period NOW — called after an admin create/void so
+   * the avizier reflects it immediately, and reusable after a history import. OPEN periods have no staged
+   * statements yet, so the declaration simply persists and derives at the next prepare.
+   */
+  async reapplyCorrectionsNow(communityId: string, periodCode: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    if (period.status === 'OPEN') return { ok: true, deferred: true }
+    await this.prisma.$transaction(async (tx) => {
+      await this.applyCorrections(tx, communityId, period.id)
+      await this.computeStatements(tx, communityId, period.id)
+      await this.computeCommunityStatements(tx, communityId, period.id)
+    })
+    return { ok: true }
   }
 
   /** The value computeStatements books as `charges` for a (BE, fund): CHARGE / ACCRUAL / ¬OPENING_BALANCE. */

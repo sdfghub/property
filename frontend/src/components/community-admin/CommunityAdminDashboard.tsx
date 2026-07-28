@@ -25,6 +25,7 @@ import { MoneyHub } from '../money/MoneyHub'
 import { AvizierPanel } from './AvizierPanel'
 import { PenaltyReviewPanel } from './PenaltyReviewPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
+import { CorrectionsPanel } from './CorrectionsPanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
 
@@ -47,6 +48,7 @@ export type CommunityAdminTabKey =
   | 'inventory'
   | 'notifications'
   | 'decisions'
+  | 'corrections'
   | 'governance'
   | 'payments'
   | 'statements'
@@ -223,6 +225,7 @@ export function CommunityAdminDashboard({
         { key: 'unpaidInvoices', label: t('tab.unpaidInvoices') || 'Unpaid invoices' },
         { key: 'funds', label: t('tab.funds') || 'Funds' },
         { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
+        { key: 'corrections', label: t('tab.corrections') || 'Corecții' },
       ],
     },
     {
@@ -650,6 +653,7 @@ export function CommunityAdminDashboard({
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
               {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
               {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
+              {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
               {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
               {activeTab === 'unpaidInvoices' && <UnpaidInvoicesPanel communityId={communityId} />}
               {activeTab === 'overview' && (

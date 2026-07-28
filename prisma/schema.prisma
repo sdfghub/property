@@ -236,6 +236,7 @@ model Community {
   VendorPayment              VendorPayment[]
   CashAccount                CashAccount[]
   CashTx                     CashTx[]
+  corrections                Correction[]
 
   @@map("community")
 }
@@ -1563,6 +1564,44 @@ model CommitteeVote {
 
   @@unique([decisionId, userId])
   @@map("committee_vote")
+}
+
+/// Admin-created financial corrections. A Correction is a declaration (the "true facts"); the ledger
+/// entries are DERIVED from it (refType='CORRECTION', refId=id) by PeriodService.applyCorrections, and
+/// summed into be_statement like any other ledger legs. Targets the current non-CLOSED period.
+enum CorrectionType {
+  RESHUFFLE         // reponderare-cote → CHARGE per BE (payload.perUnit)
+  CREDIT_TRANSFER   // reatribuire-plata → negative PAYMENT on (be, fund)
+  PAYMENT_REATTRIB  // reatribuire-plata → negative PAYMENT on payload.fromFund
+  PENALTY_WRITEOFF  // scutire-penalizari → negative ADJUSTMENT on PENALIZARI
+  MANUAL_ADJUSTMENT // ajustare-manuala → ADJUSTMENT (±) on (be, fund)
+}
+
+enum CorrectionStatus {
+  ACTIVE
+  VOID
+}
+
+model Correction {
+  id              String           @id @default(cuid())
+  communityId     String           @map("community_id")
+  community       Community        @relation(fields: [communityId], references: [id])
+  periodCode      String           @map("period_code")
+  type            CorrectionType
+  reason          String           // ledger meta.reason (reponderare-cote / reatribuire-plata / scutire-penalizari / ajustare-manuala)
+  billingEntityId String?          @map("billing_entity_id")
+  fundCode        String?          @map("fund_code")
+  amount          Decimal?         @db.Decimal(18, 4)
+  payload         Json?            // type-specific: perUnit{unit→amt} (RESHUFFLE); fromFund/toFund (PAYMENT_REATTRIB)
+  note            String?
+  status          CorrectionStatus @default(ACTIVE)
+  createdBy       String           @map("created_by")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  voidedBy        String?          @map("voided_by")
+  voidedAt        DateTime?        @map("voided_at")
+
+  @@index([communityId, periodCode, status])
+  @@map("correction")
 }
 
 model RoleAssignment {

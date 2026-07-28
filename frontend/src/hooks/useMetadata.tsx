@@ -10,6 +10,8 @@ export type CommunityMetadata = {
   beRoles: EnumMeta[]
   notificationChannels: EnumMeta[]
   committeeDecisionStatuses: EnumMeta[]
+  correctionTypes: EnumMeta[]
+  correctionStatuses: EnumMeta[]
   impactTags: EnumMeta[]
   audienceTypes: EnumMeta[]
   meterModes: EnumMeta[]

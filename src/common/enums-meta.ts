@@ -42,6 +42,21 @@ export const COMMITTEE_DECISION_STATUS_META: EnumMeta[] = [
   { key: 'CANCELLED', label: 'Anulat', tone: 'secondary' },
 ]
 
+// Correction types — enum CorrectionType. `hint` describes what each derives on the ledger.
+export const CORRECTION_TYPE_META: EnumMeta[] = [
+  { key: 'RESHUFFLE', label: 'Reponderare cote', hint: 'Redistribuire pe cotă-parte (facturi per unitate)' },
+  { key: 'CREDIT_TRANSFER', label: 'Transfer de credit', hint: 'Credit dintr-un fond aplicat pe alte fonduri (plată)' },
+  { key: 'PAYMENT_REATTRIB', label: 'Reatribuire plată', hint: 'Plată direcționată greșit, mutată între fonduri' },
+  { key: 'PENALTY_WRITEOFF', label: 'Scutire penalizări', hint: 'Anulare penalizări (ajustare pe PENALIZARI)' },
+  { key: 'MANUAL_ADJUSTMENT', label: 'Ajustare manuală sold', hint: 'Corecție manuală de sold (±) pe un fond' },
+]
+
+// Correction statuses — enum CorrectionStatus.
+export const CORRECTION_STATUS_META: EnumMeta[] = [
+  { key: 'ACTIVE', label: 'Activă', tone: 'positive' },
+  { key: 'VOID', label: 'Anulată', tone: 'secondary' },
+]
+
 // Announcement impact tags — enum AnnouncementImpactTag.
 export const IMPACT_TAG_META: EnumMeta[] = [
   { key: 'WATER', label: 'Apă' },
@@ -90,6 +105,8 @@ export const COMMUNITY_METADATA = {
   beRoles: BE_ROLE_META,
   notificationChannels: NOTIFICATION_CHANNEL_META,
   committeeDecisionStatuses: COMMITTEE_DECISION_STATUS_META,
+  correctionTypes: CORRECTION_TYPE_META,
+  correctionStatuses: CORRECTION_STATUS_META,
   impactTags: IMPACT_TAG_META,
   audienceTypes: AUDIENCE_TYPE_META,
   meterModes: MEASURE_MODE_META,

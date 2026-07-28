@@ -23,6 +23,7 @@ import { NotificationsJobsModule } from './modules/notifications-jobs/notificati
 import { InventoryModule } from './modules/inventory/inventory.module'
 import { FinanceModule } from './modules/finance/finance.module'
 import { CommitteeModule } from './modules/committee/committee.module'
+import { CorrectionsModule } from './modules/corrections/corrections.module'
 import { FeaturesModule } from './modules/features/features.module'
 import { MetadataModule } from './modules/metadata/metadata.module'
 import { ReportsModule } from './modules/reports/reports.module'
@@ -59,6 +60,7 @@ class HealthController {
     InventoryModule,
     FinanceModule,
     CommitteeModule,
+    CorrectionsModule,
     FeaturesModule,
     MetadataModule,
     ReportsModule,
