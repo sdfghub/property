@@ -151,6 +151,8 @@ export function MeterEntryForm({
 
   // Strip the building/stair prefix (e.g. "400191-C1-U6-AP 1" → "U6-AP 1") for a compact unit header.
   const prettyUnit = (code?: string | null) => (code ? code.replace(/^\d+-C\d+-/, '') : '')
+  // Drop the redundant "Contor - " prefix (e.g. "Contor - Apa Rece 1" → "Apa Rece 1"); the unit is in the header.
+  const shortMeterLabel = (label?: string) => (label || '').replace(/^\s*contor\s*[-–:]\s*/i, '')
   // A meter's contribution to its unit total: consumption (INDEX: entered − previous) or the raw value.
   const effectiveValue = (item: any) => {
     const entered = Number(values[item.key])
@@ -248,7 +250,7 @@ export function MeterEntryForm({
               <div className="muted" style={{ fontSize: 12 }}><strong>{unitCode ? `${t('meter.unit', 'Unitate')} ${prettyUnit(unitCode)}` : t('meter.community', 'Contoare comunitate')}</strong></div>
               <ul className="muted" style={{ margin: 0, paddingLeft: 12 }}>
                 {groupItems.map((item) => (
-                  <li key={item.key}>{item.label}: {values[item.key] ?? '—'}</li>
+                  <li key={item.key}>{shortMeterLabel(item.label)}: {values[item.key] ?? '—'}</li>
                 ))}
               </ul>
             </div>
@@ -281,9 +283,9 @@ export function MeterEntryForm({
               return (
               <div key={item.key} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border,#eee)', paddingTop: 6 }}>
                 <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <label className="label" style={{ minWidth: 220 }}>
-                    {item.label} {item.unitCode ? <span className="muted">(unit {item.unitCode})</span> : null}
-                    <span className="muted" style={{ marginLeft: 6 }}>· {mode === 'INDEX' ? 'index (citire)' : 'consum'}</span>
+                  <label className="label" style={{ minWidth: 150 }} title={mid || undefined}>
+                    {shortMeterLabel(item.label)}
+                    <span className="muted" style={{ marginLeft: 6 }}>· {mode === 'INDEX' ? 'index' : 'consum'}</span>
                   </label>
                   <input
                     className="input"
@@ -295,7 +297,6 @@ export function MeterEntryForm({
                     style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
                     disabled={!canEdit}
                   />
-                  <div className="muted" style={{ fontSize: 12 }}>{mid || item.typeCode}</div>
                   {mid && flagByMeter[mid]?.selfReported && (
                     <span className="badge warn" title={t('meter.selfReportedTitle', 'Valoare introdusă de proprietar, nu de administrator')}>
                       {t('meter.readByOwner', '⚠ citit de proprietar')}{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
