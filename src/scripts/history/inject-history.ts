@@ -30,8 +30,29 @@ async function main() {
     // line is an administrative re-division of who owes the fund, NOT billing. Their net-zero per-unit
     // movements are booked as 'reponderare-cote' owed-adjustments and excluded from charges. Declared
     // in history-mapping.json.shareReallocations.funds — so the treatment is opt-in, not heuristic.
-    const REALLOC = new Set<string>((() => { try { const mp = JSON.parse(require('fs').readFileSync(require('path').join(dir, 'history-mapping.json'), 'utf8')); return mp.shareReallocations?.funds ?? [] } catch { return [] } })())
-    if (REALLOC.size) console.log(`share reallocations declared (reponderare-cote): ${[...REALLOC].join(', ')}`)
+    const _mp: any = (() => { try { return JSON.parse(require('fs').readFileSync(require('path').join(dir, 'history-mapping.json'), 'utf8')) } catch { return {} } })()
+    const REALLOC = new Set<string>(_mp.shareReallocations?.funds ?? [])
+    // Per-fund declared reallocation: bookPeriod (the DB period whose dueEnd carries the re-based
+    // arrears via look-ahead) + AUTHORITATIVE per-BE amounts (resolved from per-unit labels). At that
+    // period the re-basing is booked as the DECLARED charge per BE; any concurrent paydown surfaces as
+    // a payment (charge − arrears movement). Guarded: an undeclared reshuffle BE aborts the build.
+    const labelToBe = new Map<string, string>((parsed.units as any[]).map((u) => [u.label, u.be]))
+    const REALLOC_DECL = new Map<string, { bookPeriod: string; perBE: Map<string, number>; net: number }>()
+    for (const rc of (_mp.shareReallocations?.reallocations ?? [])) {
+      const perBE = new Map<string, number>()
+      for (const [label, amt] of Object.entries<any>(rc.perUnit ?? {})) { const be = labelToBe.get(label); if (be) perBE.set(be, (perBE.get(be) ?? 0) + Number(amt)) }
+      REALLOC_DECL.set(rc.fund, { bookPeriod: rc.bookPeriod, perBE, net: Number(rc.net ?? 0) })
+    }
+    if (REALLOC.size) console.log(`share reallocations declared (reponderare-cote): ${[...REALLOC].join(', ')}${REALLOC_DECL.size ? ` (per-unit, book @ ${[...REALLOC_DECL.values()].map((r) => r.bookPeriod).join(',')})` : ''}`)
+    // Declared CREDIT TRANSFERS: a fund's credit (negative balance) applied to OTHER funds' dues — the
+    // balance rises back to 0, but it is NOT a charge (nothing was billed) and NOT a forgiveness; it's a
+    // reconciliation (reconciliere-numerar). Without this, the re-split rule for a declared reallocation
+    // fund would mis-book the rise as a regularization charge and inflate Facturat. Keyed by
+    // BE::period::fund; the counterpart payments already live in the source (the other funds' Platit).
+    const CREDIT_TRANSFERS = new Set<string>(
+      (_mp.creditTransfers?.entries ?? []).map((t: any) => `${t.be}::${t.period}::${t.fund}`),
+    )
+    if (CREDIT_TRANSFERS.size) console.log(`credit transfers declared (reconciliere-numerar): ${CREDIT_TRANSFERS.size}`)
     const months = parsed.months.filter((m) => m.code < cutover && Object.keys(m.units).length)
     console.log(`community=${communityId}  injecting ${months.length} periods (< ${cutover}): ${months[0]?.code}..${months[months.length - 1]?.code}`)
 
@@ -293,20 +314,31 @@ async function main() {
       }
 
       for (const { k, be, fund, dueStart, charges, dueEnd, plug } of calc) {
-        const isRealloc = reallocFunds.has(fund)
-        // CHARGE RE-SPLIT: for a DECLARED reallocation fund, a re-basing or credit movement is booked as
-        // a regularization CHARGE (per-owner Facturat), not an adjustment — so Datorat = Facturat and the
-        // re-based shares live in each owner's Facturat. A balance FALL (plug>0) is still a real payment;
-        // a RISE or the whole reshuffle delta becomes a charge. Non-reallocation funds keep the old rule.
-        // Skip the re-split for the LAST injected period: its dueEnd is the (blank) next-month arrears,
-        // and it is fully re-done by the April completion patch — re-splitting it here would book a
-        // spurious charge from the empty look-ahead (e.g. a credit -13.482 → 0 read as a +13.482 rise).
+        const decl = REALLOC_DECL.get(fund)
+        const isReshuffle = !!decl && m.code === decl.bookPeriod // the declared re-basing lands here
+        // CHARGE RE-SPLIT for a DECLARED reallocation fund: the re-basing is booked as a regularization
+        // CHARGE (per-owner Facturat), so Datorat = Facturat. At the reshuffle bookPeriod the charge is
+        // the AUTHORITATIVE declared per-BE amount, and any concurrent paydown surfaces as a payment
+        // (payment = residual). Other periods: a rise (credit-clear/reconciliation) → charge, a fall →
+        // payment. The last injected period is skipped (its dueEnd is the blank next-month arrears, fully
+        // re-done by the April completion patch — re-splitting it would book a spurious charge).
         const reSplit = REALLOC.has(fund) && m.code !== months[months.length - 1].code
-        let payments = 0, adjustments = 0, extraCharge = 0
-        if (reSplit) {
-          if (isRealloc) extraCharge = Number((-plug).toFixed(4))          // reshuffle: both signs → charge
-          else if (plug < -0.005) extraCharge = Number((-plug).toFixed(4)) // credit-clear / rise → charge
-          else payments = plug >= 0 ? plug : 0                             // real payment
+        let payments = 0, adjustments = 0, extraCharge = 0, adjReason = 'ajustare-sold'
+        if (isReshuffle) {
+          extraCharge = Number((decl!.perBE.get(be) ?? 0).toFixed(4))                 // DECLARED re-basing
+          payments = Number((dueStart + charges + extraCharge - dueEnd).toFixed(4))    // paydown residual
+          if (Math.abs(extraCharge) < 0.005 && Math.abs(dueEnd - dueStart - charges) > 0.5)
+            throw new Error(`reallocation ${fund} @ ${m.code}: BE ${be} moved ${(dueEnd - dueStart - charges).toFixed(2)} but has no declared per-unit amount`)
+        } else if (reSplit) {
+          if (plug < -0.005) {
+            if (CREDIT_TRANSFERS.has(`${be}::${m.code}::${fund}`)) {
+              adjustments = Number((-plug).toFixed(4)); adjReason = 'reconciliere-numerar' // credit applied to other funds — NOT a charge
+            } else {
+              extraCharge = Number((-plug).toFixed(4)) // credit-clear / rise → charge
+            }
+          } else {
+            payments = plug >= 0 ? plug : 0                          // real payment
+          }
         } else {
           payments = plug >= 0 ? plug : 0
           adjustments = plug < 0 ? -plug : 0
@@ -320,9 +352,9 @@ async function main() {
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', lane: 'ACCRUAL', amount: extraCharge, currency: 'RON', refType: REF + '_RGL', refId: periodId, fundId: fid(fund) } })
           await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', fundId: fid(fund), currency: 'RON', refType: REF + '_RGL', refId: periodId, unitId: null, amount: extraCharge, meta: { source: REF, reason: 'reponderare-cote' } } })
         }
-        if (isRealloc && Math.abs(adjustments) > 0.005) {
+        if (Math.abs(adjustments) > 0.005) { // non-reallocation fund rise → adjustment (with ledger entry)
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: adjustments, currency: 'RON', refType: REF + '_ADJ', refId: periodId, fundId: fid(fund) } })
-          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: 'reponderare-cote' } } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'ADJUSTMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_ADJ', refId: periodId, unitId: null, amount: adjustments, meta: { source: REF, reason: adjReason } } })
         }
         await prisma.beStatement.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, fundId: fid(fund) as string, dueStart, charges: chargesFinal, payments, adjustments, dueEnd } })
         running.set(k, dueEnd)

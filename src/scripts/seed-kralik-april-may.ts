@@ -237,6 +237,16 @@ async function main() {
     } catch { /* file optional */ }
     if (reattrib.size) console.log(`  ↹ ${reattrib.size} payment reattribution(s) loaded (booked as payment reversals, Datorat-flat)`)
     const REALLOC = new Set<string>(mp.shareReallocations?.funds ?? []) // charge re-split funds: reconciliation rises → CHARGE
+    // Declared credit transfers landing in April (same mechanism as the injector's CREDIT_TRANSFERS): a
+    // fund credit applied to OTHER funds' dues → the rise is a reconciliation (reconciliere-numerar),
+    // NOT a re-split charge. Keyed by beId::fund (this block only handles April). e.g. David 14B −627.
+    const CREDIT_TRANSFERS = new Set<string>()
+    for (const t of (mp.creditTransfers?.entries ?? [])) {
+      if (t.period !== APR.code) continue
+      const beId = beIds.get(t.be); if (!beId) continue
+      CREDIT_TRANSFERS.add(`${beId}::${t.fund}`)
+    }
+    if (CREDIT_TRANSFERS.size) console.log(`  ⇄ ${CREDIT_TRANSFERS.size} credit transfer(s) loaded (April, reconciliere-numerar)`)
     let patched = 0, forgiven = 0
     for (const s of await prisma.beStatement.findMany({ where: { communityId: COMM, periodId: aprP!.id } })) {
       const fund = fundCodeById.get(s.fundId as string)
@@ -254,6 +264,7 @@ async function main() {
         if (Math.abs((-gross) - declared) > 0.5) throw new Error(`payment reattribution mismatch: ${fund} declared ${declared.toFixed(2)} but source reconciliation is ${(-gross).toFixed(2)}`)
         payments = gross; reason = 'reatribuire-plata'
       }
+      else if (CREDIT_TRANSFERS.has(`${s.billingEntityId}::${fund}`)) { adjustments = -gross; reason = 'reconciliere-numerar' } // credit applied to other funds — NOT a charge
       else if (REALLOC.has(fund) && gross < -0.005) { extraCharge = -gross; reason = 'reponderare-cote' } // re-split: rise → regularization CHARGE (Datorat=Facturat)
       else if (gross >= 0) { payments = gross }
       else { adjustments = -gross; reason = 'reconciliere-numerar' }

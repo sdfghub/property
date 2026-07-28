@@ -186,8 +186,56 @@
    "_note": "REAB3 arrears (newer export 20260713)"
   }
  },
+ "creditTransfers": {
+  "_doc": "A fund credit (negative balance / prepayment) applied to OTHER funds' dues. The balance rises back to 0, but it is NOT a charge (nothing billed) and NOT a forgiveness — it is a reconciliation (reconciliere-numerar). Booked as an owed-adjustment on the source fund; the counterpart payments already exist in the source (the other funds' Platit). Confirmed with admin per case.",
+  "entries": [
+   { "be": "BE_KARACS_BEBE", "period": "2025-11", "fund": "REABILITARE_1", "note": "credit -300 din Reab 1 aplicat pe Intretinere 228.17 + Reab 2 71.83 (NU iertat) — admin Adriana Dascal" },
+   { "be": "BE_DAVID_MARIUS", "period": "2026-04", "fund": "REABILITARE_1", "note": "credit din re-split -627 aplicat pe Intretinere/Rulment/Reparatii (curente+restante) 602.6 + Reab 3 24.4 = 627 (NU charge) — admin Adriana Dascal" }
+  ]
+ },
  "shareReallocations": {
-  "_doc": "Funds whose post-billing monthly (-Luna) line is a cota-parte reallocation (reponderare de cote) — an administrative re-division of who owes the fund, NOT new billing. Their mixed-sign / net-zero per-unit movements are booked as explicit 'reponderare-cote' owed-adjustments (net-neutral) and excluded from charges. Verified against the export + ledger (2026-03 Proiect+Reabilitare: SAD 1 +15717, SAD 2/1 -13482, AP 11 -5743, ... net ~0).",
+  "_doc": "Cota-parte reallocations (reponderare de cote) — administrative re-division of who owes the fund. Booked from the DECLARED per-unit amounts (authoritative, verified vs export -Luna + ledger), as regularization CHARGES at bookPeriod (the DB period whose dueEnd carries the re-based arrears via look-ahead). Any owner's concurrent paydown surfaces as a PAYMENT (charge - arrears movement). A mismatch vs the source aborts the build.",
+  "reallocations": [
+   {
+    "fund": "REABILITARE_1",
+    "bookPeriod": "2026-02",
+    "sourcePeriod": "2026-03",
+    "net": 3.0,
+    "perUnit": {
+     "1": 221.0,
+     "2/1": 369.0,
+     "2/2": 545.0,
+     "3": 353.0,
+     "1/B": 226.0,
+     "4 (I)": 661.0,
+     "4A": 763.0,
+     "5 (I-B)": 510.0,
+     "5 (I-A)": 48.0,
+     "6": 280.0,
+     "6A": 216.0,
+     "8": 314.00000000000006,
+     "9": 221.0,
+     "10A": 252.0,
+     "10B": 293.0,
+     "11": -5743.0,
+     "11A": -289.0,
+     "11B": -3821.0,
+     "12 (SAD 4/A)": -270.0,
+     "12 (SAD 4/B)": -270.0,
+     "12 (SAD 4/C)": -270.0,
+     "4 (III)": 237.0,
+     "5 (III)": 292.0,
+     "14A": 1050.0,
+     "14B": -627.0,
+     "SAD 2/2": -1392.0,
+     "SAD 2/1": -13482.0,
+     "SAD 1": 15717.0,
+     "31": 701.0,
+     "32": 702.0,
+     "SP COM": 2196.0
+    }
+   }
+  ],
   "funds": [
    "REABILITARE_1"
   ]
