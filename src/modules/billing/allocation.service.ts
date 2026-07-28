@@ -564,67 +564,7 @@ export class AllocationService {
 
         const measures = await this.unitMeasuresForWeight(communityId, typeCode, period)
         if (!measures.length) {
-          const per = amount / units.length
-          for (const u of units) {
-            perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            const beId = unitBe.get(u.id)
-            if (!beId) continue
-            const fundId = defaultFundId
-            const lineMeta = {
-              source: 'ALLOC',
-              expenseType: expenseTypeCode,
-              splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'equal-fallback', unitMeasure: 1, totalMeasure: units.length, base: amount },
-            }
-            const fundLines = linesByFund.get(fundId) ?? []
-            fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
-            linesByFund.set(fundId, fundLines)
-            if (leaf?.id) {
-              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
-              set.add(leaf.id)
-              splitNodeIdsByFund.set(fundId, set)
-            }
-            const trailWithAlloc = attachAllocationInfo(splitTrail, {
-              method,
-              weightSource: 'equal-fallback',
-              basis,
-            })
-            const trace = buildTrace({
-              origin: 'split',
-              unit: { id: u.id, code: u.code },
-              amount: per,
-              method,
-              basis,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              splitId,
-              splitNodeId: leaf?.id ?? null,
-              splitTrail: trailWithAlloc,
-              ruleCode: alloc.ruleCode ?? null,
-              allocationParams: alloc.params ?? null,
-              allocationConfig: normalizeAllocationConfig(alloc),
-            })
-            await writeTrace({
-              allocationLineId: 'n/a',
-              unitId: u.id,
-              expenseSplitId: splitId,
-              splitNodeId: leaf?.id ?? null,
-              trace,
-            })
-          }
-          await this.logAllocation(
-            communityId,
-            period.id,
-            sourceId,
-            'Allocating split leaf equally (no measures)',
-            {
-              splitId,
-              perUnit,
-              totalAmount: amount,
-            },
-            input.description,
-          )
-          return
+          throw new ForbiddenException(`No ${typeCode} readings for this period — enter them before allocating (equal-split fallback disabled).`)
         }
         const byUnit = new Map<string, { value: number; meterId?: string | null }>()
         measures.forEach((m) => byUnit.set(m.scopeId, { value: Number(m.value), meterId: m.meterId }))
@@ -638,67 +578,8 @@ export class AllocationService {
           return s + val
         }, 0)
         if (missingMeasure) {
-          const per = amount / units.length
-          for (const u of units) {
-            perUnit[u.code] = { weight: 1 / units.length, amount: per }
-            const beId = unitBe.get(u.id)
-            if (!beId) continue
-            const fundId = defaultFundId
-            const lineMeta = {
-              source: 'ALLOC',
-              expenseType: expenseTypeCode,
-              splitNodeId: leaf?.id ?? null,
-              allocation: { method, basis, weightSource: 'equal-fallback', unitMeasure: 1, totalMeasure: units.length, base: amount },
-            }
-            const fundLines = linesByFund.get(fundId) ?? []
-            fundLines.push({ unitId: u.id, beId, amount: per, meta: lineMeta })
-            linesByFund.set(fundId, fundLines)
-            if (leaf?.id) {
-              const set = splitNodeIdsByFund.get(fundId) ?? new Set<string>()
-              set.add(leaf.id)
-              splitNodeIdsByFund.set(fundId, set)
-            }
-            const trailWithAlloc = attachAllocationInfo(splitTrail, {
-              method,
-              weightSource: 'equal-fallback',
-              basis,
-            })
-            const trace = buildTrace({
-              origin: 'split',
-              unit: { id: u.id, code: u.code },
-              amount: per,
-              method,
-              basis,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              splitId,
-              splitNodeId: leaf?.id ?? null,
-              splitTrail: trailWithAlloc,
-              ruleCode: alloc.ruleCode ?? null,
-              allocationParams: alloc.params ?? null,
-              allocationConfig: normalizeAllocationConfig(alloc),
-            })
-            await writeTrace({
-              allocationLineId: 'n/a',
-              unitId: u.id,
-              expenseSplitId: splitId,
-              splitNodeId: leaf?.id ?? null,
-              trace,
-            })
-          }
-          await this.logAllocation(
-            communityId,
-            period.id,
-            sourceId,
-            'Allocating split leaf equally (missing measures)',
-            {
-              splitId,
-              perUnit,
-              totalAmount: amount,
-            },
-            input.description,
-          )
-          return
+          const missing = units.filter((u) => byUnit.get(u.id)?.value == null).map((u) => u.code)
+          throw new ForbiddenException(`Missing ${typeCode} reading for ${missing.length} unit(s): ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? '…' : ''}. Enter the reading(s) before allocating (equal-split fallback disabled).`)
         }
         if (total <= 0) throw new ForbiddenException(`Total ${typeCode} is zero for allocation`)
 
@@ -988,52 +869,7 @@ export class AllocationService {
         const perUnit: Record<string, { weight: number; amount: number }> = {}
         const measures = await this.unitMeasuresForWeight(communityId, typeCode, period)
         if (!measures.length) {
-          const per = Number(input.amount) / units.length
-          for (const u of units) {
-            const amount = per
-            perUnit[u.code] = { weight: 1 / units.length, amount }
-            const beId = unitBe.get(u.id)
-            if (!beId) continue
-            const fundId = defaultFundId
-            const lineMeta = {
-              source: 'ALLOC',
-              expenseType: expenseTypeCode,
-              splitNodeId: null,
-              allocation: { method, weightSource: 'equal-fallback' },
-            }
-            const fundLines = linesByFund.get(fundId) ?? []
-            fundLines.push({ unitId: u.id, beId, amount, meta: lineMeta })
-            linesByFund.set(fundId, fundLines)
-            const trace = buildTrace({
-              origin: 'one-off',
-              unit: { id: u.id, code: u.code },
-              amount,
-              method,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              allocationParams: input.allocationParams ?? null,
-            })
-            await writeTrace({
-              allocationLineId: 'n/a',
-              unitId: u.id,
-              expenseSplitId: null,
-              splitNodeId: null,
-              trace,
-            })
-          }
-          await this.logAllocation(
-            communityId,
-            period.id,
-            sourceId,
-            'Allocating equally (no measures)',
-            {
-              units: units.length,
-              perUnit,
-              totalAmount: input.amount,
-            },
-            input.description,
-          )
-          return
+          throw new ForbiddenException(`No ${typeCode} readings for this period — enter them before allocating (equal-split fallback disabled).`)
         }
         const byUnit = new Map(measures.map((m) => [m.scopeId, Number(m.value)]))
         let missingMeasure = false
@@ -1046,52 +882,8 @@ export class AllocationService {
           return s + val
         }, 0)
         if (missingMeasure) {
-          const per = Number(input.amount) / units.length
-          for (const u of units) {
-            const amount = per
-            perUnit[u.code] = { weight: 1 / units.length, amount }
-            const beId = unitBe.get(u.id)
-            if (!beId) continue
-            const fundId = defaultFundId
-            const lineMeta = {
-              source: 'ALLOC',
-              expenseType: expenseTypeCode,
-              splitNodeId: null,
-              allocation: { method, weightSource: 'equal-fallback' },
-            }
-            const fundLines = linesByFund.get(fundId) ?? []
-            fundLines.push({ unitId: u.id, beId, amount, meta: lineMeta })
-            linesByFund.set(fundId, fundLines)
-            const trace = buildTrace({
-              origin: 'one-off',
-              unit: { id: u.id, code: u.code },
-              amount,
-              method,
-              weight: 1 / units.length,
-              weightSource: 'equal-fallback',
-              allocationParams: input.allocationParams ?? null,
-            })
-            await writeTrace({
-              allocationLineId: 'n/a',
-              unitId: u.id,
-              expenseSplitId: null,
-              splitNodeId: null,
-              trace,
-            })
-          }
-          await this.logAllocation(
-            communityId,
-            period.id,
-            sourceId,
-            'Allocating equally (missing measures)',
-            {
-              units: units.length,
-              perUnit,
-              totalAmount: input.amount,
-            },
-            input.description,
-          )
-          return
+          const missing = units.filter((u) => byUnit.get(u.id) == null).map((u) => u.code)
+          throw new ForbiddenException(`Missing ${typeCode} reading for ${missing.length} unit(s): ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? '…' : ''}. Enter the reading(s) before allocating (equal-split fallback disabled).`)
         }
         if (total <= 0) throw new ForbiddenException(`Total ${typeCode} is zero for allocation`)
 
