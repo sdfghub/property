@@ -37,6 +37,14 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
   const [f, setF] = React.useState<any>({ billingEntityId: '', fundCode: '', amount: '', fromFund: '', toFund: '', note: '' })
   const [perBe, setPerBe] = React.useState<Record<string, string>>({})
   const [filterPeriod, setFilterPeriod] = React.useState('') // '' = all periods (incl. closed)
+  const [impact, setImpact] = React.useState<{ row: any; data: any | null } | null>(null)
+
+  const openImpact = (row: any) => {
+    setImpact({ row, data: null })
+    api.get<any>(`/communities/${communityId}/corrections/${row.id}/ledger`)
+      .then((d: any) => setImpact((cur) => (cur && cur.row.id === row.id ? { ...cur, data: d } : cur)))
+      .catch(() => setImpact((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
+  }
 
   const loadList = React.useCallback((period: string) => {
     if (!communityId) return
@@ -221,15 +229,66 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
                   <td style={{ padding: '6px 10px' }}>{r.periodCode}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right' }}>{r.amount != null ? money(r.amount) : (r.type === 'RESHUFFLE' ? '—' : '')}</td>
                   <td style={{ padding: '6px 10px' }}><span className={`badge ${statusMeta(r.status)?.tone || 'secondary'}`}>{statusMeta(r.status)?.label || r.status}</span></td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button className="btn ghost small" type="button" onClick={() => openImpact(r)}>{t('corr.impact', 'Impact')}</button>
                     {isAdmin && r.status === 'ACTIVE' && (
-                      <button className="btn ghost small" type="button" disabled={busy === r.id} onClick={() => voidCorrection(r.id)}>{t('corr.void', 'Anulează')}</button>
+                      <button className="btn ghost small" type="button" disabled={busy === r.id} onClick={() => voidCorrection(r.id)} style={{ marginLeft: 4 }}>{t('corr.void', 'Anulează')}</button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {impact && (
+        <div onClick={() => setImpact(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 720, width: '100%', maxHeight: '85vh', overflow: 'auto', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+              <h3 style={{ margin: 0 }}>{t('corr.impactTitle', 'Impact în registru')} — {typeLabel(impact.row.type)}</h3>
+              <button className="btn ghost small" type="button" onClick={() => setImpact(null)}>{t('common.close', 'Închide')}</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              {impact.row.periodCode} · {impact.row.reason}{impact.row.fundCode ? ' · ' + impact.row.fundCode : ''}
+            </div>
+            {!impact.data ? (
+              <div className="empty" style={{ marginTop: 12 }}>{t('common.loading', 'Se încarcă…')}</div>
+            ) : impact.data.error ? (
+              <div className="empty" style={{ marginTop: 12 }}>{t('common.error', 'Eroare')}</div>
+            ) : !impact.data.legs?.length ? (
+              <div className="empty" style={{ marginTop: 12 }}>{t('corr.noLegs', 'Nicio linie de registru găsită.')}</div>
+            ) : (
+              <>
+                <div style={{ margin: '10px 0', fontSize: 12 }}>
+                  <span className={`badge ${impact.data.linked ? 'tertiary' : 'secondary'}`}>
+                    {impact.data.linked ? t('corr.linked', 'Legături directe') : t('corr.matched', 'Potrivite după perioadă/motiv')}
+                  </span>
+                  <span style={{ marginLeft: 8 }}>{impact.data.legs.length} {t('corr.legs', 'linii')} · {t('corr.total', 'Total')}: <strong>{money(impact.data.total)}</strong></span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead><tr style={{ textAlign: 'left', background: 'var(--muted-bg, #f4f4f5)' }}>
+                    <th style={{ padding: '6px 8px' }}>{t('corr.period', 'Perioadă')}</th>
+                    <th style={{ padding: '6px 8px' }}>{t('corr.entity', 'Unitate')}</th>
+                    <th style={{ padding: '6px 8px' }}>{t('corr.fund', 'Fond')}</th>
+                    <th style={{ padding: '6px 8px' }}>{t('corr.kind', 'Fel')}</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('corr.amount', 'Sumă')}</th>
+                  </tr></thead>
+                  <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {impact.data.legs.map((l: any, i: number) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                        <td style={{ padding: '5px 8px' }}>{l.period}</td>
+                        <td style={{ padding: '5px 8px' }}>{l.bename || l.becode || '—'}</td>
+                        <td style={{ padding: '5px 8px' }}>{l.fund || '—'}</td>
+                        <td style={{ padding: '5px 8px' }}>{l.kind}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>{money(l.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

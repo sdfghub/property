@@ -137,6 +137,52 @@ export class CorrectionsService {
       })
   }
 
+  /** Common SELECT for ledger legs (the `where` references l/pr/be/fu; $1 is always communityId). */
+  private legRows(where: string, params: any[]) {
+    return this.prisma.$queryRawUnsafe<any[]>(
+      `select pr.code as period, l.kind, l.ref_type as reftype, be.name as bename, be.code as becode,
+              fu.code as fund, round(l.amount::numeric,2)::float8 as amount, l.meta->>'reason' as reason,
+              l.meta->>'note' as note
+         from be_ledger_entry_detail l
+         join period pr on pr.id = l.period_id
+         left join billing_entity be on be.id = l.billing_entity_id
+         left join fund fu on fu.id = l.fund_id
+        where l.community_id = $1 and (${where})
+        order by pr.seq desc, be.code asc`,
+      ...params,
+    )
+  }
+
+  /**
+   * The ledger IMPACT of one correction: the actual legs it produced. Admin-created corrections link
+   * directly (refType='CORRECTION', refId=correction.id). Seed/history corrections have no direct link
+   * (legs booked by the injector as MIGRATED_*), so we match by period + reason + entity/fund. `linked`
+   * flags which path was used.
+   */
+  async ledgerImpact(communityRef: string, id: string) {
+    const communityId = await this.resolveCommunityId(communityRef)
+    const c = await this.prisma.correction.findFirst({
+      where: { id, communityId },
+      select: { id: true, type: true, reason: true, periodCode: true, billingEntityId: true, fundCode: true },
+    })
+    if (!c) throw new NotFoundException('Correction not found')
+
+    let linked = true
+    let legs = await this.legRows(`l.ref_type = 'CORRECTION' and (l.ref_id = $2 or l.meta->>'correctionId' = $2)`, [communityId, id])
+    if (!legs.length) {
+      linked = false
+      const conds = [`pr.code = $2`, `l.meta->>'reason' = $3`]
+      const params: any[] = [communityId, c.periodCode, c.reason]
+      if (c.billingEntityId) { params.push(c.billingEntityId); conds.push(`l.billing_entity_id = $${params.length}`) }
+      if (c.fundCode) { params.push(c.fundCode); conds.push(`fu.code = $${params.length}`) }
+      legs = await this.legRows(conds.join(' and '), params)
+    }
+    const byKind: Record<string, number> = {}
+    for (const l of legs) byKind[l.kind] = Math.round(((byKind[l.kind] || 0) + Number(l.amount || 0)) * 100) / 100
+    const total = Math.round(legs.reduce((s, l) => s + Number(l.amount || 0), 0) * 100) / 100
+    return { correctionId: id, type: c.type, reason: c.reason, periodCode: c.periodCode, linked, legs, byKind, total }
+  }
+
   async create(communityRef: string, actor: string, body: any) {
     const communityId = await this.resolveCommunityId(communityRef)
     const type = String(body?.type || '') as CorrectionType

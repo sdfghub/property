@@ -23,6 +23,12 @@ export class CorrectionsController {
     return this.svc.context(c)
   }
 
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get(':id/ledger')
+  ledger(@Param('communityId') c: string, @Param('id') id: string) {
+    return this.svc.ledgerImpact(c, id)
+  }
+
   @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Post()
   create(@Param('communityId') c: string, @Body() body: any, @Req() req: any) {
