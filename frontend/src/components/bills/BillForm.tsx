@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useI18n } from '../../i18n/useI18n'
 
 export type BillItem =
   | { key: string; label: string; kind: 'meter'; meterId: string }
@@ -31,6 +32,8 @@ export function BillForm({
   const safeItems = Array.isArray(template?.items) ? template.items : []
 
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [values, setValues] = React.useState<Record<string, string>>(
     () => Object.fromEntries(Object.entries(template?.values || {}).map(([k, v]) => [k, String(v)])),
   )
@@ -142,7 +145,7 @@ export function BillForm({
       // (e.g. the water branch → residual), which the expense allocation then reads.
       await Promise.all(meterCalls)
       await Promise.all(expenseCalls)
-      setMessage('Saved')
+      setMessage(t('bill.saved', 'Saved'))
       setBillState('FILLED')
       if (template.code) {
         await api.post(`/communities/${communityId}/periods/${periodCode}/bill-templates/${template.code}/state`, {
@@ -168,7 +171,7 @@ export function BillForm({
           values,
         })
       }
-      setMessage(`State set to ${next}`)
+      setMessage(t('bill.stateSet', 'State set to') + ' ' + next)
       onChanged?.()
     } catch (err: any) {
       setMessage(err?.message || 'Failed to update state')
@@ -195,7 +198,7 @@ export function BillForm({
       </div>
       {billState === 'CLOSED' || !canEdit ? (
         <div className="stack" style={{ marginTop: 8 }}>
-          <div className="muted">Digest</div>
+          <div className="muted">{t('bill.digest', 'Digest')}</div>
           <ul className="muted" style={{ margin: 0, paddingLeft: 12 }}>
             {items.map((item) => (
               <li key={item.key}>
@@ -203,7 +206,7 @@ export function BillForm({
               </li>
             ))}
             {isInvoice && (
-              <li><strong>Scadență factură</strong>: {values[dueDateKey] || '—'}</li>
+              <li><strong>{t('bill.invoiceDueDate', 'Scadență factură')}</strong>: {values[dueDateKey] || '—'}</li>
             )}
           </ul>
           <div className="row" style={{ marginTop: 10 }}>
@@ -232,15 +235,15 @@ export function BillForm({
                   {item.kind === 'meter' ? item.meterId : item.expenseTypeCode}
                 </div>
                 {item.kind === 'meter' && selfByKey[item.key]?.selfReported && (
-                  <span className="badge warn" title="Valoare introdusă de proprietar, nu de administrator">
-                    ⚠ citit de proprietar{selfByKey[item.key]?.enteredByName ? ` (${selfByKey[item.key]?.enteredByName})` : ''}
+                  <span className="badge warn" title={t('bill.selfReportedTitle', 'Valoare introdusă de proprietar, nu de administrator')}>
+                    {t('bill.readByOwner', '⚠ citit de proprietar')}{selfByKey[item.key]?.enteredByName ? ` (${selfByKey[item.key]?.enteredByName})` : ''}
                   </span>
                 )}
               </div>
             ))}
             {isInvoice && (
               <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <label className="label" style={{ minWidth: 220 }}>Scadență factură</label>
+                <label className="label" style={{ minWidth: 220 }}>{t('bill.invoiceDueDate', 'Scadență factură')}</label>
                 <input
                   className="input"
                   type="date"
@@ -249,7 +252,7 @@ export function BillForm({
                   style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
                   disabled={!canEdit}
                 />
-                <div className="muted" style={{ fontSize: 12 }}>due date</div>
+                <div className="muted" style={{ fontSize: 12 }}>{t('bill.dueDate', 'due date')}</div>
               </div>
             )}
           </div>

@@ -81,7 +81,7 @@ export function CommunityMetersPanel({
         <div className="badge secondary">
           Templates closed: {meterStatus.closed}/{meterStatus.total || 0}
         </div>
-        {!canEdit && <div className="badge warn">Read-only (period closed)</div>}
+        {!canEdit && <div className="badge warn">{t('cmeters.readOnly') || 'Read-only (period closed)'}</div>}
       </div>
       {communityId && currentCode && canEdit ? (
         <MeterTemplatesHost

@@ -73,7 +73,7 @@ export function CommunityExplorer() {
         {active ? (
           <BillingExplorer community={active} />
         ) : (
-          <div className="empty">Choose a community to inspect billing data.</div>
+          <div className="empty">{t('explorer.choosePrompt', 'Choose a community to inspect billing data.')}</div>
         )}
       </div>
     </div>

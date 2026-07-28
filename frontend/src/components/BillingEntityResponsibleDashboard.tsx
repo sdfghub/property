@@ -53,7 +53,7 @@ export function BillingEntityResponsibleDashboard({
           if (alive) setCaps(c)
         })
       })
-      .catch((e: any) => { if (alive) setError(e?.message || 'Nu s-au putut încărca permisiunile') })
+      .catch((e: any) => { if (alive) setError(e?.message || t('beResp.loadPermsError', 'Nu s-au putut încărca permisiunile')) })
     return () => { alive = false }
   }, [api, beId])
 

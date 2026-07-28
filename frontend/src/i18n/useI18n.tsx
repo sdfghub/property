@@ -4,7 +4,8 @@ import { Lang, TranslationKey, translations } from './lang'
 type I18nContextValue = {
   lang: Lang
   setLang: (lang: Lang) => void
-  t: (key: TranslationKey, vars?: Record<string, string | number>) => string
+  // 2nd arg may be interpolation vars OR a plain string fallback (used when the key is missing).
+  t: (key: TranslationKey, varsOrFallback?: Record<string, string | number> | string) => string
   available: Lang[]
 }
 
@@ -42,8 +43,11 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const t = React.useCallback(
-    (key: TranslationKey, vars?: Record<string, string | number>) => {
-      const template = translations[lang]?.[key] ?? translations.en[key] ?? key
+    (key: TranslationKey, varsOrFallback?: Record<string, string | number> | string) => {
+      const isFallback = typeof varsOrFallback === 'string'
+      const vars = isFallback ? undefined : varsOrFallback
+      const fallback = isFallback ? (varsOrFallback as string) : undefined
+      const template = translations[lang]?.[key] ?? translations.en[key] ?? fallback ?? key
       return interpolate(template, vars)
     },
     [lang],

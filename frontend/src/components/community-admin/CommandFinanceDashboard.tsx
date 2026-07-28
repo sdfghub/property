@@ -1,6 +1,7 @@
 import React from 'react'
 import type { CommunityAdminTabKey } from './CommunityAdminDashboard'
 import { useAuth } from '../../hooks/useAuth'
+import { useI18n } from '../../i18n/useI18n'
 
 
 const fallbackBlockingItems = [
@@ -64,6 +65,8 @@ export function CommandFinanceDashboard({
   periodError?: string | null
 }) {
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [editablePeriod, setEditablePeriod] = React.useState<any | null>(null)
   const [lastClosed, setLastClosed] = React.useState<{ code: string } | null>(null)
 
@@ -92,9 +95,9 @@ export function CommandFinanceDashboard({
   const metersOpen = editablePeriod?.meters?.open?.length ?? null
   const billsOpen = editablePeriod?.bills?.open?.length ?? null
   const blockingItems = [
-    { label: 'Meters open', value: metersOpen ?? 0, tone: 'warning' },
-    { label: 'Bill templates open', value: billsOpen ?? 0, tone: 'warning' },
-    { label: 'Invoices unlinked', value: '—', tone: 'danger' },
+    { label: t('cmdfin.metersOpen', 'Meters open'), value: metersOpen ?? 0, tone: 'warning' },
+    { label: t('cmdfin.billTemplatesOpen', 'Bill templates open'), value: billsOpen ?? 0, tone: 'warning' },
+    { label: t('cmdfin.invoicesUnlinked', 'Invoices unlinked'), value: '—', tone: 'danger' },
   ]
   const parsedError = React.useMemo(() => {
     if (!periodError) return null
@@ -126,17 +129,17 @@ export function CommandFinanceDashboard({
     <div className="cmd-finance">
       <div className="cmd-strip">
         <div className="cmd-strip-main">
-          <div className="cmd-kicker">Finalize period</div>
+          <div className="cmd-kicker">{t('cmdfin.finalizePeriod','Finalize period')}</div>
           {periodCode ? (
             <>
               <div className="cmd-strip-title">
-                Period {periodCode}
+                {t('cmdfin.period','Period')} {periodCode}
                 <span className="cmd-chip info">{periodStatus}</span>
               </div>
               <div className="cmd-strip-sub">
-                <span className="cmd-chip neutral">Meters {metersClosed}/{metersTotal}</span>
-                <span className="cmd-chip neutral">Bills {billsClosed}/{billsTotal}</span>
-                <span className="cmd-chip neutral">Last closed: {lastClosed?.code || '—'}</span>
+                <span className="cmd-chip neutral">{t('cmdfin.meters','Meters')} {metersClosed}/{metersTotal}</span>
+                <span className="cmd-chip neutral">{t('cmdfin.bills','Bills')} {billsClosed}/{billsTotal}</span>
+                <span className="cmd-chip neutral">{t('cmdfin.lastClosed','Last closed:')} {lastClosed?.code || '—'}</span>
               </div>
               <div className="cmd-strip-sub">
                 {(blockingItems || fallbackBlockingItems).map((item) => (
@@ -147,13 +150,13 @@ export function CommandFinanceDashboard({
               </div>
               {parsedError ? (
                 <div className="cmd-alert">
-                  <div className="cmd-alert-title">Prepare blocked</div>
+                  <div className="cmd-alert-title">{t('cmdfin.prepareBlocked','Prepare blocked')}</div>
                   <div className="cmd-alert-body">{parsedError.headline}</div>
                   {(parsedError.meters.length || parsedError.bills.length) && (
                     <div className="cmd-alert-grid">
                       {parsedError.meters.length ? (
                         <div>
-                          <div className="cmd-alert-label">Open meters</div>
+                          <div className="cmd-alert-label">{t('cmdfin.openMeters','Open meters')}</div>
                           <div className="cmd-alert-list">
                             {parsedError.meters.map((m) => (
                               <span key={m} className="cmd-chip warning">{m}</span>
@@ -163,7 +166,7 @@ export function CommandFinanceDashboard({
                       ) : null}
                       {parsedError.bills.length ? (
                         <div>
-                          <div className="cmd-alert-label">Open bills</div>
+                          <div className="cmd-alert-label">{t('cmdfin.openBills','Open bills')}</div>
                           <div className="cmd-alert-list">
                             {parsedError.bills.map((b) => (
                               <span key={b} className="cmd-chip warning">{b}</span>
@@ -178,9 +181,9 @@ export function CommandFinanceDashboard({
             </>
           ) : (
             <>
-              <div className="cmd-strip-title">No active period</div>
+              <div className="cmd-strip-title">{t('cmdfin.noActivePeriod','No active period')}</div>
               <div className="cmd-strip-sub">
-                <span className="cmd-chip neutral">Last closed: {lastClosed?.code || '—'}</span>
+                <span className="cmd-chip neutral">{t('cmdfin.lastClosed','Last closed:')} {lastClosed?.code || '—'}</span>
               </div>
             </>
           )}
@@ -188,14 +191,14 @@ export function CommandFinanceDashboard({
         <div className="cmd-strip-actions">
           {editablePeriod?.period ? (
             <>
-              <button className="btn small" onClick={onPrepare}>Prepare</button>
-              <button className="btn small" onClick={onClose}>Close</button>
-              <button className="btn secondary small" onClick={onReopen}>Reopen</button>
-              <button className="btn secondary small" onClick={() => go('expenses')}>Add invoice</button>
-              <button className="btn secondary small" onClick={() => go('payments')}>Record vendor payment</button>
+              <button className="btn small" onClick={onPrepare}>{t('cmdfin.prepare','Prepare')}</button>
+              <button className="btn small" onClick={onClose}>{t('cmdfin.close','Close')}</button>
+              <button className="btn secondary small" onClick={onReopen}>{t('cmdfin.reopen','Reopen')}</button>
+              <button className="btn secondary small" onClick={() => go('expenses')}>{t('cmdfin.addInvoice','Add invoice')}</button>
+              <button className="btn secondary small" onClick={() => go('payments')}>{t('cmdfin.recordVendorPayment','Record vendor payment')}</button>
             </>
           ) : (
-            <button className="btn small" onClick={onCreatePeriod}>Create period</button>
+            <button className="btn small" onClick={onCreatePeriod}>{t('cmdfin.createPeriod','Create period')}</button>
           )}
         </div>
       </div>
@@ -205,10 +208,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Receivables</div>
-                <h3>Notify due billing entities</h3>
+                <div className="cmd-kicker">{t('cmdfin.receivables','Receivables')}</div>
+                <h3>{t('cmdfin.notifyDueBillingEntities','Notify due billing entities')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('statements')}>Open list</button>
+              <button className="btn secondary small" onClick={() => go('statements')}>{t('cmdfin.openList','Open list')}</button>
             </div>
             <div className="cmd-list">
               {receivables.map((row) => (
@@ -222,17 +225,17 @@ export function CommandFinanceDashboard({
               ))}
             </div>
             <div className="cmd-card-foot">
-              <button className="btn small" onClick={() => go('statements')}>Send reminders</button>
+              <button className="btn small" onClick={() => go('statements')}>{t('cmdfin.sendReminders','Send reminders')}</button>
             </div>
           </div>
 
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Payments</div>
-                <h3>Invoices to pay</h3>
+                <div className="cmd-kicker">{t('cmdfin.payments','Payments')}</div>
+                <h3>{t('cmdfin.invoicesToPay','Invoices to pay')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('payments')}>Open queue</button>
+              <button className="btn secondary small" onClick={() => go('payments')}>{t('cmdfin.openQueue','Open queue')}</button>
             </div>
             <div className="cmd-list">
               {invoicesToPay.map((inv) => (
@@ -246,7 +249,7 @@ export function CommandFinanceDashboard({
               ))}
             </div>
             <div className="cmd-card-foot">
-              <button className="btn small" onClick={() => go('payments')}>Record payment</button>
+              <button className="btn small" onClick={() => go('payments')}>{t('cmdfin.recordPayment','Record payment')}</button>
             </div>
           </div>
         </div>
@@ -255,10 +258,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Maintenance</div>
-                <h3>Upcoming maintenance</h3>
+                <div className="cmd-kicker">{t('cmdfin.maintenance','Maintenance')}</div>
+                <h3>{t('cmdfin.upcomingMaintenance','Upcoming maintenance')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('inventory')}>Open maintenance</button>
+              <button className="btn secondary small" onClick={() => go('inventory')}>{t('cmdfin.openMaintenance','Open maintenance')}</button>
             </div>
             <div className="cmd-list">
               {maintenance.map((item) => (
@@ -273,10 +276,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Polls</div>
-                <h3>Open polls</h3>
+                <div className="cmd-kicker">{t('cmdfin.polls','Polls')}</div>
+                <h3>{t('cmdfin.openPolls','Open polls')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('polls')}>View polls</button>
+              <button className="btn secondary small" onClick={() => go('polls')}>{t('cmdfin.viewPolls','View polls')}</button>
             </div>
             <div className="cmd-list">
               {polls.map((poll) => (
@@ -293,10 +296,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Events</div>
-                <h3>Upcoming events</h3>
+                <div className="cmd-kicker">{t('cmdfin.events','Events')}</div>
+                <h3>{t('cmdfin.upcomingEvents','Upcoming events')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('events')}>View events</button>
+              <button className="btn secondary small" onClick={() => go('events')}>{t('cmdfin.viewEvents','View events')}</button>
             </div>
             <div className="cmd-list">
               {events.map((event) => (
@@ -311,10 +314,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Tasks</div>
-                <h3>Today’s actions</h3>
+                <div className="cmd-kicker">{t('cmdfin.tasks','Tasks')}</div>
+                <h3>{t('cmdfin.todaysActions','Today’s actions')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('notifications')}>View tasks</button>
+              <button className="btn secondary small" onClick={() => go('notifications')}>{t('cmdfin.viewTasks','View tasks')}</button>
             </div>
             <div className="cmd-list">
               {tasks.map((task) => (
@@ -329,10 +332,10 @@ export function CommandFinanceDashboard({
           <div className="card cmd-card">
             <div className="cmd-card-head">
               <div>
-                <div className="cmd-kicker">Incidents</div>
-                <h3>Active incidents</h3>
+                <div className="cmd-kicker">{t('cmdfin.incidents','Incidents')}</div>
+                <h3>{t('cmdfin.activeIncidents','Active incidents')}</h3>
               </div>
-              <button className="btn secondary small" onClick={() => go('health')}>View incidents</button>
+              <button className="btn secondary small" onClick={() => go('health')}>{t('cmdfin.viewIncidents','View incidents')}</button>
             </div>
             <div className="cmd-list">
               {incidents.map((incident) => (

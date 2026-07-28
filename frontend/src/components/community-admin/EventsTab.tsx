@@ -97,7 +97,7 @@ export function EventsTab({ communityCode, readOnly = false }: Props) {
     try {
       return JSON.parse(raw)
     } catch {
-      throw new Error('Attachments must be valid JSON')
+      throw new Error(t('events.attachmentsInvalidJson', 'Attachments must be valid JSON'))
     }
   }
 
@@ -165,7 +165,7 @@ export function EventsTab({ communityCode, readOnly = false }: Props) {
   }
 
   const handleDelete = async (eventId: string) => {
-    if (!window.confirm('Delete this event?')) return
+    if (!window.confirm(t('events.confirmDelete', 'Delete this event?'))) return
     setSaving(true)
     setError(null)
     try {
@@ -235,8 +235,8 @@ export function EventsTab({ communityCode, readOnly = false }: Props) {
             value={form.visibility}
             onChange={(e) => setForm((s) => ({ ...s, visibility: e.target.value }))}
           >
-            <option value="COMMUNITY">Community</option>
-            <option value="ADMINS">Admins</option>
+            <option value="COMMUNITY">{t('events.visibilityCommunity', 'Community')}</option>
+            <option value="ADMINS">{t('events.visibilityAdmins', 'Admins')}</option>
           </select>
         </div>
         <textarea
@@ -311,8 +311,8 @@ export function EventsTab({ communityCode, readOnly = false }: Props) {
                       value={editForm.visibility}
                       onChange={(e) => setEditForm((s) => ({ ...s, visibility: e.target.value }))}
                     >
-                      <option value="COMMUNITY">Community</option>
-                      <option value="ADMINS">Admins</option>
+                      <option value="COMMUNITY">{t('events.visibilityCommunity', 'Community')}</option>
+                      <option value="ADMINS">{t('events.visibilityAdmins', 'Admins')}</option>
                     </select>
                   </div>
                   <textarea

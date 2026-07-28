@@ -284,7 +284,7 @@ export function PollsTab({ communityCode, readOnly = false }: Props) {
 
   const renderOptions = (poll: PollItem) => {
     const options = poll.options || []
-    if (options.length === 0) return <div className="muted">No options</div>
+    if (options.length === 0) return <div className="muted">{t('polls.noOptions', 'No options')}</div>
     return (
       <ul className="muted" style={{ marginTop: 6 }}>
         {options.map((opt) => (
@@ -434,8 +434,8 @@ export function PollsTab({ communityCode, readOnly = false }: Props) {
             value={form.voterScope}
             onChange={(e) => setForm((s) => ({ ...s, voterScope: e.target.value }))}
           >
-            <option value="BE_RESPONSIBLES">BE responsibles</option>
-            <option value="ALL_COMMUNITY_USERS">All community users</option>
+            <option value="BE_RESPONSIBLES">{t('polls.voterScopeBe', 'BE responsibles')}</option>
+            <option value="ALL_COMMUNITY_USERS">{t('polls.voterScopeAll', 'All community users')}</option>
           </select>
         </div>
         <div className="row" style={{ marginTop: 8, gap: 8 }}>
@@ -553,7 +553,7 @@ export function PollsTab({ communityCode, readOnly = false }: Props) {
                           checked={editForm.allowsMultiple}
                           onChange={(e) => setEditForm((s) => ({ ...s, allowsMultiple: e.target.checked }))}
                         />
-                        <span className="muted">Allow multiple selections</span>
+                        <span className="muted">{t('polls.multi', 'Allow multiple selections')}</span>
                       </label>
                       <label className="row" style={{ gap: 6, alignItems: 'center' }}>
                         <input
@@ -561,7 +561,7 @@ export function PollsTab({ communityCode, readOnly = false }: Props) {
                           checked={editForm.anonymized}
                           onChange={(e) => setEditForm((s) => ({ ...s, anonymized: e.target.checked }))}
                         />
-                        <span className="muted">Anonymize public results</span>
+                        <span className="muted">{t('polls.anonymized', 'Anonymize public results')}</span>
                       </label>
                     </div>
                     <div className="row" style={{ gap: 8 }}>
@@ -661,7 +661,7 @@ export function PollsTab({ communityCode, readOnly = false }: Props) {
                     {poll.description && <div className="muted">{poll.description}</div>}
                     {isOpen && (
                       <div className="card soft" style={{ marginTop: 8 }}>
-                        <div className="muted">Options</div>
+                        <div className="muted">{t('polls.options', 'Options')}</div>
                         {renderOptions(detail)}
                       </div>
                     )}

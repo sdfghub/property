@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useI18n } from '../../i18n/useI18n'
 
 type MeterItem = { key: string; label: string; kind: 'meter'; meterId?: string; typeCode?: string; unitCode?: string }
 type MeterTemplate = { code?: string; title: string; items: MeterItem[]; values?: Record<string, string | number>; state?: 'NEW' | 'FILLED' | 'CLOSED' }
@@ -18,6 +19,8 @@ export function MeterEntryForm({
   canEdit?: boolean
 }) {
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const baseItems = Array.isArray(template?.items) ? template.items : []
   const [values, setValues] = React.useState<Record<string, string>>(
     () => Object.fromEntries(Object.entries(template.values || {}).map(([k, v]) => [k, String(v)])),
@@ -171,7 +174,7 @@ export function MeterEntryForm({
         })
       }
       setState('FILLED')
-      setMessage('Saved')
+      setMessage(t('meter.saved', 'Saved'))
       onChanged?.()
     } catch (err: any) {
       setMessage(err?.message || 'Failed to save')
@@ -191,7 +194,7 @@ export function MeterEntryForm({
           values,
         })
       }
-      setMessage(`State set to ${next}`)
+      setMessage(t('meter.stateSet', 'State set to') + ' ' + next)
       onChanged?.()
     } catch (err: any) {
       setMessage(err?.message || 'Failed to update state')
@@ -216,7 +219,7 @@ export function MeterEntryForm({
 
       {state === 'CLOSED' ? (
         <div className="stack" style={{ marginTop: 8 }}>
-          <div className="muted">Digest</div>
+          <div className="muted">{t('meter.digest', 'Digest')}</div>
           <ul className="muted" style={{ margin: 0, paddingLeft: 12 }}>
             {items.map((item) => (
               <li key={item.key}>
@@ -260,8 +263,8 @@ export function MeterEntryForm({
                   />
                   <div className="muted" style={{ fontSize: 12 }}>{mid || item.typeCode}</div>
                   {mid && flagByMeter[mid]?.selfReported && (
-                    <span className="badge warn" title="Valoare introdusă de proprietar, nu de administrator">
-                      ⚠ citit de proprietar{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
+                    <span className="badge warn" title={t('meter.selfReportedTitle', 'Valoare introdusă de proprietar, nu de administrator')}>
+                      {t('meter.readByOwner', '⚠ citit de proprietar')}{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
                     </span>
                   )}
                   {mid && (
@@ -272,7 +275,7 @@ export function MeterEntryForm({
                 </div>
                 {mode === 'INDEX' && (
                   <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
-                    {prev != null ? `citire anterioară: ${prev} → ` : 'prima citire → '}
+                    {prev != null ? `${t('meter.previousReading', 'citire anterioară')}: ${prev} → ` : `${t('meter.firstReading', 'prima citire')} → `}
                     consum: <strong>{consumption != null ? Number(consumption.toFixed(3)) : '—'}</strong>
                   </div>
                 )}
@@ -280,9 +283,9 @@ export function MeterEntryForm({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, margin: '4px 0 6px' }}>
                     <thead>
                       <tr style={{ textAlign: 'right', color: 'var(--muted,#666)' }}>
-                        <th style={{ textAlign: 'left', padding: '2px 6px' }}>Perioadă</th>
-                        <th style={{ padding: '2px 6px' }}>Index</th>
-                        <th style={{ padding: '2px 6px' }}>Consum</th>
+                        <th style={{ textAlign: 'left', padding: '2px 6px' }}>{t('meter.period', 'Perioadă')}</th>
+                        <th style={{ padding: '2px 6px' }}>{t('meter.index', 'Index')}</th>
+                        <th style={{ padding: '2px 6px' }}>{t('meter.consumption', 'Consum')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -297,7 +300,7 @@ export function MeterEntryForm({
                         </tr>
                       ))}
                       {!(historyByMeter[mid] || []).length && (
-                        <tr><td colSpan={3} className="muted" style={{ padding: '2px 6px' }}>fără citiri anterioare</td></tr>
+                        <tr><td colSpan={3} className="muted" style={{ padding: '2px 6px' }}>{t('meter.noPreviousReadings', 'fără citiri anterioare')}</td></tr>
                       )}
                     </tbody>
                   </table>

@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useI18n } from '../../i18n/useI18n'
 
 // Resident self-service: enter readings for your own unit's meters (the open period only).
 // Uses GET/POST /me/communities/:id/periods/:code/meters — ownership enforced server-side.
@@ -17,6 +18,8 @@ type MyMeter = {
 
 export function MyMeterReadings({ communityId }: { communityId: string }) {
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [period, setPeriod] = React.useState<{ code: string; status?: string; editable?: boolean } | null>(null)
   const [meters, setMeters] = React.useState<MyMeter[]>([])
   const [values, setValues] = React.useState<Record<string, string>>({})
@@ -52,7 +55,7 @@ export function MyMeterReadings({ communityId }: { communityId: string }) {
     setBusy(m.meterId); setMsg(null)
     try {
       await api.post(`/me/communities/${communityId}/periods/${period!.code}/meters`, { meterId: m.meterId, value: Number(v) })
-      setMsg('Citire salvată')
+      setMsg(t('meter.readingSaved', 'Citire salvată'))
       load()
     } catch (e: any) { setMsg(e?.message || 'Eroare la salvare') } finally { setBusy(null) }
   }
@@ -64,9 +67,9 @@ export function MyMeterReadings({ communityId }: { communityId: string }) {
 
   return (
     <div className="card" style={{ marginTop: 12 }}>
-      <h4 style={{ marginTop: 0 }}>Citirile mele de contoare</h4>
+      <h4 style={{ marginTop: 0 }}>{t('meter.myReadings', 'Citirile mele de contoare')}</h4>
       <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-        {period ? `Perioada curentă: ${period.code}` : 'Nicio perioadă deschisă pentru citiri.'}
+        {period ? `${t('meter.currentPeriod', 'Perioada curentă')}: ${period.code}` : t('meter.noOpenPeriod', 'Nicio perioadă deschisă pentru citiri.')}
       </div>
       {msg && <div className="badge">{msg}</div>}
       <div className="stack" style={{ gap: 8 }}>
@@ -94,12 +97,12 @@ export function MyMeterReadings({ communityId }: { communityId: string }) {
                   disabled={!editable || busy === m.meterId}
                 />
                 <button className="btn small" type="button" disabled={!editable || busy === m.meterId} onClick={() => save(m)}>
-                  {busy === m.meterId ? 'Salvez…' : 'Salvează'}
+                  {busy === m.meterId ? t('meter.saving', 'Salvez…') : t('meter.save', 'Salvează')}
                 </button>
               </div>
               {isIndex && (
                 <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
-                  {m.previousReading != null ? `citire anterioară: ${m.previousReading} → ` : 'prima citire → '}
+                  {m.previousReading != null ? `${t('meter.previousReading', 'citire anterioară')}: ${m.previousReading} → ` : `${t('meter.firstReading', 'prima citire')} → `}
                   consum: <strong>{consumption != null ? Number(consumption.toFixed(3)) : '—'}</strong>
                 </div>
               )}

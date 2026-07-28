@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useI18n } from '../i18n/useI18n'
 
 type Props = {
   communityId: string
@@ -11,6 +12,8 @@ type Props = {
 
 export function AttachmentPane({ communityId, periodCode, templateCode, templateType, canEdit = true }: Props) {
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [files, setFiles] = React.useState<Array<{ id: string; fileName: string; size?: number; createdAt?: string }>>([])
   const [message, setMessage] = React.useState<string | null>(null)
   const [uploading, setUploading] = React.useState(false)
@@ -68,7 +71,7 @@ export function AttachmentPane({ communityId, periodCode, templateCode, template
         `/communities/${communityId}/periods/${periodCode}/${templateType === 'BILL' ? 'bill' : 'meter'}-templates/${templateCode}/attachments/${id}/download`,
       )
       if (!res?.data) {
-        setMessage('Empty attachment')
+        setMessage(t('attach.empty', 'Empty attachment'))
         return
       }
       const byteString = atob(res.data)
@@ -91,7 +94,7 @@ export function AttachmentPane({ communityId, periodCode, templateCode, template
   return (
     <div className="card soft" style={{ marginTop: 12 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <h4 style={{ margin: 0 }}>Attachments</h4>
+        <h4 style={{ margin: 0 }}>{t('attach.title', 'Attachments')}</h4>
         {canEdit && (
           <label className="btn secondary" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
             {uploading ? 'Uploading…' : 'Upload'}
@@ -101,7 +104,7 @@ export function AttachmentPane({ communityId, periodCode, templateCode, template
       </div>
       {message && <div className="badge negative" style={{ marginTop: 6 }}>{message}</div>}
       {files.length === 0 ? (
-        <div className="muted" style={{ marginTop: 6 }}>No attachments</div>
+        <div className="muted" style={{ marginTop: 6 }}>{t('attach.none', 'No attachments')}</div>
       ) : (
         <ul className="muted" style={{ marginTop: 6, paddingLeft: 16 }}>
           {files.map((f) => (

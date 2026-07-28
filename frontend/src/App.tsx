@@ -521,7 +521,8 @@ function RolePicker({
 }
 
 function AuthCard() {
-  const { t } = useI18n()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const { loginWithPassword, registerWithPassword, getInviteSummary, error, status } = useAuth()
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
@@ -596,9 +597,9 @@ function AuthCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
-      setNotice('Dacă există un cont cu acest email, ți-am trimis un link de resetare. Verifică-ți inbox-ul (și folderul Spam).')
+      setNotice(t('reset.forgotNotice', 'Dacă există un cont cu acest email, ți-am trimis un link de resetare. Verifică-ți inbox-ul (și folderul Spam).'))
     } catch {
-      setFormError('Nu am putut trimite emailul. Încearcă din nou.')
+      setFormError(t('reset.sendError', 'Nu am putut trimite emailul. Încearcă din nou.'))
     } finally {
       setWorking(false)
     }
@@ -619,7 +620,7 @@ function AuthCard() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data?.message || 'Link de resetare invalid sau expirat')
       }
-      setNotice('Parola a fost schimbată cu succes. Te poți autentifica acum.')
+      setNotice(t('reset.success', 'Parola a fost schimbată cu succes. Te poți autentifica acum.'))
     } catch (err: any) {
       setFormError(err?.message || 'Eroare la resetarea parolei')
     } finally {
@@ -643,17 +644,17 @@ function AuthCard() {
     return (
       <div className="grid two">
         <div className="card">
-          <h2>Resetare parolă</h2>
-          <p className="muted">Setează o parolă nouă pentru contul tău.</p>
+          <h2>{t('reset.title', 'Resetare parolă')}</h2>
+          <p className="muted">{t('reset.subtitle', 'Setează o parolă nouă pentru contul tău.')}</p>
           {done ? (
             <div className="stack" style={{ gap: 12 }}>
               <div className="badge">{notice}</div>
-              <a className="btn" href="/">Mergi la autentificare</a>
+              <a className="btn" href="/">{t('reset.goToSignIn', 'Mergi la autentificare')}</a>
             </div>
           ) : (
             <form className="stack" onSubmit={handleReset}>
               <label className="label">
-                <span>Parolă nouă</span>
+                <span>{t('reset.newPassword', 'Parolă nouă')}</span>
                 <span className="muted">Minim 6 caractere.</span>
               </label>
               <input
@@ -666,7 +667,7 @@ function AuthCard() {
                 onChange={(e) => setPassword(e.target.value)}
               />
               <button className="btn" type="submit" disabled={working}>
-                {working ? 'Se salvează…' : 'Schimbă parola'}
+                {working ? t('reset.saving', 'Se salvează…') : t('reset.changePassword', 'Schimbă parola')}
               </button>
               {formError && <div className="badge negative">{formError}</div>}
             </form>
@@ -756,8 +757,8 @@ function AuthCard() {
     return (
       <div className="grid two">
         <div className="card">
-          <h2>Resetare parolă</h2>
-          <p className="muted">Introdu emailul contului și îți trimitem un link de resetare.</p>
+          <h2>{t('reset.title', 'Resetare parolă')}</h2>
+          <p className="muted">{t('reset.forgotSubtitle', 'Introdu emailul contului și îți trimitem un link de resetare.')}</p>
           <form className="stack" onSubmit={handleForgot}>
             <label className="label">
               <span>{t('auth.emailLabel')}</span>
@@ -771,7 +772,7 @@ function AuthCard() {
               onChange={(e) => setEmail(e.target.value)}
             />
             <button className="btn" type="submit" disabled={working}>
-              {working ? 'Se trimite…' : 'Trimite linkul de resetare'}
+              {working ? t('reset.sending', 'Se trimite…') : t('reset.sendLink', 'Trimite linkul de resetare')}
             </button>
             {notice && <div className="badge">{notice}</div>}
             {formError && <div className="badge negative">{formError}</div>}
@@ -784,7 +785,7 @@ function AuthCard() {
                 setFormError(null)
               }}
             >
-              ← Înapoi la autentificare
+              {t('reset.backToSignIn', '← Înapoi la autentificare')}
             </button>
           </form>
         </div>

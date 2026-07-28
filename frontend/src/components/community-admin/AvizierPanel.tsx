@@ -546,7 +546,7 @@ export function AvizierPanel({
                   {(payDetail.data.rows || []).map((r: any, i: number) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border, #eee)' }}>
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.date ? new Date(r.date).toLocaleDateString('ro-RO') : ''}</td>
-                      <td style={{ padding: '6px 8px' }}>{r.account}{r.cycle === 'prior' ? <span className="badge warn" style={{ marginLeft: 4 }} title={t('avizier.payPrior', 'Achitare ciclu anterior')}>ant.</span> : null}</td>
+                      <td style={{ padding: '6px 8px' }}>{r.account}{r.cycle === 'prior' ? <span className="badge warn" style={{ marginLeft: 4 }} title={t('avizier.payPrior', 'Achitare ciclu anterior')}>{t('avizier.abbrevPrev', 'ant.')}</span> : null}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <div>{r.memo || ''}</div>
                         <div className="muted" style={{ fontSize: 11 }}>

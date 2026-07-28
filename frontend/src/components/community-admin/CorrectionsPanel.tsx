@@ -160,7 +160,7 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
               {beSelect(f.billingEntityId, (v) => setF((s: any) => ({ ...s, billingEntityId: v })))}
               <input className="input" type="number" step="0.01" style={{ width: 140 }} placeholder={t('corr.amount', 'Sumă')}
                 value={f.amount} onChange={(e) => setF((s: any) => ({ ...s, amount: e.target.value }))} required />
-              <span className="muted" style={{ alignSelf: 'center', fontSize: 12 }}>PENALIZARI</span>
+              <span className="muted" style={{ alignSelf: 'center', fontSize: 12 }}>{t('corr.penalties', 'PENALIZARI')}</span>
             </div>
           )}
           {type === 'PAYMENT_REATTRIB' && (
@@ -222,7 +222,7 @@ export function CorrectionsPanel({ communityId }: { communityId: string }) {
                   <td style={{ padding: '6px 10px' }}>{typeLabel(r.type)}</td>
                   <td style={{ padding: '6px 10px' }}>
                     {r.type === 'RESHUFFLE'
-                      ? `${Object.keys(r.payload?.perBe || {}).length} unități · ${r.fundCode || ''}`
+                      ? `${Object.keys(r.payload?.perBe || {}).length} ${t('corr.units', 'unități')} · ${r.fundCode || ''}`
                       : `${r.billingEntity?.name || r.billingEntity?.code || '—'}${r.fundCode ? ' · ' + r.fundCode : ''}`}
                     {r.note ? <div className="muted" style={{ fontSize: 11 }}>{r.note}</div> : null}
                   </td>

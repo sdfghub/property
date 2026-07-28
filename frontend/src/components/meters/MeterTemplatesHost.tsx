@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useI18n } from '../../i18n/useI18n'
 import { MeterEntryForm } from './MeterEntryForm'
 import { AttachmentPane } from '../TemplateAttachments'
 
@@ -23,6 +24,8 @@ export function MeterTemplatesHost({
   onStatusChange?: (summary: { total: number; closed: number }) => void
 }) {
   const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [templates, setTemplates] = React.useState<MeterTemplate[]>([])
   const [message, setMessage] = React.useState<string | null>(null)
   const [csvMessage, setCsvMessage] = React.useState<string | null>(null)
@@ -184,7 +187,7 @@ export function MeterTemplatesHost({
           />
           <div className="card soft" style={{ marginTop: 12 }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0 }}>CSV</h4>
+              <h4 style={{ margin: 0 }}>{t('metertpl.csv', 'CSV')}</h4>
               <div className="row" style={{ gap: 8 }}>
                 <button className="btn secondary" type="button" onClick={handleCsvDownload} disabled={csvBusy}>
                   Export CSV
@@ -198,7 +201,7 @@ export function MeterTemplatesHost({
               </div>
             </div>
             {csvMessage && <div className="badge" style={{ marginTop: 6 }}>{csvMessage}</div>}
-            {!allowEdit && <div className="muted" style={{ marginTop: 6 }}>Import disabled (template closed or period read-only).</div>}
+            {!allowEdit && <div className="muted" style={{ marginTop: 6 }}>{t('metertpl.importDisabled', 'Import disabled (template closed or period read-only).')}</div>}
           </div>
           <AttachmentPane
             communityId={communityId}

@@ -161,35 +161,29 @@ export function CollectionRatePanel({
               </summary>
               <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.55, maxWidth: 780 }}>
                 <p style={{ margin: '0 0 6px' }}>
-                  <strong>Facturat</strong> este suma efectiv emisă drept cote (facturarea propriu-zisă),
-                  cumulată pe perioade. Pentru un fond a cărui facturare s-a încheiat, această valoare rămâne fixă.
+                  <strong>{t('collection.charges', 'Facturat')}</strong> {t('collection.explain.chargesDef', 'este suma efectiv emisă drept cote (facturarea propriu-zisă), cumulată pe perioade. Pentru un fond a cărui facturare s-a încheiat, această valoare rămâne fixă.')}
                 </p>
                 <p style={{ margin: '0 0 6px' }}>
-                  <strong>Datorat</strong> este cât se datorează în total. Pe lângă Facturat, mai include două
-                  elemente care <em>nu</em> sunt facturi noi:
+                  <strong>{t('collection.owed', 'Datorat')}</strong> {t('collection.explain.owedDef1', 'este cât se datorează în total. Pe lângă Facturat, mai include două elemente care')} <em>{t('collection.explain.not', 'nu')}</em> {t('collection.explain.owedDef2', 'sunt facturi noi:')}
                 </p>
                 <ul style={{ margin: '0 0 6px', paddingLeft: 18 }}>
                   <li>
-                    <strong>Sold precedent</strong> ({money(data.totals.opening)}) — restanțe reportate
-                    dinaintea primei perioade afișate.
+                    <strong>{t('collection.opening', 'Sold precedent')}</strong> ({money(data.totals.opening)}) — {t('collection.explain.openingDef', 'restanțe reportate dinaintea primei perioade afișate.')}
                   </li>
                   <li>
-                    <strong>Ajustări</strong> ({money(data.totals.adjustments)}) — corecții de sold:
-                    repartizări/reponderări de cote între proprietari, reconcilieri cu registrul contabil,
-                    ștergeri de credite. Acestea mută sau corectează datoria, fără o facturare nouă.
+                    <strong>{t('collection.adjustments', 'Ajustări')}</strong> ({money(data.totals.adjustments)}) — {t('collection.explain.adjustmentsDef', 'corecții de sold: repartizări/reponderări de cote între proprietari, reconcilieri cu registrul contabil, ștergeri de credite. Acestea mută sau corectează datoria, fără o facturare nouă.')}
                   </li>
                 </ul>
                 <p style={{ margin: '0 0 6px' }}>
-                  Pentru selecția curentă: <strong>{money(data.totals.charges)}</strong> (Facturat)
-                  {' + '}{money(data.totals.opening)} (Sold precedent)
-                  {' + '}{money(data.totals.adjustments)} (Ajustări)
-                  {' = '}<strong>{money(data.totals.owed)}</strong> (Datorat). Așadar diferența{' '}
-                  <strong>Datorat − Facturat = {money(data.totals.owed - data.totals.charges)}</strong>{' '}
-                  (= Sold precedent + Ajustări).
+                  {t('collection.explain.currentSelection', 'Pentru selecția curentă:')} <strong>{money(data.totals.charges)}</strong> ({t('collection.charges', 'Facturat')})
+                  {' + '}{money(data.totals.opening)} ({t('collection.opening', 'Sold precedent')})
+                  {' + '}{money(data.totals.adjustments)} ({t('collection.adjustments', 'Ajustări')})
+                  {' = '}<strong>{money(data.totals.owed)}</strong> ({t('collection.owed', 'Datorat')}). {t('collection.explain.soDifference', 'Așadar diferența')}{' '}
+                  <strong>{t('collection.owed', 'Datorat')} − {t('collection.charges', 'Facturat')} = {money(data.totals.owed - data.totals.charges)}</strong>{' '}
+                  ({t('collection.explain.equalsOpeningPlusAdj', '= Sold precedent + Ajustări')}).
                 </p>
                 <p style={{ margin: 0 }}>
-                  Aceeași descompunere se aplică la fiecare nivel (domeniu, fond, proprietar). Gradul de
-                  colectare se raportează la <strong>Facturat</strong> (Plătit ÷ Facturat), nu la Datorat.
+                  {t('collection.explain.sameDecomposition', 'Aceeași descompunere se aplică la fiecare nivel (domeniu, fond, proprietar). Gradul de colectare se raportează la')} <strong>{t('collection.charges', 'Facturat')}</strong> {t('collection.explain.rateBasis', '(Plătit ÷ Facturat), nu la Datorat.')}
                 </p>
               </div>
             </details>
@@ -246,6 +240,8 @@ export function CollectionRatePanel({
 // Hand-rolled SVG chart (no charting dependency): collection rate % as a line (left, 0–100%),
 // outstanding debt as a scaled area behind it, period on the horizontal axis. Hover for exact values.
 function HistoryChart({ history, selected, onSelect }: { history: HistoryPoint[]; selected?: string; onSelect: (code: string) => void }) {
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const [hi, setHi] = React.useState<number | null>(null)
   const firstNZ = history.findIndex((h) => h.owed > 0.005 || Math.abs(h.outstanding) > 0.005)
   const pts = firstNZ >= 0 ? history.slice(firstNZ) : history
@@ -275,10 +271,10 @@ function HistoryChart({ history, selected, onSelect }: { history: HistoryPoint[]
   return (
     <div className="card">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-        <span className="muted" style={{ fontSize: 12 }}>Evoluție pe perioade — grad de colectare & restanță</span>
+        <span className="muted" style={{ fontSize: 12 }}>{t('collection.chart.title', 'Evoluție pe perioade — grad de colectare & restanță')}</span>
         <span className="row" style={{ gap: 12, fontSize: 11 }}>
-          <span style={{ color: '#2563eb' }}>▬ grad (%)</span>
-          <span className="muted">▧ restanță (scalat)</span>
+          <span style={{ color: '#2563eb' }}>▬ {t('collection.chart.rateLegend', 'grad (%)')}</span>
+          <span className="muted">▧ {t('collection.chart.arrearsLegend', 'restanță (scalat)')}</span>
         </span>
       </div>
       <div style={{ position: 'relative', marginTop: 6 }}>
@@ -337,6 +333,8 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
   onToggle?: () => void
   strong?: boolean
 }) {
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
   const clickable = !!onToggle
   return (
     <div
@@ -364,7 +362,7 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
           {m.ratePct == null ? '—' : `${m.ratePct}%`}
         </span>
       </span>
-      <span style={{ width: 130, textAlign: 'right' }} title={money(m.adjustments) + ' ajustări'}>{money(m.charges)}</span>
+      <span style={{ width: 130, textAlign: 'right' }} title={money(m.adjustments) + ' ' + t('collection.adjustmentsLabel', 'ajustări')}>{money(m.charges)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.owed)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.paid)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.outstanding)}</span>

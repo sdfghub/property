@@ -477,7 +477,7 @@ export function OverviewTab({
                       </div>
                     )}
                      <br></br>
-                      <div>Selecteaza factura existenta</div>
+                      <div>{t('overview.selectExistingInvoice', 'Selecteaza factura existenta')}</div>
                       <select
                         className="input"
                         style={{ minWidth: 180 }}
@@ -491,7 +491,7 @@ export function OverviewTab({
                           </option>
                         ))}
                       </select>
-                      Selecteaza fondul din care s-a efectuat plata
+                      {t('overview.selectPaymentFund', 'Selecteaza fondul din care s-a efectuat plata')}
                       <select
                         className="input"
                         style={{ minWidth: 180 }}
@@ -655,11 +655,11 @@ export function OverviewTab({
                         onChange={(e) => setCustomAllocationMethod(e.target.value || null)}
                       >
                         <option value="">{t('exp.customAlloc', 'Custom allocation')}</option>
-                        <option value="EQUAL">EQUAL</option>
+                        <option value="EQUAL">{t('overview.allocEqual', 'EQUAL')}</option>
                         <option value="BY_SQM">BY_SQM</option>
                         <option value="BY_RESIDENTS">BY_RESIDENTS</option>
                         <option value="BY_CONSUMPTION">BY_CONSUMPTION</option>
-                        <option value="MIXED">MIXED</option>
+                        <option value="MIXED">{t('overview.allocMixed', 'MIXED')}</option>
                       </select>
                       <textarea
                         className="input"
