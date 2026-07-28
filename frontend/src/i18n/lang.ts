@@ -3,6 +3,14 @@
 export const translations = {
   // English translations
   en: {
+    "alloc.allocated": "Allocated",
+    "alloc.delta": "Delta",
+    "alloc.expected": "Expected",
+    "be.financials": "Financials",
+    "be.noData": "No data",
+    "nav.menu": "Menu",
+    "tab.corrections": "Corrections",
+    "tab.periodSettings": "Period settings",
     "cmdfin.metersOpen": "Meters open",
     "cmdfin.billTemplatesOpen": "Bill templates open",
     "cmdfin.invoicesUnlinked": "Invoices unlinked",
@@ -1185,6 +1193,14 @@ export const translations = {
   },
   // Romanian translations
   ro: {
+    "alloc.allocated": "Alocat",
+    "alloc.delta": "Diferență",
+    "alloc.expected": "Așteptat",
+    "be.financials": "Situație financiară",
+    "be.noData": "Fără date",
+    "nav.menu": "Meniu",
+    "tab.corrections": "Corecții",
+    "tab.periodSettings": "Setări perioadă",
     "cmdfin.metersOpen": "Contoare deschise",
     "cmdfin.billTemplatesOpen": "Șabloane de factură deschise",
     "cmdfin.invoicesUnlinked": "Facturi neasociate",
