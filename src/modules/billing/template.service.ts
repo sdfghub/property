@@ -723,17 +723,9 @@ export class TemplateService {
             items.push(clone)
             const scopeType = m.scopeType as any
             const scopeId = scopeType === 'COMMUNITY' ? communityId : unitIdByCode.get(m.scopeCode) ?? m.scopeCode
-            const pm = pmRepo
-              ? await pmRepo.findFirst({
-                  where: {
-                    communityId,
-                    periodId: period?.id,
-                    meterId: m.meterId,
-                    scopeType,
-                    scopeId,
-                    typeCode: m.typeCode,
-                  },
-                })
+            // Per-meter reading now lives in MeterReading (raw layer); PeriodMeasure is the per-unit rollup.
+            const pm = period?.id
+              ? await (this.prisma as any).meterReading.findFirst({ where: { periodId: period.id, meterId: m.meterId } })
               : null
             if (pm?.value != null) {
               const valNum = Number(pm.value)
@@ -751,10 +743,8 @@ export class TemplateService {
           if (!m) continue
           const scopeType = m.scopeType as any
           const scopeId = scopeType === 'COMMUNITY' ? communityId : unitIdByCode.get(m.scopeCode) ?? m.scopeCode
-          const pm = pmRepo
-            ? await pmRepo.findFirst({
-                where: { communityId, periodId: period?.id, meterId: m.meterId, scopeType, scopeId, typeCode: m.typeCode },
-              })
+          const pm = period?.id
+            ? await (this.prisma as any).meterReading.findFirst({ where: { periodId: period.id, meterId: m.meterId } })
             : null
           if (pm?.value != null) {
             const valNum = Number(pm.value)
@@ -1303,28 +1293,15 @@ export class TemplateService {
     const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
     const { reading, value: valueNum } = this.deriveMeasureValues(mode, entered, prior, openingIndex)
     const selfReported = !this.isCommunityAdmin(roles, communityId)
-    const pm = await (this.prisma as any).periodMeasure.upsert({
-      where: {
-        communityId_periodId_scopeType_scopeId_typeCode: {
-          communityId,
-          periodId: period.id,
-          scopeType,
-          scopeId,
-          typeCode: meter.typeCode,
-        },
-      },
-      update: {
-        value: valueNum,
-        reading,
-        origin,
-        estimated: !!input.estimated,
-        meterId: meter.meterId,
-        enteredById: userId ?? null,
-        selfReported,
-      },
+    // Write the RAW per-physical-meter reading, then roll all of this scope's meters of this type up
+    // into the single per-(scope,type) PeriodMeasure the billing engine consumes.
+    await (this.prisma as any).meterReading.upsert({
+      where: { periodId_meterId: { periodId: period.id, meterId: meter.meterId } },
+      update: { value: valueNum, reading, origin, estimated: !!input.estimated, enteredById: userId ?? null, selfReported },
       create: {
         communityId,
         periodId: period.id,
+        meterId: meter.meterId,
         scopeType,
         scopeId,
         typeCode: meter.typeCode,
@@ -1332,16 +1309,34 @@ export class TemplateService {
         value: valueNum,
         reading,
         estimated: !!input.estimated,
-        meterId: meter.meterId,
         enteredById: userId ?? null,
         selfReported,
       },
     })
+    const pm = await this.rollupUnitMeasure(communityId, period.id, scopeType, scopeId, meter.typeCode)
     await this.recomputeAggregationsAndDerived(communityId, period.id)
     if (mode === 'INDEX') {
       await this.recomputeNextConsumption(communityId, scopeType, scopeId, meter.typeCode, period.seq, entered)
     }
     return pm
+  }
+
+  /**
+   * Roll the raw MeterReadings for one (scope, type) up into its single PeriodMeasure — value = Σ readings,
+   * which is what allocation/avizier consume. A scope with one meter reproduces that meter's value exactly.
+   */
+  async rollupUnitMeasure(communityId: string, periodId: string, scopeType: SeriesScope, scopeId: string, typeCode: string) {
+    const rows: any[] = await (this.prisma as any).meterReading.findMany({
+      where: { communityId, periodId, scopeType, scopeId, typeCode },
+      select: { value: true, reading: true },
+    })
+    const value = rows.reduce((s, r) => s + Number(r.value || 0), 0)
+    const reading = rows.length === 1 && rows[0].reading != null ? Number(rows[0].reading) : null
+    return (this.prisma as any).periodMeasure.upsert({
+      where: { communityId_periodId_scopeType_scopeId_typeCode: { communityId, periodId, scopeType, scopeId, typeCode } },
+      update: { value, reading, origin: SeriesOrigin.DERIVED, meterId: `${typeCode}-${scopeId}` },
+      create: { communityId, periodId, scopeType, scopeId, typeCode, origin: SeriesOrigin.DERIVED, value, reading, meterId: `${typeCode}-${scopeId}` },
+    })
   }
 
   private async upsertPeriodMeasure(

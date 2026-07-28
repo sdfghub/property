@@ -468,6 +468,31 @@ model PeriodMeasure {
   @@map("period_measure")
 }
 
+// Raw per-PHYSICAL-METER reading for a period. Multiple readings of the same type can exist for one
+// scope (e.g. a unit with a baie + bucătărie cold-water meter); they roll up (summed) into the single
+// per-(scope,type) PeriodMeasure the billing engine consumes. See TemplateService.rollupUnitMeasure.
+model MeterReading {
+  id           String       @id @default(cuid()) @map("id")
+  communityId  String       @map("community_id")
+  periodId     String       @map("period_id")
+  meterId      String       @map("meter_id")   // the real Meter.meterId
+  scopeType    SeriesScope  @map("scope_type")  // denormalized from the meter (rollup groups on it)
+  scopeId      String       @map("scope_id")
+  typeCode     String       @map("type_code")
+  origin       SeriesOrigin @map("origin")
+  value        Decimal      @map("value") @db.Decimal(18, 6)     // period consumption (derived if INDEX)
+  reading      Decimal?     @map("reading") @db.Decimal(18, 6)   // raw cumulative index (INDEX mode)
+  estimated    Boolean      @default(false) @map("estimated")
+  enteredById  String?      @map("entered_by_id")
+  selfReported Boolean      @default(false) @map("self_reported")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@unique([periodId, meterId])
+  @@index([communityId, periodId, scopeType, scopeId, typeCode])
+  @@map("meter_reading")
+}
+
 model AllocationRule {
   id          String           @id @default(cuid()) @map("id")
   communityId String           @map("community_id")
