@@ -98,6 +98,31 @@ export const FUND_DOMAIN_META: (EnumMeta & { sortOrder: number })[] = [
   { key: 'other', label: 'Altele', hint: 'Fonduri fără domeniu configurat', sortOrder: 9 },
 ]
 
+// Avizier fund grouping — the coarse buckets the avizier groups its fund columns under, distinct
+// from the report's FUND_DOMAIN_META (which is a 4-way strategic taxonomy). Here services
+// (Întreținere) and penalties stand apart, and the remaining contribution funds collapse into just
+// two buckets the way owners read the notice: operating funds vs. rehabilitation funds. Note the
+// intended mapping puts REPARATII (a Tactic fund in FUND_DOMAIN_META) under `operational`, so this
+// is deliberately its own taxonomy. Membership is derived (not per-code hardcoded): a contribution
+// fund whose domain is `strategic` → `reabilitare`, otherwise → `operational`; the services fund and
+// the penalties fund get their own buckets.
+export const AVIZIER_FUND_GROUP_META: (EnumMeta & { sortOrder: number })[] = [
+  { key: 'intretinere', label: 'Întreținere', hint: 'Servicii curente (cheltuieli lunare)', sortOrder: 0 },
+  { key: 'operational', label: 'Fond Operațional', hint: 'Rulment, reparații', sortOrder: 1 },
+  { key: 'reabilitare', label: 'Fond Reabilitare', hint: 'Proiectare + reabilitare, pod + fațadă, reabilitare 3', sortOrder: 2 },
+  { key: 'penalizari', label: 'Penalizări', hint: 'Penalizări de întârziere, pe fond', sortOrder: 9 },
+]
+
+// Risk-exposure tiers (#13) — the escalation an arrears reaches by age, measured in days overdue
+// from the scadență (due date). `maxDays` is the inclusive upper bound of the tier (null = open-ended);
+// `action` names the legal step the tier warrants. `tone` maps to the UI severity colours.
+export const RISK_TIER_META: (EnumMeta & { sortOrder: number; maxDays: number | null; action: string })[] = [
+  { key: 'none', label: 'Fără risc', hint: '0–30 zile — în termen', sortOrder: 0, maxDays: 30, action: 'Fără acțiune', tone: 'success' },
+  { key: 'penalty', label: 'Penalități', hint: '31–59 zile — se acumulează penalizări', sortOrder: 1, maxDays: 59, action: 'Penalități', tone: 'warning' },
+  { key: 'cf', label: 'Sarcină în CF', hint: '60–119 zile — înscriere în Cartea Funciară', sortOrder: 2, maxDays: 119, action: 'Înscriere sarcină în Cartea Funciară', tone: 'orange' },
+  { key: 'court', label: 'Acțiune în instanță', hint: '≥120 zile', sortOrder: 3, maxDays: null, action: 'Acționare în instanță', tone: 'destructive' },
+]
+
 /** Everything the frontend needs to render these taxonomies, served in one payload. */
 export const COMMUNITY_METADATA = {
   roles: ROLE_META,
@@ -112,6 +137,8 @@ export const COMMUNITY_METADATA = {
   meterModes: MEASURE_MODE_META,
   waterMethods: WATER_METHOD_META,
   fundDomains: FUND_DOMAIN_META,
+  avizierFundGroups: AVIZIER_FUND_GROUP_META,
+  riskTiers: RISK_TIER_META,
 }
 
 /** Helper for the validation Sets that used to hardcode their own code lists. */

@@ -9,9 +9,16 @@ export const prettyBe = (s?: string) =>
     : s)
 
 // Resolved billing-entity label: admin displayName if set, else short apt(s) + owner name.
-export function beLabel(row: { displayName?: string | null; units?: string[]; beName?: string; beCode?: string }): { primary: string; secondary?: string } {
+// `publicMode` (GDPR, issue #10): the owner name must not appear on the posted/exported avizier, so
+// it is suppressed — the entity shows as its unit code(s) (or the admin-set displayName), never the
+// owner's name. In-app privileged views (admin/censor) still pass publicMode=false to see the name.
+export function beLabel(
+  row: { displayName?: string | null; units?: string[]; beName?: string; beCode?: string },
+  opts?: { publicMode?: boolean },
+): { primary: string; secondary?: string } {
   if (row.displayName) return { primary: row.displayName }
   const apts = (row.units || []).map(shortUnit).join(', ') || row.beCode || ''
   const owner = prettyBe(row.beName || '')
+  if (opts?.publicMode) return { primary: apts || row.beCode || '' } // no owner name on the public avizier
   return apts ? { primary: apts, secondary: owner || undefined } : { primary: owner || row.beCode || '' }
 }

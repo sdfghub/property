@@ -1,5 +1,24 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
+import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
+
+// #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
+type AvizierConfig = {
+  info: { cpi: boolean; residents: boolean; consumption: boolean }
+  defaultView: 'fond' | 'stare'
+  fundGroupOverrides: Record<string, string> // fund code → avizier super-group key
+  fundGroupLabels: Record<string, string>     // super-group key → label override
+}
+const normalizeAvizierConfig = (raw: any): AvizierConfig => {
+  const info = raw?.info || {}
+  const obj = (v: any) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+  return {
+    info: { cpi: info.cpi !== false, residents: info.residents !== false, consumption: info.consumption !== false },
+    defaultView: raw?.defaultView === 'stare' ? 'stare' : 'fond',
+    fundGroupOverrides: obj(raw?.fundGroupOverrides),
+    fundGroupLabels: obj(raw?.fundGroupLabels),
+  }
+}
 
 /**
  * Read-only community finance signals for the admin "Today" home / command center:
@@ -141,12 +160,33 @@ export class FinanceService {
    * (sold precedent), this-period charges broken down by category (services / funds / penalties),
    * payments, and total due. Categories are ordered services → funds → penalties.
    */
+  /** #8: read the per-community avizier display config (normalized with defaults). */
+  async getAvizierConfig(communityId: string): Promise<AvizierConfig> {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] }, select: { features: true },
+    })
+    return normalizeAvizierConfig(((c?.features as any) || {}).avizierConfig)
+  }
+
+  /** #8: persist the avizier config under Community.features.avizierConfig (merges, other flags survive). */
+  async setAvizierConfig(communityId: string, body: any): Promise<AvizierConfig> {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] }, select: { id: true, features: true },
+    })
+    if (!c) throw new NotFoundException('Community not found')
+    const features = ((c.features as any) || {})
+    const next = normalizeAvizierConfig({ ...(features.avizierConfig || {}), ...body })
+    await this.prisma.community.update({ where: { id: c.id }, data: { features: { ...features, avizierConfig: next } } })
+    return next
+  }
+
   async avizier(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { period: null, categories: [], rows: [], totals: null }
+    const cfg = await this.getAvizierConfig(communityId)
     const p = await this.prisma.period.findUnique({
       where: { id: period.id },
-      select: { code: true, status: true, dueDate: true, seq: true },
+      select: { code: true, status: true, dueDate: true, afisareDate: true, seq: true },
     })
 
     // per-BE running balance from statements
@@ -243,8 +283,62 @@ export class FinanceService {
       unitsByBe.set(m.billingEntityId, arr)
     })
 
-    const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true } })
+    const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true, allocation: true } })
     const fundCodes = new Set(funds.map((f) => f.code))
+    // Fund domain (from allocation.type) drives the coarse avizier grouping (#2). See AVIZIER_FUND_GROUP_META.
+    const fundDomain = new Map<string, string>(
+      funds.map((f) => [f.code, String(((f.allocation as any)?.type ?? '')).trim().toLowerCase()]),
+    )
+
+    // #7 INFO fields per BE: cotă-parte (CPI, from the SQM measure) and residents take the latest
+    // value at-or-before this period (structural attributes); water consumption is THIS period's
+    // reading only. Units map to their BE through the temporal membership window (earliest as a
+    // forward-fallback, mirroring reports.cpiByBe so injected history isn't zeroed).
+    const infoRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `with mem as (
+         select distinct on (bem.unit_id) bem.unit_id, bem.billing_entity_id as be_id
+           from billing_entity_member bem join billing_entity be on be.id = bem.billing_entity_id
+          where be.community_id = $1
+          order by bem.unit_id,
+                   (bem.start_seq <= $2 and (bem.end_seq is null or bem.end_seq >= $2)) desc,
+                   bem.start_seq asc
+       ),
+       sqm as (
+         select distinct on (pm.scope_id) pm.scope_id as unit_id, pm.value
+           from period_measure pm join period p on p.id = pm.period_id
+          where pm.community_id = $1 and pm.type_code = 'SQM' and pm.scope_type = 'UNIT'
+          order by pm.scope_id, (p.seq <= $2) desc, case when p.seq <= $2 then -p.seq else p.seq end asc
+       ),
+       res as (
+         select distinct on (pm.scope_id) pm.scope_id as unit_id, pm.value
+           from period_measure pm join period p on p.id = pm.period_id
+          where pm.community_id = $1 and pm.type_code = 'RESIDENTS' and pm.scope_type = 'UNIT'
+          order by pm.scope_id, (p.seq <= $2) desc, case when p.seq <= $2 then -p.seq else p.seq end asc
+       ),
+       cons as (
+         select pm.scope_id as unit_id, sum(pm.value)::float8 as value
+           from period_measure pm
+          where pm.community_id = $1 and pm.type_code = 'CONSUMPTION' and pm.scope_type = 'UNIT' and pm.period_id = $3
+          group by pm.scope_id
+       )
+       select mem.be_id as "beId",
+              sum(sqm.value)::float8 as cpi,
+              sum(res.value)::float8 as residents,
+              sum(cons.value)::float8 as consumption
+         from mem
+         left join sqm on sqm.unit_id = mem.unit_id
+         left join res on res.unit_id = mem.unit_id
+         left join cons on cons.unit_id = mem.unit_id
+        group by mem.be_id`,
+      communityId, p?.seq ?? 0, period.id,
+    )
+    const infoByBe = new Map<string, { cpi: number | null; residents: number | null; consumption: number | null }>(
+      infoRows.map((r) => [r.beId, {
+        cpi: r.cpi == null ? null : round2(Number(r.cpi)),
+        residents: r.residents == null ? null : Number(r.residents),
+        consumption: r.consumption == null ? null : round2(Number(r.consumption)),
+      }]),
+    )
     // Column display labels come from the data (expense-type / fund names) — the frontend renders these
     // rather than hardcoding a code→label map. APA_DIF is the synthetic water-difference column.
     const expTypes = await this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true } })
@@ -285,14 +379,32 @@ export class FinanceService {
     const waterGrp = catToGroup.get('APA_RECE') ?? catToGroup.get('CANALIZARE')
     if (waterGrp && !catToGroup.has('APA_DIF')) catToGroup.set('APA_DIF', waterGrp)
     const groupRank = (k: string) => (k === 'EXPENSES' ? 0 : k === 'PENALIZARI' ? 9 : 1)
-    const groupMap = new Map<string, { key: string; label: string; categories: string[] }>()
+    // #2 coarse avizier bucket for a fund group: services → Întreținere, penalties → Penalizări,
+    // strategic (reabilitare) funds → Fond Reabilitare, everything else → Fond Operațional. Derived
+    // from the fund's domain (allocation.type), not per-code hardcoded.
+    const superGroupMeta = new Map(AVIZIER_FUND_GROUP_META.map((g) => [g.key, g]))
+    // #8: an admin-set override (config.fundGroupOverrides[fundCode]) wins over the domain-derived bucket.
+    const superGroupKeyOf = (groupKey: string) =>
+      cfg.fundGroupOverrides[groupKey]
+        ?? (groupKey === 'EXPENSES' ? 'intretinere'
+          : groupKey === 'PENALIZARI' ? 'penalizari'
+            : fundDomain.get(groupKey) === 'strategic' ? 'reabilitare'
+              : 'operational')
+    const sgLabelOf = (sgKey: string, fallback: string) => cfg.fundGroupLabels[sgKey] ?? superGroupMeta.get(sgKey)?.label ?? fallback
+    const groupMap = new Map<string, { key: string; label: string; superGroup: { key: string; label: string }; categories: string[] }>()
     for (const c of categories) {
       const g = catToGroup.get(c) || { key: 'ALTELE', label: 'Altele' }
-      const entry = groupMap.get(g.key) ?? { key: g.key, label: g.label, categories: [] }
+      const sgKey = superGroupKeyOf(g.key)
+      const entry = groupMap.get(g.key)
+        ?? { key: g.key, label: g.label, superGroup: { key: sgKey, label: sgLabelOf(sgKey, g.label) }, categories: [] }
       entry.categories.push(c)
       groupMap.set(g.key, entry)
     }
-    const groups = [...groupMap.values()].sort((a, b) => groupRank(a.key) - groupRank(b.key) || a.label.localeCompare(b.label))
+    const sgOrder = (k: string) => superGroupMeta.get(k)?.sortOrder ?? 5
+    const groups = [...groupMap.values()].sort((a, b) =>
+      sgOrder(a.superGroup.key) - sgOrder(b.superGroup.key)
+      || groupRank(a.key) - groupRank(b.key)
+      || a.label.localeCompare(b.label))
 
     const rows = bes
       .map((be) => {
@@ -313,6 +425,9 @@ export class FinanceService {
           displayName: be.displayName ?? null,
           order: be.order,
           units: unitsByBe.get(be.id) ?? [],
+          cpi: infoByBe.get(be.id)?.cpi ?? null,
+          residents: infoByBe.get(be.id)?.residents ?? null,
+          consumption: infoByBe.get(be.id)?.consumption ?? null,
           soldPrecedent: round2(Number(s?.sold ?? 0)),
           charges,
           curentTotal: round2(curTotal + delta),
@@ -328,6 +443,9 @@ export class FinanceService {
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
     const totals = {
+      cpi: round2(rows.reduce((s, r) => s + (r.cpi ?? 0), 0)),
+      residents: rows.reduce((s, r) => s + (r.residents ?? 0), 0),
+      consumption: round2(rows.reduce((s, r) => s + (r.consumption ?? 0), 0)),
       soldPrecedent: round2(rows.reduce((s, r) => s + r.soldPrecedent, 0)),
       curentTotal: round2(rows.reduce((s, r) => s + r.curentTotal, 0)),
       penaltyMonth: round2(rows.reduce((s, r) => s + r.penaltyMonth, 0)),
@@ -353,7 +471,7 @@ export class FinanceService {
     const groupOrder = new Map(groups.map((g, i) => [g.key, i]))
     const penaltyFunds = [...penaltyFundSet].sort((a, b) => (groupOrder.get(a) ?? 99) - (groupOrder.get(b) ?? 99))
 
-    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate }, categories, categoryLabels, groups, penaltyFunds, rows, totals }
+    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, rows, totals }
   }
 
   /**

@@ -28,6 +28,7 @@ import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { CorrectionsPanel } from './CorrectionsPanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
+import { RiskPanel } from './RiskPanel'
 
 export type CommunityAdminTabKey =
   | 'today'
@@ -57,6 +58,7 @@ export type CommunityAdminTabKey =
   | 'periodFocus'
   | 'periodSettings'
   | 'collectionRate'
+  | 'riskExposure'
 
 type Props = {
   forceCommunityId?: string
@@ -71,8 +73,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'unpaidInvoices', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'unpaidInvoices', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -226,6 +228,7 @@ export function CommunityAdminDashboard({
         { key: 'funds', label: t('tab.funds') || 'Funds' },
         { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
         { key: 'corrections', label: t('tab.corrections') || 'Corecții' },
+        { key: 'riskExposure', label: t('tab.riskExposure') || 'Risc de expunere' },
       ],
     },
     {
@@ -652,6 +655,7 @@ export function CommunityAdminDashboard({
               {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
               {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
+              {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
               {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
               {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
               {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
