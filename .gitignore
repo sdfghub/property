@@ -56,3 +56,4 @@ infra/cdk/dist/
 *.tgz
 *.tmp
 property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json
+node_modules
