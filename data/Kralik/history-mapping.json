@@ -187,11 +187,11 @@
   }
  },
  "creditTransfers": {
-  "_doc": "A fund credit (negative balance / prepayment) applied to OTHER funds' dues. The balance rises back to 0, but it is NOT a charge (nothing billed) and NOT a forgiveness — it is a reconciliation (reconciliere-numerar). Booked as an owed-adjustment on the source fund; the counterpart payments already exist in the source (the other funds' Platit). Confirmed with admin per case.",
+  "_doc": "A fund credit (prepayment / re-split credit) APPLIED to OTHER funds' dues — the credit leaves REABILITARE_1 as a PAYMENT reversal (reatribuire-plata), so the fund's Datorat stays flat (= Facturat) and only its outstanding shifts. NOT a charge, NOT a forgiveness. Confirmed with admin per case.",
   "entries": [
-   { "be": "BE_KARACS_BEBE", "period": "2025-11", "fund": "REABILITARE_1", "note": "credit -300 din Reab 1 aplicat pe Intretinere 228.17 + Reab 2 71.83 (NU iertat) — admin Adriana Dascal" },
-   { "be": "BE_DAVID_MARIUS", "period": "2026-04", "fund": "REABILITARE_1", "note": "credit din re-split -627 aplicat pe Intretinere/Rulment/Reparatii (curente+restante) 602.6 + Reab 3 24.4 = 627 (NU charge) — admin Adriana Dascal" },
-   { "be": "BE_SOAMES_MARIANA", "period": "2026-03", "fund": "REABILITARE_1", "note": "credit din re-split -3821 (Corectie in sursa: Restante-Afisat -3821 dar Restante Calculat CashFlow = 0) consumat -> reconciliere, NU charge — admin Adriana Dascal" }
+   { "be": "BE_KARACS_BEBE", "period": "2025-11", "fund": "REABILITARE_1", "note": "credit -300 aplicat pe Intretinere 228.17 + Reab 2 71.83 — admin Adriana Dascal" },
+   { "be": "BE_DAVID_MARIUS", "period": "2026-04", "fund": "REABILITARE_1", "note": "credit re-split -627 aplicat pe Intretinere/Rulment/Reparatii 602.6 + Reab 3 24.4 — admin Adriana Dascal" },
+   { "be": "BE_SOAMES_MARIANA", "period": "2026-03", "fund": "REABILITARE_1", "note": "credit re-split -3821 (Corectie: Afisat -3821, Calculat cashflow 0) aplicat — admin Adriana Dascal" }
   ]
  },
  "shareReallocations": {
@@ -202,6 +202,7 @@
     "bookPeriod": "2026-02",
     "sourcePeriod": "2026-03",
     "net": 3.0,
+    "_basis": "FULL reshuffle (redistribution of the 390.000 project, net +3). Credit consumptions (Karacs/David/Soames) are booked as PAYMENT reversals via creditTransfers, so Datorat=Facturat and the total charge stays 390.003.",
     "perUnit": {
      "1": 221.0,
      "2/1": 369.0,

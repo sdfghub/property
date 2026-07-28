@@ -264,7 +264,7 @@ async function main() {
         if (Math.abs((-gross) - declared) > 0.5) throw new Error(`payment reattribution mismatch: ${fund} declared ${declared.toFixed(2)} but source reconciliation is ${(-gross).toFixed(2)}`)
         payments = gross; reason = 'reatribuire-plata'
       }
-      else if (CREDIT_TRANSFERS.has(`${s.billingEntityId}::${fund}`)) { adjustments = -gross; reason = 'reconciliere-numerar' } // credit applied to other funds — NOT a charge
+      else if (CREDIT_TRANSFERS.has(`${s.billingEntityId}::${fund}`)) { payments = gross; reason = 'reatribuire-plata' } // credit applied to other funds → PAYMENT reversal (Datorat flat)
       else if (REALLOC.has(fund) && gross < -0.005) { extraCharge = -gross; reason = 'reponderare-cote' } // re-split: rise → regularization CHARGE (Datorat=Facturat)
       else if (gross >= 0) { payments = gross }
       else { adjustments = -gross; reason = 'reconciliere-numerar' }

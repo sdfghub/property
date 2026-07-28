@@ -324,6 +324,7 @@ async function main() {
         // re-done by the April completion patch — re-splitting it would book a spurious charge).
         const reSplit = REALLOC.has(fund) && m.code !== months[months.length - 1].code
         let payments = 0, adjustments = 0, extraCharge = 0, adjReason = 'ajustare-sold'
+        let payReason: string | undefined
         if (isReshuffle) {
           extraCharge = Number((decl!.perBE.get(be) ?? 0).toFixed(4))                 // DECLARED re-basing
           payments = Number((dueStart + charges + extraCharge - dueEnd).toFixed(4))    // paydown residual
@@ -332,7 +333,7 @@ async function main() {
         } else if (reSplit) {
           if (plug < -0.005) {
             if (CREDIT_TRANSFERS.has(`${be}::${m.code}::${fund}`)) {
-              adjustments = Number((-plug).toFixed(4)); adjReason = 'reconciliere-numerar' // credit applied to other funds — NOT a charge
+              payments = Number(plug.toFixed(4)); payReason = 'reatribuire-plata' // credit applied to other funds → PAYMENT reversal (Datorat flat, only outstanding shifts)
             } else {
               extraCharge = Number((-plug).toFixed(4)) // credit-clear / rise → charge
             }
@@ -344,9 +345,9 @@ async function main() {
           adjustments = plug < 0 ? -plug : 0
         }
         const chargesFinal = Number((charges + extraCharge).toFixed(4))
-        if (payments > 0.005) {
+        if (Math.abs(payments) > 0.005) { // negative = a credit-transfer payment reversal (credit applied to other funds)
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', lane: 'CASH', amount: payments, currency: 'RON', refType: REF + '_PAY', refId: periodId, fundId: fid(fund) } })
-          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_PAY', refId: periodId, unitId: null, amount: payments, meta: { source: REF } } })
+          await prisma.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: bid(be) as string, kind: 'PAYMENT', fundId: fid(fund), currency: 'RON', refType: REF + '_PAY', refId: periodId, unitId: null, amount: payments, meta: { source: REF, reason: payReason } } })
         }
         if (Math.abs(extraCharge) > 0.005) { // regularization charge (reponderare-cote / credit-clear) — Datorat via charges
           const le = await prisma.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: bid(be) as string, kind: 'CHARGE', lane: 'ACCRUAL', amount: extraCharge, currency: 'RON', refType: REF + '_RGL', refId: periodId, fundId: fid(fund) } })
