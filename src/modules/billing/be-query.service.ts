@@ -55,6 +55,12 @@ export class BeQueryService {
     return rows.map((r) => r.billingEntityId)
   }
 
+  /** Public per-BE access guard (community admin OR any membership) for controllers in other modules. */
+  async assertBeAccess(beId: string, roles: RoleAssignment[], userId?: string) {
+    const be = await this.getBeById(beId)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
+  }
+
   async getCurrentDue(
     communityRef: string,
     filters: { beId?: string; fundId?: string; unitId?: string },
@@ -588,10 +594,23 @@ export class BeQueryService {
       }))
     }
 
+    // Per-fund statement rows (opening→closing per fund) — getFinancials otherwise only exposes the
+    // reduced total; the monthly-ledger view needs the fund breakdown.
+    const statementByFund = (statementRows || []).map((s: any) => ({
+      fundId: s.fundId,
+      dueStart: Number(s.dueStart ?? 0),
+      charges: Number(s.charges ?? 0),
+      payments: Number(s.payments ?? 0),
+      adjustments: Number(s.adjustments ?? 0),
+      dueEnd: Number(s.dueEnd ?? 0),
+      currency: s.currency ?? 'RON',
+    }))
+
     return {
       be,
       period,
       statement,
+      statementByFund,
       ledgerEntries,
       allocations,
       splitGroups,
@@ -601,6 +620,67 @@ export class BeQueryService {
       fundById,
       fundOpenings,
     }
+  }
+
+  /**
+   * Closed-period statement series for a BE — the "monthly ledgers" view. One entry per closed
+   * period (newest first), each with the per-fund opening→closing breakdown and a total. Each period
+   * drills into getFinancials for that month's ledger entries.
+   */
+  async getStatementSeries(beId: string, roles: RoleAssignment[], userId?: string) {
+    const be = await this.getBeById(beId)
+    await this.ensureAccess(be.id, be.communityId, roles, userId)
+
+    const closed = await this.periodLookup.listClosed(be.communityId)
+    const [statements, funds] = await Promise.all([
+      this.prisma.beStatement.findMany({
+        where: { communityId: be.communityId, billingEntityId: be.id, periodId: { in: closed.map((p) => p.id) } },
+      }),
+      this.prisma.fund.findMany({
+        where: { communityId: be.communityId },
+        select: { id: true, code: true, name: true },
+      }),
+    ])
+    const fundById = new Map(funds.map((f) => [f.id, f]))
+
+    const byPeriod = new Map<string, any[]>()
+    for (const s of statements) {
+      const list = byPeriod.get(s.periodId) ?? []
+      list.push(s)
+      byPeriod.set(s.periodId, list)
+    }
+
+    const periods = closed.map((p) => {
+      const rows = byPeriod.get(p.id) ?? []
+      const fundsOut = rows.map((s: any) => {
+        const f = fundById.get(s.fundId)
+        return {
+          fundId: s.fundId,
+          fundCode: f?.code ?? null,
+          fundName: f?.name ?? null,
+          dueStart: Number(s.dueStart ?? 0),
+          charges: Number(s.charges ?? 0),
+          payments: Number(s.payments ?? 0),
+          adjustments: Number(s.adjustments ?? 0),
+          dueEnd: Number(s.dueEnd ?? 0),
+          currency: s.currency ?? 'RON',
+        }
+      })
+      const totals = fundsOut.reduce(
+        (acc, f) => {
+          acc.dueStart += f.dueStart
+          acc.charges += f.charges
+          acc.payments += f.payments
+          acc.adjustments += f.adjustments
+          acc.dueEnd += f.dueEnd
+          return acc
+        },
+        { dueStart: 0, charges: 0, payments: 0, adjustments: 0, dueEnd: 0 },
+      )
+      return { code: p.code, seq: p.seq, status: p.status, funds: fundsOut, totals }
+    })
+
+    return { be: { id: be.id, code: be.code, name: be.name, communityId: be.communityId }, periods }
   }
 
   async getBeSummary(beId: string, roles: RoleAssignment[], userId?: string) {
