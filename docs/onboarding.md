@@ -116,7 +116,8 @@ Community-level admin screens are all under
   the API applies `db push` on boot. After editing `prisma/schema.prisma`:
   `npx prisma db push --skip-generate && npm run generate`.
   ⚠️ Ignore the stale `dev:db` and `prestart` npm scripts — they are migration-based
-  leftovers and will try to create a migration.
+  leftovers and will try to create a migration. `npm run allocate` is dead too (no
+  `src/cli/allocate.ts`); allocation runs inside `prepare`.
 - **Scripts, not test suites.** There is no jest setup. Ops and checks are `ts-node
   --transpile-only src/scripts/*.ts`, exposed as npm aliases (`npm run reopen:period -- Kralik 2026-05`,
   `npm run prepare:period -- …`, `npm run backfill:corrections -- Kralik`, …). Add new ones

@@ -64,7 +64,8 @@ steps plus the project rules that aren't guessable from the code.
 ## Caveats
 
 - `npm run dev:db` and `prestart` are **stale** migration-based scripts — ignore them; this
-  project uses `prisma db push`.
+  project uses `prisma db push`. `npm run allocate` is also dead (its `src/cli/allocate.ts`
+  no longer exists); allocation runs as part of `prepare`.
 - `npm run build` currently fails on 23 pre-existing type errors; dev and the prod image
   both transpile without typechecking. See [onboarding.md §6](./docs/onboarding.md).
 - `data/Kralik/` is **real** association data (owner names, charges, debts). Private repo,

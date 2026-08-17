@@ -19,7 +19,8 @@ This file is only the rules that are easy to get wrong.
 1. **Schema: `npx prisma db push`, never `prisma migrate`.** There is no migrations folder;
    the API applies `db push` on boot. After schema edits:
    `npx prisma db push --skip-generate && npm run generate`.
-   The `dev:db` and `prestart` npm scripts are stale migration leftovers — never run them.
+   The `dev:db` and `prestart` npm scripts are stale migration leftovers — never run them
+   (`allocate` is dead too: no `src/cli/allocate.ts`; allocation happens inside `prepare`).
 2. **No jest suite.** Checks are `npm run typecheck`, `cd frontend && npm run check:i18n`, and
    scripts under `src/scripts/*.ts` run via `ts-node --transpile-only` (add npm aliases in the
    same style as `reopen:period`, `prepare:period`).
