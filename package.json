@@ -34,7 +34,13 @@
     "test:payment-allocation": "ts-node --transpile-only src/scripts/test-payment-allocation.ts",
     "history:parse": "ts-node --transpile-only src/scripts/history/parse-export.ts",
     "history:inject": "ts-node --transpile-only src/scripts/history/inject-history.ts",
-    "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts"
+    "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts",
+    "typecheck": "tsc -p . --noEmit",
+    "reopen:period": "ts-node --transpile-only src/scripts/reopen-period.ts",
+    "prepare:period": "ts-node --transpile-only src/scripts/prepare-period.ts",
+    "backfill:corrections": "ts-node --transpile-only src/scripts/backfill-corrections.ts",
+    "backfill:meter-readings": "ts-node --transpile-only src/scripts/backfill-meter-readings.ts",
+    "prune:meters": "ts-node --transpile-only src/scripts/prune-stale-meters.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

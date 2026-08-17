@@ -86,11 +86,47 @@ structure/behavior, not labels, and are fine:
   `PEN:<fund>` category prefix, or `ALLOCATED_EXPENSE`). The code originates on the
   backend; the frontend just decides how to draw it.
 
+## i18n: every string, both languages
+
+All user-visible copy goes through `useI18n()`. Translations live in
+`frontend/src/i18n/lang.ts` as two **flat** maps:
+
+```ts
+export const translations = {
+  en: { 'tab.corrections': 'Corrections', 'meter.total': 'unit total', … },
+  ro: { 'tab.corrections': 'Corecții',    'meter.total': 'total unitate', … },
+}
+```
+
+**The rule: a new key is added to `en` *and* `ro` in the same commit.** Lookup is
+`translations[lang][key] ?? translations.en[key] ?? fallback ?? key`, so a missing key
+renders as the raw key (`tab.corrections`) in the UI — visible, ugly, and exactly what
+users reported before this was enforced.
+
+`t()` takes either interpolation vars or a **string fallback** as its 2nd argument:
+
+```tsx
+const { t } = useI18n()
+t('tab.corrections')                              // plain lookup
+t('tab.corrections', 'Corecții')                  // fallback if the key is missing
+t('period.range', { from: 'Mar', to: 'Apr' })     // interpolation vars
+t('role.' + r, labelOf(meta?.roles, r))           // i18n override on a backend label
+```
+
+Don't reintroduce the old per-component wrapper (`const t = (k, d='') => …`) — the hook
+handles fallbacks now.
+
+**Gate:** `cd frontend && npm run check:i18n` (`frontend/scripts/check-i18n.cjs`) scans every
+`t('…')` call form, fails on any key missing from either language, and fails on en/ro drift.
+Run it before you commit UI work.
+
+Known exception: `ErrorBoundary.tsx` is a class component (no hooks) and still holds
+hardcoded Romanian copy; its keys exist in `lang.ts` for whenever it's converted.
+
 ## Misc
 
 - **API client**: `frontend/src/api/client.ts` reads `VITE_API_BASE` (see
   [local-dev.md](./local-dev.md)); components call it through `useAuth().api`.
-- **i18n**: `useI18n()` returns a `t(key, params?)` where the 2nd arg is interpolation
-  params, not a default string. Many components wrap it as
-  `const t = (k, d='') => { const v = rawT(k); return v && v !== k ? v : d }` to get a
-  default-string helper — follow that pattern in new components.
+- **Admin screens** live in `frontend/src/components/community-admin/`, hosted by
+  `CommunityAdminDashboard.tsx` (tab keys + nav groups + render switch — add all of them when
+  introducing a tab).

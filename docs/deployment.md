@@ -69,6 +69,34 @@ docker compose logs -f api        # watch startup (prisma db push + server boot)
 docker compose ps
 ```
 
+## Running scripts on the prod host
+
+Reseeds, period reopens/prepares, and backfills run in a **one-off container** against the
+prod DB. The plain invocation does **not** work — the image's tsconfig isn't in effect, so
+ts-node emits TC39 decorators and any script that imports the Nest graph dies with
+`TypeError: Cannot read properties of undefined (reading 'value')` at `__esDecorate`. You
+must bind-mount `tsconfig.json` **and** force the legacy decorator options:
+
+```bash
+cd ~/app                       # the compose dir on the host
+docker compose run --rm \
+  -v "$HOME/app/backend/src:/app/src" \
+  -v "$HOME/app/backend/data:/app/data" \
+  -v "$HOME/app/backend/scripts:/app/scripts" \
+  -v "$HOME/app/backend/tsconfig.json:/app/tsconfig.json" \
+  -e 'TS_NODE_COMPILER_OPTIONS={"module":"commonjs","experimentalDecorators":true,"emitDecoratorMetadata":true,"useDefineForClassFields":false}' \
+  --entrypoint npx api ts-node --transpile-only src/scripts/prepare-period.ts Kralik 2026-05
+```
+
+Swap the last part for another script, or use `--entrypoint bash api scripts/rebuild-kralik-nobridge.sh`
+for a full community rebuild.
+
+⚠️ A first attempt **without** the tsconfig mount once left prod half-reseeded (history
+through April, no May, no cash, no corrections). Re-running the full rebuild with the correct
+invocation repaired it, because the script wipes and rebuilds — but treat a failed prod reseed
+as an outage until you've verified the period status, statement count, and fund totals
+afterwards (see the checks in [data-reseed.md](./data-reseed.md#verifying-the-result)).
+
 ## First-time / on-host setup
 
 1. Install Docker + Compose on the host.

@@ -37,8 +37,9 @@ Thumbs.db
 !.vscode/extensions.json
 
 # Docker / containers
-.dockerignore
-docker-compose*.yaml
+# NOTE: .dockerignore IS tracked — the deploy images build with the repo root as context,
+# so it is part of the build contract. Only a developer's own compose override is ignored.
+docker-compose.override.y*ml
 *.tar
 
 # GitHub artifacts
@@ -56,4 +57,6 @@ infra/cdk/dist/
 *.tgz
 *.tmp
 property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json
-node_modules
+
+# Captured script output (e.g. `npm run db:flush > debug`) — never source
+debug

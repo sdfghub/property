@@ -38,11 +38,21 @@ rules, expense types, units, memberships). Entry: `npm run import:community`.
 
 - **`createNext()`** — opens the next OPEN period.
 - **`prepare()`** OPEN→PREPARED — in one transaction: reapply payments, run allocations,
-  penalty `advance`, `applyChargeOverrides`, `computeStatements`. Guards: period must have
-  ended and templates/meters/bills be closed.
-- **`approve()`** PREPARED→CLOSED — re-derives overrides, commits penalty buckets.
+  penalty `advance`, `applyChargeOverrides`, **`applyCorrections`**, `computeStatements`.
+  Guards: period must have ended and templates/meters/bills be closed. A metered allocation
+  with a missing reading **throws here** and blocks the period (see [meters.md](./meters.md)).
+- **`approve()`** PREPARED→CLOSED — re-derives overrides and corrections, commits penalty
+  buckets.
 - **`reject()`** PREPARED→OPEN; **`reopen()`** CLOSED→OPEN (blocked if a *later* period is
   CLOSED; undoes the `CLOSE_*` ledger legs and reverts the penalty-bucket advance).
+  Correction *declarations* survive both — their ledger legs are simply re-derived on the
+  next `prepare` ([corrections.md](./corrections.md)).
+
+Reopening and re-preparing are **service operations**, not status flips. Outside the UI use
+`npm run reopen:period -- <COMM> <YYYY-MM>` / `npm run prepare:period -- <COMM> <YYYY-MM>`
+(`src/scripts/{reopen,prepare}-period.ts`, which boot a minimal Nest context and call the
+real service). Never `UPDATE period SET status=…` by hand — the ledger and penalty buckets
+would be left inconsistent.
 
 Two per-period fields matter for Kralik (see [kralik.md](./kralik.md)):
 - **`afisareDate`** — the vendor posting/display date. Penalties accrue over the
@@ -109,6 +119,18 @@ recomputing an earlier period reflows forward.
 truth**. `BeStatement`, `CommunityStatement`, and `runningDue` are **deleted and re-derived
 every prepare/approve** — never edit a statement directly; change the ledger and recompute.
 
+### Auditing charges
+
+⚠️ **Audit per-expense, per-entity charges through `community_charge` → `community_charge_line`.**
+Those are fine-grained, carry the real expense/method, and equal `be_statement` to the cent.
+
+Do **not** audit via `be_ledger_entry_detail` ALLOC legs: they are a coarse summary whose
+`expenseType` is mislabelled (nearly everything shows up as `APA_RECE` or `CURENT_SCARA` —
+e.g. one month's "APA_RECE" leg read 4547.20 against a real `apa_rece` of 907.16). Reading
+them has produced confident false alarms ("the water difference collapsed", "zero-consumption
+commercial units are being billed for water") that vanished as soon as the right table was
+queried. The mislabelling itself is cosmetic; the wrong conclusions are not.
+
 ## 6. Payments
 
 `Payment` (a received payment from a BE) → `PaymentApplication` (links it to specific
@@ -174,3 +196,18 @@ Never edit the statement — write/adjust the override. Entry point: `overrideCh
 Drilldown endpoints (finance controller): `avizier/explain` (per-cell formula),
 `explain-sold`, `payments`, `adjustments`, `explain-penalty` (per-bucket), and the override
 UI (`POST`/`GET avizier/charge-override`).
+
+## 10. Corrections
+
+Reshuffled cote, credit transfers, penalty write-offs and manual adjustments are stored as
+**declarations** (`Correction` rows) whose ledger legs are *derived* — `refType='CORRECTION'`,
+re-derived on every prepare/approve, summed into statements like any other leg. Full model,
+type table and API: **[corrections.md](./corrections.md)**.
+
+## 11. Meters & measures
+
+`Meter` (device) → `MeterReading` (raw, per device per period) → `PeriodMeasure` (the
+per-`(scope, typeCode)` figure allocation consumes, = Σ of that scope's readings of that
+type). Allocation **throws** rather than falling back to an equal split when a metered
+reading is missing. Full model, the aggregation rule and INDEX/CONSUMPTION modes:
+**[meters.md](./meters.md)**.
