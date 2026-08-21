@@ -5,7 +5,7 @@
 // Where a validation list already exists (e.g. impact tags, channels), it derives its codes from
 // the matching *_META here so there is a single source of truth for the code set.
 
-export type EnumMeta = { key: string; label: string; hint?: string; tone?: string }
+export type EnumMeta = { key: string; label: string; labelEn?: string; hint?: string; hintEn?: string; tone?: string }
 
 // System/community roles — enum Role (prisma/schema.prisma). Labels mirror invite.service.roleLabel().
 export const ROLE_META: EnumMeta[] = [
@@ -42,19 +42,41 @@ export const COMMITTEE_DECISION_STATUS_META: EnumMeta[] = [
   { key: 'CANCELLED', label: 'Anulat', tone: 'secondary' },
 ]
 
-// Correction types — enum CorrectionType. `hint` describes what each derives on the ledger.
+// Correction types — enum CorrectionType. `hint` is the plain-language definition shown to admins
+// (locked wording — see docs/corrections.md if this drifts from the derivation logic).
+//
+// RESHUFFLE_TRUEUP is NOT a real CorrectionType — it's a display-only pseudo-key. RESHUFFLE covers two
+// real-world situations that share one mechanism (one charge amount per unit): a true redistribution of
+// an already-existing total (net ≈ 0, small differences are rounding) vs. a true-up of an estimated
+// amount against the real one (net is a genuine new sum, e.g. correcting a 12 lei estimate to a real
+// 136 lei fee). The frontend picks RESHUFFLE vs RESHUFFLE_TRUEUP for display based on the net amount's
+// size — `type` sent to the backend is always RESHUFFLE either way.
 export const CORRECTION_TYPE_META: EnumMeta[] = [
-  { key: 'RESHUFFLE', label: 'Reponderare cote', hint: 'Redistribuire pe cotă-parte (facturi per unitate)' },
-  { key: 'CREDIT_TRANSFER', label: 'Transfer de credit', hint: 'Credit dintr-un fond aplicat pe alte fonduri (plată)' },
-  { key: 'PAYMENT_REATTRIB', label: 'Reatribuire plată', hint: 'Plată direcționată greșit, mutată între fonduri' },
-  { key: 'PENALTY_WRITEOFF', label: 'Scutire penalizări', hint: 'Anulare penalizări (ajustare pe PENALIZARI)' },
-  { key: 'MANUAL_ADJUSTMENT', label: 'Ajustare manuală sold', hint: 'Corecție manuală de sold (±) pe un fond' },
+  { key: 'RESHUFFLE', label: 'Redistribuire', labelEn: 'Redistribution',
+    hint: 'O sumă deja existentă e împărțită din nou între unități — de exemplu când se recalculează cotele-parte. Suma totală rămâne aproape aceeași; diferențele mici (de obicei câțiva lei) vin din rotunjiri, nu sunt bani în plus.',
+    hintEn: 'An existing amount gets split across units again — e.g. when ownership shares are recalculated. The total stays about the same; small differences (usually a few lei) come from rounding, not real extra charges.' },
+  { key: 'RESHUFFLE_TRUEUP', label: 'Regularizare', labelEn: 'True-up',
+    hint: 'Corectează o sumă estimată cu suma reală, odată ce aceasta e cunoscută — de exemplu un comision bancar estimat la 12 lei, dar suma reală a fost 136 lei; diferența se regularizează, împărțită pe unități după cotă-parte.',
+    hintEn: 'Corrects an estimated amount once the real one is known — e.g. a bank fee estimated at 12 lei but really 136 lei; the difference is billed, split across units by ownership share.' },
+  { key: 'CREDIT_TRANSFER', label: 'Transfer de credit', labelEn: 'Credit transfer',
+    hint: 'O unitate are bani în plus (credit) într-un fond, folosit să-i scadă din ce mai are de plătit.',
+    hintEn: "A unit has a credit surplus in a fund, used to reduce what it still owes there." },
+  { key: 'PAYMENT_REATTRIB', label: 'Reatribuire plată', labelEn: 'Payment reattribution',
+    hint: 'O plată a fost înregistrată din greșeală la alt fond. Corecția o scoate de acolo.',
+    hintEn: 'A payment was recorded against the wrong fund by mistake. The correction removes it from there.' },
+  { key: 'PENALTY_WRITEOFF', label: 'Scutire penalizări', labelEn: 'Penalty write-off',
+    hint: 'Se anulează (se iartă) penalizările de întârziere ale unei unități.',
+    hintEn: "Cancels (forgives) a unit's late-payment penalties." },
+  { key: 'MANUAL_ADJUSTMENT', label: 'Ajustare manuală sold', labelEn: 'Manual balance adjustment',
+    hint: 'O corecție simplă, la o singură unitate și un singur fond.',
+    hintEn: 'A simple correction to one unit, on one fund.' },
 ]
 
 // Correction statuses — enum CorrectionStatus.
 export const CORRECTION_STATUS_META: EnumMeta[] = [
-  { key: 'ACTIVE', label: 'Activă', tone: 'positive' },
-  { key: 'VOID', label: 'Anulată', tone: 'secondary' },
+  { key: 'ACTIVE', label: 'Activă', labelEn: 'Active', tone: 'positive' },
+  { key: 'VOID', label: 'Anulată', labelEn: 'Voided', tone: 'secondary' },
+  { key: 'TODO', label: 'De atribuit', labelEn: 'To be attached', tone: 'warning', hint: 'Declarată, dar neatribuită încă unei perioade — nu afectează niciun avizier', hintEn: 'Declared but not yet attached to a period — does not affect any avizier' },
 ]
 
 // Announcement impact tags — enum AnnouncementImpactTag.

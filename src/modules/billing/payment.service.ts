@@ -395,6 +395,13 @@ export class PaymentService {
     let remaining = amount
     const apps: Array<{ paymentId: string; chargeId: string; amount: number; spec: any }> = []
     const coveredChargeIds = new Set<string>()
+    // A fixed line only matches THIS period's own open charges (prior-period arrears aren't
+    // individually matchable line items — they only exist as the aggregate dueStart carried
+    // forward). So a line's amount routinely exceeds what it can actually consume here. That
+    // leftover belongs to the line's OWN fund (it's still money paid "into Rulment"), not pooled
+    // together with every other line's leftover and dumped into a single shared advance fund —
+    // tracked per fund here so the caller can credit each fund its own leftover as its own advance.
+    const leftoverByFund = new Map<string, number>()
     for (let idx = 0; idx < allocationSpec.length; idx += 1) {
       if (remaining <= 0) break
       const line = allocationSpec[idx]
@@ -425,8 +432,18 @@ export class PaymentService {
       res.coveredChargeIds.forEach((id) => coveredChargeIds.add(id))
       apps.push(...res.apps)
       remaining -= lineAmount - res.remaining
+      if (res.remaining > 0.0001 && line.fundId) {
+        leftoverByFund.set(line.fundId, (leftoverByFund.get(line.fundId) ?? 0) + res.remaining)
+      }
+      // a line with no fundId can't self-advance — its leftover stays inside the pooled
+      // `remaining` above, to be handled by the caller's shared advanceFundId fallback.
     }
-    return { apps, remaining }
+    // Whatever a line couldn't consume was left inside `remaining` above only when it had no
+    // fundId to self-advance into; for fundId'd lines, move their leftover out of the pooled
+    // total (it's now accounted for per-fund) so it isn't double-counted by the caller.
+    let pooledRemaining = remaining
+    for (const amt of leftoverByFund.values()) pooledRemaining -= amt
+    return { apps, remaining: Number(pooledRemaining.toFixed(4)), leftoverByFund }
   }
 
   private async validateAllocationSpec(
@@ -655,6 +672,7 @@ export class PaymentService {
 
     let apps: Array<{ paymentId: string; chargeId: string; amount: number; spec: PaymentAllocationSpec | any }> = []
     let remaining = chargeApplicable
+    let leftoverByFund = new Map<string, number>()
     if (chargeApplicable > 0) {
       if (fixedLines.length) {
         const res = await this.applyPaymentWithSpec(
@@ -668,6 +686,7 @@ export class PaymentService {
         )
         apps = res.apps
         remaining = res.remaining
+        leftoverByFund = res.leftoverByFund
       } else {
         // Automatic spread across open charges, ordered by the community's allocation strategy
         // (default FIFO — oldest charge first). Restricted to the selected set when the operator
@@ -682,7 +701,10 @@ export class PaymentService {
       remaining = 0
     }
 
-    // Money left after settling charges becomes an advance/credit — needs a target fund.
+    // Money left after settling charges becomes an advance/credit. Leftover from a fixed line that
+    // named its own fund goes back into THAT fund (see applyPaymentWithSpec) — only leftover with
+    // no fund of its own (generic auto-spread, or a fixed line without a fundId) needs the payment's
+    // shared advanceFundId fallback.
     const advanceTotal = Number((explicitAdvance + remaining).toFixed(4))
     if (advanceTotal > 0.0001 && !advanceFundId) {
       throw new BadRequestException('Payment exceeds open charges')
@@ -693,10 +715,20 @@ export class PaymentService {
       await (client as any).paymentApplication.createMany({ data: apps, skipDuplicates: true })
     }
 
-    // Ledger view = charge applications + (optionally) the advance as a fund-only allocation.
-    const ledgerApps = advanceTotal > 0 && advanceFundId
-      ? [...apps, { paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, amount: advanceTotal } }]
-      : apps
+    // Ledger view = charge applications + each fund's own unconsumed leftover (advance back into
+    // that same fund) + (optionally) the payment's shared advance for any leftover with no fund.
+    const ledgerApps = [
+      ...apps,
+      ...Array.from(leftoverByFund.entries())
+        .filter(([, amt]) => amt > 0.0001)
+        .map(([fundId, amt]) => ({
+          paymentId: paymentIdStr, amount: Number(amt.toFixed(4)),
+          spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId, amount: Number(amt.toFixed(4)) },
+        })),
+      ...(advanceTotal > 0.0001 && advanceFundId
+        ? [{ paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, amount: advanceTotal } }]
+        : []),
+    ]
 
     const fundTotals = new Map<string, number>()
     for (const app of ledgerApps) {
@@ -763,7 +795,12 @@ export class PaymentService {
     const fundIdTotals = this.buildCommunityPaymentFundTotals(ledgerApps, 0)
     await this.replaceCommunityPaymentLedger(client, entryCtx as any, paymentIdStr, fundIdTotals)
     await this.replaceFundPaymentLedger(client, entryCtx as any, paymentIdStr, ledgerApps)
-    return { applied: Number((amount - advanceTotal).toFixed(4)), remaining: 0, advance: advanceTotal }
+    const perFundLeftoverTotal = Array.from(leftoverByFund.values()).reduce((s, v) => s + v, 0)
+    return {
+      applied: Number((amount - advanceTotal - perFundLeftoverTotal).toFixed(4)),
+      remaining: 0,
+      advance: Number((advanceTotal + perFundLeftoverTotal).toFixed(4)),
+    }
   }
 
   private async latestPeriodId(communityId: string) {
@@ -994,6 +1031,26 @@ export class PaymentService {
       this.logger.log(
         `[PAY] BE=${beId} charges=${beChargeIds.length} payments=${payments.length} (period=${periodId})`,
       )
+
+      // A payment that lost eligibility for this period (e.g. its cycleCode tag moved elsewhere) is
+      // skipped by the loop below, so applyPayment() never runs for it here and never clears out the
+      // PAYMENT-kind ledger entries it created for this period on a previous prepare() — leaving a
+      // stale contribution baked into be_statement.payments. Sweep those explicitly.
+      const eligibleIds = new Set(payments.map((p) => String((p as any).id)))
+      const staleIds = allPayments.map((p) => String((p as any).id)).filter((id) => !eligibleIds.has(id))
+      if (staleIds.length) {
+        const staleEntries = await (client as any).beLedgerEntry.findMany({
+          where: { communityId, billingEntityId: beId, periodId, kind: 'PAYMENT', refType: 'PAYMENT', refId: { in: staleIds } },
+          select: { id: true },
+        })
+        if (staleEntries.length) {
+          const staleLedgerIds = staleEntries.map((e: { id: string }) => e.id)
+          await (client as any).beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: staleLedgerIds } } })
+          await (client as any).beLedgerEntry.deleteMany({ where: { id: { in: staleLedgerIds } } })
+          this.logger.log(`[PAY] Swept ${staleLedgerIds.length} stale payment ledger entries for BE=${beId} period=${periodId}`)
+        }
+      }
+
       if (!payments.length) continue
       // Net out what each payment already settled elsewhere. This period's applications were just
       // deleted above, so any remaining applications belong to OTHER periods; only the unspent balance

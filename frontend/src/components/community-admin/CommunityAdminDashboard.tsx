@@ -651,7 +651,18 @@ export function CommunityAdminDashboard({
               {activeTab === 'periodSettings' && (
                 <PeriodSettingsPanel communityId={communityId} readOnly={readOnly} />
               )}
-              {activeTab === 'avizier' && <AvizierPanel communityId={communityId} cenzorEnabled={features ? features.cenzor !== false : true} />}
+              {activeTab === 'avizier' && (
+                <AvizierPanel
+                  communityId={communityId}
+                  cenzorEnabled={features ? features.cenzor !== false : true}
+                  onOpenConfig={() => {
+                    navigate('config')
+                    // ConfigTab renders several sections above it; jump straight to the Avizier one
+                    // instead of leaving the admin to scroll-hunt for it (the whole reason this button exists).
+                    setTimeout(() => document.getElementById('avizier-config')?.scrollIntoView({ block: 'start' }), 60)
+                  }}
+                />
+              )}
               {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
               {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
               {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}

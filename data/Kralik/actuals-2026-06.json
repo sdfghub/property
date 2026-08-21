@@ -1,0 +1,41 @@
+{
+  "periodCode": "2026-06",
+  "_note": "PARTIAL packet — sourced from the 3 invoices found in /Users/adrianadascal/Documents/_Vicusia/Kralik/2026-06/ (as of 2026-08-19). Only BY_CPI-allocated charges are included; everything requiring a per-unit reading or missing an invoice is deliberately DEFERRED, not fabricated. DEFERRED: (1) Aquatim apa_rece/canal/penalitati (TMA10/1015558474, billing period 22.05-21.06.2026: apă potabilă 917.49 + canal 888.57 + penalități 33.30 net, TVA 211.31, total 2165.66) — allocation.service.ts uses BY_WATER_COLD weighting for these and throws with no per-unit WATER_COLD readings for the period ('equal-split fallback disabled'); no per-unit June water sheet exists yet (checked the historical workbooks — their 'Data - Open Month' sheet still reflects May's closed totals). (2) No invoices found for curent_scara (PPC), salubritate (Retim), comision_banca (Libra), or interfon (Schmidt) this month. FLAGS: (a) BILL_CURATENIE (RICH CLEAN RC 0107, 840.00, dated 03.08.2026) is invoiced for service month IULIE 2026 (July) — same one-month-lag pattern as May's RC-0093 (service month June, absorbed into May's close); by that precedent this one is attributed to June's close. (b) BILL_APA_METEO amount (114.99) is the invoice's net 'Valoare' figure (before its share of the 211.31 TVA), used as-is since no association bookkeeping sheet exists yet for June to cross-check against (unlike May's apa_rece/canal/penalitati split, which was reconciled against the association's own Data-MAI sheet). (c) afisareDate intentionally left unset for June — the vendor posting date wasn't available; PenaltyLedgerService falls back to calendar period bounds when null.",
+  "meters": {
+    "community": {},
+    "_note": "No June branch water-meter reading available yet (Aquatim invoice covers 22.05-21.06.2026, index 1022→1141=119 m³, but no per-unit submeters to reconcile against — see top-level _note)."
+  },
+  "unitMeasures": {
+    "_note": "No per-unit June water/residents source available yet — SQM (CPI, static) is seeded directly from def.json by the script; RESIDENTS/WATER_COLD are intentionally left unset.",
+    "byUnit": {}
+  },
+  "items": [
+    {
+      "templateCode": "BILL_ADMINISTRARE",
+      "detailKey": "administrare",
+      "amount": 800.0,
+      "invoiceNumber": "TM 1830",
+      "invoiceGross": 800.0,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_APA_METEO",
+      "detailKey": "apa_meteo",
+      "amount": 114.99,
+      "invoiceNumber": "TMA10/1015558474",
+      "invoiceGross": 127.64,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_CURATENIE",
+      "detailKey": "curatenie",
+      "amount": 840.0,
+      "invoiceNumber": "RC 0107",
+      "invoiceGross": 840.0,
+      "serviceStartPeriod": "2026-07",
+      "serviceEndPeriod": "2026-07"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { useAuth } from './useAuth'
 
 // Fixed system taxonomies (codes + labels/hints) served by the backend metadata endpoint,
 // so components never hardcode domain code→label knowledge.
-export type EnumMeta = { key: string; label: string; hint?: string; tone?: string }
+export type EnumMeta = { key: string; label: string; labelEn?: string; hint?: string; hintEn?: string; tone?: string }
 export type CommunityMetadata = {
   roles: EnumMeta[]
   governanceRoles: EnumMeta[]

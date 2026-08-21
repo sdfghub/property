@@ -16,6 +16,7 @@ export type ApiClientConfig = {
 export type ApiClient = {
   get: <T>(path: string) => Promise<T>
   post: <T>(path: string, body?: unknown) => Promise<T>
+  patch: <T>(path: string, body?: unknown) => Promise<T>
   del: <T>(path: string) => Promise<T>
   deleteWithBody: <T>(path: string, body?: unknown) => Promise<T>
   refreshAccessToken: () => Promise<string | null>
@@ -109,6 +110,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   return {
     get: <T>(path: string) => request<T>(path, { method: 'GET' }),
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+    patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body: body as BodyInit | undefined }),
     del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
     deleteWithBody: <T>(path: string, body?: unknown) => request<T>(path, { method: 'DELETE', body }),
     refreshAccessToken,

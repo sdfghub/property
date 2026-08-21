@@ -612,9 +612,19 @@ export class PeriodService {
 
     return this.prisma.$transaction(async (tx) => {
       // remove staged artifacts
-      await tx.beLedgerEntry.deleteMany({
+      const prepEntries = await tx.beLedgerEntry.findMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
+        select: { id: true },
       })
+      if (prepEntries.length) {
+        const prepIds = prepEntries.map((e) => e.id)
+        const client: any = tx as any
+        if (client.paymentApplication?.deleteMany) {
+          await client.paymentApplication.deleteMany({ where: { chargeId: { in: prepIds } } })
+        }
+        await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prepIds } } })
+        await tx.beLedgerEntry.deleteMany({ where: { id: { in: prepIds } } })
+      }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
       const communityEntries = await tx.communityLedgerEntry.findMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },

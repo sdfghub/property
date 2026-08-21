@@ -5,18 +5,23 @@ import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
   info: { cpi: boolean; residents: boolean; consumption: boolean }
-  defaultView: 'fond' | 'stare'
+  defaultView: 'fond' | 'fondStare' | 'stare'
   fundGroupOverrides: Record<string, string> // fund code → avizier super-group key
   fundGroupLabels: Record<string, string>     // super-group key → label override
+  groupOrder: string[]                        // explicit super-group display order (keys); unlisted groups sort after, by default rank
+  fundOrder: string[]                         // explicit fund display order (codes), within their group; unlisted funds sort after, by default rank
 }
 const normalizeAvizierConfig = (raw: any): AvizierConfig => {
   const info = raw?.info || {}
   const obj = (v: any) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+  const arr = (v: any) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [])
   return {
     info: { cpi: info.cpi !== false, residents: info.residents !== false, consumption: info.consumption !== false },
-    defaultView: raw?.defaultView === 'stare' ? 'stare' : 'fond',
+    defaultView: raw?.defaultView === 'stare' ? 'stare' : raw?.defaultView === 'fondStare' ? 'fondStare' : 'fond',
     fundGroupOverrides: obj(raw?.fundGroupOverrides),
     fundGroupLabels: obj(raw?.fundGroupLabels),
+    groupOrder: arr(raw?.groupOrder),
+    fundOrder: arr(raw?.fundOrder),
   }
 }
 
@@ -180,6 +185,28 @@ export class FinanceService {
     return next
   }
 
+  /**
+   * #16 Configurator support data: every fund with its DOMAIN-DERIVED default avizier super-group
+   * (ignoring any config override — same derivation avizier() falls back to), so the configurator can
+   * combine it live with the in-progress (unsaved) fundGroupOverrides to show the effective grouping
+   * as the admin edits, without duplicating the domain→group logic on the frontend.
+   */
+  async avizierConfigContext(communityId: string) {
+    const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true, allocation: true } })
+    const fundDomain = new Map<string, string>(
+      funds.map((f) => [f.code, String(((f.allocation as any)?.type ?? '')).trim().toLowerCase()]),
+    )
+    const defaultGroupOf = (code: string) =>
+      code === 'EXPENSES' ? 'intretinere'
+        : code === 'PENALIZARI' ? 'intretinere'
+          : fundDomain.get(code) === 'strategic' ? 'reabilitare'
+            : 'operational'
+    return {
+      funds: funds.map((f) => ({ code: f.code, name: f.name, defaultGroup: defaultGroupOf(f.code) })),
+      superGroups: AVIZIER_FUND_GROUP_META,
+    }
+  }
+
   async avizier(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { period: null, categories: [], rows: [], totals: null }
@@ -251,6 +278,32 @@ export class FinanceService {
     )
     const overrideDelta = new Map<string, number>(ovrRows.map((r) => [r.beId, Number(r.delta)]))
 
+    // per-BE per-fund arrears net of this period's fund-scoped payments (be_statement, grouped by
+    // fund) — powers the "per Fond-Stare" view, which pairs each fund's Restanțe with its Curente
+    // (raw charges, same as "Per fond") breakdown. Restanțe_shown = dueStart − payments, NOT clamped
+    // at zero — an owner who paid more than their opening balance shows a negative (credit) figure
+    // rather than a false zero, and Restanțe_shown + Curente(raw) always equals the fund's dueEnd.
+    const soldFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select bs.billing_entity_id as "beId", coalesce(f.code, 'ALTELE') as "fundCode",
+              sum(bs.due_start)::float8 as sold, sum(bs.payments)::float8 as payments
+         from be_statement bs left join fund f on f.id = bs.fund_id
+        where bs.community_id = $1 and bs.period_id = $2
+        group by bs.billing_entity_id, f.code`,
+      communityId, period.id,
+    )
+    const soldByFundByBe = new Map<string, Record<string, number>>()
+    // #18 raw per-fund Încasări (payments), for the new per-fund/TOTAL Încasări column — separate from
+    // soldByFund above, which already nets payments into Restanțe.
+    const paymentsByFundByBe = new Map<string, Record<string, number>>()
+    for (const r of soldFundRows) {
+      const m = soldByFundByBe.get(r.beId) ?? {}
+      m[r.fundCode] = round2((m[r.fundCode] ?? 0) + Number(r.sold) - Number(r.payments))
+      soldByFundByBe.set(r.beId, m)
+      const pm = paymentsByFundByBe.get(r.beId) ?? {}
+      pm[r.fundCode] = round2((pm[r.fundCode] ?? 0) + Number(r.payments))
+      paymentsByFundByBe.set(r.beId, pm)
+    }
+
     // per-BE per-category current charges
     const lineRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select ccl.billing_entity_id as "beId",
@@ -318,7 +371,7 @@ export class FinanceService {
        cons as (
          select pm.scope_id as unit_id, sum(pm.value)::float8 as value
            from period_measure pm
-          where pm.community_id = $1 and pm.type_code = 'CONSUMPTION' and pm.scope_type = 'UNIT' and pm.period_id = $3
+          where pm.community_id = $1 and pm.type_code = 'WATER_COLD' and pm.scope_type = 'UNIT' and pm.period_id = $3
           group by pm.scope_id
        )
        select mem.be_id as "beId",
@@ -379,15 +432,17 @@ export class FinanceService {
     const waterGrp = catToGroup.get('APA_RECE') ?? catToGroup.get('CANALIZARE')
     if (waterGrp && !catToGroup.has('APA_DIF')) catToGroup.set('APA_DIF', waterGrp)
     const groupRank = (k: string) => (k === 'EXPENSES' ? 0 : k === 'PENALIZARI' ? 9 : 1)
-    // #2 coarse avizier bucket for a fund group: services → Întreținere, penalties → Penalizări,
-    // strategic (reabilitare) funds → Fond Reabilitare, everything else → Fond Operațional. Derived
-    // from the fund's domain (allocation.type), not per-code hardcoded.
+    // #2/#17 coarse avizier bucket for a fund group: services → Întreținere, strategic (reabilitare)
+    // funds → Fond Reabilitare, everything else → Fond Operațional. Penalties nest under Întreținere
+    // too — they're an accessory of a fund's own arrears, not a domain of their own. Derived from the
+    // fund's domain (allocation.type), not per-code hardcoded (except EXPENSES/PENALIZARI, which are
+    // fixed community-wide concepts, not amenable to a generic domain lookup).
     const superGroupMeta = new Map(AVIZIER_FUND_GROUP_META.map((g) => [g.key, g]))
     // #8: an admin-set override (config.fundGroupOverrides[fundCode]) wins over the domain-derived bucket.
     const superGroupKeyOf = (groupKey: string) =>
       cfg.fundGroupOverrides[groupKey]
         ?? (groupKey === 'EXPENSES' ? 'intretinere'
-          : groupKey === 'PENALIZARI' ? 'penalizari'
+          : groupKey === 'PENALIZARI' ? 'intretinere'
             : fundDomain.get(groupKey) === 'strategic' ? 'reabilitare'
               : 'operational')
     const sgLabelOf = (sgKey: string, fallback: string) => cfg.fundGroupLabels[sgKey] ?? superGroupMeta.get(sgKey)?.label ?? fallback
@@ -400,10 +455,24 @@ export class FinanceService {
       entry.categories.push(c)
       groupMap.set(g.key, entry)
     }
-    const sgOrder = (k: string) => superGroupMeta.get(k)?.sortOrder ?? 5
+    // Some funds carry arrears but had no current-period charge this cycle (e.g. a Reabilitare fund
+    // billed only sporadically) — they'd otherwise have no group/column at all, making their Restanțe
+    // invisible to any per-fund view (notably "Per fond-stare", which pairs Restanțe with Curente per
+    // fund). Add a zero-category placeholder group for any such fund so its Restanțe still gets shown.
+    for (const code of new Set(soldFundRows.map((r) => String(r.fundCode)))) {
+      if (groupMap.has(code)) continue
+      const fundRow = funds.find((f) => f.code === code)
+      const label = code === 'PENALIZARI' ? 'Penalizări' : (fundRow?.name ?? (code === 'ALTELE' ? 'Altele' : code))
+      const sgKey = superGroupKeyOf(code)
+      groupMap.set(code, { key: code, label, superGroup: { key: sgKey, label: sgLabelOf(sgKey, label) }, categories: [] })
+    }
+    // #16 explicit admin order (config.groupOrder / config.fundOrder) wins; anything not listed keeps
+    // the old default rank but sorts after every explicitly-ordered entry.
+    const sgOrderIdx = (k: string) => { const i = cfg.groupOrder.indexOf(k); return i >= 0 ? i : 1000 + (superGroupMeta.get(k)?.sortOrder ?? 5) }
+    const fundOrderIdx = (k: string) => { const i = cfg.fundOrder.indexOf(k); return i >= 0 ? i : 1000 + groupRank(k) }
     const groups = [...groupMap.values()].sort((a, b) =>
-      sgOrder(a.superGroup.key) - sgOrder(b.superGroup.key)
-      || groupRank(a.key) - groupRank(b.key)
+      sgOrderIdx(a.superGroup.key) - sgOrderIdx(b.superGroup.key)
+      || fundOrderIdx(a.key) - fundOrderIdx(b.key)
       || a.label.localeCompare(b.label))
 
     const rows = bes
@@ -429,6 +498,8 @@ export class FinanceService {
           residents: infoByBe.get(be.id)?.residents ?? null,
           consumption: infoByBe.get(be.id)?.consumption ?? null,
           soldPrecedent: round2(Number(s?.sold ?? 0)),
+          soldByFund: soldByFundByBe.get(be.id) ?? {},
+          paymentsByFund: paymentsByFundByBe.get(be.id) ?? {},
           charges,
           curentTotal: round2(curTotal + delta),
           penaltyMonth: round2(grossMonth + delta),
@@ -447,6 +518,14 @@ export class FinanceService {
       residents: rows.reduce((s, r) => s + (r.residents ?? 0), 0),
       consumption: round2(rows.reduce((s, r) => s + (r.consumption ?? 0), 0)),
       soldPrecedent: round2(rows.reduce((s, r) => s + r.soldPrecedent, 0)),
+      soldByFund: groups.reduce((acc, g) => {
+        acc[g.key] = round2(rows.reduce((s, r) => s + (r.soldByFund?.[g.key] ?? 0), 0))
+        return acc
+      }, {} as Record<string, number>),
+      paymentsByFund: groups.reduce((acc, g) => {
+        acc[g.key] = round2(rows.reduce((s, r) => s + ((r as any).paymentsByFund?.[g.key] ?? 0), 0))
+        return acc
+      }, {} as Record<string, number>),
       curentTotal: round2(rows.reduce((s, r) => s + r.curentTotal, 0)),
       penaltyMonth: round2(rows.reduce((s, r) => s + r.penaltyMonth, 0)),
       penaltyTotal: round2(rows.reduce((s, r) => s + r.penaltyTotal, 0)),
@@ -700,21 +779,40 @@ export class FinanceService {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select coalesce(f.code, 'ALTELE') as "fundCode",
               coalesce(f.name, f.code, 'Altele') as "fundName",
-              sum(bs.due_start)::float8 as sold
+              sum(bs.due_start)::float8 as sold, sum(bs.payments)::float8 as payments, sum(bs.charges)::float8 as charges
          from be_statement bs left join fund f on f.id = bs.fund_id
         where bs.community_id = $1 and bs.period_id = $2 and bs.billing_entity_id = $3
         group by f.code, f.name
-       having abs(sum(bs.due_start)) > 0.0001
+       having abs(sum(bs.due_start)) > 0.0001 or abs(sum(bs.payments)) > 0.0001 or abs(sum(bs.charges)) > 0.0001
         order by coalesce(f.name, f.code)`,
       communityId, period.id, be.id,
     )
-    const out = rows.map((r) => ({ fundCode: r.fundCode, fundName: r.fundName, amount: round2(Number(r.sold)) }))
-    return { beCode, beName: be.name, periodCode: period.code, rows: out, total: round2(out.reduce((s, r) => s + r.amount, 0)) }
+    // amount = net Restanțe (dueStart − payments), same figure the "per Fond-Stare" Restanțe cell
+    // shows; dueStart/payments are broken out so the drilldown explains how that net figure was
+    // reached, and charges/totalDue show this period's own charge and the true full total owed
+    // (net Restanțe + charges) — distinct from "amount", which deliberately excludes this month's
+    // own new charge.
+    const out = rows.map((r) => ({
+      fundCode: r.fundCode, fundName: r.fundName,
+      dueStart: round2(Number(r.sold)), payments: round2(Number(r.payments)),
+      amount: round2(Number(r.sold) - Number(r.payments)),
+      charges: round2(Number(r.charges)),
+      totalDue: round2(Number(r.sold) - Number(r.payments) + Number(r.charges)),
+    }))
+    return {
+      beCode, beName: be.name, periodCode: period.code, rows: out,
+      dueStartTotal: round2(out.reduce((s, r) => s + r.dueStart, 0)),
+      paymentsTotal: round2(out.reduce((s, r) => s + r.payments, 0)),
+      chargesTotal: round2(out.reduce((s, r) => s + r.charges, 0)),
+      totalDueTotal: round2(out.reduce((s, r) => s + r.totalDue, 0)),
+      total: round2(out.reduce((s, r) => s + r.amount, 0)),
+    }
   }
 
   /**
    * Payment log for one billing entity in a period: the individual owner receipts collected against
-   * that period's cycle (from the imported cash register — payment.provider='cash-register',
+   * that period's cycle (from the imported cash register — payment.provider LIKE 'cash-register%'
+   * — each import batch gets its own suffixed provider, e.g. 'cash-register-2026-06' — scoped by
    * providerMeta.cycleCode = the period code), with date, account, reference, payer and fund split.
    */
   async paymentsLog(communityId: string, periodCode: string, beCode: string) {
@@ -725,7 +823,7 @@ export class FinanceService {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select id, ts, amount::float8 as amount, provider_ref as "ref", method, provider_meta as "meta"
          from payment
-        where community_id = $1 and billing_entity_id = $3 and provider = 'cash-register'
+        where community_id = $1 and billing_entity_id = $3 and provider like 'cash-register%'
           and provider_meta->>'cycleCode' = $4
         order by ts, id`,
       communityId, period.id, be.id, period.code,

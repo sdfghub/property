@@ -129,6 +129,14 @@ h4 {
   gap: 16px;
 }
 
+.grid > * {
+  /* Grid items default to a content-based minimum width, so a wide descendant (e.g. a table with
+     many columns) can silently force the whole page wider instead of scrolling within its own
+     container. Overriding to 0 lets items shrink to the grid's actual track size; anything that
+     manages its own overflow (like a table wrapped in overflow-x:auto) still scrolls correctly. */
+  min-width: 0;
+}
+
 .grid.two {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
@@ -792,10 +800,114 @@ select option {
   background: rgba(52, 199, 89, 0.08);
 }
 
+.badge.warning {
+  color: #8a5300;
+  border-color: rgba(255, 159, 10, 0.35);
+  background: var(--chip-warn-bg);
+}
+
 .badge.negative {
   color: var(--danger);
   border-color: rgba(255, 59, 48, 0.3);
   background: rgba(255, 59, 48, 0.06);
+}
+
+/* #16 Avizier configurator — toggle switch + drag-to-reorder grouping cards */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex: none;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch .track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+.switch .track::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.switch input:checked + .track {
+  background: var(--accent);
+}
+.switch input:checked + .track::before {
+  transform: translateX(16px);
+}
+.switch input:focus-visible + .track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cfg-group-card {
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--card-shadow-sm);
+  padding: 12px 14px;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.cfg-group-card.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.cfg-group-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+  touch-action: none;
+}
+.cfg-group-handle:active {
+  cursor: grabbing;
+}
+
+.fund-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12.5px;
+  cursor: grab;
+  transition: opacity 0.12s ease, box-shadow 0.12s ease;
+}
+.fund-chip:active {
+  cursor: grabbing;
+}
+.fund-chip.dragging {
+  opacity: 0.35;
+}
+.fund-chip .grip {
+  color: var(--muted);
+  font-size: 11px;
+}
+.fund-drop-zone {
+  min-height: 40px;
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+.fund-drop-zone.drag-over {
+  background: var(--accent-soft);
 }
 
 .fade-enter {

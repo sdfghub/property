@@ -38,18 +38,20 @@ export class CorrectionsService {
     return p
   }
 
-  /** Funds + billing entities + the current target period + all periods — everything the panel needs. */
+  /** Funds + billing entities + expense types + the current target period + all periods — everything the panel needs. */
   async context(communityRef: string) {
     const communityId = await this.resolveCommunityId(communityRef)
-    const [funds, bes, period, periods] = await Promise.all([
+    const [funds, bes, expenseTypes, period, periods] = await Promise.all([
       this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true }, orderBy: { code: 'asc' } }),
       this.prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true, displayName: true }, orderBy: { order: 'asc' } }),
+      this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true }, orderBy: { name: 'asc' } }),
       this.prisma.period.findFirst({ where: { communityId, status: { in: ['OPEN', 'PREPARED'] } }, orderBy: { seq: 'desc' }, select: { code: true, status: true } }),
       this.prisma.period.findMany({ where: { communityId }, select: { code: true, status: true }, orderBy: { seq: 'desc' } }),
     ])
     return {
       funds,
       billingEntities: bes.map((b) => ({ id: b.id, code: b.code, name: b.displayName || b.name })),
+      expenseTypes, // optional "which service" tag on a correction — e.g. COMISION_BANCA
       period,
       periods, // all periods (incl. CLOSED) so the panel can filter the list by any past period
     }
@@ -61,12 +63,13 @@ export class CorrectionsService {
    * allocation RESULT (the derived ledger legs) — a debug view, per the model "the ledger is only for debug
    * after allocation".
    */
-  async list(communityRef: string, periodCode?: string, debug?: string) {
+  async list(communityRef: string, periodCode?: string, debug?: string, status?: string) {
     const communityId = await this.resolveCommunityId(communityRef)
     if (debug === 'ledger') return this.listFromLedger(communityId, periodCode)
     const rows = await this.prisma.correction.findMany({
-      where: { communityId, ...(periodCode ? { periodCode } : {}) },
-      orderBy: [{ periodCode: 'desc' }, { createdAt: 'desc' }],
+      where: { communityId, ...(periodCode ? { periodCode } : {}), ...(status ? { status: status as any } : {}) },
+      // TODO rows (periodCode=null) need admin attention — surface them first, then most recent period first.
+      orderBy: [{ periodCode: { sort: 'desc', nulls: 'first' } }, { createdAt: 'desc' }],
     })
     const beIds = Array.from(new Set(rows.map((r) => r.billingEntityId).filter(Boolean))) as string[]
     const bes = beIds.length
@@ -80,6 +83,7 @@ export class CorrectionsService {
       periodCode: r.periodCode,
       billingEntity: r.billingEntityId ? (beById.get(r.billingEntityId) ?? { id: r.billingEntityId }) : null,
       fundCode: r.fundCode,
+      expenseTypeCode: r.expenseTypeCode,
       amount: r.amount != null ? Number(r.amount) : null,
       payload: r.payload,
       note: r.note,
@@ -187,7 +191,11 @@ export class CorrectionsService {
     const communityId = await this.resolveCommunityId(communityRef)
     const type = String(body?.type || '') as CorrectionType
     if (!REASON_BY_TYPE[type]) throw new BadRequestException(`Unknown correction type "${type}"`)
-    const period = await this.currentPeriod(communityId)
+    // TODO corrections are declared but not attached to any period yet (periodCode stays null) — they
+    // never derive ledger legs (applyCorrections only reads status='ACTIVE'). An admin attaches one to a
+    // period later by re-creating it as ACTIVE against that period's currentPeriod(), then voiding this one.
+    const unattached = String(body?.status || '').toUpperCase() === 'TODO'
+    const period = unattached ? null : await this.currentPeriod(communityId)
 
     const note = body?.note != null ? String(body.note).trim() || null : null
     const amount = body?.amount != null && body.amount !== '' ? Number(body.amount) : null
@@ -206,6 +214,15 @@ export class CorrectionsService {
       const f = await this.prisma.fund.findFirst({ where: { communityId, code: String(code || '') }, select: { code: true } })
       if (!f) throw new BadRequestException(`Fund "${code}" not found`)
       return f.code
+    }
+    // Optional: which service/expense this correction ties to (e.g. COMISION_BANCA) — purely descriptive,
+    // doesn't change derivation, but lets the panel call out "this is about Comision Bancă" instead of
+    // just the fund it landed on.
+    let expenseTypeCode: string | null = null
+    if (body?.expenseTypeCode) {
+      const et = await this.prisma.expenseType.findFirst({ where: { communityId, code: String(body.expenseTypeCode) }, select: { code: true } })
+      if (!et) throw new BadRequestException(`Expense type "${body.expenseTypeCode}" not found`)
+      expenseTypeCode = et.code
     }
 
     switch (type) {
@@ -243,20 +260,23 @@ export class CorrectionsService {
     const created = await this.prisma.correction.create({
       data: {
         communityId,
-        periodCode: period.code,
+        periodCode: period?.code ?? null,
         type,
         reason: REASON_BY_TYPE[type],
         billingEntityId,
         fundCode,
+        expenseTypeCode,
         amount: amount ?? undefined,
         payload: payload ?? undefined,
         note,
+        status: unattached ? 'TODO' : 'ACTIVE',
         createdBy: actor,
       },
     })
-    // derive immediately if the period is already PREPARED; otherwise it derives at prepare
-    await this.periods.reapplyCorrectionsNow(communityId, period.code)
-    return { ok: true, id: created.id, periodCode: period.code }
+    // derive immediately if the period is already PREPARED; otherwise it derives at prepare. TODO
+    // corrections have no period to derive into yet.
+    if (period) await this.periods.reapplyCorrectionsNow(communityId, period.code)
+    return { ok: true, id: created.id, periodCode: period?.code ?? null, status: unattached ? 'TODO' : 'ACTIVE' }
   }
 
   async void(communityRef: string, id: string, actor: string) {
@@ -265,7 +285,7 @@ export class CorrectionsService {
     if (!c) throw new NotFoundException('Correction not found')
     if (c.status === 'VOID') return { ok: true }
     await this.prisma.correction.update({ where: { id }, data: { status: 'VOID', voidedBy: actor, voidedAt: new Date() } })
-    await this.periods.reapplyCorrectionsNow(communityId, c.periodCode)
+    if (c.periodCode) await this.periods.reapplyCorrectionsNow(communityId, c.periodCode)
     return { ok: true }
   }
 }

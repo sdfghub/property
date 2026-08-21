@@ -49,6 +49,12 @@ export class FinanceController {
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier-config/context')
+  avizierConfigContext(@Param('communityId') c: string) {
+    return this.finance.avizierConfigContext(c)
+  }
+
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('avizier/explain')
   explainCell(
     @Param('communityId') c: string,

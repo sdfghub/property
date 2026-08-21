@@ -1605,17 +1605,19 @@ enum CorrectionType {
 enum CorrectionStatus {
   ACTIVE
   VOID
+  TODO // declared but not yet attached to a period (periodCode is null) — never derived into the ledger
 }
 
 model Correction {
   id              String           @id @default(cuid())
   communityId     String           @map("community_id")
   community       Community        @relation(fields: [communityId], references: [id])
-  periodCode      String           @map("period_code")
+  periodCode      String?          @map("period_code") // null while status=TODO (not yet attached to a period)
   type            CorrectionType
   reason          String           // ledger meta.reason (reponderare-cote / reatribuire-plata / scutire-penalizari / ajustare-manuala)
   billingEntityId String?          @map("billing_entity_id")
   fundCode        String?          @map("fund_code")
+  expenseTypeCode String?          @map("expense_type_code") // optional: which service/expense this ties to (e.g. COMISION_BANCA)
   amount          Decimal?         @db.Decimal(18, 4)
   payload         Json?            // type-specific: perUnit{unit→amt} (RESHUFFLE); fromFund/toFund (PAYMENT_REATTRIB)
   note            String?
