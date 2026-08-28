@@ -44,7 +44,7 @@ export class PeriodService {
     return this.prisma.period.findMany({
       where: { communityId },
       orderBy: { seq: 'asc' },
-      select: { id: true, code: true, seq: true, status: true, closedAt: true },
+      select: { id: true, code: true, seq: true, status: true, closedAt: true, startDate: true, afisareDate: true, dueDate: true },
     })
   }
 
@@ -97,6 +97,18 @@ export class PeriodService {
       const lastClosed = await this.prisma.period.findFirst({ where: { communityId, status: 'CLOSED' }, orderBy: { seq: 'desc' }, select: { code: true } })
       return { period: null, lastClosed, meters: { total: 0, closed: 0, open: [] }, bills: { total: 0, closed: 0, open: [] }, canClose: false }
     }
+    return this.buildEditableInfo(communityId, period)
+  }
+
+  /** Same shape as getEditable(), but for an arbitrary (explicit) period rather than "the" earliest
+   *  non-closed one — used by the global period selector so Overview's meters/bills checklist and
+   *  prepare/close actions can target whatever period the admin is currently browsing. */
+  async getStatusFor(communityId: string, periodCode: string) {
+    const period = await this.getPeriod(communityId, periodCode)
+    return this.buildEditableInfo(communityId, period)
+  }
+
+  private async buildEditableInfo(communityId: string, period: { id: string; code: string; status: string; checklist?: any }) {
     const meterTemplates = await (this.prisma as any).meterEntryTemplate.findMany({ where: { communityId }, select: { code: true, name: true } })
     const meterInstances = await (this.prisma as any).meterEntryTemplateInstance.findMany({
       where: { communityId, periodId: period.id },
@@ -159,6 +171,15 @@ export class PeriodService {
   async prepare(communityId: string, periodCode: string) {
     const period = await this.getPeriod(communityId, periodCode)
     if (period.status !== 'OPEN') throw new BadRequestException('Period must be OPEN to prepare')
+    // Periods must close in order — the global period selector lets an admin target any period
+    // directly, so this guard (mirroring reopen's own later-period check) stops one from being
+    // prepared while an earlier one is still unsettled.
+    const earlierUnclosed = await this.prisma.period.count({
+      where: { communityId, seq: { lt: period.seq }, status: { not: 'CLOSED' } },
+    })
+    if (earlierUnclosed > 0) {
+      throw new BadRequestException(`Cannot prepare ${periodCode}: an earlier period is not yet CLOSED`)
+    }
     // A period can only be prepared/closed once it has actually ended: penalties and allocations
     // must not accrue over time (days) that has not yet elapsed.
     if (new Date(period.endDate) > new Date()) {
@@ -220,6 +241,12 @@ export class PeriodService {
   async approve(communityId: string, periodCode: string) {
     const period = await this.getPeriod(communityId, periodCode)
     if (period.status !== 'PREPARED') throw new BadRequestException('Period must be PREPARED to approve')
+    const earlierUnclosed = await this.prisma.period.count({
+      where: { communityId, seq: { lt: period.seq }, status: { not: 'CLOSED' } },
+    })
+    if (earlierUnclosed > 0) {
+      throw new BadRequestException(`Cannot close ${periodCode}: an earlier period is not yet CLOSED`)
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // cleanup any previous finalize attempts to avoid unique conflicts

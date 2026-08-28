@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { usePeriodOptional } from '../../contexts/PeriodContext'
 
 const money = (n: number | null | undefined, ccy = 'RON') =>
   n == null ? '—' : `${Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`
@@ -9,18 +10,24 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
   const { api } = useAuth()
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const shared = usePeriodOptional()
+  const selectedCode = shared?.selectedCode
   const [data, setData] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     if (!communityId) return
+    // Wait for the global period selector to resolve before fetching, so this doesn't briefly
+    // load the "latest statement" default and then flash to the actually-selected period.
+    if (shared && !selectedCode) return
     let alive = true
     setLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/receivables`)
+    const q = selectedCode ? `?period=${encodeURIComponent(selectedCode)}` : ''
+    api.get<any>(`/communities/${communityId}/finance/receivables${q}`)
       .then((d) => { if (alive) { setData(d); setLoading(false) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
-  }, [api, communityId])
+  }, [api, communityId, selectedCode, shared])
 
   if (loading) return <div className="empty">{t('common.loading', 'Loading…')}</div>
   if (!data || !data.periodCode) return <div className="empty">{t('debtors.none', 'No statements yet — close a period to see debtors.')}</div>

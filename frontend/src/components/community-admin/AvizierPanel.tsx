@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { PenaltyOverrideModal } from './PenaltyOverrideModal'
 import { beLabel } from './beLabel'
+import { usePeriodOptional } from '../../contexts/PeriodContext'
 
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -19,8 +20,8 @@ export function AvizierPanel({
   cenzorEnabled = true,
   reportPath,
   periodsPath,
+  associationInfoPath,
   readOnly = false,
-  onOpenConfig,
 }: {
   communityId: string
   cenzorEnabled?: boolean
@@ -28,10 +29,10 @@ export function AvizierPanel({
   // interactive drilldown / admin control (residents only get the whole-community table to read).
   reportPath?: string
   periodsPath?: string
+  // Same idea for the signature-block data (board/administrator names) — defaults to the admin
+  // route, resident callers pass the me/ equivalent.
+  associationInfoPath?: string
   readOnly?: boolean
-  // Jumps to the admin "Config" tab's Avizier section (grouping/order/labels) — omitted in resident
-  // read-only mode, where there's nothing to configure.
-  onOpenConfig?: () => void
 }) {
   const { api, activeRole } = useAuth()
   const { t: rawT, lang } = useI18n()
@@ -53,10 +54,27 @@ export function AvizierPanel({
   }
   const avizierBase = reportPath ?? `/communities/${communityId}/finance/avizier`
   const periodsBase = periodsPath ?? `/communities/${communityId}/periods`
+  const associationInfoBase = associationInfoPath ?? `/communities/${communityId}/association-info`
   const RO = !!readOnly
 
-  const [periods, setPeriods] = React.useState<any[]>([])
-  const [period, setPeriod] = React.useState<string>('')
+  // "Unitatea" / "Grup Unități" toggle — which row-grouping the backend's avizier() computes
+  // (billing entity / real unit / physical PHYS_ group, see FinanceService.avizier). Rows already
+  // arrive shaped for the existing `beLabel()` helper (displayName/units/beName/beCode), plus a
+  // `contactMismatch` flag when a physical group's units don't agree on a contact (e.g. a box sold
+  // separately from its apartment) — not available to the resident read-only embed, admin/censor-
+  // scoped like the rest of this toggle's data.
+  const [groupBy, setGroupBy] = React.useState<'entity' | 'unit' | 'group'>('unit')
+
+  // Community-admin usage (no periodsPath override) shares the global period selector; the
+  // resident read-only embed (periodsPath given) sits outside PeriodProvider and keeps its own
+  // self-contained fetch — see the effect below.
+  const sharedPeriod = usePeriodOptional()
+  const useSharedPeriod = !periodsPath && !!sharedPeriod
+  const [localPeriods, setLocalPeriods] = React.useState<any[]>([])
+  const [localPeriod, setLocalPeriod] = React.useState<string>('')
+  const periods: any[] = useSharedPeriod ? sharedPeriod!.periods : localPeriods
+  const period = useSharedPeriod ? sharedPeriod!.selectedCode : localPeriod
+  const setPeriod = useSharedPeriod ? sharedPeriod!.setSelectedCode : setLocalPeriod
   const [data, setData] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
   const [signBusy, setSignBusy] = React.useState<string | null>(null)
@@ -73,9 +91,32 @@ export function AvizierPanel({
       setEditBe(null); reloadAvizier()
     } catch { setEditBe(null) }
   }
+  // The plain pencil-icon edit above is a retroactive correction (typo fixes) — it rewrites every
+  // period's report immediately. A genuine rename (ownership/name change) instead needs the old
+  // name to keep showing for past periods; this state backs that separate "rename from period"
+  // flow. Same scope as the plain edit (displayName only) — the real BillingEntity.name isn't
+  // editable from Avizier in unit/group view, since `r.beName` there is the resolved contact
+  // string, not the entity's own name.
+  const [renamingBe, setRenamingBe] = React.useState<{ be: string; displayName: string } | null>(null)
+  const [renameEffectiveFrom, setRenameEffectiveFrom] = React.useState('')
+  const [renameError, setRenameError] = React.useState<string | null>(null)
+  const [renameBusy, setRenameBusy] = React.useState(false)
+  const saveRename = async () => {
+    if (!renamingBe || !renameEffectiveFrom) return
+    setRenameBusy(true); setRenameError(null)
+    try {
+      await api.post(`/communities/${communityId}/billing-entities/${encodeURIComponent(renamingBe.be)}/rename`, {
+        displayName: renamingBe.displayName || null, effectiveFromPeriodCode: renameEffectiveFrom,
+      })
+      setRenamingBe(null); reloadAvizier()
+    } catch (e: any) { setRenameError(e?.message || t('common.error', 'Eroare')) } finally { setRenameBusy(false) }
+  }
   const reloadAvizier = () => {
-    const q = period ? `?period=${encodeURIComponent(period)}` : ''
-    api.get<any>(`${avizierBase}${q}`).then((d: any) => setData(d)).catch(() => {})
+    const params = new URLSearchParams()
+    if (period) params.set('period', period)
+    if (!RO) params.set('groupBy', groupBy)
+    const q = params.toString()
+    api.get<any>(`${avizierBase}${q ? `?${q}` : ''}`).then((d: any) => setData(d)).catch(() => {})
   }
   const signOff = async (action: 'approve' | 'reject') => {
     if (!data?.period?.code) return
@@ -128,7 +169,7 @@ export function AvizierPanel({
   // label/button plus the icon button) can independently wrap apart if that width is tight.
   // Flexing them together makes their combined width the intrinsic width, so they never split.
   const HLabel = ({ children }: { children: React.ReactNode }) => (
-    <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>{children}</span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 4, minWidth: 0 }}>{children}</span>
   )
   // Row filter: CPI range + an explicit hidden-unit set (checklist), both scoped to the Apartament column.
   // The popover renders as position:fixed at the end of the tree (not nested inside the sticky
@@ -210,25 +251,45 @@ export function AvizierPanel({
   }, [fullscreen, explain, soldDetail, penDetail])
 
   React.useEffect(() => {
+    if (useSharedPeriod) return // global selector (PeriodProvider) owns the fetch + selection
     if (!communityId) return
     api.get<any[]>(periodsBase).then((rows) => {
       const sorted = (rows || []).slice().sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0))
-      setPeriods(sorted)
+      setLocalPeriods(sorted)
       // default to the newest period (the one being closed), not the latest CLOSED one
-      if (sorted.length) setPeriod((cur) => cur || sorted[0].code)
+      if (sorted.length) setLocalPeriod((cur) => cur || sorted[0].code)
       else setLoading(false)
-    }).catch(() => { setPeriods([]); setLoading(false) })
-  }, [api, communityId, periodsBase])
+    }).catch(() => { setLocalPeriods([]); setLoading(false) })
+  }, [api, communityId, periodsBase, useSharedPeriod])
 
   React.useEffect(() => {
     if (!communityId || !period) return
     let alive = true
     setLoading(true)
-    api.get<any>(`${avizierBase}?period=${encodeURIComponent(period)}`)
+    const q = `?period=${encodeURIComponent(period)}${RO ? '' : `&groupBy=${groupBy}`}`
+    api.get<any>(`${avizierBase}${q}`)
       .then((d) => { if (alive) { setData(d); setLoading(false) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
-  }, [api, communityId, period, avizierBase])
+  }, [api, communityId, period, avizierBase, groupBy, RO])
+
+  // Signature block (bottom of the printed avizier): Președinte / Cenzor / Administrator, sourced
+  // from "Informații Asociație" (board members + administrator) — never hardcoded here.
+  const [assocInfo, setAssocInfo] = React.useState<any>(null)
+  React.useEffect(() => {
+    if (!communityId) return
+    api.get<any>(associationInfoBase).then((d: any) => setAssocInfo(d)).catch(() => setAssocInfo(null))
+  }, [api, communityId, associationInfoBase])
+  const boardMemberByRole = (needle: string) => {
+    const members: any[] = assocInfo?.boardMembers ?? []
+    const hit = members.find((m) => String(m?.role || '').toLowerCase().trim() === needle)
+    return hit?.name || null
+  }
+  const signatories = [
+    { role: t('avizier.sigPresident', 'Președinte'), name: boardMemberByRole('președinte') },
+    { role: t('avizier.sigCenzor', 'Cenzor'), name: boardMemberByRole('cenzor') },
+    { role: t('avizier.sigAdministrator', 'Administrator'), name: assocInfo?.administrator?.rep || assocInfo?.administrator?.company || null },
+  ]
 
   const cats: string[] = data?.categories ?? []
   const rows: any[] = data?.rows ?? []
@@ -400,7 +461,7 @@ export function AvizierPanel({
   let displayRows = rows
   if (filterActive) {
     displayRows = displayRows.filter((r) => {
-      if (hiddenUnits.has(r.beCode)) return false
+      if (hiddenUnits.has(r.rowKey ?? r.beCode)) return false
       const cpi = Number(r.cpi) || 0
       if (filterCpiMin !== '' && cpi < Number(filterCpiMin)) return false
       if (filterCpiMax !== '' && cpi > Number(filterCpiMax)) return false
@@ -435,28 +496,7 @@ export function AvizierPanel({
           <div className="muted" style={{ fontSize: 13 }}>{t('avizier.list', 'Listă de întreținere')} · {periodLabel(data?.period?.code || period)}</div>
         </div>
         <div className="row" style={{ gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {data?.period?.afisareDate && (
-            <div className="stack" style={{ gap: 1 }}>
-              <span className="muted" style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('avizier.afisare', 'Data afișării')}</span>
-              <span style={{ fontWeight: 600, fontSize: 13.5 }}>{new Date(data.period.afisareDate).toLocaleDateString('ro-RO')}</span>
-            </div>
-          )}
-          {data?.period?.dueDate && (
-            <div className="stack" style={{ gap: 1 }}>
-              <span className="muted" style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('avizier.due', 'Scadență')}</span>
-              <span style={{ fontWeight: 600, fontSize: 13.5 }}>{new Date(data.period.dueDate).toLocaleDateString('ro-RO')}</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn small"
-            onClick={() => setPublicMode((v) => !v)}
-            title={t('avizier.publicToggle', 'Mod public: ascunde numele proprietarilor (GDPR) pentru afișare/print')}
-            aria-pressed={!publicMode}
-            style={{ borderRadius: 999, ...(publicMode ? { background: 'none', color: 'var(--text, #1d1d1f)', borderColor: 'var(--border, #e5e5e5)' } : {}) }}
-          >
-            👤 {t('avizier.publicOff', 'Nume')}
-          </button>
+          {/* Data afișării / Scadență moved to the global PeriodSelectorBar (shared by every tab). */}
           <button type="button" className="btn small" style={{ borderRadius: 999, background: 'none', color: 'var(--text, #1d1d1f)', borderColor: 'var(--border, #e5e5e5)' }}
             onClick={() => window.print()} title={t('avizier.print', 'Printează')}>
             🖨 {t('avizier.print', 'Printează')}
@@ -464,17 +504,33 @@ export function AvizierPanel({
         </div>
       </div>
 
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div className="row" style={{ gap: 4, alignItems: 'center' }}>
-          <button type="button" className="btn ghost small" disabled={periodIdx < 0 || periodIdx >= periods.length - 1}
-            onClick={() => goPeriod(1)} title={t('avizier.prevPeriod', 'Perioada anterioară')} aria-label={t('avizier.prevPeriod', 'Perioada anterioară')}>‹</button>
-          <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
-            {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
-          </select>
-          <button type="button" className="btn ghost small" disabled={periodIdx <= 0}
-            onClick={() => goPeriod(-1)} title={t('avizier.nextPeriod', 'Perioada următoare')} aria-label={t('avizier.nextPeriod', 'Perioada următoare')}>›</button>
-        </div>
+      <div className="row" style={{ justifyContent: useSharedPeriod ? 'flex-end' : 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        {!useSharedPeriod && (
+          <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+            <button type="button" className="btn ghost small" disabled={periodIdx < 0 || periodIdx >= periods.length - 1}
+              onClick={() => goPeriod(1)} title={t('avizier.prevPeriod', 'Perioada anterioară')} aria-label={t('avizier.prevPeriod', 'Perioada anterioară')}>‹</button>
+            <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
+              {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
+            </select>
+            <button type="button" className="btn ghost small" disabled={periodIdx <= 0}
+              onClick={() => goPeriod(-1)} title={t('avizier.nextPeriod', 'Perioada următoare')} aria-label={t('avizier.nextPeriod', 'Perioada următoare')}>›</button>
+          </div>
+        )}
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          {!RO && (
+            <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+              <button type="button" className={groupBy === 'entity' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('entity')}
+                title={t('avizier.entityOwnerHint', 'Restanțe și Total de plată sunt disponibile doar în acest mod (sunt ținute per proprietar, nu per unitate)')}>
+                {t('avizier.entityOwner', 'Proprietar')}
+              </button>
+              <button type="button" className={groupBy === 'unit' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('unit')}>
+                {t('avizier.entityUnit', 'Unitatea')}
+              </button>
+              <button type="button" className={groupBy === 'group' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('group')}>
+                {t('avizier.entityGroup', 'Grup Unități')}
+              </button>
+            </div>
+          )}
           <div className="row" style={{ gap: 0, alignItems: 'center', border: '1px solid var(--border, #e5e5e5)', borderRadius: 999, padding: '2px 2px' }}>
             <button type="button" onClick={() => applyZoom(zoomLevel - 1)} disabled={zoomLevel <= 0}
               title={t('avizier.zoomOut', 'Comprimă o treaptă')} aria-label={t('avizier.zoomOut', 'Comprimă o treaptă')}
@@ -488,6 +544,16 @@ export function AvizierPanel({
               +
             </button>
           </div>
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => setPublicMode((v) => !v)}
+            title={t('avizier.publicToggle', 'Mod public: ascunde numele proprietarilor (GDPR) pentru afișare/print')}
+            aria-pressed={!publicMode}
+            style={{ borderRadius: 999 }}
+          >
+            {!publicMode ? '☑ ' : '☐ '}{t('avizier.publicOff', 'Nume')}
+          </button>
           <button
             type="button"
             className="btn ghost small"
@@ -508,17 +574,6 @@ export function AvizierPanel({
           >
             {showIncasari ? '☑ ' : '☐ '}{t('avizier.incasari', 'Încasări')}
           </button>
-          {isAdmin && onOpenConfig && (
-            <button
-              type="button"
-              className="btn ghost small"
-              onClick={onOpenConfig}
-              title={t('avizier.openConfig', 'Configurare avizier — grupare, ordine, etichete')}
-              style={{ borderRadius: 999 }}
-            >
-              ⚙ {t('avizierCfg.title', 'Configurare avizier')}
-            </button>
-          )}
           <button
             type="button"
             className="btn ghost small"
@@ -555,9 +610,9 @@ export function AvizierPanel({
       ) : !displayRows.length ? (
         <div className="empty">{t('avizier.filterNone', 'Niciun apartament nu corespunde filtrului.')}</div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto', padding: 0, minWidth: 0 }}>
+        <div className="card" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh', padding: 0, minWidth: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={leadColspan} />
                 {sgRuns.map((run, i) => {
@@ -595,7 +650,7 @@ export function AvizierPanel({
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                    {t('avizier.entity', 'Apartament')}
+                    {groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
                     <SortIcon k="name" />
                     <button type="button"
                       onClick={(e) => {
@@ -660,22 +715,34 @@ export function AvizierPanel({
                     <th key={`a${i}`} style={{ ...TH_WRAP, padding: '8px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}><HLabel>{t('avizier.adjustments', 'Ajustări')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   return (
-                    <th key={`fin${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`fin${i}`} style={{
+                      ...TH_WRAP, padding: '8px 10px', fontWeight: 700,
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
+                    }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                 })}
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
               {displayRows.map((r, rowIdx) => {
-                const hov = hoverBe === r.beCode
+                const rowKey = r.rowKey ?? r.beCode
+                const hov = hoverBe === rowKey
                 const zebraBg = rowIdx % 2 === 1 ? 'var(--muted-bg, #fafafa)' : 'var(--bg, #fff)'
                 const rowBg = hov ? 'var(--hover-bg, #eef4ff)' : zebraBg
+                // Row shape (displayName/units/beName/beCode) already matches beLabel()'s contract —
+                // the backend resolves "Unitatea"/"Grup Unități" grouping and Contact Principal
+                // itself now (FinanceService.avizier), including the red "contactMismatch" case
+                // (a physical group whose units don't agree, e.g. a box sold separately from its
+                // apartment). `beCode` here still names the real billing entity for the drilldowns
+                // below — it stays stable even when the display axis is the unit/group.
+                const l = beLabel(r, { publicMode })
+                const secondary = publicMode ? undefined : l.secondary
                 return (
-                <tr key={r.beCode} onMouseEnter={() => setHoverBe(r.beCode)} onMouseLeave={() => setHoverBe(null)}
+                <tr key={rowKey} onMouseEnter={() => setHoverBe(rowKey)} onMouseLeave={() => setHoverBe(null)}
                   style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
                   <td style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : zebraBg,
                       maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                    title={(() => { const l = beLabel(r, { publicMode }); return `${l.primary}${l.secondary ? ' · ' + l.secondary : ''}` })()}>
+                    title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
                     {editBe?.be === r.beCode ? (
                       <span className="row" style={{ gap: 4, alignItems: 'center' }}>
                         <input className="input" autoFocus value={editBe.value} placeholder={beLabel({ ...r, displayName: null }).primary}
@@ -684,10 +751,8 @@ export function AvizierPanel({
                           style={{ fontSize: 12, padding: '2px 4px', width: 150 }} />
                         <button type="button" className="btn ghost small" onClick={saveDisplayName} title={t('common.save', 'Salvează')}>✓</button>
                       </span>
-                    ) : (() => {
-                      const l = beLabel(r, { publicMode })
-                      return (
-                        <span>
+                    ) : (
+                      <span>
                           {RO ? (
                             <span style={{ fontWeight: 600 }}>{l.primary}</span>
                           ) : (
@@ -696,13 +761,15 @@ export function AvizierPanel({
                               {l.primary}
                             </button>
                           )}
-                          {l.secondary ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{l.secondary}</span> : null}
+                          {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 11, marginLeft: 6 } : { fontSize: 11, marginLeft: 6 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
                           {isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.rename', 'Redenumește')}
                             onClick={(e) => { e.stopPropagation(); setEditBe({ be: r.beCode, value: r.displayName || '' }) }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 6, padding: 0 }}>✎</button> : null}
+                          {isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.renameFromPeriod', 'Redenumește de la o perioadă')}
+                            onClick={(e) => { e.stopPropagation(); setRenamingBe({ be: r.beCode, displayName: r.displayName || '' }); setRenameEffectiveFrom(data?.period?.code || ''); setRenameError(null) }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 4, padding: 0 }}>🕐</button> : null}
                         </span>
-                      )
-                    })()}
+                    )}
                   </td>
                   {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.residents != null ? r.residents : ''}</td>}
@@ -806,13 +873,16 @@ export function AvizierPanel({
                       )) : ''}</td>
                     )
                     // finalTotal
-                    return <td key={`fin${i}`} style={{ padding: '6px 10px', fontWeight: 700 }}>{money(r.totalDue)}</td>
+                    return <td key={`fin${i}`} style={{
+                      padding: '6px 10px', fontWeight: 700,
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: rowBg } : {}),
+                    }}>{money(r.totalDue)}</td>
                   })}
                 </tr>
                 )
               })}
               {totals ? (
-                <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)' }}>
+                <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)', position: 'sticky', bottom: 0, zIndex: 3 }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.totalRow', 'TOTAL')}</td>
                   {infoVis.cpi && <td style={{ padding: '8px 10px' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '8px 10px' }}>{totals.residents != null ? totals.residents : ''}</td>}
@@ -844,12 +914,29 @@ export function AvizierPanel({
                     if (col.kind === 'adjustments') return (
                       <td key={`a${i}`} style={{ padding: '8px 10px' }}>{money(totals.adjustments)}</td>
                     )
-                    return <td key={`fin${i}`} style={{ padding: '8px 10px' }}>{money(totals.totalDue)}</td>
+                    return <td key={`fin${i}`} style={{
+                      padding: '8px 10px',
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
+                    }}>{money(totals.totalDue)}</td>
                   })}
                 </tr>
               ) : null}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && rows.length > 0 && (
+        <div className="row" style={{ gap: 24, flexWrap: 'wrap', marginTop: 8 }}>
+          {signatories.map((s, i) => (
+            <div key={i} className="stack" style={{ gap: 4, flex: '1 1 200px', minWidth: 180 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{s.role}</div>
+              <div className="muted" style={{ fontSize: 12.5 }}>{s.name || '—'}</div>
+              <div style={{ borderTop: '1px solid var(--border, #ccc)', marginTop: 10, paddingTop: 3 }}>
+                <span className="muted" style={{ fontSize: 11 }}>{t('avizier.signature', 'Semnătură')}</span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -871,7 +958,7 @@ export function AvizierPanel({
               <input className="input" placeholder={t('avizier.searchUnit', 'Caută apartament')} value={unitSearch}
                 onChange={(e) => setUnitSearch(e.target.value)} style={{ fontSize: 12, padding: '4px 6px' }} />
               <button type="button"
-                onClick={() => setHiddenUnits(hiddenUnits.size ? new Set() : new Set(rows.map((r) => r.beCode)))}
+                onClick={() => setHiddenUnits(hiddenUnits.size ? new Set() : new Set(rows.map((r) => r.rowKey ?? r.beCode)))}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12, textAlign: 'left' }}>
                 {hiddenUnits.size ? t('avizier.selectAll', 'Selectează tot') : t('avizier.deselectAll', 'Deselectează tot')}
               </button>
@@ -879,8 +966,8 @@ export function AvizierPanel({
                 {rows
                   .filter((r) => !unitSearch || beLabel(r, { publicMode }).primary.toLowerCase().includes(unitSearch.toLowerCase()))
                   .map((r) => (
-                    <label key={r.beCode} className="row" style={{ gap: 6, alignItems: 'center', fontSize: 12, padding: '2px 0' }}>
-                      <input type="checkbox" checked={!hiddenUnits.has(r.beCode)} onChange={() => toggleUnitHidden(r.beCode)} />
+                    <label key={r.rowKey ?? r.beCode} className="row" style={{ gap: 6, alignItems: 'center', fontSize: 12, padding: '2px 0' }}>
+                      <input type="checkbox" checked={!hiddenUnits.has(r.rowKey ?? r.beCode)} onChange={() => toggleUnitHidden(r.rowKey ?? r.beCode)} />
                       <span style={{ flex: 1 }}>{beLabel(r, { publicMode }).primary}</span>
                       <span className="muted">{r.cpi != null ? money(r.cpi) : ''}</span>
                     </label>
@@ -1183,6 +1270,41 @@ export function AvizierPanel({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {renamingBe && (
+        <div onClick={() => setRenamingBe(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, width: '90%', background: 'var(--bg,#fff)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <h4 style={{ margin: 0 }}>{t('avizier.renameFromPeriodTitle', 'Redenumește de la o perioadă')}</h4>
+              <button className="btn ghost small" onClick={() => setRenamingBe(null)}>✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              {t('avizier.renameFromPeriodHint', 'Perioadele anterioare vor păstra numele vechi; de la perioada aleasă înainte se va afișa numele nou.')}
+            </div>
+            {renameError && <div className="badge negative" style={{ marginBottom: 8 }}>{renameError}</div>}
+            <div className="stack" style={{ gap: 10 }}>
+              <div className="stack" style={{ gap: 3 }}>
+                <label className="label" style={{ fontSize: 12 }}>{t('avizier.renameNewName', 'Nume nou')}</label>
+                <input className="input" autoFocus value={renamingBe.displayName}
+                  onChange={(e) => setRenamingBe({ ...renamingBe, displayName: e.target.value })} />
+              </div>
+              <div className="stack" style={{ gap: 3 }}>
+                <label className="label" style={{ fontSize: 12 }}>{t('avizier.renameEffectiveFrom', 'Valabil de la perioada')}</label>
+                <select className="input" value={renameEffectiveFrom} onChange={(e) => setRenameEffectiveFrom(e.target.value)}>
+                  {periods.map((p) => <option key={p.code} value={p.code}>{p.code}</option>)}
+                </select>
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                <button type="button" className="btn ghost" onClick={() => setRenamingBe(null)}>{t('common.cancel', 'Anulează')}</button>
+                <button type="button" className="btn primary" disabled={renameBusy || !renameEffectiveFrom} onClick={saveRename}>
+                  {renameBusy ? t('common.loading', '…') : t('common.save', 'Salvează')}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

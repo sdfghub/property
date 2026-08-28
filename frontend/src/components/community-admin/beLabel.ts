@@ -16,9 +16,9 @@ export function beLabel(
   row: { displayName?: string | null; units?: string[]; beName?: string; beCode?: string },
   opts?: { publicMode?: boolean },
 ): { primary: string; secondary?: string } {
-  if (row.displayName) return { primary: row.displayName }
-  const apts = (row.units || []).map(shortUnit).join(', ') || row.beCode || ''
   const owner = prettyBe(row.beName || '')
+  if (row.displayName) return { primary: row.displayName, secondary: opts?.publicMode ? undefined : (owner || undefined) }
+  const apts = (row.units || []).map(shortUnit).join(', ') || row.beCode || ''
   if (opts?.publicMode) return { primary: apts || row.beCode || '' } // no owner name on the public avizier
   return apts ? { primary: apts, secondary: owner || undefined } : { primary: owner || row.beCode || '' }
 }

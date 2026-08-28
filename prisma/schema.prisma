@@ -114,6 +114,26 @@ enum PollStatus {
 enum TicketType {
   INCIDENT
   TASK
+  REQUEST
+}
+
+/// Classification for REQUEST tickets — who/what the request concerns.
+enum TicketImpact {
+  NUMAR_PERSOANE
+  PROPRIETAR
+  CHIRIAS
+  SERVICII
+  INFORMATII
+  ADEVERINTA
+  LUCRARI_TEHNICE
+}
+
+/// Classification for REQUEST tickets — the kind of request.
+enum TicketRequestKind {
+  SCHIMBARE
+  DEFECTIUNE
+  ACORD
+  ALTELE
 }
 
 enum TicketStatus {
@@ -285,12 +305,34 @@ model Unit {
   code        String @map("code")
   order       Int    @default(0) @map("order")
 
+  // Real registry attributes, from the association's own "Unit Definitions" spreadsheet — not
+  // derived/guessed from the code string. `name` is that registry's own display label ("AP 4 (I)",
+  // "Intrare Uscata") — most units' label happens to also be embeddable in their own code, but a
+  // building common-space unit's isn't, so this is authoritative where the code-derived guess
+  // (see unitLabel()) would otherwise fall back to the raw code. `type` is that same registry's
+  // taxonomy (Apartament, SAD, Boxa, Cale Evacuare, Cale Acces, Estetice si structurale, Tehnice,
+  // Depozitare, Functionale), richer than a simple resident/storage split.
+  name        String?  @map("name")
+  type        String?  @map("type")
+  floorNumber Int?     @map("floor_number")
+  floorName   String?  @map("floor_name")
+  staircase   String?  @map("staircase")
+  location    String?  @map("location")
+  surfaceMp   Decimal? @map("surface_mp") @db.Decimal(10, 2)
+  cfCode      String?  @map("cf_code")
+  // A unit has at most one facility/property-management contact at a time — plain columns, no
+  // history needed (every real case so far is a single, currently-active contact).
+  propertyManagerName  String? @map("property_manager_name")
+  propertyManagerPhone String? @map("property_manager_phone")
+  propertyManagerEmail String? @map("property_manager_email")
+
   community           Community             @relation(fields: [communityId], references: [id])
   UnitGroupMember     UnitGroupMember[]
   BillingEntityMember BillingEntityMember[]
   BeLedgerEntryDetail BeLedgerEntryDetail[]
   CommunityChargeLine CommunityChargeLine[]
   BeOpeningBalance     BeOpeningBalance[]
+  tenants             UnitTenant[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -336,6 +378,10 @@ model BillingEntity {
   order       Int    @default(0) @map("order")
   name        String @map("name")
   displayName String? @map("display_name") // admin-set label; falls back to computed (short unit + owner)
+  // Which comma-segment of `name` is the default point of contact, when `name` bundles several
+  // owners (e.g. "Matei Corina, Matei Nelu, Matei Vasile") — null means "the first one". Read at
+  // the CURRENT period only; for a specific period's report use nameHistory instead (see below).
+  primaryOwnerName String? @map("primary_owner_name")
 
   community Community               @relation(fields: [communityId], references: [id])
   members   BillingEntityMember[]
@@ -343,10 +389,55 @@ model BillingEntity {
   bills     Bill[]
   Payment   Payment[]
   CommunityChargeLine CommunityChargeLine[]
+  nameHistory BillingEntityNameHistory[]
 
   @@unique([code, communityId])
   @@index([communityId])
   @@map("billing_entity")
+}
+
+// A genuine identity change (not a typo fix — see `display-name` PATCH, which stays a plain,
+// retroactive edit) to a billing entity's name/displayName, effective from a specific period
+// onward. No rows exist for a BE that has never had one of these — resolve by falling back to the
+// entity's own current name/displayName when no history row covers the period in question.
+model BillingEntityNameHistory {
+  id              String   @id @default(cuid()) @map("id")
+  billingEntityId String   @map("billing_entity_id")
+  name            String   @map("name")
+  displayName     String?  @map("display_name")
+  startPeriodId   String   @map("start_period_id")
+  endPeriodId     String?  @map("end_period_id")
+  startSeq        Int      @map("start_seq")
+  endSeq          Int?     @map("end_seq")
+
+  billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
+
+  @@index([billingEntityId, startSeq, endSeq])
+  @@map("billing_entity_name_history")
+}
+
+// #21 "Persoane" (Informații asociație) — a real, unconfirmed-until-reviewed tenant candidate for
+// one specific unit. There is no formal lease record in this system, so a tenant is *inferred*: a
+// payer name from the cash/bank register that keeps paying for a unit but doesn't match its
+// owner's name — `source` records whether this row is that inference or a manual entry,
+// `confirmed` lets an admin promote an inferred tenant to a normal, no-longer-flagged entry.
+// (Owner comes straight from BillingEntity.name/primaryOwnerName; property manager is plain
+// columns on Unit — neither needs its own table, only tenancy does, since a unit can have several
+// tenant candidates at once awaiting review.)
+model UnitTenant {
+  id        String   @id @default(cuid()) @map("id")
+  unitId    String   @map("unit_id")
+  name      String   @map("name")
+  phone     String?  @map("phone")
+  email     String?  @map("email")
+  source    String   @default("MANUAL") @map("source") // MANUAL | INFERRED
+  confirmed Boolean  @default(false) @map("confirmed")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@index([unitId])
+  @@map("unit_tenant")
 }
 
 model BillingEntityMember {
@@ -858,6 +949,7 @@ model Vendor {
   name        String  @map("name")
   taxId       String? @map("tax_id")
   iban        String? @map("iban")
+  contract    String? @map("contract")
 
   community     Community       @relation(fields: [communityId], references: [id])
   VendorInvoice VendorInvoice[]
@@ -1715,6 +1807,8 @@ model Ticket {
   priority              TicketPriority @default(MEDIUM)
   title                 String
   description           String?
+  impact                TicketImpact?
+  requestKind           TicketRequestKind? @map("request_kind")
   createdById           String         @map("created_by_id")
   assigneeId            String?        @map("assignee_id")
   sourceInventoryRuleId String?        @map("source_inventory_rule_id")

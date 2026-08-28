@@ -60,17 +60,26 @@ export class FinanceService {
   }
 
   /**
-   * Debtors: per billing entity outstanding for the reference period.
-   * The statement snapshot (be_statement.due_end) is only rebuilt at period close, so a receipt
-   * recorded in the still-open period would not show up. To reflect it immediately we subtract
-   * payments recorded in periods that have NO statement yet (uncommitted — e.g. the open period).
+   * Debtors: per billing entity ARREARS (restanțe) carried into the reference period — i.e.
+   * be_statement.due_start minus this period's payments, the same "Restanțe" figure the avizier's
+   * grand-total band shows (finance.service's avizier query: soldPrecedent − payments). This is
+   * deliberately NOT due_end (which would also include this period's own fresh charges) — a panel
+   * called "debtors/arrears" should match the avizier's Restanțe column, not the full balance.
+   * The statement snapshot is only rebuilt at period close, so a receipt recorded in the still-open
+   * period would not show up; to reflect it immediately we subtract payments recorded in periods
+   * that have NO statement yet (uncommitted — e.g. the open period).
+   *
+   * totalDebt is the NET sum across every billing entity (credits from BEs in advance offset
+   * others' arrears), matching the avizier grand-total band exactly; topDebtors/debtorCount then
+   * filter to just the entities actually in arrears, since listing a credit balance in a "debtors"
+   * table wouldn't make sense.
    */
   async receivables(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
-    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, topDebtors: [] }
+    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, topDebtors: [], byFund: [] }
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `with stmt as (
-         select bs.billing_entity_id as be_id, sum(bs.due_end) as due_end
+         select bs.billing_entity_id as be_id, sum(bs.due_start) as due_start, sum(bs.payments) as payments
            from be_statement bs
           where bs.community_id = $1 and bs.period_id = $2
           group by bs.billing_entity_id
@@ -83,21 +92,39 @@ export class FinanceService {
           group by le.billing_entity_id
        )
        select be.code as "beCode", be.name as "beName",
-              (coalesce(stmt.due_end,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt
+              (coalesce(stmt.due_start,0) - coalesce(stmt.payments,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt
          from billing_entity be
          left join stmt on stmt.be_id = be.id
          left join uncommitted_pay on uncommitted_pay.be_id = be.id
         where be.community_id = $1
-          and (coalesce(stmt.due_end,0) - coalesce(uncommitted_pay.paid,0)) > 0.005
         order by debt desc`,
       communityId, period.id,
     )
     const totalDebt = rows.reduce((s, r) => s + Number(r.debt), 0)
+    const debtors = rows.filter((r) => Number(r.debt) > 0.005)
+
+    // Per-fund breakdown for the Dashboard's "Restanțe" card expander — summed directly from
+    // be_statement's own (billing entity, fund) rows, not re-derived from the entity-level CTE
+    // above, so this is the fund split of `due_start − payments` only; it doesn't carry the
+    // small "uncommitted payment" adjustment (a per-entity, not fund-attributable, timing fix),
+    // so it may not sum to totalDebt to the cent in edge cases.
+    const byFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select f.code as "fundCode", f.name as "fundName",
+              coalesce(sum(bs.due_start - bs.payments),0)::float8 as amount
+         from be_statement bs join fund f on f.id = bs.fund_id
+        where bs.community_id = $1 and bs.period_id = $2
+        group by f.code, f.name
+       having coalesce(sum(bs.due_start - bs.payments),0) <> 0
+        order by f.code`,
+      communityId, period.id,
+    )
+
     return {
       periodCode: period.code,
       totalDebt: round2(totalDebt),
-      debtorCount: rows.length,
-      topDebtors: rows.slice(0, 10).map((r) => ({ ...r, debt: round2(r.debt) })),
+      debtorCount: debtors.length,
+      topDebtors: debtors.slice(0, 10).map((r) => ({ ...r, debt: round2(r.debt) })),
+      byFund: byFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) })),
     }
   }
 
@@ -207,10 +234,166 @@ export class FinanceService {
     }
   }
 
-  async avizier(communityId: string, periodCode?: string) {
+  /**
+   * Real ExpenseType catalog for a community — code, live name, its AllocationRule, and which
+   * Fund it settles into via params.fundCode. Backs the "Configurare Servicii" admin UI so it can
+   * assign real codes to descriptive domains instead of free text. `synthetic` lists avizier
+   * columns with no ExpenseType row behind them (currently only APA_DIF, the water-difference
+   * split — see the categoryLabels hardcode in avizier() below) so the UI can show them as
+   * non-pickable, auto-computed entries.
+   *
+   * `splitSteps` surfaces the CURRENTLY ACTIVE leaves of ExpenseType.params.splitTemplate (the
+   * real per-unit allocation engine — see allocation.service.ts's processSplits/resolveShares) —
+   * each leaf's own `name` is already a human Romanian description (e.g. "Apa rece contorizată",
+   * "Diferență citire apă rece") written at import time, so this is read-only, purely descriptive
+   * plumbing: no new computation, just exposing what the engine already does. "Active" is decided
+   * by the community's representative period's waterDifferenceMethod, the same switch
+   * allocation.service.ts itself reads (a leaf with no `mode` is always active).
+   */
+  async expenseCatalog(communityId: string) {
+    const [rows, funds, period] = await Promise.all([
+      this.prisma.expenseType.findMany({
+        where: { communityId },
+        select: { code: true, name: true, ruleId: true, params: true, rule: { select: { method: true, name: true } } },
+      }),
+      this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true, allocation: true } }),
+      this.resolvePeriod(communityId),
+    ])
+    const waterDifferenceMethod = period
+      ? (await this.prisma.period.findUnique({ where: { id: period.id }, select: { waterDifferenceMethod: true } }))?.waterDifferenceMethod || 'PROPORTIONAL'
+      : 'PROPORTIONAL'
+    const fundByCode = new Map(funds.map((f) => [f.code, f]))
+
+    // First pass: parse each type's active split leaves and collect every meter id / measure-type
+    // code they reference, so their real human names (Meter.name, MeasureType.name — already
+    // stored as friendly Romanian text, e.g. "Contor comunitate - Apa Rece (total branșament)")
+    // can be fetched in one batch and used to render an actual formula, not just a leaf's own name.
+    const parsed = rows.map((e) => {
+      const leaves: any[] = Array.isArray((e.params as any)?.splitTemplate) ? (e.params as any).splitTemplate : []
+      const activeLeaves = leaves.filter((n) => !n?.mode || n.mode === waterDifferenceMethod)
+      return { row: e, activeLeaves }
+    })
+    const meterIds = new Set<string>()
+    const measureTypeCodes = new Set<string>()
+    for (const { activeLeaves } of parsed) {
+      for (const n of activeLeaves) {
+        if (n?.derivedShare?.totalMeterId) meterIds.add(String(n.derivedShare.totalMeterId))
+        if (n?.derivedShare?.partMeterId) meterIds.add(String(n.derivedShare.partMeterId))
+        if (n?.allocation?.weightSource) measureTypeCodes.add(String(n.allocation.weightSource))
+      }
+    }
+    const [meters, measureTypes] = await Promise.all([
+      meterIds.size ? this.prisma.meter.findMany({ where: { meterId: { in: [...meterIds] } }, select: { meterId: true, name: true, scopeType: true, scopeCode: true, typeCode: true } }) : [],
+      measureTypeCodes.size ? this.prisma.measureType.findMany({ where: { code: { in: [...measureTypeCodes] } }, select: { code: true, name: true, unit: true } }) : [],
+    ])
+    const meterName = (id?: string) => (id && meters.find((m) => m.meterId === id)?.name) || id || ''
+    const measureTypeName = (code?: string) => (code && measureTypes.find((m) => m.code === code)?.name) || code || ''
+    const measureTypeUnit = (code?: string) => (code && measureTypes.find((m) => m.code === code)?.unit) || null
+
+    // Live reading for each referenced COMMUNITY-scope meter, at the representative period (see
+    // resolvePeriod above) — so the difference explanation can show real numbers (branch reading,
+    // Σ unit readings, residual), not just the formula. Meter → PeriodMeasure isn't a direct FK;
+    // a meter's own (scopeType, typeCode) is what PeriodMeasure is actually keyed by.
+    const communityMeters = meters.filter((m) => m.scopeType === 'COMMUNITY')
+    const meterReadings = period && communityMeters.length
+      ? await this.prisma.periodMeasure.findMany({
+          where: { communityId, periodId: period.id, scopeType: 'COMMUNITY', typeCode: { in: communityMeters.map((m) => m.typeCode) } },
+          select: { typeCode: true, value: true },
+        })
+      : []
+    const meterValue = (id?: string) => {
+      const m = id ? communityMeters.find((cm) => cm.meterId === id) : undefined
+      const v = m ? meterReadings.find((r) => r.typeCode === m.typeCode)?.value : undefined
+      return v == null ? null : Number(v)
+    }
+
+    const expenseTypes = parsed
+      .map(({ row: e, activeLeaves }) => {
+        const fundCode = (e.params as any)?.fundCode ?? null
+        const fund = fundCode ? fundByCode.get(fundCode) : undefined
+        const splitSteps = activeLeaves.filter((n) => n?.name).map((n) => {
+          const weightLabel = measureTypeName(n?.allocation?.weightSource)
+          // A "residual"-meter leaf is the difference portion of this split (see template.service.ts's
+          // recomputeAggregationsAndDerived: residual = branch meter − Σ unit meters).
+          const isDifference = /RESIDUAL/i.test(String(n?.derivedShare?.partMeterId ?? ''))
+          const formula = n?.derivedShare
+            ? `Parte din sumă: ${meterName(n.derivedShare.partMeterId)} din ${meterName(n.derivedShare.totalMeterId)}. Se împarte pe unități proporțional cu consumul propriu de ${weightLabel}.`
+            : weightLabel ? `Se împarte pe unități proporțional cu consumul propriu de ${weightLabel}.` : ''
+          return { id: String(n.id ?? n.name), name: String(n.name), isDifference, formula }
+        })
+        return {
+          code: e.code,
+          name: e.name,
+          ruleId: e.ruleId,
+          rule: { method: e.rule.method, name: e.rule.name },
+          fundCode: fund?.code ?? fundCode ?? null,
+          fundName: fund?.name ?? null,
+          fundDomain: fund ? String(((fund.allocation as any)?.type ?? '')).trim().toLowerCase() || null : null,
+          splitSteps,
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const anchor =
+      expenseTypes.find((e) => e.code === 'APA_RECE')?.code ??
+      expenseTypes.find((e) => e.code === 'CANALIZARE')?.code ??
+      null
+    const contributingCodes = expenseTypes.filter((e) => e.splitSteps.some((s) => s.isDifference)).map((e) => e.code)
+
+    // Build the synthetic difference column's own formula from the anchor type's two matching
+    // leaves (the "contorizat" and "diferență" siblings share the same derivedShare.totalMeterId).
+    let syntheticFormula = ''
+    let syntheticReading: { totalValue: number | null; meteredValue: number | null; residualValue: number | null; unit: string | null } | null = null
+    const anchorLeaves = anchor ? parsed.find(({ row }) => row.code === anchor)?.activeLeaves ?? [] : []
+    const diffLeaf = anchorLeaves.find((n) => /RESIDUAL/i.test(String(n?.derivedShare?.partMeterId ?? '')))
+    const meteredLeaf = anchorLeaves.find((n) => n?.derivedShare && n.derivedShare.totalMeterId === diffLeaf?.derivedShare?.totalMeterId && n !== diffLeaf)
+    if (diffLeaf?.derivedShare) {
+      syntheticFormula = `Diferență = ${meterName(diffLeaf.derivedShare.totalMeterId)} − ${meterName(meteredLeaf?.derivedShare?.partMeterId)} (înregistrată ca ${meterName(diffLeaf.derivedShare.partMeterId)}), redistribuită pe unități proporțional cu consumul propriu.`
+      syntheticReading = {
+        totalValue: meterValue(diffLeaf.derivedShare.totalMeterId),
+        meteredValue: meterValue(meteredLeaf?.derivedShare?.partMeterId),
+        residualValue: meterValue(diffLeaf.derivedShare.partMeterId),
+        unit: measureTypeUnit(diffLeaf?.allocation?.weightSource) ?? 'm3',
+      }
+    }
+    const synthetic = anchor
+      ? [{ code: 'APA_DIF', label: 'Apă - diferență', anchorCode: anchor, contributingCodes, formula: syntheticFormula, reading: syntheticReading }]
+      : []
+    return { expenseTypes, synthetic, period: period ? { code: period.code } : null }
+  }
+
+  /**
+   * Real ExpenseType.code display order, as chosen by the admin in "Configurare Servicii"
+   * (Community.features.associationInfo.serviceConfig.domains[].serviceCodes — see
+   * community.service.ts). Flattens domain order + intra-domain order into a single rank map,
+   * inserting each synthetic column (e.g. APA_DIF) right after the real code it's computed from.
+   * Used by avizier()'s category sort so the report's column order matches the config page.
+   */
+  private async serviceOrderIndex(communityId: string): Promise<Map<string, number>> {
+    const [c, catalog] = await Promise.all([
+      this.prisma.community.findFirst({ where: { OR: [{ id: communityId }, { code: communityId }] }, select: { features: true } }),
+      this.expenseCatalog(communityId),
+    ])
+    const domains = (c?.features as any)?.associationInfo?.serviceConfig?.domains
+    const order: string[] = []
+    if (Array.isArray(domains)) {
+      for (const dom of domains) {
+        const codes = Array.isArray(dom?.serviceCodes) ? dom.serviceCodes : []
+        for (const code of codes) {
+          if (typeof code !== 'string') continue
+          order.push(code)
+          for (const s of catalog.synthetic) if (s.anchorCode === code) order.push(s.code)
+        }
+      }
+    }
+    return new Map(order.map((code, i) => [code, i]))
+  }
+
+  async avizier(communityId: string, periodCode?: string, groupBy?: 'entity' | 'unit' | 'group') {
+    const mode: 'entity' | 'unit' | 'group' = groupBy === 'unit' || groupBy === 'group' ? groupBy : 'entity'
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { period: null, categories: [], rows: [], totals: null }
     const cfg = await this.getAvizierConfig(communityId)
+    const serviceOrder = await this.serviceOrderIndex(communityId)
     const p = await this.prisma.period.findUnique({
       where: { id: period.id },
       select: { code: true, status: true, dueDate: true, afisareDate: true, seq: true },
@@ -304,9 +487,11 @@ export class FinanceService {
       paymentsByFundByBe.set(r.beId, pm)
     }
 
-    // per-BE per-category current charges
+    // per-BE (and, in the same pass, per-unit — grouping by both costs nothing extra and lets
+    // "Unitate"/"Grup unități" mode re-sum these same lines by unit instead of by entity) per-
+    // category current charges.
     const lineRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select ccl.billing_entity_id as "beId",
+      `select ccl.billing_entity_id as "beId", ccl.unit_id as "unitId",
               case when cc.source_key like 'penalty:%' then 'PEN:' || split_part(cc.source_key, ':', 2)
                    when ccl.meta->>'splitNodeId' like '%DIFERENTA' then 'APA_DIF'
                    when cc.source_type = 'FUND' then f.code
@@ -316,25 +501,99 @@ export class FinanceService {
          join community_charge cc on cc.id = ccl.charge_id
          left join fund f on f.id = cc.fund_id
         where ccl.community_id = $1 and ccl.period_id = $2
-        group by ccl.billing_entity_id, label`,
+        group by ccl.billing_entity_id, ccl.unit_id, label`,
       communityId, period.id,
     )
 
     const bes = await this.prisma.billingEntity.findMany({
       where: { communityId },
-      select: { id: true, code: true, name: true, order: true, displayName: true },
+      select: { id: true, code: true, name: true, order: true, displayName: true, primaryOwnerName: true },
     })
     const members = await this.prisma.billingEntityMember.findMany({
       where: { billingEntity: { communityId }, startSeq: { lte: p?.seq ?? 0 }, OR: [{ endSeq: null }, { endSeq: { gte: p?.seq ?? 0 } }] },
-      select: { billingEntityId: true, unit: { select: { code: true } } },
+      select: { billingEntityId: true, unit: { select: { id: true, code: true } } },
     })
     const unitsByBe = new Map<string, string[]>()
+    const beIdByUnitId = new Map<string, string>()
     members.forEach((m) => {
       if (!m.unit) return
       const arr = unitsByBe.get(m.billingEntityId) ?? []
       arr.push(m.unit.code)
       unitsByBe.set(m.billingEntityId, arr)
+      beIdByUnitId.set(m.unit.id, m.billingEntityId)
     })
+
+    // Per-unit identity + owner/contact resolution ("Unitate"/"Grup unități" modes) — built
+    // unconditionally since it's cheap, and keeps this method's shape simple. Contact is just the
+    // owning BillingEntity's own primaryOwnerName (or its first name) — no separate storage, no
+    // query, since owner was never persisted separately from BillingEntity.name.
+    const beById = new Map(bes.map((b) => [b.id, b]))
+    const firstNameOf = (name: string) => name.split(',')[0].trim()
+    // Name/displayName are traceable through periods (BillingEntityNameHistory) — a rename only
+    // rewrites reports from its effective period forward, so this period's own view resolves
+    // against whichever history row (if any) was open at this period's seq, falling back to the
+    // entity's current name/displayName when it was never renamed.
+    const nameHistoryRows = await this.prisma.billingEntityNameHistory.findMany({
+      where: { billingEntity: { communityId } },
+      select: { billingEntityId: true, name: true, displayName: true, startSeq: true, endSeq: true },
+    })
+    const nameHistoryByBe = new Map<string, typeof nameHistoryRows>()
+    for (const h of nameHistoryRows) {
+      const arr = nameHistoryByBe.get(h.billingEntityId) ?? []
+      arr.push(h)
+      nameHistoryByBe.set(h.billingEntityId, arr)
+    }
+    const aviSeq = p?.seq ?? 0
+    const resolveBeName = (be: { id: string; name: string; displayName: string | null }): { name: string; displayName: string | null } => {
+      const hist = nameHistoryByBe.get(be.id)
+      const row = hist?.find((h) => h.startSeq <= aviSeq && (h.endSeq == null || h.endSeq >= aviSeq))
+      return row ? { name: row.name, displayName: row.displayName } : { name: be.name, displayName: be.displayName }
+    }
+    const allUnits = mode === 'entity' ? [] : await this.prisma.unit.findMany({
+      where: { communityId },
+      select: { id: true, code: true, name: true, type: true, floorNumber: true, staircase: true },
+    })
+    const unitById = new Map(allUnits.map((u) => [u.id, u]))
+    const contactForUnit = (unitId: string): string | null => {
+      const beId = beIdByUnitId.get(unitId)
+      const be = beId ? beById.get(beId) : undefined
+      return be ? (be.primaryOwnerName || firstNameOf(resolveBeName(be).name)) : null
+    }
+
+    // Physical-group (PHYS_ UnitGroup) resolution, period-correct, private groups only — the
+    // building's own common/technical spaces never carry CPI or charges, excluded the same way
+    // the Units/Persoane pages already exclude "Gr Spatii Comune".
+    const groupIdByUnitId = new Map<string, string>()
+    const groupMetaById = new Map<string, { id: string; name: string }>()
+    if (mode === 'group') {
+      const groupMembers = await this.prisma.unitGroupMember.findMany({
+        where: {
+          group: { communityId, code: { startsWith: 'PHYS_' } },
+          startSeq: { lte: p?.seq ?? 0 },
+          OR: [{ endSeq: null }, { endSeq: { gte: p?.seq ?? 0 } }],
+        },
+        select: { unitId: true, group: { select: { id: true, name: true } } },
+      })
+      const BILLABLE_TYPES = new Set(['apartament', 'sad', 'comercial'])
+      const unitsByGroupId = new Map<string, string[]>()
+      for (const gm of groupMembers) {
+        groupIdByUnitId.set(gm.unitId, gm.group.id)
+        groupMetaById.set(gm.group.id, gm.group)
+        const arr = unitsByGroupId.get(gm.group.id) ?? []
+        arr.push(gm.unitId)
+        unitsByGroupId.set(gm.group.id, arr)
+      }
+      for (const [groupId, unitIds] of unitsByGroupId) {
+        const isComune = unitIds.every((uid) => {
+          const t = (unitById.get(uid)?.type || '').toLowerCase()
+          return !BILLABLE_TYPES.has(t) && t !== 'boxa'
+        })
+        if (isComune) {
+          for (const uid of unitIds) groupIdByUnitId.delete(uid)
+          groupMetaById.delete(groupId)
+        }
+      }
+    }
 
     const funds = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true, allocation: true } })
     const fundCodes = new Set(funds.map((f) => f.code))
@@ -374,24 +633,31 @@ export class FinanceService {
           where pm.community_id = $1 and pm.type_code = 'WATER_COLD' and pm.scope_type = 'UNIT' and pm.period_id = $3
           group by pm.scope_id
        )
-       select mem.be_id as "beId",
-              sum(sqm.value)::float8 as cpi,
-              sum(res.value)::float8 as residents,
-              sum(cons.value)::float8 as consumption
+       select mem.be_id as "beId", mem.unit_id as "unitId",
+              sqm.value::float8 as cpi,
+              res.value::float8 as residents,
+              cons.value::float8 as consumption
          from mem
          left join sqm on sqm.unit_id = mem.unit_id
          left join res on res.unit_id = mem.unit_id
-         left join cons on cons.unit_id = mem.unit_id
-        group by mem.be_id`,
+         left join cons on cons.unit_id = mem.unit_id`,
       communityId, p?.seq ?? 0, period.id,
     )
-    const infoByBe = new Map<string, { cpi: number | null; residents: number | null; consumption: number | null }>(
-      infoRows.map((r) => [r.beId, {
+    const infoByUnit = new Map<string, { cpi: number | null; residents: number | null; consumption: number | null }>(
+      infoRows.map((r) => [r.unitId, {
         cpi: r.cpi == null ? null : round2(Number(r.cpi)),
         residents: r.residents == null ? null : Number(r.residents),
         consumption: r.consumption == null ? null : round2(Number(r.consumption)),
       }]),
     )
+    const infoByBe = new Map<string, { cpi: number | null; residents: number | null; consumption: number | null }>()
+    for (const r of infoRows) {
+      const cur = infoByBe.get(r.beId) ?? { cpi: null, residents: null, consumption: null }
+      if (r.cpi != null) cur.cpi = round2((cur.cpi ?? 0) + Number(r.cpi))
+      if (r.residents != null) cur.residents = (cur.residents ?? 0) + Number(r.residents)
+      if (r.consumption != null) cur.consumption = round2((cur.consumption ?? 0) + Number(r.consumption))
+      infoByBe.set(r.beId, cur)
+    }
     // Column display labels come from the data (expense-type / fund names) — the frontend renders these
     // rather than hardcoding a code→label map. APA_DIF is the synthetic water-difference column.
     const expTypes = await this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true } })
@@ -404,14 +670,19 @@ export class FinanceService {
     // count toward the month total, but are NOT registered as categories/columns — penalties are now
     // rendered per fund via penaltyByFund, next to each fund's own column.
     const byBe = new Map<string, Record<string, number>>()
+    const byUnit = new Map<string, Record<string, number>>()
     const catSet = new Set<string>()
     for (const r of lineRows) {
       if (!String(r.label).startsWith('PEN:')) catSet.add(r.label)
       const m = byBe.get(r.beId) ?? {}
       m[r.label] = round2((m[r.label] ?? 0) + Number(r.amt))
       byBe.set(r.beId, m)
+      const mu = byUnit.get(r.unitId) ?? {}
+      mu[r.label] = round2((mu[r.label] ?? 0) + Number(r.amt))
+      byUnit.set(r.unitId, mu)
     }
-    const categories = [...catSet].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    const categories = [...catSet].sort((a, b) =>
+      rank(a) - rank(b) || ((serviceOrder.get(a) ?? 1e6) - (serviceOrder.get(b) ?? 1e6)) || a.localeCompare(b))
 
     // map each category to its owning fund group (services → EXPENSES, contributions → own fund, penalties → PENALIZARI)
     const catFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
@@ -475,7 +746,7 @@ export class FinanceService {
       || fundOrderIdx(a.key) - fundOrderIdx(b.key)
       || a.label.localeCompare(b.label))
 
-    const rows = bes
+    const entityRows = bes
       .map((be) => {
         const s = stmt.get(be.id)
         const charges = byBe.get(be.id) ?? {}
@@ -488,10 +759,12 @@ export class FinanceService {
           const share = delta === 0 ? 0 : grossMonth !== 0 ? v.month / grossMonth : 1 / pbf.size
           penByFundOut[f] = { month: round2(v.month + delta * share), total: round2(v.total + delta * share) }
         }
+        const rn = resolveBeName(be)
         return {
+          rowKey: be.code,
           beCode: be.code,
-          beName: be.name,
-          displayName: be.displayName ?? null,
+          beName: rn.name,
+          displayName: rn.displayName ?? null,
           order: be.order,
           units: unitsByBe.get(be.id) ?? [],
           cpi: infoByBe.get(be.id)?.cpi ?? null,
@@ -508,10 +781,87 @@ export class FinanceService {
           payments: round2(Number(s?.pay ?? 0)),
           adjustments: round2(Number(s?.adj ?? 0) - delta),
           totalDue: round2(Number(s?.total ?? 0)),
+          contactMismatch: false,
         }
       })
       .filter((r) => r.soldPrecedent !== 0 || r.curentTotal !== 0 || r.totalDue !== 0 || r.penaltyTotal !== 0)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+    // "Unitate" / "Grup unități" rows only ever carry current-period Cheltuieli (community_charge_line
+    // already has a real per-unit unitId) — arrears/payments/penalties stay billing-entity concepts
+    // (`BeStatement` has zero unit granularity) and are shown as 0 here rather than repeating a BE's
+    // aggregate on every one of its units, which would overcount the TOTAL row.
+    const zeroFinancials = {
+      soldPrecedent: 0,
+      soldByFund: {} as Record<string, number>,
+      paymentsByFund: {} as Record<string, number>,
+      penaltyMonth: 0, penaltyTotal: 0,
+      penaltyByFund: {} as Record<string, { month: number; total: number }>,
+      payments: 0, adjustments: 0, totalDue: 0,
+    }
+    const unitRows = mode !== 'unit' ? [] : allUnits
+      .map((u) => {
+        const charges = byUnit.get(u.id) ?? {}
+        const curTotal = round2(Object.values(charges).reduce((x, v) => x + v, 0))
+        const beId = beIdByUnitId.get(u.id)
+        const be = beId ? beById.get(beId) : undefined
+        const contact = contactForUnit(u.id) ?? (be ? (resolveBeName(be).displayName || resolveBeName(be).name) : '')
+        return {
+          rowKey: u.id,
+          beCode: be?.code ?? u.code, beName: contact, displayName: null, order: 0,
+          units: [u.code],
+          cpi: infoByUnit.get(u.id)?.cpi ?? null,
+          residents: infoByUnit.get(u.id)?.residents ?? null,
+          consumption: infoByUnit.get(u.id)?.consumption ?? null,
+          charges, curentTotal: curTotal, contactMismatch: false,
+          ...zeroFinancials,
+          _sortFloor: u.floorNumber ?? 999, _sortName: u.name || u.code,
+        }
+      })
+      .filter((r) => r.curentTotal !== 0 || r.cpi != null)
+      .sort((a, b) => a._sortFloor - b._sortFloor || a._sortName.localeCompare(b._sortName, 'ro', { numeric: true }))
+      .map(({ _sortFloor, _sortName, ...r }) => r)
+
+    const groupRowsAgg = new Map<string, { name: string; unitIds: string[] }>()
+    for (const [unitId, groupId] of groupIdByUnitId) {
+      const meta = groupMetaById.get(groupId)!
+      const g = groupRowsAgg.get(groupId) ?? { name: meta.name, unitIds: [] }
+      g.unitIds.push(unitId)
+      groupRowsAgg.set(groupId, g)
+    }
+    const groupRows = mode !== 'group' ? [] : [...groupRowsAgg.entries()]
+      .map(([groupId, g]) => {
+        const charges: Record<string, number> = {}
+        for (const uid of g.unitIds) for (const [k, v] of Object.entries(byUnit.get(uid) ?? {})) charges[k] = round2((charges[k] ?? 0) + v)
+        let cpi: number | null = null
+        for (const uid of g.unitIds) { const c = infoByUnit.get(uid)?.cpi; if (c != null) cpi = round2((cpi ?? 0) + c) }
+        const apartmentUnitId = g.unitIds.find((uid) => {
+          const t = (unitById.get(uid)?.type || '').toLowerCase()
+          return t === 'apartament' || t === 'sad' || t === 'comercial'
+        })
+        const distinctContacts = [...new Set(g.unitIds.map((uid) => contactForUnit(uid)).filter((n): n is string => !!n))]
+        let beName = distinctContacts[0] ?? ''
+        let contactMismatch = false
+        if (distinctContacts.length > 1) {
+          const lead = apartmentUnitId ? contactForUnit(apartmentUnitId) : null
+          beName = (lead ? [lead, ...distinctContacts.filter((n) => n !== lead)] : distinctContacts).join(', ')
+          contactMismatch = true
+        }
+        const apartmentBeId = apartmentUnitId ? beIdByUnitId.get(apartmentUnitId) : undefined
+        const apartmentBeCode = apartmentBeId ? beById.get(apartmentBeId)?.code : undefined
+        return {
+          rowKey: groupId,
+          beCode: apartmentBeCode ?? groupId, beName, displayName: g.name, order: 0,
+          units: g.unitIds.map((uid) => unitById.get(uid)?.code ?? uid),
+          cpi, residents: null, consumption: null,
+          charges, curentTotal: round2(Object.values(charges).reduce((x, v) => x + v, 0)), contactMismatch,
+          ...zeroFinancials,
+        }
+      })
+      .filter((r) => r.curentTotal !== 0 || r.cpi != null)
+      .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '', 'ro', { numeric: true }))
+
+    const rows = mode === 'unit' ? unitRows : mode === 'group' ? groupRows : entityRows
 
     const totals = {
       cpi: round2(rows.reduce((s, r) => s + (r.cpi ?? 0), 0)),
@@ -550,7 +900,7 @@ export class FinanceService {
     const groupOrder = new Map(groups.map((g, i) => [g.key, i]))
     const penaltyFunds = [...penaltyFundSet].sort((a, b) => (groupOrder.get(a) ?? 99) - (groupOrder.get(b) ?? 99))
 
-    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, rows, totals }
+    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, groupBy: mode, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, rows, totals }
   }
 
   /**
@@ -922,21 +1272,71 @@ export class FinanceService {
   }
 
   /** Collection rate for a period: charged (be_statement.charges) vs collected (payments). */
+  /**
+   * `charged` is this period's own be_statement total (correct as a period-scoped figure).
+   * `collected`, however, is deliberately NOT be_statement.payments for this same period: residents
+   * pay a period's invoice only after it's actually posted (Period.afisareDate) — payments booked
+   * into period X's own be_statement are typically settling the PRIOR cycle's invoice (this is why
+   * the avizier itself labels period X's payments column "Încasări (X-1)", a cosmetic relabeling of
+   * the same underlying number — see AvizierPanel.tsx). So "this period's real collection" is
+   * instead every POSTED payment dated after this period's own afisareDate — right after posting,
+   * that's correctly 0 until residents start paying against it.
+   */
   async collection(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
-    if (!period) return { periodCode: null, charged: 0, collected: 0, ratePct: null }
-    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+    if (!period) return { periodCode: null, charged: 0, chargedCount: 0, collected: 0, collectedCount: 0, ratePct: null }
+    // be_statement has one row per (billing entity, fund) — @@unique([communityId, periodId,
+    // billingEntityId, fundId]) — so counting rows overcounts units by however many funds each
+    // one spans. Aggregate to one row per billing entity first, then count those with a real charge.
+    const chargedRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select coalesce(sum(charges),0)::float8 as charged,
-              coalesce(sum(payments),0)::float8 as collected
+              (select count(*) from (
+                select billing_entity_id from be_statement
+                where community_id = $1 and period_id = $2
+                group by billing_entity_id
+                having sum(charges) > 0
+              ) x)::int as "chargedCount"
          from be_statement where community_id = $1 and period_id = $2`,
       communityId, period.id,
     )
-    const charged = round2(Number(rows?.[0]?.charged ?? 0))
-    const collected = round2(Number(rows?.[0]?.collected ?? 0))
+    const charged = round2(Number(chargedRows?.[0]?.charged ?? 0))
+    const chargedCount = Number(chargedRows?.[0]?.chargedCount ?? 0)
+
+    // Per-fund breakdown for the Dashboard's "Curente" card expander.
+    const chargedByFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select f.code as "fundCode", f.name as "fundName", coalesce(sum(bs.charges),0)::float8 as amount
+         from be_statement bs join fund f on f.id = bs.fund_id
+        where bs.community_id = $1 and bs.period_id = $2
+        group by f.code, f.name
+       having coalesce(sum(bs.charges),0) <> 0
+        order by f.code`,
+      communityId, period.id,
+    )
+    const chargedByFund = chargedByFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) }))
+
+    const periodRow: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select afisare_date as "afisareDate" from period where id = $1`,
+      period.id,
+    )
+    const afisareDate: Date | null = periodRow?.[0]?.afisareDate ?? null
+    let collected = 0
+    let collectedCount = 0
+    if (afisareDate) {
+      const collectedRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+        `select coalesce(sum(amount),0)::float8 as collected, count(distinct billing_entity_id)::int as "collectedCount"
+           from payment where community_id = $1 and status = 'POSTED' and ts > $2`,
+        communityId, afisareDate,
+      )
+      collected = round2(Number(collectedRows?.[0]?.collected ?? 0))
+      collectedCount = Number(collectedRows?.[0]?.collectedCount ?? 0)
+    }
     return {
       periodCode: period.code,
       charged,
+      chargedCount,
+      chargedByFund,
       collected,
+      collectedCount,
       ratePct: charged > 0 ? round2((collected / charged) * 100) : null,
     }
   }

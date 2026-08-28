@@ -5,6 +5,7 @@ import { BillingPeriodLookupService } from './period-lookup.service'
 import { FinanceService } from '../finance/finance.service'
 import { ReportsService } from '../reports/reports.service'
 import { FundService } from '../fund/fund.service'
+import { CommunityService } from '../community/community.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
@@ -25,6 +26,7 @@ export class MeReportsService {
     private readonly finance: FinanceService,
     private readonly reports: ReportsService,
     private readonly fundSvc: FundService,
+    private readonly community: CommunityService,
   ) {}
 
   /** Which resident capabilities the caller has in this community — drives the UI tab set. */
@@ -65,6 +67,12 @@ export class MeReportsService {
     const period = await this.resolveClosed(communityId, periodCode)
     if (!period) return { period: null, categories: [], rows: [], totals: null }
     return this.finance.avizier(communityId, period.code)
+  }
+
+  /** Legal identity/board/administrator info — used for the avizier's printed signature block. */
+  async associationInfo(userId: string | undefined, communityId: string, roles: RoleAssignment[]) {
+    await this.access.assertCommunityMemberRole(userId, communityId, REPORT_ROLES, roles)
+    return this.community.getAssociationInfo(communityId)
   }
 
   async collectionRate(

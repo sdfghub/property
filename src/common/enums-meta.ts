@@ -89,6 +89,26 @@ export const IMPACT_TAG_META: EnumMeta[] = [
   { key: 'OTHER', label: 'Altele' },
 ]
 
+// Solicitări (Ticket.type = 'REQUEST') classification — who/what the request concerns.
+// Enum TicketImpact.
+export const TICKET_IMPACT_META: EnumMeta[] = [
+  { key: 'NUMAR_PERSOANE', label: 'Număr persoane', labelEn: 'Number of people' },
+  { key: 'PROPRIETAR', label: 'Proprietar', labelEn: 'Owner' },
+  { key: 'CHIRIAS', label: 'Chiriaș', labelEn: 'Tenant' },
+  { key: 'SERVICII', label: 'Servicii', labelEn: 'Services' },
+  { key: 'INFORMATII', label: 'Informații', labelEn: 'Information' },
+  { key: 'ADEVERINTA', label: 'Adeverință', labelEn: 'Certificate' },
+  { key: 'LUCRARI_TEHNICE', label: 'Lucrări tehnice', labelEn: 'Technical works' },
+]
+
+// Solicitări (Ticket.type = 'REQUEST') classification — the kind of request. Enum TicketRequestKind.
+export const TICKET_REQUEST_KIND_META: EnumMeta[] = [
+  { key: 'SCHIMBARE', label: 'Schimbare', labelEn: 'Change' },
+  { key: 'DEFECTIUNE', label: 'Defecțiune', labelEn: 'Malfunction' },
+  { key: 'ACORD', label: 'Acord', labelEn: 'Agreement' },
+  { key: 'ALTELE', label: 'Altele', labelEn: 'Other' },
+]
+
 // Announcement audience types — enum AnnouncementAudienceType.
 export const AUDIENCE_TYPE_META: EnumMeta[] = [
   { key: 'COMMUNITY', label: 'Toată asociația' },
@@ -106,6 +126,17 @@ export const MEASURE_MODE_META: EnumMeta[] = [
 export const WATER_METHOD_META: EnumMeta[] = [
   { key: 'PROPORTIONAL', label: 'Proporțional', hint: 'Proporțional cu consumul (o linie)' },
   { key: 'APA_DIF', label: 'Apă - diferență', hint: 'Contorizat + diferență separată (apa-dif)' },
+]
+
+// Expense allocation methods (AllocationRule.method) — how a service's cost is split across
+// billing entities. The rule's own `name` (community-specific, e.g. "După consumul de apă rece")
+// is the precise description shown to admins; this is only the generic fallback/category label.
+export const ALLOCATION_METHOD_META: EnumMeta[] = [
+  { key: 'EQUAL', label: 'În mod egal', hint: 'Împărțit egal între toate unitățile' },
+  { key: 'BY_SQM', label: 'După cota-parte / suprafață', hint: 'Proporțional cu suprafața sau cota-parte indiviză' },
+  { key: 'BY_RESIDENTS', label: 'După numărul de persoane', hint: 'Proporțional cu numărul de persoane din unitate' },
+  { key: 'BY_CONSUMPTION', label: 'După consum', hint: 'Proporțional cu consumul măsurat (contor)' },
+  { key: 'MIXED', label: 'Metodă mixtă', hint: 'Combinație a mai multor criterii' },
 ]
 
 // Fund domains — the strategic grouping a fund belongs to, read from `Fund.allocation.type`
@@ -155,9 +186,12 @@ export const COMMUNITY_METADATA = {
   correctionTypes: CORRECTION_TYPE_META,
   correctionStatuses: CORRECTION_STATUS_META,
   impactTags: IMPACT_TAG_META,
+  requestImpacts: TICKET_IMPACT_META,
+  requestKinds: TICKET_REQUEST_KIND_META,
   audienceTypes: AUDIENCE_TYPE_META,
   meterModes: MEASURE_MODE_META,
   waterMethods: WATER_METHOD_META,
+  allocationMethods: ALLOCATION_METHOD_META,
   fundDomains: FUND_DOMAIN_META,
   avizierFundGroups: AVIZIER_FUND_GROUP_META,
   riskTiers: RISK_TIER_META,

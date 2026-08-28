@@ -1,7 +1,12 @@
+import { NestFactory } from '@nestjs/core'
+import { Module } from '@nestjs/common'
+import { BillingModule } from '../modules/billing/billing.module'
+import { PeriodModule } from '../modules/period/period.module'
+import { FeaturesModule } from '../modules/features/features.module'
 import { PeriodService } from '../modules/period/period.service'
-import { PrismaService } from '../modules/user/prisma.service'
-import { AllocationService } from '../modules/billing/allocation.service'
-import { PaymentService } from '../modules/billing/payment.service'
+
+@Module({ imports: [FeaturesModule, BillingModule, PeriodModule] })
+class ScriptModule {}
 
 function usage(msg?: string): never {
   if (msg) console.error(`Error: ${msg}\n`)
@@ -25,11 +30,8 @@ async function main() {
 
   console.log(`ℹ️ closing period ${periodCode} for ${communityId} (approve=${approve})`)
 
-  const prismaSvc = new PrismaService()
-  await prismaSvc.$connect()
-  const allocSvc = new AllocationService(prismaSvc as any)
-  const paySvc = new PaymentService(prismaSvc as any)
-  const periodSvc = new PeriodService(prismaSvc as any, allocSvc as any, paySvc as any)
+  const app = await NestFactory.createApplicationContext(ScriptModule, { logger: ['error'] })
+  const periodSvc = app.get(PeriodService)
 
   if (approve) {
     await periodSvc.approve(communityId, periodCode)
@@ -38,6 +40,8 @@ async function main() {
     await periodSvc.prepare(communityId, periodCode)
     console.log(`✅ Prepared period ${periodCode} for ${communityId}`)
   }
+
+  await app.close()
 }
 
 main().catch((e) => {

@@ -30,6 +30,12 @@ export class MeReportsController {
     return this.svc.avizier(userId, c, roles, period)
   }
 
+  @Get('association-info')
+  associationInfo(@Param('communityId') c: string, @Req() req: any) {
+    const { userId, roles } = this.ctx(req)
+    return this.svc.associationInfo(userId, c, roles)
+  }
+
   @Get('collection-rate')
   collectionRate(
     @Param('communityId') c: string,
