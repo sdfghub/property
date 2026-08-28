@@ -1,28 +1,154 @@
 {
   "periodCode": "2026-06",
-  "_note": "PARTIAL packet — sourced from the 3 invoices found in /Users/adrianadascal/Documents/_Vicusia/Kralik/2026-06/ (as of 2026-08-19). Only BY_CPI-allocated charges are included; everything requiring a per-unit reading or missing an invoice is deliberately DEFERRED, not fabricated. DEFERRED: (1) Aquatim apa_rece/canal/penalitati (TMA10/1015558474, billing period 22.05-21.06.2026: apă potabilă 917.49 + canal 888.57 + penalități 33.30 net, TVA 211.31, total 2165.66) — allocation.service.ts uses BY_WATER_COLD weighting for these and throws with no per-unit WATER_COLD readings for the period ('equal-split fallback disabled'); no per-unit June water sheet exists yet (checked the historical workbooks — their 'Data - Open Month' sheet still reflects May's closed totals). (2) No invoices found for curent_scara (PPC), salubritate (Retim), comision_banca (Libra), or interfon (Schmidt) this month. FLAGS: (a) BILL_CURATENIE (RICH CLEAN RC 0107, 840.00, dated 03.08.2026) is invoiced for service month IULIE 2026 (July) — same one-month-lag pattern as May's RC-0093 (service month June, absorbed into May's close); by that precedent this one is attributed to June's close. (b) BILL_APA_METEO amount (114.99) is the invoice's net 'Valoare' figure (before its share of the 211.31 TVA), used as-is since no association bookkeeping sheet exists yet for June to cross-check against (unlike May's apa_rece/canal/penalitati split, which was reconciled against the association's own Data-MAI sheet). (c) afisareDate intentionally left unset for June — the vendor posting date wasn't available; PenaltyLedgerService falls back to calendar period bounds when null.",
+  "_note": "COMPLETE packet, gross-only (bruto) amounts throughout — no separate net/TVA tracking. Sourced from the final, reconciled state of Kralik's June 2026 close (all vendor invoices, per-unit water/residents readings from the association's own Cheltuieli table, and the Aquatim VAT correction already folded into the gross figures below). Regenerated 2026-08-28 to make this packet self-sufficient for a fresh reseed — the original PARTIAL export deferred apa_rece/canal/penalitati (no per-unit water yet) and curent_scara/salubritate/comision_banca (no invoice yet); all of that is now included. KNOWN GAP: comision_banca stays at the flat 12.00 RON placeholder (matching what's actually posted in development) — the real 136.00 RON correction exists only as an unapplied TODO Correction in the dev DB and as a manually-edited VendorInvoice record (number LIBRA-2026-06); neither is reproduced by this packet.",
   "meters": {
-    "community": {},
-    "_note": "No June branch water-meter reading available yet (Aquatim invoice covers 22.05-21.06.2026, index 1022→1141=119 m³, but no per-unit submeters to reconcile against — see top-level _note)."
+    "community": {
+      "COMMUNITY_WATER_COLD": 119
+    },
+    "_note": "Branch (branșament) cold-water reading for apa-dif: index 1022→1141 = 119 m³ (period 22.05-21.06.2026, Aquatim invoice TMA10/1015558474)."
   },
   "unitMeasures": {
-    "_note": "No per-unit June water/residents source available yet — SQM (CPI, static) is seeded directly from def.json by the script; RESIDENTS/WATER_COLD are intentionally left unset.",
-    "byUnit": {}
+    "_note": "Per-unit June residents + cold-water readings, sourced from the association's own Cheltuieli table ('Pers. Prez.' / 'Consum (m³)' columns) — matches what's live in development exactly (cross-checked against period_measure).",
+    "byUnit": {
+      "400191-C1-U10-AP 4A": {
+        "residents": 2,
+        "water_cold": 5.268
+      },
+      "400191-C1-U11-AP 6A": {
+        "residents": 1,
+        "water_cold": 4.184
+      },
+      "400191-C1-U12-AP 4 (I)": {
+        "residents": 1,
+        "water_cold": 4
+      },
+      "400191-C1-U14-AP 11A": {
+        "residents": 3,
+        "water_cold": 4.387
+      },
+      "400191-C1-U16-SAD 2/1": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U17-SAD 2/2": {
+        "residents": 0,
+        "water_cold": 3
+      },
+      "400191-C1-U18-AP 8": {
+        "residents": 1,
+        "water_cold": 1
+      },
+      "400191-C1-U19-AP 2/2": {
+        "residents": 0,
+        "water_cold": 0.25
+      },
+      "400191-C1-U20-AP 5 (I-A)": {
+        "residents": 1,
+        "water_cold": 0.9
+      },
+      "400191-C1-U21-AP 5 (I-B)": {
+        "residents": 2,
+        "water_cold": 5.2
+      },
+      "400191-C1-U23-SPAȚIU COMERCIAL": {
+        "residents": 0
+      },
+      "400191-C1-U25-AP 31": {
+        "residents": 0,
+        "water_cold": 0.309
+      },
+      "400191-C1-U26-AP 32": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U27-AP 10B": {
+        "residents": 2,
+        "water_cold": 0.675
+      },
+      "400191-C1-U28-AP 1/B": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U29-AP 9": {
+        "residents": 1,
+        "water_cold": 3.047
+      },
+      "400191-C1-U30-AP 4 (III)": {
+        "residents": 1,
+        "water_cold": 0
+      },
+      "400191-C1-U31-AP 5 (III)": {
+        "residents": 1,
+        "water_cold": 1.674
+      },
+      "400191-C1-U32-AP 11": {
+        "residents": 1,
+        "water_cold": 3.75
+      },
+      "400191-C1-U33-AP 11B": {
+        "residents": 1,
+        "water_cold": 3.68
+      },
+      "400191-C1-U34-AP 12 (SAD 4/A)": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U34-AP 12 (SAD 4/B)": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U34-AP 12 (SAD 4/C)": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U35-AP 14A": {
+        "residents": 2,
+        "water_cold": 4
+      },
+      "400191-C1-U36-AP 14B": {
+        "residents": 1,
+        "water_cold": 0.655
+      },
+      "400191-C1-U37-AP 10A": {
+        "residents": 1,
+        "water_cold": 2.34
+      },
+      "400191-C1-U5-SAD 1": {
+        "residents": 0,
+        "water_cold": 2
+      },
+      "400191-C1-U6-AP 1": {
+        "residents": 0,
+        "water_cold": 0
+      },
+      "400191-C1-U7-AP 6": {
+        "residents": 1,
+        "water_cold": 3
+      },
+      "400191-C1-U8-AP 3": {
+        "residents": 1,
+        "water_cold": 0.215
+      },
+      "400191-C1-U9-AP 2/1": {
+        "residents": 1,
+        "water_cold": 0
+      }
+    }
   },
   "items": [
     {
       "templateCode": "BILL_ADMINISTRARE",
       "detailKey": "administrare",
-      "amount": 800.0,
+      "amount": 800,
       "invoiceNumber": "TM 1830",
-      "invoiceGross": 800.0,
+      "invoiceGross": 800,
       "serviceStartPeriod": "2026-06",
       "serviceEndPeriod": "2026-06"
     },
     {
       "templateCode": "BILL_APA_METEO",
       "detailKey": "apa_meteo",
-      "amount": 114.99,
+      "amount": 127.64,
       "invoiceNumber": "TMA10/1015558474",
       "invoiceGross": 127.64,
       "serviceStartPeriod": "2026-06",
@@ -31,11 +157,92 @@
     {
       "templateCode": "BILL_CURATENIE",
       "detailKey": "curatenie",
-      "amount": 840.0,
+      "amount": 840,
       "invoiceNumber": "RC 0107",
-      "invoiceGross": 840.0,
+      "invoiceGross": 840,
       "serviceStartPeriod": "2026-07",
-      "serviceEndPeriod": "2026-07"
+      "serviceEndPeriod": "2026-07",
+      "_note": "Invoiced for service month July (one-month-lag pattern, same as May's RC-0093) — attributed to June's close regardless."
+    },
+    {
+      "templateCode": "BILL_APA_RECE",
+      "detailKey": "apa_rece",
+      "amount": 1018.41,
+      "invoiceNumber": "TMA10/1015558474",
+      "invoiceGross": 2038.02,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_APA_RECE",
+      "detailKey": "canal",
+      "amount": 986.31,
+      "invoiceNumber": "TMA10/1015558474",
+      "invoiceGross": 2038.02,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_APA_RECE",
+      "detailKey": "penalitati",
+      "amount": 33.3,
+      "invoiceNumber": "TMA10/1015558474",
+      "invoiceGross": 2038.02,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06",
+      "_note": "No VAT on late-payment penalties (Romanian law exemption)."
+    },
+    {
+      "templateCode": "BILL_CURENT_SCARA",
+      "detailKey": "curent_scara",
+      "amount": 68.12,
+      "invoiceNumber": "26EI 12312610",
+      "invoiceGross": 68.12,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_SALUBRITATE",
+      "detailKey": "salubritate",
+      "amount": 686.32,
+      "invoiceNumber": "TM 19690906",
+      "invoiceGross": 686.32,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06"
+    },
+    {
+      "templateCode": "BILL_COMISION_BANCA",
+      "detailKey": "comision_banca",
+      "amount": 12,
+      "invoiceNumber": null,
+      "invoiceGross": 12,
+      "serviceStartPeriod": "2026-06",
+      "serviceEndPeriod": "2026-06",
+      "_note": "Flat placeholder, no real invoice — see top-level _note re: the pending 136.00 correction."
     }
-  ]
+  ],
+  "afisareDate": "2026-08-10",
+  "invoiceDates": {
+    "_note": "issueDate/dueDate per invoice number, transcribed from the actual vendor invoice PDFs — applied after charge submission (VendorInvoice metadata only, no effect on amounts).",
+    "TM 19690906": {
+      "issueDate": "2026-06-30",
+      "dueDate": "2026-07-15"
+    },
+    "RC 0107": {
+      "issueDate": "2026-08-03",
+      "dueDate": "2026-08-03"
+    },
+    "26EI 12312610": {
+      "issueDate": "2026-07-11",
+      "dueDate": "2026-07-27"
+    },
+    "TMA10/1015558474": {
+      "issueDate": "2026-07-06",
+      "dueDate": "2026-07-20"
+    },
+    "TM 1830": {
+      "issueDate": "2026-07-25",
+      "dueDate": null
+    }
+  }
 }
