@@ -65,6 +65,12 @@ export function AvizierPanel({
   // scoped like the rest of this toggle's data.
   const [groupBy, setGroupBy] = React.useState<'entity' | 'unit' | 'group'>('unit')
 
+  // "Asociație" view — a structurally different 4th view (one row per vendor-service line, not
+  // per payer), backed by its own endpoint/component (AvizierAssociationTable below). Kept
+  // independent of `groupBy` (rather than adding a 4th groupBy value) since it doesn't share that
+  // fetch/table shape at all — selecting it just hides the payer table and shows this one instead.
+  const [associationView, setAssociationView] = React.useState(false)
+
   // Community-admin usage (no periodsPath override) shares the global period selector; the
   // resident read-only embed (periodsPath given) sits outside PeriodProvider and keeps its own
   // self-contained fetch — see the effect below.
@@ -519,15 +525,18 @@ export function AvizierPanel({
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
           {!RO && (
             <div className="row" style={{ gap: 4, alignItems: 'center' }}>
-              <button type="button" className={groupBy === 'entity' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('entity')}
+              <button type="button" className={!associationView && groupBy === 'entity' ? 'btn primary small' : 'btn secondary small'} onClick={() => { setAssociationView(false); setGroupBy('entity') }}
                 title={t('avizier.entityOwnerHint', 'Restanțe și Total de plată sunt disponibile doar în acest mod (sunt ținute per proprietar, nu per unitate)')}>
                 {t('avizier.entityOwner', 'Proprietar')}
               </button>
-              <button type="button" className={groupBy === 'unit' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('unit')}>
+              <button type="button" className={!associationView && groupBy === 'unit' ? 'btn primary small' : 'btn secondary small'} onClick={() => { setAssociationView(false); setGroupBy('unit') }}>
                 {t('avizier.entityUnit', 'Unitatea')}
               </button>
-              <button type="button" className={groupBy === 'group' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupBy('group')}>
+              <button type="button" className={!associationView && groupBy === 'group' ? 'btn primary small' : 'btn secondary small'} onClick={() => { setAssociationView(false); setGroupBy('group') }}>
                 {t('avizier.entityGroup', 'Grup Unități')}
+              </button>
+              <button type="button" className={associationView ? 'btn primary small' : 'btn secondary small'} onClick={() => setAssociationView(true)}>
+                {t('avizier.viewAssociation', 'Asociație')}
               </button>
             </div>
           )}
@@ -605,7 +614,9 @@ export function AvizierPanel({
         </div>
       )}
 
-      {loading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !rows.length ? (
+      {associationView ? (
+        <AvizierAssociationTable communityId={communityId} avizierBase={avizierBase} period={period} />
+      ) : loading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !rows.length ? (
         <div className="empty">{t('avizier.none', 'No data for this period.')}</div>
       ) : !displayRows.length ? (
         <div className="empty">{t('avizier.filterNone', 'Niciun apartament nu corespunde filtrului.')}</div>
@@ -1308,6 +1319,176 @@ export function AvizierPanel({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// "Asociație" view — one row per vendor-service line (Furnizor → Asociație audit trail), backed by
+// GET {avizierBase}/expenses. Structurally unrelated to the payer table above (different columns
+// entirely, not just a different row-grouping), so it's a standalone component with its own fetch.
+type AvizierExpenseRow = {
+  domain: string; associationService: string
+  measuredQty: number | null; measuredQtyUnit: string | null; measuredQtyBasis: string | null
+  beneficiaries: string; splitMethod: string
+  vendorName: string; vendorService: string; document: string
+  invoicedQty: number | null; invoicedQtyUnit: string | null
+  qtyDifference: number | null
+  unitCost: number | null; unitCostUnit: string | null; totalCost: number
+}
+function AvizierAssociationTable({ communityId, avizierBase, period }: { communityId: string; avizierBase: string; period: string }) {
+  const { api } = useAuth()
+  const { t: rawT } = useI18n()
+  const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
+  const [rows, setRows] = React.useState<AvizierExpenseRow[] | null>(null)
+  const [error, setError] = React.useState(false)
+  // Optional grouping (by association service or by vendor) — purely a client-side re-sort +
+  // subtotal-row insertion over the same flat rows, no separate fetch.
+  const [groupField, setGroupField] = React.useState<'none' | 'service' | 'domain' | 'vendor'>('none')
+  // Collapsible column groups (Serviciu / Alocare / Furnizor) — declared here, not next to the
+  // colGroups literal below, because that literal sits after this component's early returns and
+  // hooks can't follow those.
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set())
+
+  React.useEffect(() => {
+    if (!communityId || !period) return
+    let alive = true
+    setRows(null); setError(false)
+    api.get<any>(`${avizierBase}/expenses?period=${encodeURIComponent(period)}`)
+      .then((d: any) => { if (alive) setRows(d?.rows ?? []) })
+      .catch(() => { if (alive) setError(true) })
+    return () => { alive = false }
+  }, [api, communityId, avizierBase, period])
+
+  const qty = (v: number | null, unit: string | null) => v == null ? '—' : `${v.toLocaleString('ro-RO')}${unit ? ' ' + unit : ''}`
+
+  if (error) return <div className="empty">{t('avizier.expLoadError', 'Datele nu au putut fi încărcate.')}</div>
+  if (!rows) return <div className="empty">{t('common.loading', 'Loading…')}</div>
+  if (!rows.length) return <div className="empty">{t('avizier.none', 'No data for this period.')}</div>
+
+  const totalCost = rows.reduce((s, r) => s + r.totalCost, 0)
+  const cols: Array<{ key: keyof AvizierExpenseRow | 'measured' | 'invoiced'; label: string; render: (r: AvizierExpenseRow) => React.ReactNode; num?: boolean }> = [
+    { key: 'domain', label: t('avizier.expDomain', 'Domeniu'), render: (r) => r.domain },
+    { key: 'associationService', label: t('avizier.expAssociationService', 'Serviciu Asociație'), render: (r) => r.associationService },
+    { key: 'measured', label: t('avizier.expMeasuredQty', 'Cantitate'), render: (r) => qty(r.measuredQty, r.measuredQtyUnit), num: true },
+    { key: 'measuredQtyBasis', label: t('avizier.expQtyBasis', 'Determinare'), render: (r) => r.measuredQtyBasis ?? '—' },
+    { key: 'unitCost', label: t('avizier.expUnitCost', 'Cost unitar'), render: (r) => r.unitCost == null ? '—' : `${money(r.unitCost)}${r.unitCostUnit ? ' / ' + r.unitCostUnit : ''}`, num: true },
+    { key: 'splitMethod', label: t('avizier.expSplitMethod', 'Împărțire'), render: (r) => r.splitMethod },
+    { key: 'beneficiaries', label: t('avizier.expBeneficiaries', 'Beneficiari'), render: (r) => r.beneficiaries },
+    { key: 'vendorName', label: t('avizier.expVendorName', 'Furnizor'), render: (r) => r.vendorName },
+    { key: 'vendorService', label: t('avizier.expVendorService', 'Serviciu Furnizor'), render: (r) => r.vendorService },
+    { key: 'document', label: t('avizier.expDocument', 'Document'), render: (r) => r.document },
+    { key: 'invoiced', label: t('avizier.expInvoicedQty', 'Cantitate (facturat)'), render: (r) => qty(r.invoicedQty, r.invoicedQtyUnit), num: true },
+    { key: 'qtyDifference', label: t('avizier.expQtyDifference', 'Diferență'), render: (r) => qty(r.qtyDifference, r.invoicedQtyUnit), num: true },
+    { key: 'totalCost', label: t('avizier.expTotalCost', 'Cost'), render: (r) => money(r.totalCost), num: true },
+  ]
+  const colByKey = new Map(cols.map((c) => [c.key, c]))
+
+  // Column groups — collapsible, spreadsheet-style: collapsing a group hides its member columns
+  // behind a single 1-slot header cell. "Furnizor" ends in totalCost, so the subtotal/footer rows
+  // below always put the money value in the rightmost slot, whatever group currently owns it.
+  // collapsedKey — which member column's value stands in for the whole group once collapsed
+  // (Serviciu → its service name, Alocare → the split method, Furnizor → the cost).
+  const colGroups: Array<{ key: string; label: string; keys: Array<typeof cols[number]['key']>; collapsedKey: typeof cols[number]['key'] }> = [
+    { key: 'g-service', label: t('avizier.expColGroupService', 'Serviciu'), keys: ['domain', 'associationService', 'measured', 'measuredQtyBasis', 'unitCost'], collapsedKey: 'associationService' },
+    { key: 'g-alloc', label: t('avizier.expColGroupAlloc', 'Alocare'), keys: ['splitMethod', 'beneficiaries'], collapsedKey: 'splitMethod' },
+    { key: 'g-vendor', label: t('avizier.expColGroupVendor', 'Furnizor'), keys: ['vendorName', 'vendorService', 'document', 'invoiced', 'qtyDifference', 'totalCost'], collapsedKey: 'totalCost' },
+  ]
+  const toggleColGroup = (key: string) => setCollapsedGroups((prev) => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
+  const totalVisibleSlots = colGroups.reduce((s, g) => s + (collapsedGroups.has(g.key) ? 1 : g.keys.length), 0)
+  const renderRowCells = (r: AvizierExpenseRow) => colGroups.flatMap((g) => {
+    if (collapsedGroups.has(g.key)) {
+      const c = colByKey.get(g.collapsedKey)!
+      return [<td key={g.key} style={{ padding: '6px 10px', textAlign: c.num ? 'right' : 'left', color: 'var(--text, #1d1d1f)' }}>{c.render(r)}</td>]
+    }
+    return g.keys.map((k) => {
+      const c = colByKey.get(k)!
+      return <td key={String(c.key)} style={{ padding: '6px 10px', textAlign: c.num ? 'right' : 'left', color: 'var(--text, #1d1d1f)' }}>{c.render(r)}</td>
+    })
+  })
+
+  // groupField === 'none' → one implicit group ("") holding every row, so the render loop below
+  // stays a single code path either way.
+  const groupKeyOf = (r: AvizierExpenseRow) => groupField === 'service' ? r.associationService : groupField === 'domain' ? r.domain : groupField === 'vendor' ? (r.vendorName === '—' ? t('avizier.expNoVendor', 'Fără furnizor') : r.vendorName) : ''
+  const groupOrder: string[] = []
+  const rowsByGroup = new Map<string, AvizierExpenseRow[]>()
+  for (const r of rows) {
+    const key = groupKeyOf(r)
+    if (!rowsByGroup.has(key)) { rowsByGroup.set(key, []); groupOrder.push(key) }
+    rowsByGroup.get(key)!.push(r)
+  }
+  if (groupField !== 'none') groupOrder.sort((a, b) => a.localeCompare(b, 'ro'))
+
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+        <span className="muted" style={{ fontSize: 12 }}>{t('avizier.expGroupBy', 'Grupează după')}:</span>
+        <button type="button" className={groupField === 'none' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupField('none')}>{t('avizier.expGroupNone', 'Fără grupare')}</button>
+        <button type="button" className={groupField === 'service' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupField('service')}>{t('avizier.expGroupService', 'Serviciu')}</button>
+        <button type="button" className={groupField === 'domain' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupField('domain')}>{t('avizier.expGroupDomain', 'Domeniu')}</button>
+        <button type="button" className={groupField === 'vendor' ? 'btn primary small' : 'btn secondary small'} onClick={() => setGroupField('vendor')}>{t('avizier.expGroupVendor', 'Furnizor')}</button>
+      </div>
+    <div className="card" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh', padding: 0, minWidth: 0 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg, #fff)' }}>
+          <tr>
+            {colGroups.map((g) => {
+              const collapsed = collapsedGroups.has(g.key)
+              return (
+                <th key={g.key} colSpan={collapsed ? 1 : g.keys.length} rowSpan={collapsed ? 2 : 1}
+                  onClick={() => toggleColGroup(g.key)}
+                  style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', background: 'var(--muted-bg, #f4f4f5)', borderBottom: '1px solid var(--border, #eee)' }}
+                  title={collapsed ? t('avizier.expColExpand', 'Extinde') : t('avizier.expColCollapse', 'Restrânge')}
+                >
+                  {collapsed ? '▸' : '▾'} {g.label}
+                </th>
+              )
+            })}
+          </tr>
+          <tr style={{ borderBottom: '1px solid var(--border, #eee)' }}>
+            {colGroups.flatMap((g) => collapsedGroups.has(g.key) ? [] : g.keys.map((k) => {
+              const c = colByKey.get(k)!
+              return <th key={String(c.key)} style={{ padding: '8px 10px', textAlign: c.num ? 'right' : 'left', whiteSpace: 'nowrap', fontWeight: 600 }}>{c.label}</th>
+            }))}
+          </tr>
+        </thead>
+        <tbody>
+          {groupOrder.map((groupKey) => {
+            const groupRows = rowsByGroup.get(groupKey)!
+            const groupTotal = groupRows.reduce((s, r) => s + r.totalCost, 0)
+            return (
+              <React.Fragment key={groupKey || '_all'}>
+                {groupField !== 'none' && (
+                  <tr style={{ borderTop: '1px solid var(--border, #e5e5e5)', background: 'var(--muted-bg, #f4f4f5)' }}>
+                    <td colSpan={totalVisibleSlots} style={{ padding: '6px 10px', fontWeight: 700 }}>{groupKey}</td>
+                  </tr>
+                )}
+                {groupRows.map((r, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid var(--border, #f0f0f0)', fontVariantNumeric: 'tabular-nums' }}>
+                    {renderRowCells(r)}
+                  </tr>
+                ))}
+                {groupField !== 'none' && (
+                  <tr style={{ borderTop: '1px solid var(--border, #e5e5e5)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    <td colSpan={totalVisibleSlots - 1} style={{ padding: '6px 10px', textAlign: 'right' }}>{t('avizier.expGroupTotal', 'Subtotal')}</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right' }}>{money(groupTotal)}</td>
+                  </tr>
+                )}
+              </React.Fragment>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
+            <td colSpan={totalVisibleSlots - 1} style={{ padding: '8px 10px' }}>{t('avizier.totalRow', 'TOTAL')}</td>
+            <td style={{ padding: '8px 10px', textAlign: 'right' }}>{money(totalCost)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
     </div>
   )
 }

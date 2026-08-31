@@ -904,6 +904,285 @@ export class FinanceService {
   }
 
   /**
+   * #22 Avizier "Asociație" view — one row per vendor-service line (not per payer): traces each
+   * posted expense charge from the vendor's own invoiced quantity through to how the association
+   * categorizes and splits it. Reuses `expenseCatalog()`'s split-leaf reading (derivedShare meter
+   * pairs for the water branch-vs-measured-vs-residual triad) but per CHARGE instead of per
+   * ExpenseType, and filters each charge's leaves to exactly the ones the allocation engine
+   * actually used (`allocationSnapshot.splitNodeIds`) rather than re-deriving "active" from the
+   * period's current waterDifferenceMethod — so a mid-period method change doesn't retroactively
+   * relabel an already-posted charge.
+   */
+  async avizierExpenses(communityId: string, periodCode?: string) {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { period: null, rows: [], totals: { totalCost: 0 } }
+    const p = await this.prisma.period.findUnique({ where: { id: period.id }, select: { code: true, seq: true } })
+    const seq = p?.seq ?? 0
+
+    const chargeRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select cc.id, cc.source_type, cc.amount::float8 as amount, cc.source_key,
+              cc.allocation_snapshot->>'expenseType' as expense_type_code,
+              cc.allocation_snapshot->'splitNodeIds' as split_node_ids,
+              cc.meta->>'description' as description,
+              f.code as fund_code,
+              vi.id as invoice_id, vi.number as invoice_number, v.name as vendor_name
+         from community_charge cc
+         left join fund f on f.id = cc.fund_id
+         left join vendor_invoice vi on vi.id = cc.source_id
+         left join vendor v on v.id = vi.vendor_id
+        where cc.community_id = $1 and cc.period_id = $2 and cc.status = 'ACTIVE'`,
+      communityId, period.id,
+    )
+    if (!chargeRows.length) return { period: { code: p?.code ?? null }, rows: [], totals: { totalCost: 0 } }
+
+    // Domeniu = the SAME per-community domains the admin set up in "Configurare Servicii" (not a
+    // separate hardcoded taxonomy) — Community.features.associationInfo.serviceConfig.domains,
+    // the exact source serviceOrderIndex() above already reads for that config page's own order.
+    // Fund-contribution charges have no ExpenseType/domain assignment at all (they're not
+    // "services" in that config), so they get a fixed "Fonduri" domain instead.
+    const community = await this.prisma.community.findFirst({ where: { OR: [{ id: communityId }, { code: communityId }] }, select: { features: true } })
+    const serviceDomains: any[] = (community?.features as any)?.associationInfo?.serviceConfig?.domains ?? []
+    const domainByExpenseCode = new Map<string, string>()
+    for (const dom of serviceDomains) {
+      const codes = Array.isArray(dom?.serviceCodes) ? dom.serviceCodes : []
+      for (const code of codes) if (typeof code === 'string') domainByExpenseCode.set(code, String(dom?.name || dom?.key || ''))
+    }
+    const METHOD_LABEL: Record<string, string> = {
+      EQUAL: 'Egal (per unitate)', BY_SQM: 'Cotă-parte indiviză (CPI)', BY_RESIDENTS: 'Număr persoane',
+      BY_CONSUMPTION: 'Consum', MIXED: 'Mixt',
+    }
+    const expenseCodes = [...new Set(chargeRows.map((r) => r.expense_type_code).filter(Boolean))] as string[]
+    const expenseTypes = expenseCodes.length
+      ? await this.prisma.expenseType.findMany({
+          where: { communityId, code: { in: expenseCodes } },
+          select: { code: true, name: true, params: true, rule: { select: { method: true } } },
+        })
+      : []
+    const expenseTypeByCode = new Map(expenseTypes.map((e) => [e.code, e]))
+
+    // Per-charge: the leaves the engine actually used (for vendor-invoice charges only — fund
+    // contribution charges have no ExpenseType/splitTemplate at all, see the FUND branch below),
+    // whether any of them derive a branch-vs-measured-vs-residual triad (water), and which
+    // UnitGroup it pays through.
+    type LeafSet = { basisCode: string | null; metered: any | null; residual: any | null }
+    const groupCodes = new Set<string>()
+    const communityMeterIds = new Set<string>()
+    const leafSetByChargeId = new Map<string, LeafSet>()
+    for (const row of chargeRows) {
+      const et = row.expense_type_code ? expenseTypeByCode.get(row.expense_type_code) : undefined
+      const allLeaves: any[] = et && Array.isArray((et.params as any)?.splitTemplate) ? (et.params as any).splitTemplate : []
+      const activeIds: string[] = Array.isArray(row.split_node_ids) ? row.split_node_ids.map(String) : []
+      const active = activeIds.length ? allLeaves.filter((l) => activeIds.includes(String(l?.id))) : allLeaves
+      const withShare = active.filter((l) => l?.derivedShare)
+      const residual = withShare.find((l) => /RESIDUAL/i.test(String(l?.derivedShare?.partMeterId ?? ''))) ?? null
+      const metered = withShare.find((l) => l !== residual) ?? null
+      const basisCode = active.find((l) => l?.allocation?.basis?.type === 'GROUP')?.allocation?.basis?.code ?? null
+      if (basisCode) groupCodes.add(String(basisCode))
+      for (const l of [metered, residual]) {
+        if (l?.derivedShare?.totalMeterId) communityMeterIds.add(String(l.derivedShare.totalMeterId))
+        if (l?.derivedShare?.partMeterId) communityMeterIds.add(String(l.derivedShare.partMeterId))
+      }
+      leafSetByChargeId.set(row.id, { basisCode: basisCode ? String(basisCode) : null, metered, residual })
+    }
+
+    // A charge with both a "metered" and "residual" leaf (the water branch-vs-measured-vs-
+    // residual triad) gets split into TWO output rows below ("Apă rece" + "Apă - diferență") —
+    // each leaf's own real cost share, not a pro-rata guess, lives on every one of its
+    // community_charge_line rows as meta.allocation.base (the leaf's total before per-unit
+    // distribution); read it directly.
+    const splitChargeIds = [...leafSetByChargeId.entries()].filter(([, l]) => l.metered && l.residual).map(([id]) => id)
+    const leafCostRows: any[] = splitChargeIds.length
+      ? await (this.prisma as any).$queryRawUnsafe(
+          `select distinct charge_id, meta->>'splitNodeId' as split_node_id, (meta->'allocation'->>'base')::float8 as base
+             from community_charge_line
+            where charge_id = any($1::text[])`,
+          splitChargeIds,
+        )
+      : []
+    const leafCost = (chargeId: string, splitNodeId?: string | null): number | null => {
+      const r = leafCostRows.find((x) => x.charge_id === chargeId && x.split_node_id === splitNodeId)
+      return r ? Number(r.base) : null
+    }
+
+    // Fund-contribution charges (source_type='FUND', e.g. the REABILITARE/RULMENT monthly offset)
+    // have no ExpenseType at all — they're driven straight from Fund.allocation (method/split/
+    // weights), community-wide, per `explainCell`'s own convention (`cc.source_type = 'FUND'` →
+    // `f.code` as the category). "Beneficiari" defaults to ALL_BILLABLE (every fund-contribution
+    // charge in practice applies community-wide).
+    const fundCodes = [...new Set(chargeRows.filter((r) => r.source_type === 'FUND' && r.fund_code).map((r) => r.fund_code))] as string[]
+    const funds = fundCodes.length
+      ? await this.prisma.fund.findMany({ where: { communityId, code: { in: fundCodes } }, select: { code: true, name: true, allocation: true } })
+      : []
+    const fundByCode = new Map(funds.map((f) => [f.code, f]))
+    if (fundCodes.length) groupCodes.add('ALL_BILLABLE')
+
+    // Batch-fetch: UnitGroup names + their current member units (for Beneficiari + non-water
+    // "Cantitate măsurată" counts), community meter readings (for the water triad).
+    const [groups, groupMembers, meters] = await Promise.all([
+      groupCodes.size ? this.prisma.unitGroup.findMany({ where: { communityId, code: { in: [...groupCodes] } }, select: { id: true, code: true, name: true } }) : [],
+      groupCodes.size ? this.prisma.unitGroupMember.findMany({
+          where: { group: { communityId, code: { in: [...groupCodes] } }, startSeq: { lte: seq }, OR: [{ endSeq: null }, { endSeq: { gte: seq } }] },
+          select: { unitId: true, group: { select: { code: true } } },
+        }) : [],
+      communityMeterIds.size ? this.prisma.meter.findMany({ where: { meterId: { in: [...communityMeterIds] } }, select: { meterId: true, scopeType: true, typeCode: true } }) : [],
+    ])
+    const groupNameByCode = new Map(groups.map((g) => [g.code, g.name]))
+    const unitIdsByGroupCode = new Map<string, string[]>()
+    for (const m of groupMembers) {
+      const arr = unitIdsByGroupCode.get(m.group.code) ?? []
+      arr.push(m.unitId)
+      unitIdsByGroupCode.set(m.group.code, arr)
+    }
+    const communityMeters = meters.filter((m) => m.scopeType === 'COMMUNITY')
+    const communityReadings = communityMeters.length
+      ? await this.prisma.periodMeasure.findMany({
+          where: { communityId, periodId: period.id, scopeType: 'COMMUNITY', typeCode: { in: communityMeters.map((m) => m.typeCode) } },
+          select: { typeCode: true, value: true },
+        })
+      : []
+    const meterValue = (meterId?: string | null): number | null => {
+      const m = meterId ? communityMeters.find((cm) => cm.meterId === meterId) : undefined
+      const v = m ? communityReadings.find((r) => r.typeCode === m.typeCode)?.value : undefined
+      return v == null ? null : Number(v)
+    }
+
+    // Non-water "Cantitate măsurată" for vendor-invoice charges: sum of SQM/RESIDENTS across the
+    // payer group's current units, dispatched off the ExpenseType's own AllocationRule.method
+    // (not a per-leaf field — e.g. a CPI-split leaf carries `ruleCode: 'BY_CPI'`, not a
+    // `weightSource`, so the rule's method is the reliable signal).
+    const unitMeasureRows = await this.prisma.periodMeasure.findMany({
+      where: { communityId, periodId: period.id, scopeType: 'UNIT', typeCode: { in: ['SQM', 'RESIDENTS'] } },
+      select: { scopeId: true, typeCode: true, value: true },
+    })
+    const sumMeasureForGroup = (typeCode: string, groupCode: string): number => {
+      const unitIds = new Set(unitIdsByGroupCode.get(groupCode) ?? [])
+      return unitMeasureRows
+        .filter((r) => r.typeCode === typeCode && unitIds.has(r.scopeId))
+        .reduce((s, r) => s + Number(r.value), 0)
+    }
+
+    const unitCostOf = (totalCost: number, qty: number | null, unit: string | null) => ({
+      unitCost: qty ? round2(totalCost / qty) : null,
+      unitCostUnit: unit,
+    })
+
+    const rows = chargeRows.flatMap((row) => {
+      const isFund = row.source_type === 'FUND'
+      const et = !isFund && row.expense_type_code ? expenseTypeByCode.get(row.expense_type_code) : undefined
+      const fund = isFund && row.fund_code ? fundByCode.get(row.fund_code) : undefined
+      const leafSet = !isFund ? leafSetByChargeId.get(row.id) : undefined
+      const domain = isFund ? 'Fonduri' : (row.expense_type_code ? (domainByExpenseCode.get(row.expense_type_code) ?? '—') : '—')
+      const vendorName = isFund ? 'Asociația' : (row.vendor_name ?? '—')
+      const document = row.invoice_number ?? '—'
+      const fundCode: string | null = row.fund_code ?? null
+
+      // Water's branch-vs-measured-vs-residual triad splits into TWO rows — "Apă rece" (the
+      // metered leaf) and "Apă - diferență" (the residual leaf) — each with its own real cost
+      // share (community_charge_line.meta.allocation.base, read above), not a pro-rata guess, so
+      // the two rows' totalCost always adds back up to the charge's own posted amount. Both stay
+      // attributed to the same vendor/document (Aquatim) — the residual is still part of that
+      // same invoice, just a different line of it — using each leaf's own descriptive `name`
+      // (from def.json's expenseSplits) for "Serviciu Furnizor" instead of the charge-level
+      // combined description, since the two leaves are genuinely different line items.
+      if (et && leafSet?.metered && leafSet?.residual) {
+        const beneficiaries = leafSet.basisCode ? (groupNameByCode.get(leafSet.basisCode) ?? leafSet.basisCode) : '—'
+        const splitMethod = et.rule?.method ? (METHOD_LABEL[et.rule.method] ?? et.rule.method) : '—'
+        const invoicedQty = meterValue(leafSet.metered.derivedShare.totalMeterId)
+        const measuredQty = meterValue(leafSet.metered.derivedShare.partMeterId)
+        const residualQty = meterValue(leafSet.residual.derivedShare.partMeterId)
+        const meteredCost = round2(leafCost(row.id, leafSet.metered.id) ?? Number(row.amount))
+        const residualCost = round2(leafCost(row.id, leafSet.residual.id) ?? 0)
+
+        const meteredRow = {
+          domain, associationService: et.name ?? row.expense_type_code ?? '—',
+          measuredQty, measuredQtyUnit: measuredQty != null ? 'm3' : null, measuredQtyBasis: 'Măsurat',
+          beneficiaries, splitMethod,
+          vendorName, vendorService: leafSet.metered.name ?? '—', document,
+          invoicedQty, invoicedQtyUnit: invoicedQty != null ? 'm3' : null,
+          qtyDifference: null as number | null,
+          // Priced against its OWN quantity (not the total invoiced m³) — both the metered and
+          // residual rows come out to the same real per-m³ rate this way, since the underlying
+          // invoice charges one uniform rate across the whole branch reading.
+          ...unitCostOf(meteredCost, measuredQty, 'm3'),
+          totalCost: meteredCost, fundCode,
+        }
+        const residualRow = {
+          domain, associationService: 'Apă - diferență',
+          measuredQty: residualQty, measuredQtyUnit: residualQty != null ? 'm3' : null, measuredQtyBasis: 'Calculat',
+          beneficiaries, splitMethod,
+          vendorName, vendorService: leafSet.residual.name ?? '—', document,
+          invoicedQty: null as number | null, invoicedQtyUnit: null as string | null,
+          qtyDifference: null as number | null,
+          ...unitCostOf(residualCost, residualQty, 'm3'),
+          totalCost: residualCost, fundCode,
+        }
+        return [meteredRow, residualRow]
+      }
+
+      let measuredQty: number | null = null, measuredQtyUnit: string | null = null, measuredQtyBasis: string | null = null
+      let invoicedQty: number | null = null, invoicedQtyUnit: string | null = null
+      let qtyDifference: number | null = null
+      let beneficiaries = '—', splitMethod = '—'
+      const vendorService = row.vendor_name ? (row.description ?? '—') : '—'
+
+      if (isFund && fund) {
+        const alloc: any = fund.allocation ?? {}
+        beneficiaries = groupNameByCode.get('ALL_BILLABLE') ?? 'Toate unitățile facturabile'
+        if (alloc.method === 'EQUAL') {
+          splitMethod = METHOD_LABEL.EQUAL
+          measuredQty = (unitIdsByGroupCode.get('ALL_BILLABLE') ?? []).length
+          measuredQtyUnit = 'Unitate'; measuredQtyBasis = 'Calculat'
+        } else if (alloc.split === 'CPI' || alloc.method === 'EXPLICIT') {
+          splitMethod = METHOD_LABEL.BY_SQM
+          const weights = alloc.weights && typeof alloc.weights === 'object' ? Object.values(alloc.weights) as number[] : []
+          measuredQty = weights.length ? round2(weights.reduce((s, v) => s + Number(v), 0)) : null
+          measuredQtyUnit = measuredQty != null ? 'CPI' : null; measuredQtyBasis = measuredQty != null ? 'Calculat' : null
+        }
+      } else if (et && leafSet) {
+        beneficiaries = leafSet.basisCode ? (groupNameByCode.get(leafSet.basisCode) ?? leafSet.basisCode) : '—'
+        splitMethod = et.rule?.method ? (METHOD_LABEL[et.rule.method] ?? et.rule.method) : '—'
+        if (leafSet.metered || leafSet.residual) {
+          const totalMeterId = leafSet.metered?.derivedShare?.totalMeterId ?? leafSet.residual?.derivedShare?.totalMeterId
+          invoicedQty = meterValue(totalMeterId)
+          invoicedQtyUnit = invoicedQty != null ? 'm3' : null
+          if (leafSet.metered) { measuredQty = meterValue(leafSet.metered.derivedShare.partMeterId); measuredQtyUnit = measuredQty != null ? 'm3' : null; measuredQtyBasis = 'Măsurat' }
+          if (leafSet.residual) qtyDifference = meterValue(leafSet.residual.derivedShare.partMeterId)
+        } else if (et.rule?.method === 'BY_SQM' && leafSet.basisCode) {
+          measuredQty = round2(sumMeasureForGroup('SQM', leafSet.basisCode)); measuredQtyUnit = 'CPI'; measuredQtyBasis = 'Calculat'
+        } else if (et.rule?.method === 'BY_RESIDENTS' && leafSet.basisCode) {
+          measuredQty = round2(sumMeasureForGroup('RESIDENTS', leafSet.basisCode)); measuredQtyUnit = 'Persoana'; measuredQtyBasis = 'Estimat'
+        } else if (et.rule?.method === 'EQUAL' && leafSet.basisCode) {
+          measuredQty = (unitIdsByGroupCode.get(leafSet.basisCode) ?? []).length; measuredQtyUnit = 'Unitate'; measuredQtyBasis = 'Calculat'
+        }
+      }
+
+      const totalCost = round2(Number(row.amount))
+      // Prefer the vendor's own invoiced quantity (water) when there is one; every other method
+      // still has a real quantity basis (CPI %, persons, unit count) to price against — no reason
+      // to leave it blank just because there's no physical meter behind it.
+      const unitCostQty = invoicedQty ?? measuredQty
+      const unitCostUnit = invoicedQty != null ? invoicedQtyUnit : measuredQtyUnit
+
+      return [{
+        domain,
+        associationService: isFund ? (fund?.name ?? row.fund_code ?? '—') : (et?.name ?? row.expense_type_code ?? '—'),
+        measuredQty, measuredQtyUnit, measuredQtyBasis,
+        beneficiaries,
+        splitMethod,
+        vendorName, vendorService, document,
+        invoicedQty, invoicedQtyUnit,
+        qtyDifference,
+        ...unitCostOf(totalCost, unitCostQty, unitCostUnit),
+        totalCost,
+        fundCode,
+      }]
+    })
+    rows.sort((a, b) => a.domain.localeCompare(b.domain, 'ro') || a.associationService.localeCompare(b.associationService, 'ro') || a.vendorService.localeCompare(b.vendorService, 'ro'))
+
+    return { period: { code: p?.code ?? null }, rows, totals: { totalCost: round2(rows.reduce((s, r) => s + r.totalCost, 0)) } }
+  }
+
+  /**
    * Explain how one avizier cell (billing entity × category) was computed for a period.
    * Reads the allocation detail (`meta.allocation`) that each allocator persisted on the charge
    * line at allocation time — no recomputation. Returns per underlying charge (invoice / fund

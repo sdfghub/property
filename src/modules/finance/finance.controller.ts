@@ -34,6 +34,13 @@ export class FinanceController {
     return this.finance.avizier(c, period, groupBy as any)
   }
 
+  // #22 Avizier "Asociație" view — one row per vendor-service line (Furnizor → Asociație audit trail).
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier/expenses')
+  avizierExpenses(@Param('communityId') c: string, @Query('period') period?: string) {
+    return this.finance.avizierExpenses(c, period)
+  }
+
   // #8 Avizier configurator — per-community display config (INFO columns, default view, fund-group
   // labels & membership overrides), persisted under Community.features.avizierConfig.
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
