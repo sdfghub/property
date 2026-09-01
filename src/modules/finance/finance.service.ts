@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
+import { resolveBeName as resolveBeNameShared } from '../../common/billing-entity-name.util'
 
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
@@ -544,11 +545,8 @@ export class FinanceService {
       nameHistoryByBe.set(h.billingEntityId, arr)
     }
     const aviSeq = p?.seq ?? 0
-    const resolveBeName = (be: { id: string; name: string; displayName: string | null }): { name: string; displayName: string | null } => {
-      const hist = nameHistoryByBe.get(be.id)
-      const row = hist?.find((h) => h.startSeq <= aviSeq && (h.endSeq == null || h.endSeq >= aviSeq))
-      return row ? { name: row.name, displayName: row.displayName } : { name: be.name, displayName: be.displayName }
-    }
+    const resolveBeName = (be: { id: string; name: string; displayName: string | null }): { name: string; displayName: string | null } =>
+      resolveBeNameShared(be, aviSeq, nameHistoryByBe)
     const allUnits = mode === 'entity' ? [] : await this.prisma.unit.findMany({
       where: { communityId },
       select: { id: true, code: true, name: true, type: true, floorNumber: true, staircase: true },

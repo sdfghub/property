@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
 import { PrismaService } from '../user/prisma.service'
+import { resolveBeName } from '../../common/billing-entity-name.util'
 
 type OwnerHistoryEntry = { name: string; startPeriodCode: string | null; endPeriodCode: string | null; current: boolean }
 type TenantHistoryEntry = { name: string; source: string; confirmed: boolean }
@@ -226,16 +227,6 @@ export class CommunityStructureController {
   // its own, so there is no start/end range to show per tenant) per unit code.
   // A name change mid-membership is a rare edge case; resolving at the membership's own start
   // (not "now") is a reasonable simplification — see resolveBeName below.
-  private resolveBeName(
-    be: { id: string; name: string; displayName: string | null },
-    seq: number,
-    historyByBe: Map<string, Array<{ name: string; displayName: string | null; startSeq: number; endSeq: number | null }>>,
-  ): { name: string; displayName: string | null } {
-    const hist = historyByBe.get(be.id)
-    const row = hist?.find((h) => h.startSeq <= seq && (h.endSeq == null || h.endSeq >= seq))
-    return row ? { name: row.name, displayName: row.displayName } : { name: be.name, displayName: be.displayName }
-  }
-
   private async loadUnitHistory(communityId: string): Promise<Map<string, { ownerHistory: OwnerHistoryEntry[]; tenantHistory: TenantHistoryEntry[] }>> {
     const [members, tenants, periods, nameHistoryRows] = await Promise.all([
       this.prisma.billingEntityMember.findMany({
@@ -268,7 +259,7 @@ export class CommunityStructureController {
       return e
     }
     for (const m of members) {
-      const rn = this.resolveBeName(m.billingEntity, m.startSeq, nameHistoryByBe)
+      const rn = resolveBeName(m.billingEntity, m.startSeq, nameHistoryByBe)
       ensure(m.unit.code).ownerHistory.push({
         name: rn.displayName || rn.name,
         startPeriodCode: codeBySeq.get(m.startSeq) ?? null,

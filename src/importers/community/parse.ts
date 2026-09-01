@@ -52,12 +52,29 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   }
   const beOrders: Record<string, number> = {}
   const billingEntityMeta: Record<string, { name?: string; displayName?: string }> = {}
+  const billingEntityNameHistory: CommunityImportPlan['billingEntityNameHistory'] = []
   if ((def as any).billingEntities && Array.isArray((def as any).billingEntities)) {
     ;(def as any).billingEntities.forEach((be: any) => {
       const code = be.code || be.name
       if (!code) return
       if (typeof be.order === 'number') beOrders[String(code)] = be.order
-      billingEntityMeta[String(code)] = { name: be.name, displayName: be.displayName }
+
+      // displayNames[] is the versioned source of truth; a legacy flat `displayName`
+      // (older def.json shape) is tolerated as a single unbounded entry.
+      const rows: Array<{ displayName: string; startPeriod?: string; endPeriod?: string }> =
+        Array.isArray(be.displayNames) && be.displayNames.length
+          ? be.displayNames
+          : be.displayName
+          ? [{ displayName: be.displayName }]
+          : []
+      rows.forEach((r) => {
+        if (!r?.displayName) return
+        billingEntityNameHistory!.push({ code: String(code), displayName: r.displayName, startPeriod: r.startPeriod, endPeriod: r.endPeriod })
+      })
+      // "Current" = the open (endPeriod-less) entry, else the one with the latest startPeriod —
+      // mirrors resolveBeName treating the live BillingEntity fields as "current, unbounded".
+      const current = rows.find((r) => !r.endPeriod) ?? [...rows].sort((a, b) => (a.startPeriod ?? '').localeCompare(b.startPeriod ?? '')).pop()
+      billingEntityMeta[String(code)] = { name: be.name, displayName: current?.displayName }
     })
   }
   if ((def as any).billingEntityOrder && typeof (def as any).billingEntityOrder === 'object') {
@@ -125,6 +142,7 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
     communityId: def.id,
     communityName: def.name,
     billingEntityMeta,
+    billingEntityNameHistory,
     periodCode: def.period.code,
     periodStart: def.period.start,
     periodEnd: def.period.end,

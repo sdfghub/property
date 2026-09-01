@@ -156,19 +156,34 @@ async function main() {
   function norm(x: string) { return String(x).replace(/ /g, '').replace(/[\s./]/g, '').toUpperCase() }
   const mapping = loadJson('history-mapping.json')
   const prefix = mapping.unitLabelPrefix ?? ''
-  const byNorm = new Map<string, { code: string; be: string }>()
+  // Two separate resolutions, kept apart on purpose: a cash-register memo only ever carries a
+  // human label ("AP 2/2"), so label→unit-code matching is unavoidably name-based. But which BE
+  // owns that unit as of THIS import (June) must be resolved by code + period, not by name — a
+  // unit can have multiple structure[] rows sharing one code (one per ownership span, e.g. after
+  // a mid-year owner change), and a plain array scan keyed by name/code with last-write-wins would
+  // silently pick whichever row happens to be listed last, regardless of period.
+  const juneSeqOf = (code: string) => { const [y, m] = code.split('-').map(Number); return y * 12 + m }
+  const juneSeq = juneSeqOf(JUNE.code)
+  const beOfCode = new Map<string, string>()
   for (const u of def.structure || []) {
-    const nm = String(u.name || '')
-    const label = nm.startsWith(prefix) ? nm.slice(prefix.length) : (nm || u.code)
-    byNorm.set(norm(label), { code: u.code, be: u.billingEntity })
+    if (!u.billingEntity) continue
+    const start = u.startPeriod ? juneSeqOf(u.startPeriod) : -Infinity
+    const end = u.endPeriod ? juneSeqOf(u.endPeriod) : Infinity
+    if (juneSeq >= start && juneSeq <= end) beOfCode.set(u.code, u.billingEntity)
+  }
+  const byNorm = new Map<string, string>() // normalized label -> unit code
+  for (const u of def.structure || []) {
+    if (!u.name) continue
+    const nm = String(u.name)
+    const label = nm.startsWith(prefix) ? nm.slice(prefix.length) : nm
+    byNorm.set(norm(label), u.code)
   }
   const ov: Record<string, string> = mapping.unitOverrides || {}
   const ovNorm = new Map<string, string>(Object.entries(ov).map(([k, v]) => [norm(k), v as string]))
-  const beOfCode = new Map<string, string>((def.structure || []).map((u: any) => [u.code, u.billingEntity]))
   const resolveBe = (label: string): string | null => {
     const n = norm(label)
-    if (ovNorm.has(n)) return beOfCode.get(ovNorm.get(n)!) ?? null
-    return byNorm.get(n)?.be ?? null
+    const code = ovNorm.get(n) ?? byNorm.get(n)
+    return code ? (beOfCode.get(code) ?? null) : null
   }
   const accounts = new Map<string, string>((await prisma.cashAccount.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })).map((a: any) => [a.code, a.id]))
   const fundsById = new Map<string, string>((await prisma.fund.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })).map((f: any) => [f.code, f.id]))

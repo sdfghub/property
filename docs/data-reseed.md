@@ -65,6 +65,48 @@ Sanity checks for 2026-05: 27 billing entities / 183 `be_statement` rows, all 10
 allocated, `REABILITARE_1` Facturat = Datorat = 390 003.00, community DEBT ≈ 796 896.67,
 31 unit water meters with 31 May readings, and `Σ MeterReading == PeriodMeasure` per unit.
 
+### Kralik — June (2026-06), on top of the canonical rebuild
+
+`rebuild-kralik-nobridge.sh` stops at 2026-05; June is a separate, self-contained step,
+not yet folded into the script:
+
+```bash
+npx ts-node --transpile-only src/scripts/seed-kralik-june-complete.ts
+npm run backfill:meter-readings -- Kralik
+```
+
+`seed-kralik-june-complete.ts` requires May already **CLOSED**, chains `dueStart` from
+May's `beStatement.dueEnd` automatically, and builds entirely from
+`data/Kralik/actuals-2026-06.json` + `data/Kralik/cash-2026-06.json` (both
+self-sufficient as of the Aug 2026 regeneration — no other June script needs to run).
+It submits all bill-template items, imports the full cash register, backfills invoice
+dates, closes the templates, and calls `PeriodService.prepare()` — June is left
+**PREPARED**, not approved. The `backfill:meter-readings` re-run is required
+afterwards (community-wide, not period-scoped) because June adds new `PeriodMeasure`
+rows.
+
+All ten other `*june*` scripts under `src/scripts/` (`seed-kralik-june.ts`,
+`seed-kralik-june-import.ts`, `seed-kralik-june-water.ts`,
+`seed-kralik-june-remaining.ts`, `fix-kralik-june-vat.ts`, `import-kralik-cash-june.ts`,
+`fix-kralik-june-payment-specs.ts`, `prepare-kralik-june.ts`,
+`merge-kralik-june-apa-rece.ts`, `backfill-june-invoice-due-dates.ts`,
+`backfill-june-invoice-issue-dates.ts`) are a superseded one-off chain, now folded into
+`seed-kralik-june-complete.ts` and the two JSON packets above — do **not** run them as
+part of a fresh reseed.
+
+### Checking the result against def.json
+
+```bash
+COMM=Kralik PERIODS=2026-05,2026-06 npx ts-node --transpile-only src/scripts/verify-def-consistency.ts
+```
+
+Read-only diagnostic — compares live DB state (billing-entity-to-unit assignment,
+group membership, and what was actually posted to `community_charge_line`) against
+`data/Kralik/def.json` for the given periods. Non-zero exit on any real mismatch; see
+the script's own header comment for two important caveats before acting on a finding
+(recomputeAllocations() staleness, and why re-running `import:community` is not a safe
+auto-fix for a mismatch).
+
 ## Kralik — the older April/May-only baseline
 
 A narrower recipe kept for debugging: **only** April + May, no pre-2026 history. April
@@ -163,6 +205,7 @@ system-admin login (seed one with `npm run seed`).
 | `npm run backfill:meter-readings -- <COMM>` | Clean-rebuild the raw `MeterReading` layer from measures. |
 | `npm run reopen:period -- <COMM> <YYYY-MM>` | Reopen a period through `PeriodService.reopen`. |
 | `npm run prepare:period -- <COMM> <YYYY-MM>` | Re-run allocation + statements for a period. |
+| `npx ts-node --transpile-only src/scripts/verify-def-consistency.ts` | Read-only: diff live DB (billing-entity assignment, group membership, posted charge lines) against `def.json` for given periods. |
 | `npm run db:flush` | Flush the **entire** DB (all communities) — destructive. |
 
 > Running any of these **against prod** needs the one-off-container recipe in

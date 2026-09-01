@@ -106,10 +106,15 @@ export async function wipeCommunity(communityId: string, opts: WipeOptions = {})
     // Resident/user ↔ billing-entity links (FK is RESTRICT, so must be cleared before the BE delete).
     // These are re-established via invites after a rebuild.
     prisma.billingEntityUserRole.deleteMany({ where: { billingEntityId: { in: beIds } } }),
+    // Versioned display-name history (from admin renames or def.json's billingEntities[].displayNames[]
+    // on import) — same FK-before-BE-delete requirement as billingEntityUserRole above.
+    prisma.billingEntityNameHistory.deleteMany({ where: { billingEntityId: { in: beIds } } }),
 
     // Topology
     prisma.unitGroup.deleteMany({ where: { id: { in: groupIds } } }),
     prisma.billingEntity.deleteMany({ where: { id: { in: beIds } } }),
+    // Recorded/declared tenants per unit (FK is RESTRICT, so must be cleared before the unit delete).
+    prisma.unitTenant.deleteMany({ where: { unitId: { in: unitIds } } }),
     prisma.unit.deleteMany({ where: { id: { in: unitIds } } }),
 
     // Periods

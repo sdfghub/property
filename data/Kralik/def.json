@@ -85,7 +85,10 @@
     {
       "code": "BE_GAMPE_FRANCISC",
       "name": "Gampe Francisc",
-      "order": 4
+      "order": 4,
+      "displayNames": [
+        { "displayName": "Ap 2/2 · Gampe Francisc", "startPeriod": "2026-03", "endPeriod": "2026-05" }
+      ]
     },
     {
       "code": "BE_CODREA_RUXANDRA_GEORGETA",
@@ -201,6 +204,14 @@
       "code": "BE_BRINZEU_ADINA",
       "name": "Brînzeu Adina",
       "order": 27
+    },
+    {
+      "code": "BE_VALEAN_MIRELA",
+      "name": "Valean Mirela",
+      "order": 28,
+      "displayNames": [
+        { "displayName": "Ap 2/2 · Valean Mirela", "startPeriod": "2026-06", "endPeriod": null }
+      ]
     }
   ],
   "structure": [
@@ -282,7 +293,6 @@
       "residents": 0,
       "sqm": null,
       "cpi": 1.99,
-      "billingEntity": "BE_GAMPE_FRANCISC",
       "groupCodes": [
         "ALL_BILLABLE",
         "RESIDENTIAL",
@@ -299,6 +309,18 @@
       "startPeriod": "2026-03",
       "endPeriod": null,
       "order": 4
+    },
+    {
+      "code": "400191-C1-U19-AP 2/2",
+      "billingEntity": "BE_GAMPE_FRANCISC",
+      "startPeriod": "2026-03",
+      "endPeriod": "2026-05"
+    },
+    {
+      "code": "400191-C1-U19-AP 2/2",
+      "billingEntity": "BE_VALEAN_MIRELA",
+      "startPeriod": "2026-06",
+      "endPeriod": null
     },
     {
       "code": "400191-C1-U8-AP 3",

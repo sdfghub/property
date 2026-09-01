@@ -14,6 +14,7 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     billingEntities: 0,
     unitGroupMemberships: 0,
     billingEntityMemberships: 0,
+    billingEntityNameHistory: 0,
     periodMeasures: 0,
     meters: 0,
     measureTypes: 0,
@@ -381,6 +382,29 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
         await prisma.billingEntityMember.create({ data: { billingEntityId: be.id, unitId: u, startPeriodId: s.id, startSeq: s.seq, endPeriodId: e?.id ?? null, endSeq: e?.seq ?? null } })
         stats.billingEntityMemberships += 1
       }
+    }
+  }
+
+  // billing-entity display-name history — versioned displayName per BE, for
+  // traceability across owner/name changes (BillingEntityDisplayNameRow in types.ts).
+  // `name` itself stays flat/unversioned (mirrors the community's current BE.name); only
+  // `displayName` is versioned. Reuses the exact overlap-guard + period-resolution
+  // pattern used for billingEntityMember above, so re-running the importer stays
+  // idempotent instead of duplicating history rows.
+  for (const h of plan.billingEntityNameHistory ?? []) {
+    const be = await prisma.billingEntity.findUnique({ where: { code_communityId: { code: h.code, communityId } }, select: { id: true, name: true } })
+    if (!be) throw new Error(`BillingEntity ${h.code} missing for displayNames — needs at least one membership in structure[]`)
+    const s = (await getPeriod(h.startPeriod)) ?? { id: period.id, seq: period.seq }
+    const e = await getPeriod(h.endPeriod)
+    const overlap = await prisma.billingEntityNameHistory.findFirst({
+      where: { billingEntityId: be.id, startSeq: { lte: e?.seq ?? INT4_MAX }, OR: [{ endSeq: null }, { endSeq: { gte: s.seq } }] },
+      select: { id: true },
+    })
+    if (!overlap) {
+      await prisma.billingEntityNameHistory.create({
+        data: { billingEntityId: be.id, name: be.name, displayName: h.displayName, startPeriodId: s.id, startSeq: s.seq, endPeriodId: e?.id ?? null, endSeq: e?.seq ?? null },
+      })
+      stats.billingEntityNameHistory += 1
     }
   }
 
