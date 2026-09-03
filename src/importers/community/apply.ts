@@ -257,8 +257,27 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
 
   // pre-fetch referenced periods by code for membership ranges and cash account opening balances
   const periodByCode = new Map<string,{id:string,seq:number,startDate:Date}>()
+  const placeholderPeriods: string[] = []
   async function getPeriod(code?: string){ if(!code) return undefined; if(periodByCode.has(code)) return periodByCode.get(code)!;
-    const p = await prisma.period.findUnique({ where: { communityId_code: { communityId, code } } }); if(!p) throw new Error(`Period ${code} missing`)
+    let p = await prisma.period.findUnique({ where: { communityId_code: { communityId, code } } })
+    if(!p){
+      // def.json describes the structure's whole timeline, so a membership (or a cash account's
+      // opening balance) may reference a period that only gets created later in the pipeline —
+      // history:inject and the May/June seeds. On a clean DB those rows don't exist yet, and
+      // throwing here made a from-scratch rebuild impossible: the community import runs before
+      // any of them. Materialise a DRAFT placeholder instead. DRAFT is invisible to
+      // currentPeriod() (which selects OPEN/PREPARED only), so it cannot become the target of a
+      // correction or a close; every later step upserts the same code and sets the real dates
+      // and status, and derives seq the same way, so the placeholder is simply filled in.
+      const [y,m] = code.split('-').map(Number)
+      if(!Number.isInteger(y) || !Number.isInteger(m) || m<1 || m>12) throw new Error(`Period ${code} missing and its code is not a YYYY-MM period`)
+      p = await prisma.period.upsert({
+        where: { communityId_code: { communityId, code } },
+        update: {},
+        create: { communityId, code, seq: y*12+m, status: 'DRAFT', startDate: new Date(`${code}-01`), endDate: new Date(Date.UTC(y, m, 0)) },
+      })
+      placeholderPeriods.push(code)
+    }
     const v={id:p.id,seq:p.seq,startDate:p.startDate}; periodByCode.set(code,v); return v;
   }
 
@@ -420,6 +439,10 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
     stats.periodMeasures += 1
   }
 
+  if (placeholderPeriods.length) {
+    // eslint-disable-next-line no-console
+    console.log(`note: created DRAFT placeholder period(s) referenced by def.json but not yet seeded: ${placeholderPeriods.join(', ')}`)
+  }
   const result = { ok: true, communityId, periodId: period.id, stats }
   // eslint-disable-next-line no-console
   console.log(JSON.stringify(result, null, 2))
