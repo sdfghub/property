@@ -76,17 +76,34 @@ export function parseExport(communityDir: string): Parsed {
   const warnings: string[] = []
 
   // unit label -> {code, be}
+  // A unit's owner can change mid-timeline. def.json models that as EXTRA structure rows carrying
+  // only { code, billingEntity, startPeriod, endPeriod }, which means the row holding the unit's
+  // `name` (the one the export's column label matches) may carry no billingEntity at all — Ap 2/2
+  // is the live case (Gampe Francisc → Valean Mirela at 2026-06). Reading billingEntity off the
+  // labelled row alone then yields `be: undefined`, and inject-history's `if (!be) continue`
+  // silently drops that unit's ENTIRE history — 26,438.11 of real debt, with no warning.
+  // So resolve the owner across every row for the same unit code, preferring the earliest-starting
+  // one: this export covers 2021-11..2026-04, which predates any handover in the data (later
+  // ownership is applied by the membership ranges the period engine reads, not by this importer).
+  const ownerByCode = new Map<string, { be: string; start: string }>()
+  for (const u of def.structure || []) {
+    if (!u.billingEntity) continue
+    const start = String(u.startPeriod ?? u.start_period ?? '')
+    const prev = ownerByCode.get(u.code)
+    if (!prev || start < prev.start) ownerByCode.set(u.code, { be: u.billingEntity, start })
+  }
+  const ownerOf = (u: any): string => u.billingEntity ?? ownerByCode.get(u.code)?.be
   const prefix = mapping.unitLabelPrefix ?? ''
   const byName = new Map<string, { code: string; be: string }>()
   for (const u of def.structure || []) {
     const label = String(u.name || '').startsWith(prefix) ? String(u.name).slice(prefix.length) : String(u.name || u.code)
-    byName.set(label, { code: u.code, be: u.billingEntity })
+    byName.set(label, { code: u.code, be: ownerOf(u) })
   }
   const overrideCode = mapping.unitOverrides || {}
   const resolveUnit = (label: string): { code: string; be: string } | null => {
     if (overrideCode[label]) {
       const u = (def.structure || []).find((x: any) => x.code === overrideCode[label])
-      return u ? { code: u.code, be: u.billingEntity } : null
+      return u ? { code: u.code, be: ownerOf(u) } : null
     }
     return byName.get(label) ?? null
   }
@@ -113,6 +130,7 @@ export function parseExport(communityDir: string): Parsed {
     const label = H[i]
     const u = resolveUnit(label)
     if (!u) warnings.push(`UNMATCHED unit column "${label}" (col ${i})`)
+    else if (!u.be) warnings.push(`NO BILLING ENTITY for unit column "${label}" (${u.code}) — its history would be dropped`)
     unitCols.push({ i, label, unit: u })
   }
 
