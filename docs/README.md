@@ -12,6 +12,7 @@ Postgres). **New here? Start with [onboarding.md](./onboarding.md).**
 | [corrections.md](./corrections.md) | Reshuffles, credit transfers, penalty write-offs, manual adjustments: declarations with a **derived** ledger. |
 | [frontend-conventions.md](./frontend-conventions.md) | No hardcoded domain knowledge (metadata registry + `useMetadata()`) and the EN/RO i18n contract. Read before adding UI. |
 | [data-reseed.md](./data-reseed.md) | Wiping and rebuilding a community from its committed source — `rebuild-kralik-nobridge.sh` and friends. |
+| [kralik-reseed-runbook.md](./kralik-reseed-runbook.md) | Linear, runnable checklist for a full Kralik reseed (def.json + May + June) — start here for the exact commands; data-reseed.md has the background. |
 | [kralik.md](./kralik.md) | The live association's modelling: afisare window, back-penalty forgiveness, apa-dif water split, data caveats. |
 | [deployment.md](./deployment.md) | Shipping to prod (`wend` / vicusia.ro): Compose stack, Caddy + Cloudflare, `push-to-wend.sh`, running scripts on the host. |
 | [reports/collection-rate.md](./reports/collection-rate.md) | The "grad de colectare" report: the owed/paid/outstanding identity, fund domains, CPI, deliberate deviations from the spec. |
