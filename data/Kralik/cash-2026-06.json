@@ -418,10 +418,9 @@
       "unit": "31",
       "payer": "Fikl Emil",
       "funds": {
-        "EXPENSES": -208.78,
-        "RULMENT": -14.52,
-        "REABILITARE_3": 12900.08
-      }
+        "REABILITARE_3": 12676.78
+      },
+      "memo": "Settles May's per-fund arrears in full (confirmed against Registru Bancă) — stays in June's cycle so it shows as June's Încasări (2026-05). Homefile's own per-fund breakdown was EXPENSES -208.78 / RULMENT -14.52 / REABILITARE_3 12900.08 (net 12676.78) — restricted here to a single REABILITARE_3 line so the seed script's dominant-fund allocationSpec builder doesn't leak the payment across EXPENSES/RULMENT's own open charges via a blanket cross-fund advance (see period.service.ts's applyPaymentWithSpec: a negative-amount fund entry disables the explicit-lines branch, leaving only an unrestricted advance line)."
     },
     {
       "n": 31,
@@ -888,9 +887,12 @@
       "unit": "4(III)",
       "payer": "Alexandru Grosu",
       "funds": {
-        "EXPENSES": 2742.87
+        "EXPENSES": 123.60,
+        "REABILITARE_3": 2581.55,
+        "REPARATII": 23.20,
+        "RULMENT": 14.52
       },
-      "memo": "Tabel mai 2026 — adăugat, lipsea din Registru Bancă"
+      "memo": "Tabel mai 2026 — adăugat, lipsea din Registru Bancă. Settles May's per-fund arrears in full; stays in June's cycle so it shows as June's Încasări (2026-05)"
     },
     {
       "n": 101,
@@ -903,9 +905,11 @@
       "unit": "4A",
       "payer": "Gloria Lucia Catargiu",
       "funds": {
-        "EXPENSES": 503.83
+        "EXPENSES": 414.79,
+        "RULMENT": 29.04,
+        "REPARATII": 60.00
       },
-      "memo": "martie 2026, Fond rulment+reparații (nesplit) — adăugat",
+      "memo": "martie 2026, Fond rulment+reparații (nesplit) — adăugat. Datată 11.08, în fereastra de suprapunere Mai/Iunie — reconfirmat cycle 2026-07 (toate tranzacțiile din fereastra de suprapunere aparțin lui Iunie, nu doar celor din 12.08). Repartizare pe fonduri conform administratorului: Expenses 414.79 (=414.61+0.18) + Rulment 29.04 + Reparatii 60.00.",
       "cycle": "2026-07"
     },
     {
@@ -921,7 +925,7 @@
       "funds": {
         "EXPENSES": 51.55
       },
-      "memo": "martie 2026 — adăugat",
+      "memo": "martie 2026 — adăugat. Datată 11.08, în fereastra de suprapunere Mai/Iunie — reconfirmat cycle 2026-07 (toate tranzacțiile din fereastra de suprapunere aparțin lui Iunie).",
       "cycle": "2026-07"
     },
     {
@@ -985,7 +989,7 @@
       "funds": {
         "REABILITARE_3": 8312.13
       },
-      "memo": "pe mai 2026 F.Reabilitare.3 — adăugat",
+      "memo": "F.Reabilitare.3 — adăugat. Găsită abia în august; reconfirmat cycle 2026-07 (toate tranzacțiile din fereastra de suprapunere Mai/Iunie aparțin lui Iunie, apar ca Încasări (Iunie) în Iulie).",
       "cycle": "2026-07"
     },
     {

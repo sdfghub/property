@@ -94,6 +94,33 @@ All ten other `*june*` scripts under `src/scripts/` (`seed-kralik-june.ts`,
 `seed-kralik-june-complete.ts` and the two JSON packets above — do **not** run them as
 part of a fresh reseed.
 
+### Kralik — post-rebuild corrections (May penalty residuals + June fund reattributions)
+
+Two more one-off, idempotent scripts must run after the steps above for the DB to fully
+match the Aug 2026 reconciliation against Homefile / Registru Bancă — neither is sourced
+from `def.json` or the JSON packets, so a fresh reseed silently drops them without this
+step:
+
+```bash
+npx ts-node --transpile-only src/scripts/fix-kralik-penalizari-mai.ts       # after May, before/after June — reopens May itself
+npx ts-node --transpile-only src/scripts/add-kralik-fund-reattributions.ts # after June is PREPARED (attaches to currentPeriod())
+```
+
+`fix-kralik-penalizari-mai.ts` restores two May PENALIZARI charges dropped by the April
+historical injection (Matei Viorel 9.42, Macri Nicodemo/Francesco/Antonio 3.70) as real
+`community_charge`/`community_charge_line`/`be_ledger_entry` rows — not a
+`MANUAL_ADJUSTMENT` correction, which doesn't show up in Avizier's Curente column (see
+the script's own header for why). It reopens May, posts the charge, re-prepares +
+approves May, then re-preprares June so `dueStart` chains from May's corrected
+`dueEnd`.
+
+`add-kralik-fund-reattributions.ts` declares 6 `PAYMENT_REATTRIB` corrections (real
+double-entry fund-to-fund transfers, not manual ledger edits) resolving credits stuck on
+the wrong fund for three billing entities — Fikl Emil, Brînzeu Adina, and Macri
+Nicodemo/Francesco/Antonio. See the script's own header for the source/reasoning behind
+each transfer (a restricted `allocationSpec` line, an overshot June payment, and two
+real Registru Bancă cont EUR reconciliation entries, respectively).
+
 ### Checking the result against def.json
 
 ```bash

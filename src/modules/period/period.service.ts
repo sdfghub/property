@@ -845,7 +845,14 @@ export class PeriodService {
       case 'CREDIT_TRANSFER':
         return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: -Math.abs(amt) }]
       case 'PAYMENT_REATTRIB':
-        return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.fromFund), amount: -Math.abs(amt) }]
+        // A real fund-to-fund transfer needs both legs of the double-entry: the source fund loses
+        // the (phantom) payment it never should have kept, and the target fund gains a real payment
+        // credit — not just a charge reduction, so `receivables()`'s due_start − payments arrears
+        // figure reflects it too, not only due_end.
+        return [
+          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.fromFund), amount: -Math.abs(amt) },
+          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.toFund), amount: Math.abs(amt) },
+        ]
       case 'RESHUFFLE': {
         const fid = fId(c.fundCode)
         return Object.entries(payload.perBe ?? {}).map(([beId, a]) => ({ kind: 'CHARGE' as const, billingEntityId: beId, fundId: fid, amount: Number(a) }))

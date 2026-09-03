@@ -1,12 +1,20 @@
 // Correction: the April historical injection dropped the PENALIZARI closing/carry-forward for two
 // units (ledger-2026-04.json's `closing` omits the PENALIZARI key for both, even though `opening`
 // has real values) — a full write-off adjustment zeroed both to 0 instead of leaving the small
-// residual the official record shows. Per user confirmation: Matei Viorel (1B) should carry 9.42 into
-// May (1.39 of which gets collected in June, per the existing be_statement payment), Macri Nicodemo
-// (11) should carry 3.70. Fixed by reopening May only, posting a MANUAL_ADJUSTMENT correction against
-// May specifically (bypasses corrections.create()'s currentPeriod() resolution, which would otherwise
-// always pick June since it's the later non-CLOSED period), re-preparing and re-closing May, then
-// re-preparing June so its dueStart correctly chains from May's corrected dueEnd.
+// residual the official record (Homefile — Tabel cheltuieli 2026-05) shows: Matei Viorel (1B) 9.42,
+// Macri Nicodemo/Francesco/Antonio (11) 3.70.
+//
+// A first attempt posted these as a MANUAL_ADJUSTMENT correction (an ADJUSTMENT ledger leg). The
+// admin rejected that: it only moves due_end/Restanțe, it never shows up in Avizier's "Curente"
+// column, which only reads real `community_charge`→`community_charge_line` rows (see CLAUDE.md rule
+// #9 and finance.service.ts's avizier()). This version instead mirrors PenaltyLedgerService.advance()'s
+// own posting shape directly: a real `community_charge` (sourceType FUND, sourceKey penalty:EXPENSES)
+// + per-BE `community_charge_line` + `be_ledger_entry`(+detail), kind CHARGE — exactly what a genuine
+// penalty accrual would produce, just posted by hand since Kralik's penalty rate has been 0% since
+// mid-2023 (no live PenaltyBucket would ever generate it on its own).
+//
+// Idempotent: skips if a community_charge with this sourceKey already carries lines for both BEs in
+// May.
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
 import { BillingModule } from '../modules/billing/billing.module'
@@ -19,62 +27,89 @@ import { PrismaService } from '../modules/user/prisma.service'
 class ScriptModule {}
 
 const COMM = 'Kralik'
+const MAY_CODE = '2026-05'
+const JUNE_CODE = '2026-06'
+const SOURCE_KEY = 'penalty:EXPENSES'
+
+const targets = [
+  { beName: 'Matei Viorel', unitCode: '400191-C1-U28-AP 1/B', amount: 9.42, note: 'Homefile Mai 2026 — Matei Viorel (1B)' },
+  { beName: 'Macri Nicodemo', unitCode: '400191-C1-U32-AP 11', amount: 3.70, note: 'Homefile Mai 2026 — Macri (11)' },
+]
 
 async function main() {
   const app = await NestFactory.createApplicationContext(ScriptModule, { logger: ['error'] })
   const periods = app.get(PeriodService)
   const prisma = app.get(PrismaService) as any
 
-  console.log('Reopening May...')
-  await periods.reopen(COMM, '2026-05')
+  const may = await prisma.period.findUnique({ where: { communityId_code: { communityId: COMM, code: MAY_CODE } } })
+  if (!may) throw new Error(`${MAY_CODE} not found — run the canonical rebuild through May first`)
 
-  const targets = [
-    { name: 'Matei Viorel', amount: 9.42, note: 'RO: Penalizări reziduale la închiderea lunii mai (9,42 lei) omise din injecția istorică aprilie — restaurate conform Table Cheltuieli. EN: Residual May-closing penalty balance (9.42 RON) dropped from the historical April injection — restored per the official Table Cheltuieli figure.' },
-    { name: 'Macri Nicodemo', amount: 3.70, note: 'RO: Penalizări reziduale la închiderea lunii mai (3,70 lei) omise din injecția istorică aprilie — restaurate conform Table Cheltuieli. EN: Residual May-closing penalty balance (3.70 RON) dropped from the historical April injection — restored per the official Table Cheltuieli figure.' },
-  ]
+  const already = await prisma.communityChargeLine.findMany({
+    where: { communityId: COMM, periodId: may.id, charge: { sourceKey: SOURCE_KEY } },
+    select: { billingEntityId: true },
+  })
+  const alreadySet = new Set(already.map((r: any) => r.billingEntityId))
+  const penFund = await prisma.fund.findFirst({ where: { communityId: COMM, code: 'PENALIZARI' }, select: { id: true } })
+  if (!penFund) throw new Error('PENALIZARI fund not found')
 
+  const resolved: { beId: string; unitId: string; amount: number; note: string }[] = []
   for (const t of targets) {
-    const be = await prisma.billingEntity.findFirst({ where: { communityId: COMM, name: { contains: t.name } }, select: { id: true, name: true } })
-    if (!be) { console.log(`  ⚠ BE not found: ${t.name}`); continue }
-    const created = await prisma.correction.create({
+    const be = await prisma.billingEntity.findFirst({ where: { communityId: COMM, name: { contains: t.beName } }, select: { id: true } })
+    const unit = await prisma.unit.findFirst({ where: { communityId: COMM, code: t.unitCode }, select: { id: true } })
+    if (!be) { console.log(`  ⚠ BE not found: ${t.beName}`); continue }
+    if (!unit) { console.log(`  ⚠ unit not found: ${t.unitCode}`); continue }
+    if (alreadySet.has(be.id)) { console.log(`  = already posted for ${t.beName}, skipping`); continue }
+    resolved.push({ beId: be.id, unitId: unit.id, amount: t.amount, note: t.note })
+  }
+  if (!resolved.length) { console.log('Nothing to do — all targets already posted.'); await app.close(); return }
+
+  console.log(`Reopening ${MAY_CODE}...`)
+  await periods.reopen(COMM, MAY_CODE)
+
+  const total = resolved.reduce((s, r) => s + r.amount, 0)
+  const charge = await prisma.communityCharge.create({
+    data: {
+      communityId: COMM, periodId: may.id, fundId: penFund.id,
+      sourceType: 'FUND', sourceId: penFund.id, sourceKey: SOURCE_KEY,
+      amount: total, status: 'ACTIVE', allocationStrategy: 'PENALTY',
+      meta: { source: 'PENALTY', sourceFund: 'EXPENSES', note: 'manual: Homefile Mai 2026, confirmat admin' },
+    },
+  })
+  for (const r of resolved) {
+    await prisma.communityChargeLine.create({
       data: {
-        communityId: COMM,
-        periodCode: '2026-05',
-        type: 'MANUAL_ADJUSTMENT',
-        reason: 'ajustare-manuala',
-        billingEntityId: be.id,
-        fundCode: 'PENALIZARI',
-        amount: t.amount,
-        note: t.note,
-        status: 'ACTIVE',
-        createdBy: 'system:penalizari-mai-restore',
+        chargeId: charge.id, communityId: COMM, periodId: may.id, billingEntityId: r.beId, unitId: r.unitId,
+        amount: r.amount, meta: { source: 'PENALTY', sourceFund: 'EXPENSES', allocation: { method: 'MANUAL', note: r.note } },
       },
     })
-    console.log(`  correction created for ${be.name}: +${t.amount} RON (${created.id})`)
+    const entry = await prisma.beLedgerEntry.create({
+      data: {
+        communityId: COMM, periodId: may.id, billingEntityId: r.beId, fundId: penFund.id,
+        kind: 'CHARGE', amount: r.amount, refType: 'PENALTY_CLOSE_PREP', refId: may.id,
+      },
+    })
+    await prisma.beLedgerEntryDetail.create({
+      data: {
+        ledgerEntryId: entry.id, communityId: COMM, periodId: may.id, billingEntityId: r.beId,
+        kind: 'CHARGE', fundId: penFund.id, refType: 'PENALTY_CLOSE_PREP', refId: may.id, unitId: r.unitId,
+        amount: r.amount, meta: { source: 'PENALTY', note: `manual: ${r.note}` },
+      },
+    })
+    console.log(`  posted +${r.amount} RON (${r.note})`)
   }
 
-  console.log('Preparing May (applies the correction)...')
-  await periods.prepare(COMM, '2026-05')
-  console.log('Approving/closing May again...')
-  await periods.approve(COMM, '2026-05')
+  console.log(`Preparing + approving ${MAY_CODE} (recomputes be_statement from the new charge)...`)
+  await periods.prepare(COMM, MAY_CODE)
+  await periods.approve(COMM, MAY_CODE)
 
-  console.log('Rejecting + re-preparing June (picks up May\'s corrected dueEnd)...')
-  await periods.reject(COMM, '2026-06')
-  await periods.prepare(COMM, '2026-06')
+  const june = await prisma.period.findUnique({ where: { communityId_code: { communityId: COMM, code: JUNE_CODE } } })
+  if (june && june.status !== 'OPEN') {
+    console.log(`Rejecting + re-preparing ${JUNE_CODE} (picks up May's corrected dueEnd)...`)
+    await periods.reject(COMM, JUNE_CODE)
+    await periods.prepare(COMM, JUNE_CODE)
+  }
+
   console.log('✅ done')
-
-  const period = await prisma.period.findUnique({ where: { communityId_code: { communityId: COMM, code: '2026-06' } } })
-  for (const t of targets) {
-    const be = await prisma.billingEntity.findFirst({ where: { communityId: COMM, name: { contains: t.name } }, select: { id: true, name: true } })
-    const row: any[] = await prisma.$queryRawUnsafe(
-      `select bs.due_start::float8 ds, bs.payments::float8 pay, bs.due_end::float8 de
-         from be_statement bs left join fund f on f.id=bs.fund_id
-        where bs.community_id=$1 and bs.period_id=$2 and bs.billing_entity_id=$3 and f.code='PENALIZARI'`,
-      COMM, period.id, be.id,
-    )
-    console.log(be.name, 'June PENALIZARI:', row[0])
-  }
-
   await app.close()
 }
 main().catch((e) => { console.error(e?.message || e); process.exit(1) })

@@ -26,7 +26,10 @@ const COMM = 'Kralik'
 // afisare = the vendor's posting/display date (Data-Config). The penalty engine accrues over the
 // afisare-to-afisare window (May = 2026-06-11+1 .. 2026-07-13 = 32 days), reproducing the vendor total.
 const APR = { code: '2026-04', start: '2026-04-01', end: '2026-04-30', due: '2026-05-15', afisare: '2026-06-11' }
-const MAY = { code: '2026-05', start: '2026-05-01', end: '2026-05-31', due: '2026-06-15', afisare: '2026-07-13' }
+// due: Homefile's own May PDF header states "Dată scadență: 12.08.2026" — not 2026-06-15 (that
+// stale value predates the Aug 2026 regeneration and was corrected in DB via setSettings; kept here
+// too so a fresh reseed reproduces the fix instead of regressing it).
+const MAY = { code: '2026-05', start: '2026-05-01', end: '2026-05-31', due: '2026-08-12', afisare: '2026-07-13' }
 const REF = 'APRIL_INJECT'
 
 function loadJson(f: string) { return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', COMM, f), 'utf8')) }

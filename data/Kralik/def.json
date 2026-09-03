@@ -1673,6 +1673,14 @@
       "type": "PETTY",
       "currency": "RON",
       "defaultFundCode": "EXPENSES"
+    },
+    {
+      "code": "BANK_LIBRA_EUR",
+      "name": "Libra - EUR",
+      "type": "BANK",
+      "currency": "EUR",
+      "defaultFundCode": "EXPENSES",
+      "bank": "Libra"
     }
   ]
 }

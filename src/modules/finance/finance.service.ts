@@ -461,6 +461,12 @@ export class FinanceService {
       communityId, period.id,
     )
     const overrideDelta = new Map<string, number>(ovrRows.map((r) => [r.beId, Number(r.delta)]))
+    // Kralik has exactly one real penalty-accruing fund — PENALIZARI pairs with EXPENSES
+    // (Întreținere) only; every other fund's "penalty bucket" rows are an unrelated zero-rate
+    // arrears-tracking artifact (see penalty_bucket.fund_id spanning REABILITARE_3/REPARATII/RULMENT
+    // with rate=0 — not real historical penalty buckets, those only ever existed for EXPENSES). A
+    // manual override must not get split across those, so make sure its home fund has a column.
+    if ([...overrideDelta.values()].some((d) => d !== 0)) penaltyFundSet.add('EXPENSES')
 
     // per-BE per-fund arrears net of this period's fund-scoped payments (be_statement, grouped by
     // fund) — powers the "per Fond-Stare" view, which pairs each fund's Restanțe with its Curente
@@ -664,14 +670,16 @@ export class FinanceService {
     for (const f of funds) if (f.name) categoryLabels[f.code] = f.name
     const rank = (label: string) => (label === 'PENALIZARI' || label.startsWith('PEN:') ? 2 : fundCodes.has(label) ? 1 : 0)
 
-    // charges per BE keyed by category. Penalty (`PEN:<fund>`) amounts stay in the charge map so they
-    // count toward the month total, but are NOT registered as categories/columns — penalties are now
-    // rendered per fund via penaltyByFund, next to each fund's own column.
+    // charges per BE keyed by category. Penalty (`PEN:<fund>`) amounts stay in the charge map AND are
+    // registered as a category — catToGroup (below) already maps every `PEN:<fund>` label to the
+    // PENALIZARI group, so this is what makes PENALIZARI's own Curente/Restanțe (the same generic
+    // per-fund columns every other fund gets) actually show the amount, instead of it only reaching
+    // the BE's grand total invisibly.
     const byBe = new Map<string, Record<string, number>>()
     const byUnit = new Map<string, Record<string, number>>()
     const catSet = new Set<string>()
     for (const r of lineRows) {
-      if (!String(r.label).startsWith('PEN:')) catSet.add(r.label)
+      catSet.add(r.label)
       const m = byBe.get(r.beId) ?? {}
       m[r.label] = round2((m[r.label] ?? 0) + Number(r.amt))
       byBe.set(r.beId, m)
@@ -753,9 +761,12 @@ export class FinanceService {
         const grossMonth = penMonth.get(be.id) ?? 0
         const pbf = penaltyByFund.get(be.id)
         const penByFundOut: Record<string, { month: number; total: number }> = {}
-        if (pbf) for (const [f, v] of pbf) {
-          const share = delta === 0 ? 0 : grossMonth !== 0 ? v.month / grossMonth : 1 / pbf.size
-          penByFundOut[f] = { month: round2(v.month + delta * share), total: round2(v.total + delta * share) }
+        if (pbf) for (const [f, v] of pbf) penByFundOut[f] = { month: v.month, total: v.total }
+        // The override's delta always belongs on EXPENSES (see the penaltyFundSet note above) — never
+        // split across whichever funds happen to have a (zero-rate, unrelated) penalty_bucket row.
+        if (delta !== 0) {
+          const cur = penByFundOut.EXPENSES ?? { month: 0, total: 0 }
+          penByFundOut.EXPENSES = { month: round2(cur.month + delta), total: round2(cur.total + delta) }
         }
         const rn = resolveBeName(be)
         return {
@@ -1555,9 +1566,15 @@ export class FinanceService {
    * pay a period's invoice only after it's actually posted (Period.afisareDate) — payments booked
    * into period X's own be_statement are typically settling the PRIOR cycle's invoice (this is why
    * the avizier itself labels period X's payments column "Încasări (X-1)", a cosmetic relabeling of
-   * the same underlying number — see AvizierPanel.tsx). So "this period's real collection" is
-   * instead every POSTED payment dated after this period's own afisareDate — right after posting,
-   * that's correctly 0 until residents start paying against it.
+   * the same underlying number — see AvizierPanel.tsx). So "this period's real collection" is every
+   * POSTED payment dated inside this period's own afisare↔scadență window.
+   * That window is NOT always chronological — afisareDate (when the invoice was actually posted) can
+   * fall AFTER dueDate (the nominal due date printed on it) when the association posts late but keeps
+   * the nominal due date fixed (e.g. Kralik's May 2026: due 2026-06-15, afisare 2026-07-13 — see
+   * seed-kralik-april-may.ts). So the window is the symmetric range between the two dates, not a
+   * fixed afisare-then-due order — min(afisare, due) < ts <= max(afisare, due). Without an upper
+   * bound at all (the bug this replaced), "collected" grew unboundedly and pulled in later periods'
+   * own payments (e.g. June's) into an earlier period's (May's) collection figure.
    */
   async collection(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
@@ -1592,17 +1609,23 @@ export class FinanceService {
     const chargedByFund = chargedByFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) }))
 
     const periodRow: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select afisare_date as "afisareDate" from period where id = $1`,
+      `select afisare_date as "afisareDate", due_date as "dueDate" from period where id = $1`,
       period.id,
     )
     const afisareDate: Date | null = periodRow?.[0]?.afisareDate ?? null
+    const dueDate: Date | null = periodRow?.[0]?.dueDate ?? null
     let collected = 0
     let collectedCount = 0
     if (afisareDate) {
+      // Symmetric window: afisareDate and dueDate aren't always in chronological order (see the
+      // class comment above), so bound by min/max of the two rather than assuming afisare <= due.
+      // No dueDate at all → fall back to the old unbounded-above behavior (lower bound only).
+      const windowLo = dueDate && dueDate < afisareDate ? dueDate : afisareDate
+      const windowHi = dueDate && dueDate > afisareDate ? dueDate : (dueDate ? afisareDate : null)
       const collectedRows: any[] = await (this.prisma as any).$queryRawUnsafe(
         `select coalesce(sum(amount),0)::float8 as collected, count(distinct billing_entity_id)::int as "collectedCount"
-           from payment where community_id = $1 and status = 'POSTED' and ts > $2`,
-        communityId, afisareDate,
+           from payment where community_id = $1 and status = 'POSTED' and ts > $2 and ($3::timestamp is null or ts <= $3)`,
+        communityId, windowLo, windowHi,
       )
       collected = round2(Number(collectedRows?.[0]?.collected ?? 0))
       collectedCount = Number(collectedRows?.[0]?.collectedCount ?? 0)
