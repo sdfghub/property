@@ -60,3 +60,4 @@ property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json
 
 # Captured script output (e.g. `npm run db:flush > debug`) — never source
 debug
+backups/

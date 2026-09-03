@@ -710,6 +710,22 @@ export class PeriodService {
           where: { id: { in: finalIds } },
         })
       }
+      // Clean PAYMENT-kind ledger entries for this period too. reapplyForPeriod() only sweeps a
+      // payment's stale entries when the Payment row itself still exists but lost eligibility
+      // (cycleCode moved elsewhere) — if a Payment row was instead deleted and recreated with a new
+      // id (e.g. a reseed script re-importing the cash register), the old entries' refId points at an
+      // id that no longer exists anywhere, so that sweep never finds them and be_statement.payments
+      // silently doubles up on the next prepare(). Not covered by the CLOSE_* cleanup above (these
+      // carry refType='PAYMENT', not CLOSE_PREP/CLOSE_FINAL).
+      const paymentEntries = await tx.beLedgerEntry.findMany({
+        where: { communityId, periodId: period.id, kind: 'PAYMENT' },
+        select: { id: true },
+      })
+      if (paymentEntries.length) {
+        const paymentEntryIds = paymentEntries.map((e) => e.id)
+        await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: paymentEntryIds } } })
+        await tx.beLedgerEntry.deleteMany({ where: { id: { in: paymentEntryIds } } })
+      }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
       // clean penalty artifacts (dedicated PENALTY_* refTypes + penalty:* community charges); these
       // are not covered by the CLOSE_* cleanup above, so leaving them would double-count on re-prepare.
