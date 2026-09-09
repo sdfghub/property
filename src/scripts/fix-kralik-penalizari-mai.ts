@@ -14,7 +14,10 @@
 // mid-2023 (no live PenaltyBucket would ever generate it on its own).
 //
 // Idempotent: skips if a community_charge with this sourceKey already carries lines for both BEs in
-// May.
+// May. Target amounts live in data/Kralik/penalty-corrections-2026-05.json, not hardcoded here, so a
+// fresh reseed reproduces them without needing this script's source edited.
+import fs from 'fs'
+import path from 'path'
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
 import { BillingModule } from '../modules/billing/billing.module'
@@ -31,10 +34,8 @@ const MAY_CODE = '2026-05'
 const JUNE_CODE = '2026-06'
 const SOURCE_KEY = 'penalty:EXPENSES'
 
-const targets = [
-  { beName: 'Matei Viorel', unitCode: '400191-C1-U28-AP 1/B', amount: 9.42, note: 'Homefile Mai 2026 — Matei Viorel (1B)' },
-  { beName: 'Macri Nicodemo', unitCode: '400191-C1-U32-AP 11', amount: 3.70, note: 'Homefile Mai 2026 — Macri (11)' },
-]
+const corrections = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', COMM, 'penalty-corrections-2026-05.json'), 'utf8'))
+const targets: Array<{ beName: string; unitCode: string; amount: number; note: string }> = corrections.targets || []
 
 async function main() {
   const app = await NestFactory.createApplicationContext(ScriptModule, { logger: ['error'] })

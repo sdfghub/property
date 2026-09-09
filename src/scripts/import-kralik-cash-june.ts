@@ -44,7 +44,7 @@ async function main() {
     await prisma.cashTx.deleteMany({ where: { communityId: COMM, refType: REF } })
     await prisma.payment.deleteMany({ where: { communityId: COMM, provider: 'cash-register-2026-06' } })
 
-    let nTx = 0, nPay = 0, missBe: string[] = []
+    let nTx = 0, nPay = 0, nSkipped = 0, missBe: string[] = []
     for (const t of cash.tx as any[]) {
       if (t.void) continue
       const account = acctId(t.acct)
@@ -52,8 +52,13 @@ async function main() {
       const ts = new Date(t.date)
       const dir = t.dir === 'IN' ? 'IN' : 'OUT'
       const kind = ['PAYMENT', 'TRANSFER', 'ADJUSTMENT', 'OTHER'].includes(t.kind) ? t.kind : 'OTHER'
+      // `funds` (and `amount`) are what the owner-facing Payment/receipt shows — the source
+      // register's own figures. `cashFunds`, when present, overrides ONLY the real bank/casă
+      // movement (CashTx) for cases where the account's real currency amount differs from the
+      // register's RON-equivalent mislabeling (the 6 BANK_EUR entries) — see the file's own _note.
       const fundsObj: Record<string, number> = t.funds || { [t.fund || 'EXPENSES']: t.amount }
-      for (const [fc, amt] of Object.entries(fundsObj)) {
+      const cashFundsObj: Record<string, number> = t.cashFunds || fundsObj
+      for (const [fc, amt] of Object.entries(cashFundsObj)) {
         const fundId = funds.get(fc)
         if (!fundId) { console.log(`  ⚠ no fund ${fc} (tx #${t.n})`); continue }
         await prisma.cashTx.create({
@@ -67,22 +72,29 @@ async function main() {
         })
         nTx++
       }
+      // `skipPayment` reproduces a dev-DB correction that removed a duplicate/unresolved Payment
+      // without touching the underlying CashTx (the real money movement still happened) — see
+      // fix-kralik-duplicate-payments.ts. `cycle`, when it differs from this file's own cycleCode,
+      // parks the Payment on that later cycle directly (fix-kralik-reattribute-payments.ts /
+      // fix-kralik-register-gap-payments.ts folded into the source data instead of a separate step).
+      if (t.skipPayment) { nSkipped++; continue }
       if (t.unit && dir === 'IN' && kind === 'PAYMENT' && t.amount > 0) {
         const be = resolveBe(t.unit)
         const beId = be ? beIds.get(be) : null
         if (!beId) { missBe.push(t.unit); continue }
+        const payCycleCode: string = t.cycle && t.cycle !== cycleCode ? t.cycle : cycleCode
         await prisma.payment.create({
           data: {
             communityId: COMM, billingEntityId: beId, accountId: account, amount: t.amount, currency: t.acct === 'BANK_EUR' ? 'EUR' : 'RON', ts,
             method: 'REGISTER', status: 'POSTED', provider: 'cash-register-2026-06', providerRef: t.ref,
             refId: `cash:${cycleCode}:${t.n}`,
-            providerMeta: { cycleCode, account: t.acct, unitLabel: t.unit, payer: t.payer || null, funds: fundsObj, cycle: t.cycle || null, memo: t.memo || null, ref: t.ref },
+            providerMeta: { cycleCode: payCycleCode, account: t.acct, unitLabel: t.unit, payer: t.payer || null, funds: fundsObj, cycle: t.cycle || null, memo: t.memo || null, ref: t.ref },
           },
         })
         nPay++
       }
     }
-    console.log(`✅ cash imported: ${nTx} cash_tx, ${nPay} payments (cycle ${cycleCode})`)
+    console.log(`✅ cash imported: ${nTx} cash_tx, ${nPay} payments, ${nSkipped} skipped (cycle ${cycleCode})`)
     if (missBe.length) console.log(`  ⚠ unresolved units: ${[...new Set(missBe)].join(', ')}`)
   } finally { await prisma.$disconnect() }
 }
