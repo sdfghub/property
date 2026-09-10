@@ -71,13 +71,16 @@ export class FinanceService {
    * that have NO statement yet (uncommitted — e.g. the open period).
    *
    * totalDebt is the NET sum across every billing entity (credits from BEs in advance offset
-   * others' arrears), matching the avizier grand-total band exactly; topDebtors/debtorCount then
+   * others' arrears), matching the avizier grand-total band exactly; debtors/debtorCount then
    * filter to just the entities actually in arrears, since listing a credit balance in a "debtors"
-   * table wouldn't make sense.
+   * table wouldn't make sense. Each debtor's pctOfTotal is its share of the GROSS sum of listed
+   * debtors (not the netted totalDebt above) — "what fraction of the money owed to the
+   * association is owed by this owner," which is what a restanțieri list actually wants; it isn't
+   * diluted by unrelated BEs sitting in credit.
    */
   async receivables(communityId: string, periodCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
-    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, topDebtors: [], byFund: [] }
+    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, debtors: [], byFund: [] }
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `with stmt as (
          select bs.billing_entity_id as be_id, sum(bs.due_start) as due_start, sum(bs.payments) as payments
@@ -103,6 +106,7 @@ export class FinanceService {
     )
     const totalDebt = rows.reduce((s, r) => s + Number(r.debt), 0)
     const debtors = rows.filter((r) => Number(r.debt) > 0.005)
+    const debtorsGrossTotal = debtors.reduce((s, r) => s + Number(r.debt), 0)
 
     // Per-fund breakdown for the Dashboard's "Restanțe" card expander — summed directly from
     // be_statement's own (billing entity, fund) rows, not re-derived from the entity-level CTE
@@ -124,7 +128,11 @@ export class FinanceService {
       periodCode: period.code,
       totalDebt: round2(totalDebt),
       debtorCount: debtors.length,
-      topDebtors: debtors.slice(0, 10).map((r) => ({ ...r, debt: round2(r.debt) })),
+      debtors: debtors.map((r) => ({
+        ...r,
+        debt: round2(r.debt),
+        pctOfTotal: debtorsGrossTotal > 0 ? round2((Number(r.debt) / debtorsGrossTotal) * 100) : 0,
+      })),
       byFund: byFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) })),
     }
   }
@@ -389,6 +397,29 @@ export class FinanceService {
     return new Map(order.map((code, i) => [code, i]))
   }
 
+  /**
+   * Some real ExpenseType codes are ONE physical service billed as several invoice lines (e.g.
+   * Aquatim's "Apa Rece" invoice: APA_RECE + CANALIZARE + PENALITATI_APA, each with its own
+   * allocation rule) — those fold into ONE avizier column, summed, under the anchor code's own
+   * name, via `params.service` on the ExpenseType (set from expenseSplits[].service — see
+   * parse.ts). A code with no `service` override anchors its own column; APA_METEO is a
+   * genuinely different service (rain water, not potable water) and stays separate even though
+   * both sit under the same "Apă" domain. This is deliberately a finer grain than "Configurare
+   * Servicii" domains, which stay a coarser, not-yet-wired-in zoom-out level for later (today
+   * used only for column order, via serviceOrderIndex above).
+   */
+  private async serviceMergeMap(communityId: string): Promise<Map<string, { key: string; label: string }>> {
+    const types = await this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true, params: true } })
+    const nameByCode = new Map(types.map((t) => [t.code, t.name]))
+    const map = new Map<string, { key: string; label: string }>()
+    for (const t of types) {
+      const anchor = (t.params as any)?.service
+      if (typeof anchor !== 'string' || anchor === t.code) continue
+      map.set(t.code, { key: anchor, label: nameByCode.get(anchor) ?? anchor })
+    }
+    return map
+  }
+
   async avizier(communityId: string, periodCode?: string, groupBy?: 'entity' | 'unit' | 'group') {
     const mode: 'entity' | 'unit' | 'group' = groupBy === 'unit' || groupBy === 'group' ? groupBy : 'entity'
     const period = await this.resolvePeriod(communityId, periodCode)
@@ -494,6 +525,117 @@ export class FinanceService {
       paymentsByFundByBe.set(r.beId, pm)
     }
 
+    // Real per-unit payments/restanțe/penalties, wherever BeUnitStatement/PenaltyBucket actually
+    // have them (charges: always; payments/adjustments: only when a payment/correction explicitly
+    // named a unit — see PeriodService.computeUnitStatements). Absent for the un-tagged share of a
+    // multi-unit billing entity's activity, same "don't fabricate" rule as everywhere else in this
+    // method — `avizier()`'s unit/group rows fall back to 0 (+ the 🔗 badge) for those.
+    const unitStmtRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select unit_id as "unitId", billing_entity_id as "beId",
+              sum(due_start)::float8 as sold, sum(payments)::float8 as pay,
+              sum(adjustments)::float8 as adj, sum(due_end)::float8 as total
+         from be_unit_statement where community_id = $1 and period_id = $2
+        group by unit_id, billing_entity_id`,
+      communityId, period.id,
+    )
+    const stmtByUnit = new Map(unitStmtRows.map((r) => [r.unitId, r]))
+    // Trust a multi-unit BE's per-unit split only when its units' BeUnitStatement rows sum back
+    // to exactly the BE's own BeStatement total (dueEnd, across all funds) — i.e. every payment/
+    // adjustment that moved the BE-level number was also unit-tagged. A partial/incomplete split
+    // would understate what's actually paid and make arrears look worse than they are, which is
+    // worse than the honest 0+badge fallback — so an incomplete BE gets zero+badge on ALL of its
+    // units, not a mix of real and fabricated-looking figures.
+    // Accumulate raw (unrounded) and round only once at the end — rounding after every row's
+    // addition compounds small per-fund/per-unit drift (observed: a genuine ~140 RON aggregate
+    // rounded in 6+ separate additions can land exactly on the 0.01 tolerance boundary and fail
+    // a strict `<` by floating-point noise alone, even though the real figures match to the cent).
+    const unitDueEndSumByBe = new Map<string, number>()
+    for (const r of unitStmtRows) unitDueEndSumByBe.set(r.beId, (unitDueEndSumByBe.get(r.beId) ?? 0) + Number(r.total))
+    const splitTrustedForBe = new Set<string>()
+    for (const [beId, sum] of unitDueEndSumByBe) {
+      const beTotal = Number(stmt.get(beId)?.total ?? 0)
+      if (Math.abs(round2(sum) - round2(beTotal)) < 0.015) splitTrustedForBe.add(beId)
+    }
+    const unitSoldFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select bus.unit_id as "unitId", coalesce(f.code, 'ALTELE') as "fundCode",
+              sum(bus.due_start)::float8 as sold, sum(bus.payments)::float8 as payments
+         from be_unit_statement bus left join fund f on f.id = bus.fund_id
+        where bus.community_id = $1 and bus.period_id = $2
+        group by bus.unit_id, f.code`,
+      communityId, period.id,
+    )
+    const soldByFundByUnit = new Map<string, Record<string, number>>()
+    const paymentsByFundByUnit = new Map<string, Record<string, number>>()
+    for (const r of unitSoldFundRows) {
+      const m = soldByFundByUnit.get(r.unitId) ?? {}
+      m[r.fundCode] = round2((m[r.fundCode] ?? 0) + Number(r.sold) - Number(r.payments))
+      soldByFundByUnit.set(r.unitId, m)
+      const pm = paymentsByFundByUnit.get(r.unitId) ?? {}
+      pm[r.fundCode] = round2((pm[r.fundCode] ?? 0) + Number(r.payments))
+      paymentsByFundByUnit.set(r.unitId, pm)
+    }
+    // PenaltyBucket already carries a real unitId (per-unit by construction, see
+    // PeriodService/PenaltyLedgerService) — same aging-ledger source as the BE-level
+    // penMonthRows/penTotalRows above, just grouped by unit instead.
+    const unitPenMonthRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pb.unit_id as "unitId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
+         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
+        where pb.community_id = $1 and pbp.period_id = $2 and pb.unit_id is not null
+        group by pb.unit_id, sf.code`,
+      communityId, period.id,
+    )
+    const unitPenTotalRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pb.unit_id as "unitId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
+         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
+        where pb.community_id = $1 and pbp.period_seq <= $2 and pb.unit_id is not null
+        group by pb.unit_id, sf.code`,
+      communityId, p?.seq ?? 0,
+    )
+    const penaltyByFundByUnit = new Map<string, Map<string, { month: number; total: number }>>()
+    const bumpPenUnit = (unitId: string, fund: string, key: 'month' | 'total', amt: number) => {
+      const m = penaltyByFundByUnit.get(unitId) ?? new Map<string, { month: number; total: number }>()
+      const cur = m.get(fund) ?? { month: 0, total: 0 }
+      cur[key] = round2(cur[key] + amt)
+      m.set(fund, cur); penaltyByFundByUnit.set(unitId, m)
+    }
+    unitPenMonthRows.forEach((r) => bumpPenUnit(r.unitId, r.fund, 'month', Number(r.amt)))
+    unitPenTotalRows.forEach((r) => bumpPenUnit(r.unitId, r.fund, 'total', Number(r.amt)))
+    const penMonthByUnit = new Map<string, number>()
+    const penTotalByUnit = new Map<string, number>()
+    for (const [unitId, byFund] of penaltyByFundByUnit) {
+      let mo = 0, to = 0
+      for (const v of byFund.values()) { mo += v.month; to += v.total }
+      penMonthByUnit.set(unitId, round2(mo)); penTotalByUnit.set(unitId, round2(to))
+    }
+    const finByUnit = (unitId: string) => {
+      const s = stmtByUnit.get(unitId)
+      const pbf = penaltyByFundByUnit.get(unitId)
+      const penByFundOut: Record<string, { month: number; total: number }> = {}
+      if (pbf) for (const [f, v] of pbf) penByFundOut[f] = { month: v.month, total: v.total }
+      const soldPrecedent = round2(Number(s?.sold ?? 0))
+      const payments = round2(Number(s?.pay ?? 0))
+      const adjustments = round2(Number(s?.adj ?? 0))
+      // totalDue: see the matching note in finByBe below — derived live from this unit's own
+      // charge lines (byUnit) rather than BeUnitStatement.dueEnd's snapshot, so it stays correct
+      // even on an OPEN, not-yet-prepared period.
+      const curTotal = round2(Object.values(byUnit.get(unitId) ?? {}).reduce((x, v) => x + v, 0))
+      return {
+        soldPrecedent,
+        soldByFund: soldByFundByUnit.get(unitId) ?? {},
+        paymentsByFund: paymentsByFundByUnit.get(unitId) ?? {},
+        penaltyMonth: round2(penMonthByUnit.get(unitId) ?? 0),
+        penaltyTotal: round2(penTotalByUnit.get(unitId) ?? 0),
+        penaltyByFund: penByFundOut,
+        payments,
+        adjustments,
+        totalDue: round2(soldPrecedent - payments + adjustments + curTotal),
+      }
+    }
+    // A unit "has real data" this period only if BeUnitStatement actually has a row for it — an
+    // empty/never-populated unit (e.g. a period before this feature existed) must still fall back
+    // to zero+badge, not a silent all-zero that looks identical to "genuinely nothing owed".
+    const unitsWithRealStatement = new Set(unitStmtRows.map((r) => r.unitId))
+
     // per-BE (and, in the same pass, per-unit — grouping by both costs nothing extra and lets
     // "Unitate"/"Grup unități" mode re-sum these same lines by unit instead of by entity) per-
     // category current charges.
@@ -553,11 +695,15 @@ export class FinanceService {
     const aviSeq = p?.seq ?? 0
     const resolveBeName = (be: { id: string; name: string; displayName: string | null }): { name: string; displayName: string | null } =>
       resolveBeNameShared(be, aviSeq, nameHistoryByBe)
-    const allUnits = mode === 'entity' ? [] : await this.prisma.unit.findMany({
+    // Always fetched now (not just for unit/group mode) — entity mode's own rows need it too,
+    // to resolve each multi-unit BE's member units for `unitBreakdown` (the Proprietar-mode
+    // expand/collapse drilldown).
+    const allUnits = await this.prisma.unit.findMany({
       where: { communityId },
       select: { id: true, code: true, name: true, type: true, floorNumber: true, staircase: true },
     })
     const unitById = new Map(allUnits.map((u) => [u.id, u]))
+    const unitIdByCode = new Map(allUnits.map((u) => [u.code, u.id]))
     const contactForUnit = (unitId: string): string | null => {
       const beId = beIdByUnitId.get(unitId)
       const be = beId ? beById.get(beId) : undefined
@@ -665,6 +811,7 @@ export class FinanceService {
     // Column display labels come from the data (expense-type / fund names) — the frontend renders these
     // rather than hardcoding a code→label map. APA_DIF is the synthetic water-difference column.
     const expTypes = await this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true } })
+    const serviceMerge = await this.serviceMergeMap(communityId)
     const categoryLabels: Record<string, string> = { APA_DIF: 'Apă - diferență' }
     for (const e of expTypes) if (e.name) categoryLabels[e.code] = e.name
     for (const f of funds) if (f.name) categoryLabels[f.code] = f.name
@@ -679,12 +826,13 @@ export class FinanceService {
     const byUnit = new Map<string, Record<string, number>>()
     const catSet = new Set<string>()
     for (const r of lineRows) {
-      catSet.add(r.label)
+      const label = serviceMerge.get(r.label)?.key ?? r.label
+      catSet.add(label)
       const m = byBe.get(r.beId) ?? {}
-      m[r.label] = round2((m[r.label] ?? 0) + Number(r.amt))
+      m[label] = round2((m[label] ?? 0) + Number(r.amt))
       byBe.set(r.beId, m)
       const mu = byUnit.get(r.unitId) ?? {}
-      mu[r.label] = round2((mu[r.label] ?? 0) + Number(r.amt))
+      mu[label] = round2((mu[label] ?? 0) + Number(r.amt))
       byUnit.set(r.unitId, mu)
     }
     const categories = [...catSet].sort((a, b) =>
@@ -752,54 +900,56 @@ export class FinanceService {
       || fundOrderIdx(a.key) - fundOrderIdx(b.key)
       || a.label.localeCompare(b.label))
 
-    const entityRows = bes
-      .map((be) => {
-        const s = stmt.get(be.id)
-        const charges = byBe.get(be.id) ?? {}
-        const curTotal = round2(Object.values(charges).reduce((x, v) => x + v, 0))
-        const delta = overrideDelta.get(be.id) ?? 0 // net (override − computed); folded into penalty display
-        const grossMonth = penMonth.get(be.id) ?? 0
-        const pbf = penaltyByFund.get(be.id)
-        const penByFundOut: Record<string, { month: number; total: number }> = {}
-        if (pbf) for (const [f, v] of pbf) penByFundOut[f] = { month: v.month, total: v.total }
-        // The override's delta always belongs on EXPENSES (see the penaltyFundSet note above) — never
-        // split across whichever funds happen to have a (zero-rate, unrelated) penalty_bucket row.
-        if (delta !== 0) {
-          const cur = penByFundOut.EXPENSES ?? { month: 0, total: 0 }
-          penByFundOut.EXPENSES = { month: round2(cur.month + delta), total: round2(cur.total + delta) }
-        }
-        const rn = resolveBeName(be)
-        return {
-          rowKey: be.code,
-          beCode: be.code,
-          beName: rn.name,
-          displayName: rn.displayName ?? null,
-          order: be.order,
-          units: unitsByBe.get(be.id) ?? [],
-          cpi: infoByBe.get(be.id)?.cpi ?? null,
-          residents: infoByBe.get(be.id)?.residents ?? null,
-          consumption: infoByBe.get(be.id)?.consumption ?? null,
-          soldPrecedent: round2(Number(s?.sold ?? 0)),
-          soldByFund: soldByFundByBe.get(be.id) ?? {},
-          paymentsByFund: paymentsByFundByBe.get(be.id) ?? {},
-          charges,
-          curentTotal: round2(curTotal + delta),
-          penaltyMonth: round2(grossMonth + delta),
-          penaltyTotal: round2((penTotal.get(be.id) ?? 0) + delta),
-          penaltyByFund: penByFundOut,
-          payments: round2(Number(s?.pay ?? 0)),
-          adjustments: round2(Number(s?.adj ?? 0) - delta),
-          totalDue: round2(Number(s?.total ?? 0)),
-          contactMismatch: false,
-        }
-      })
-      .filter((r) => r.soldPrecedent !== 0 || r.curentTotal !== 0 || r.totalDue !== 0 || r.penaltyTotal !== 0)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    // Payments/Restanțe/Penalties/TotalDue are billing-entity concepts (`BeStatement` has zero
+    // unit granularity) — computed once per BE here so unit/group rows can reuse the exact same
+    // figures entity rows show, instead of re-deriving them.
+    const finByBe = (beId: string) => {
+      const s = stmt.get(beId)
+      const delta = overrideDelta.get(beId) ?? 0 // net (override − computed); folded into penalty display
+      const grossMonth = penMonth.get(beId) ?? 0
+      const pbf = penaltyByFund.get(beId)
+      const penByFundOut: Record<string, { month: number; total: number }> = {}
+      if (pbf) for (const [f, v] of pbf) penByFundOut[f] = { month: v.month, total: v.total }
+      // The override's delta always belongs on EXPENSES (see the penaltyFundSet note above) — never
+      // split across whichever funds happen to have a (zero-rate, unrelated) penalty_bucket row.
+      if (delta !== 0) {
+        const cur = penByFundOut.EXPENSES ?? { month: 0, total: 0 }
+        penByFundOut.EXPENSES = { month: round2(cur.month + delta), total: round2(cur.total + delta) }
+      }
+      const soldPrecedent = round2(Number(s?.sold ?? 0))
+      const payments = round2(Number(s?.pay ?? 0))
+      const rawAdjustments = round2(Number(s?.adj ?? 0))
+      // totalDue is derived live (soldPrecedent − payments + adjustments + this period's own
+      // charges) instead of trusting BeStatement.dueEnd's snapshot directly. BeStatement.charges
+      // is only refreshed by PeriodService.prepare()/approve() — an OPEN period whose charges
+      // were staged into community_charge_line by another path (a late invoice import, a data-fix
+      // script) can sit with a stale, too-low dueEnd until the next prepare. `byBe` (built above
+      // from community_charge_line, same source `curentTotal` already uses) must agree with
+      // BeStatement.charges to the cent once truly in sync (see CLAUDE.md's own charges-audit
+      // invariant) — recomputing from it here means Avizier always shows the full, reviewable
+      // total, whether or not the period has been prepared yet.
+      const curTotal = round2(Object.values(byBe.get(beId) ?? {}).reduce((x, v) => x + v, 0))
+      return {
+        soldPrecedent,
+        soldByFund: soldByFundByBe.get(beId) ?? {},
+        paymentsByFund: paymentsByFundByBe.get(beId) ?? {},
+        penaltyMonth: round2(grossMonth + delta),
+        penaltyTotal: round2((penTotal.get(beId) ?? 0) + delta),
+        penaltyByFund: penByFundOut,
+        payments,
+        adjustments: round2(rawAdjustments - delta),
+        totalDue: round2(soldPrecedent - payments + rawAdjustments + curTotal),
+        _delta: delta,
+      }
+    }
 
-    // "Unitate" / "Grup unități" rows only ever carry current-period Cheltuieli (community_charge_line
-    // already has a real per-unit unitId) — arrears/payments/penalties stay billing-entity concepts
-    // (`BeStatement` has zero unit granularity) and are shown as 0 here rather than repeating a BE's
-    // aggregate on every one of its units, which would overcount the TOTAL row.
+    // "Unitate" / "Grup unități" rows — and now the Proprietar-mode `unitBreakdown` drilldown
+    // below — show REAL payments/restanțe/penalties whenever we can trust them: always for a
+    // single-unit billing entity (no ambiguity), and for a multi-unit one only once every
+    // unit's BeUnitStatement is verified to sum back to the BE's own total (see
+    // splitTrustedForBe above). Otherwise zeroed rather than repeating/guessing the BE's
+    // aggregate on every one of its units — the 🔗 badge points an admin at Proprietar mode
+    // (or, now, at expanding that same row) for the real combined figure.
     const zeroFinancials = {
       soldPrecedent: 0,
       soldByFund: {} as Record<string, number>,
@@ -808,6 +958,103 @@ export class FinanceService {
       penaltyByFund: {} as Record<string, { month: number; total: number }>,
       payments: 0, adjustments: 0, totalDue: 0,
     }
+
+    // A unit's outstanding balance that moved to a new owner at an ownership change
+    // (Correction type OWNERSHIP_TRANSFER — not period-scoped, a declared transfer stays true
+    // from the period it was made onward) — surfaced on the receiving BE's row so an admin can
+    // see "this much of what I owe isn't from my own activity" instead of it silently merging
+    // into the normal figures.
+    const transferRows = await this.prisma.correction.findMany({
+      where: { communityId, type: 'OWNERSHIP_TRANSFER', status: 'ACTIVE' },
+      select: { billingEntityId: true, payload: true },
+    })
+    const inheritedFromByBe = new Map<string, { beName: string; byFund: Record<string, number>; total: number }>()
+    for (const t of transferRows) {
+      const payload = (t.payload ?? {}) as any
+      const toId: string | undefined = payload.toBillingEntityId
+      const perFund = (payload.perFund ?? {}) as Record<string, number>
+      if (!toId || !t.billingEntityId) continue
+      const fromBe = beById.get(t.billingEntityId)
+      if (!fromBe) continue
+      const total = round2(Object.values(perFund).reduce((s, v) => s + Number(v), 0))
+      inheritedFromByBe.set(toId, { beName: resolveBeName(fromBe).name, byFund: perFund, total })
+    }
+
+    // Short apartment label from a full unit code ("400191-C1-U8-AP 3" → "AP 3") — same
+    // transform as frontend/src/components/community-admin/beLabel.ts's shortUnit, duplicated
+    // here (not imported — this is backend code) purely so unitBreakdown can be sorted in the
+    // order an admin actually reads unit labels in, not the raw code's own U-number ordering
+    // (which routinely disagrees, e.g. "…U14-AP 11A" sorts before "…U32-AP 11" by code).
+    const shortUnitLabel = (code: string) => code.split('-').slice(3).join('-') || code
+    const entityRows = bes
+      .map((be) => {
+        const charges = byBe.get(be.id) ?? {}
+        const curTotal = round2(Object.values(charges).reduce((x, v) => x + v, 0))
+        const { _delta, ...fin } = finByBe(be.id)
+        const rn = resolveBeName(be)
+        const unitCodes = unitsByBe.get(be.id) ?? []
+        // Per-unit drilldown for the Proprietar-mode expand toggle — only built for multi-unit
+        // BEs (a single-unit BE's own row already IS the unit's row, nothing to expand into).
+        let unitBreakdown: any[] | undefined
+        if (unitCodes.length > 1) {
+          const beTrusted = splitTrustedForBe.has(be.id)
+          unitBreakdown = unitCodes
+            .slice()
+            .sort((a, b) => shortUnitLabel(a).localeCompare(shortUnitLabel(b), 'ro', { numeric: true }))
+            .map((code) => {
+            const unitId = unitIdByCode.get(code)
+            const uCharges = unitId ? (byUnit.get(unitId) ?? {}) : {}
+            const uCurTotal = round2(Object.values(uCharges).reduce((x, v) => x + v, 0))
+            const uTrusted = !!(beTrusted && unitId && unitsWithRealStatement.has(unitId))
+            const { _delta: _ud, ...ufin } = uTrusted ? { ...finByUnit(unitId!), _delta: 0 } : { ...zeroFinancials, _delta: 0 }
+            if (!uTrusted) ufin.totalDue = uCurTotal
+            return {
+              rowKey: `${be.code}::${code}`,
+              // The real BE code (not the unit's own code) — the per-cell drilldowns
+              // (openCell/openSold/openPayments/openPenalty) are inherently BE-scoped, no
+              // unit-level equivalent exists, so a click from an expanded row explains the
+              // whole entity, same as clicking the parent row itself would.
+              beCode: be.code,
+              // No displayName here — beLabel() falls back to shortUnit(units[0]) for the
+              // primary label ("400191-C1-U32-AP 11" → "AP 11"), same as Unitate mode.
+              beName: unitId ? (contactForUnit(unitId) ?? '') : '',
+              displayName: null,
+              units: [code],
+              cpi: unitId ? (infoByUnit.get(unitId)?.cpi ?? null) : null,
+              residents: unitId ? (infoByUnit.get(unitId)?.residents ?? null) : null,
+              consumption: unitId ? (infoByUnit.get(unitId)?.consumption ?? null) : null,
+              charges: uCharges,
+              curentTotal: uCurTotal,
+              contactMismatch: false,
+              trusted: uTrusted,
+              ...ufin,
+            }
+          })
+        }
+        return {
+          rowKey: be.code,
+          beCode: be.code,
+          beName: rn.name,
+          displayName: rn.displayName ?? null,
+          order: be.order,
+          units: unitCodes,
+          cpi: infoByBe.get(be.id)?.cpi ?? null,
+          residents: infoByBe.get(be.id)?.residents ?? null,
+          consumption: infoByBe.get(be.id)?.consumption ?? null,
+          charges,
+          curentTotal: round2(curTotal + _delta),
+          contactMismatch: false,
+          unitBreakdown,
+          inheritedFrom: inheritedFromByBe.get(be.id),
+          ...fin,
+        }
+      })
+      // Net restanța (soldPrecedent − payments), not the raw opening balance — a BE whose entire
+      // opening balance was settled this period (e.g. transferred away via OWNERSHIP_TRANSFER)
+      // has a real opening balance but owes nothing now; it shouldn't linger as a visible
+      // all-zero row just because `soldPrecedent` itself is historically non-zero.
+      .filter((r) => round2(r.soldPrecedent - r.payments) !== 0 || r.curentTotal !== 0 || r.totalDue !== 0 || r.penaltyTotal !== 0)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     const unitRows = mode !== 'unit' ? [] : allUnits
       .map((u) => {
         const charges = byUnit.get(u.id) ?? {}
@@ -815,6 +1062,22 @@ export class FinanceService {
         const beId = beIdByUnitId.get(u.id)
         const be = beId ? beById.get(beId) : undefined
         const contact = contactForUnit(u.id) ?? (be ? (resolveBeName(be).displayName || resolveBeName(be).name) : '')
+        // A billing entity spanning more than one unit (e.g. one owner holding both an
+        // apartment and a separate storage unit) has no per-unit split for payments/restanțe
+        // unless verified trustworthy (see splitTrustedForBe above) — flag the sibling unit(s)
+        // regardless, so the UI can always point an admin at Proprietar mode too.
+        const siblingUnits = beId ? (unitsByBe.get(beId) ?? []) : []
+        const shared = siblingUnits.length > 1 ? siblingUnits.filter((c) => c !== u.code) : undefined
+        const single = beId && !shared
+        const trusted = beId && shared && splitTrustedForBe.has(beId) && unitsWithRealStatement.has(u.id)
+        // Only badge the row when its financials are actually still the zero fallback — once a
+        // multi-unit BE's split is verified real (`trusted`), the numbers speak for themselves.
+        const sharedWithUnits = shared && !trusted ? shared : undefined
+        const { _delta, ...fin } = single ? finByBe(beId!) : trusted ? { ...finByUnit(u.id), _delta: 0 } : { ...zeroFinancials, _delta: 0 }
+        // The zero fallback must not claim "nothing owed" when there ARE real charges this
+        // period — Total is at least this period's own Curente even when the carried restanțe
+        // are unknown at unit granularity (understating reality is honest; a flat 0 isn't).
+        if (!single && !trusted) fin.totalDue = curTotal
         return {
           rowKey: u.id,
           beCode: be?.code ?? u.code, beName: contact, displayName: null, order: 0,
@@ -822,9 +1085,9 @@ export class FinanceService {
           cpi: infoByUnit.get(u.id)?.cpi ?? null,
           residents: infoByUnit.get(u.id)?.residents ?? null,
           consumption: infoByUnit.get(u.id)?.consumption ?? null,
-          charges, curentTotal: curTotal, contactMismatch: false,
-          ...zeroFinancials,
-          _sortFloor: u.floorNumber ?? 999, _sortName: u.name || u.code,
+          charges, curentTotal: curTotal, contactMismatch: false, sharedWithUnits,
+          ...fin,
+          _sortFloor: u.floorNumber ?? 999, _sortName: u.name || shortUnitLabel(u.code),
         }
       })
       .filter((r) => r.curentTotal !== 0 || r.cpi != null)
@@ -858,13 +1121,23 @@ export class FinanceService {
         }
         const apartmentBeId = apartmentUnitId ? beIdByUnitId.get(apartmentUnitId) : undefined
         const apartmentBeCode = apartmentBeId ? beById.get(apartmentBeId)?.code : undefined
+        // Same sibling-unit flag as unit mode, but scoped to units OUTSIDE this physical group
+        // that still share the group's resolved billing entity (a BE split across two separate
+        // physical groups, not just across units within the same one).
+        const groupUnitCodes = new Set(g.unitIds.map((uid) => unitById.get(uid)?.code ?? uid))
+        const outsideSiblings = apartmentBeId ? (unitsByBe.get(apartmentBeId) ?? []).filter((c) => !groupUnitCodes.has(c)) : []
+        const sharedWithUnits = outsideSiblings.length ? outsideSiblings : undefined
+        const { _delta, ...fin } = apartmentBeId && !sharedWithUnits ? finByBe(apartmentBeId) : { ...zeroFinancials, _delta: 0 }
+        const groupCurTotal = round2(Object.values(charges).reduce((x, v) => x + v, 0))
+        // Same "don't claim zero owed when there are real charges" fix as unit mode above.
+        if (!(apartmentBeId && !sharedWithUnits)) fin.totalDue = groupCurTotal
         return {
           rowKey: groupId,
           beCode: apartmentBeCode ?? groupId, beName, displayName: g.name, order: 0,
           units: g.unitIds.map((uid) => unitById.get(uid)?.code ?? uid),
           cpi, residents: null, consumption: null,
-          charges, curentTotal: round2(Object.values(charges).reduce((x, v) => x + v, 0)), contactMismatch,
-          ...zeroFinancials,
+          charges, curentTotal: groupCurTotal, contactMismatch, sharedWithUnits,
+          ...fin,
         }
       })
       .filter((r) => r.curentTotal !== 0 || r.cpi != null)
@@ -968,6 +1241,16 @@ export class FinanceService {
         })
       : []
     const expenseTypeByCode = new Map(expenseTypes.map((e) => [e.code, e]))
+    // Same anchor merge avizier() uses for its per-payer "Serviciu" columns (e.g. Aquatim's water
+    // invoice splits into APA_RECE + CANALIZARE + PENALITATI_APA, each its own ExpenseType/charge —
+    // see serviceMergeMap's own doc comment) — applied here too so "Serviciu Asociație" never shows
+    // a sub-service's raw name on its own row. Rows stay one-per-charge (this is still the vendor
+    // audit trail: unit cost/quantity/document per line), but the displayed service name now always
+    // matches what the per-apartment/per-unit-group views call it, and "Grupează după: Serviciu"
+    // subtotals the sub-service rows together under that shared name.
+    const serviceMerge = await this.serviceMergeMap(communityId)
+    const mergedServiceName = (code: string | null | undefined, fallbackName?: string | null): string =>
+      (code ? serviceMerge.get(code)?.label : undefined) ?? fallbackName ?? code ?? '—'
 
     // Per-charge: the leaves the engine actually used (for vendor-invoice charges only — fund
     // contribution charges have no ExpenseType/splitTemplate at all, see the FUND branch below),
@@ -1103,7 +1386,7 @@ export class FinanceService {
         const residualCost = round2(leafCost(row.id, leafSet.residual.id) ?? 0)
 
         const meteredRow = {
-          domain, associationService: et.name ?? row.expense_type_code ?? '—',
+          domain, associationService: mergedServiceName(row.expense_type_code, et.name),
           measuredQty, measuredQtyUnit: measuredQty != null ? 'm3' : null, measuredQtyBasis: 'Măsurat',
           beneficiaries, splitMethod,
           vendorName, vendorService: leafSet.metered.name ?? '—', document,
@@ -1174,7 +1457,7 @@ export class FinanceService {
 
       return [{
         domain,
-        associationService: isFund ? (fund?.name ?? row.fund_code ?? '—') : (et?.name ?? row.expense_type_code ?? '—'),
+        associationService: isFund ? (fund?.name ?? row.fund_code ?? '—') : mergedServiceName(row.expense_type_code, et?.name),
         measuredQty, measuredQtyUnit, measuredQtyBasis,
         beneficiaries,
         splitMethod,
