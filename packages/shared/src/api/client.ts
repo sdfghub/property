@@ -28,7 +28,11 @@ function urlFor(baseUrl: string, path: string) {
 
 function buildError(res: Response, body: any) {
   const message = typeof body === 'string' ? body : body?.message || res.statusText
-  return new Error(`Request failed (${res.status}): ${message}`)
+  const err = new Error(`Request failed (${res.status}): ${message}`) as Error & { status?: number; body?: unknown }
+  // Keep the structured body: some endpoints return details (e.g. intake contract issues) next to `message`.
+  err.status = res.status
+  err.body = body
+  return err
 }
 
 export function createApiClient(config: ApiClientConfig): ApiClient {

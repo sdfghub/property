@@ -24,6 +24,7 @@ import { InventoryModule } from './modules/inventory/inventory.module'
 import { FinanceModule } from './modules/finance/finance.module'
 import { CommitteeModule } from './modules/committee/committee.module'
 import { CorrectionsModule } from './modules/corrections/corrections.module'
+import { IntakeModule } from './modules/intake/intake.module'
 import { FeaturesModule } from './modules/features/features.module'
 import { MetadataModule } from './modules/metadata/metadata.module'
 import { ReportsModule } from './modules/reports/reports.module'
@@ -61,6 +62,7 @@ class HealthController {
     FinanceModule,
     CommitteeModule,
     CorrectionsModule,
+    IntakeModule,
     FeaturesModule,
     MetadataModule,
     ReportsModule,
@@ -102,6 +104,12 @@ async function bootstrap() {
     next()
   })
   app.use((req: Request, res: Response, next: NextFunction) => {
+    // Intake carries prompt packs (~50 KB) and whole agent payloads — log the line, not the bodies.
+    const quiet = String(req.originalUrl || req.url).includes('/intake/')
+    if (quiet) {
+      console.log('[REQ]', { method: req.method, url: req.originalUrl || req.url })
+      return next()
+    }
     // Debug: log all requests with headers/body.
     console.log('[REQ]', {
       method: req.method,

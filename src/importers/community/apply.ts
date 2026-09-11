@@ -25,8 +25,8 @@ export async function applyCommunityPlan(plan: CommunityImportPlan) {
   // community + period (use id and code from plan)
   await prisma.community.upsert({
     where: { id: communityId },
-    update: { code: communityId, name: plan.communityName },
-    create: { id: communityId, code: communityId, name: plan.communityName },
+    update: { code: communityId, name: plan.communityName, ...(plan.intakeHints ? { intakeHints: plan.intakeHints } : {}) },
+    create: { id: communityId, code: communityId, name: plan.communityName, intakeHints: plan.intakeHints ?? undefined },
   })
   const sysAdmins = await prisma.roleAssignment.findMany({
     where: { role: Role.SYSTEM_ADMIN, scopeType: ScopeType.SYSTEM },

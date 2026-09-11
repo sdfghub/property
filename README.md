@@ -55,6 +55,7 @@ steps plus the project rules that aren't guessable from the code.
 | [architecture.md](./docs/architecture.md) | the domain model: periods, funds, allocation, statements/ledger, penalties, avizier |
 | [meters.md](./docs/meters.md) | meters → readings → measures, the aggregation rule, never-fall-back allocation |
 | [corrections.md](./docs/corrections.md) | reshuffles/transfers/write-offs as declarations with a derived ledger |
+| [intake.md](./docs/intake.md) | AI intake: prompt pack → external agent JSON → review → apply as invoices/expenses |
 | [frontend-conventions.md](./docs/frontend-conventions.md) | no hardcoded domain labels; EN/RO i18n contract |
 | [data-reseed.md](./docs/data-reseed.md) | wiping and rebuilding a community from committed source |
 | [deployment.md](./docs/deployment.md) | shipping to prod (vicusia.ro) |
