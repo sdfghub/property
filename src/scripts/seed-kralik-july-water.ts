@@ -1,6 +1,12 @@
-// Kralik: import July's per-unit WATER_COLD measures from
+// Kralik: import July's per-unit WATER_COLD readings from
 // data/Kralik/Consum_apa_Iulie_2026.csv (Unitate,Consum apa [m3]), sourced from the association's own
 // reading sheet. Only WATER_COLD — residents/invoices/bill submission are separate steps.
+//
+// Goes through TemplateService.upsertMeterReading — the same path the real "Contoare" UI step calls —
+// so it writes the raw MeterReading row against the unit's registered Meter, rolls it up into
+// PeriodMeasure, and runs recomputeAggregationsAndDerived. Writing PeriodMeasure directly (an earlier
+// version of this script did) bypasses MeterReading entirely, which is what the UI actually reads —
+// the values never showed up on screen even though the allocation engine had them.
 //
 // AP 4A is deliberately SKIPPED: the sheet reports -13.342 m³, which is physically impossible (a
 // negative consumption means the new index read lower than the old one) and would corrupt the
@@ -13,6 +19,7 @@ import { BillingModule } from '../modules/billing/billing.module'
 import { PeriodModule } from '../modules/period/period.module'
 import { FeaturesModule } from '../modules/features/features.module'
 import { PrismaService } from '../modules/user/prisma.service'
+import { TemplateService } from '../modules/billing/template.service'
 
 @Module({ imports: [FeaturesModule, BillingModule, PeriodModule] })
 class ScriptModule {}
@@ -76,11 +83,12 @@ function parseCsv(filePath: string): Array<{ label: string; value: number | null
 async function main() {
   const app = await NestFactory.createApplicationContext(ScriptModule, { logger: ['error'] })
   const prisma = app.get(PrismaService) as any
+  const templates = app.get(TemplateService)
 
   const def = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', COMM, 'def.json'), 'utf8'))
   const longCodeByName = new Map<string, string>((def.structure || []).map((s: any) => [s.name, s.code]))
-  const units = await prisma.unit.findMany({ where: { communityId: COMM }, select: { id: true, code: true } })
-  const unitByCode = new Map(units.map((u: any) => [u.code, u]))
+  const meters = await prisma.meter.findMany({ where: { typeCode: 'WATER_COLD' }, select: { meterId: true, scopeCode: true } })
+  const meterIdByUnitCode = new Map(meters.map((m: any) => [m.scopeCode, m.meterId]))
 
   const period = await prisma.period.findUnique({ where: { communityId_code: { communityId: COMM, code: PERIOD_CODE } } })
   if (!period) throw new Error(`Period ${PERIOD_CODE} not found for ${COMM}`)
@@ -97,20 +105,16 @@ async function main() {
     if (value < 0) { negative.push(`${label} (${value} m³)`); continue }
     const name = NAME_MAP[label]
     const longCode = name ? longCodeByName.get(name) : undefined
-    const u = longCode ? (unitByCode.get(longCode) as any) : null
-    if (!u) { missing.push(label); continue }
-    await prisma.periodMeasure.upsert({
-      where: { communityId_periodId_scopeType_scopeId_typeCode: { communityId: COMM, periodId: period.id, scopeType: 'UNIT', scopeId: u.id, typeCode: 'WATER_COLD' } },
-      update: { value, origin: 'ADMIN', meterId: `WATER_COLD-${u.code}` },
-      create: { communityId: COMM, periodId: period.id, scopeType: 'UNIT', scopeId: u.id, typeCode: 'WATER_COLD', value, origin: 'ADMIN', meterId: `WATER_COLD-${u.code}` },
-    })
+    const meterId = longCode ? (meterIdByUnitCode.get(longCode) as string | undefined) : undefined
+    if (!meterId) { missing.push(label); continue }
+    await templates.upsertMeterReading(COMM, PERIOD_CODE, [], { meterId, value, origin: 'METER' })
     nOk++
   }
 
-  console.log(`✅ imported WATER_COLD for ${nOk} units (period ${PERIOD_CODE})`)
+  console.log(`✅ imported WATER_COLD readings for ${nOk} units (period ${PERIOD_CODE})`)
   if (skipped.length) console.log(`  ⏭️  no reading in CSV (blank), left untouched: ${skipped.join(', ')}`)
   if (negative.length) console.log(`  ⚠️  SKIPPED — negative/invalid reading, needs manual check: ${negative.join(', ')}`)
-  if (missing.length) console.log(`  ⚠️  no matching unit found for: ${missing.join(', ')}`)
+  if (missing.length) console.log(`  ⚠️  no matching meter found for: ${missing.join(', ')}`)
 
   await app.close()
 }
