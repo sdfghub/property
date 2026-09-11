@@ -1,30 +1,30 @@
 {
-  "_note": "July cash-register import. Sources: 'Registru Casă (Homefile) - 10.08-10.09.2026.pdf' and 'Registru Bancă (Homefile) - 10.08-10.09.2026.pdf' (data/Kralik's Documents/2026-07 folder). Both registers actually cover 10.08.2026-10.09.2026, and their first several rows (through Bancă's row #34 / Casă's row #2, ref FT262317M754 / CHHF374) duplicate the tail of what import-kralik-cash-june.ts already imported from the same two documents' earlier export (cash-2026-06.json's own window ran through 2026-08-19). This file contains ONLY the rows past that already-imported point, so re-running both scripts does not double count anything. `cycle` is set only where a row's own text references an earlier month's charges (Mai/Iun 2026, or 1B's very old 'Ian 2021' partial); it is informational (providerMeta.cycleCode / Payment display label) — PaymentService.createOrApply's own allocation strategy assigns the payment across open charges regardless of this tag. Fund label -> code per data/Kralik/history-mapping.json + funds.json: 'FOND PROIECT+REABILITARE' -> REABILITARE_1, 'Fond Pod si Fatada' -> REABILITARE_2 (funds.json altName), 'Fond reabilitare 3' -> REABILITARE_3 (explicit in the source text already). Skipped as a net-zero wash: Bancă row #8 (11.08.2026, Ap 4(III), 2742.87 lei) was never imported into cash-2026-06.json (it predates row #34's cutoff but wasn't picked up there either) and is exactly reversed by row #36's 24.08.2026 STORNARE (-2742.87) — including both would add two offsetting, non-informative ledger rows for a unit whose real 19.08.2026 payment (FT262317M754, 2690.88 lei) is already correctly imported.",
+  "_note": "July cash-register import. Sources: 'Registru Casă (Homefile) - 10.08-10.09.2026.pdf' and 'Registru Bancă (Homefile) - 10.08-10.09.2026.pdf' (data/Kralik's Documents/2026-07 folder). Both registers actually cover 10.08.2026-10.09.2026, and their first several rows (through Bancă's row #34 / Casă's row #2, ref FT262317M754 / CHHF374) duplicate the tail of what import-kralik-cash-june.ts already imported from the same two documents' earlier export (cash-2026-06.json's own window ran through 2026-08-19). This file contains ONLY the rows past that already-imported point, so re-running both scripts does not double count anything. No row sets its own `cycle` override: providerMeta.cycleCode defaults to this file's cycleCode (2026-07) for every payment, which is what PaymentService.reapplyForPeriod actually keys on to decide which period's prepare pass applies a payment (see cash-2026-06.json's own precedent — its overlap-window rows are tagged cycle '2026-07' even though their memo references Mai/Iun charges, precisely so July's prepare, not June's already-closed one, is what sweeps them in; the referenced month in each memo below is descriptive only, not the processing cycle). An earlier version of this file wrongly set `cycle` to the referenced month (2026-06/2026-05/2021-01), which excluded those rows from July's prepare entirely — fixed here. Fund label -> code per data/Kralik/history-mapping.json + funds.json: 'FOND PROIECT+REABILITARE' -> REABILITARE_1, 'Fond Pod si Fatada' -> REABILITARE_2 (funds.json altName), 'Fond reabilitare 3' -> REABILITARE_3 (explicit in the source text already). Skipped as a net-zero wash: Bancă row #8 (11.08.2026, Ap 4(III), 2742.87 lei) was never imported into cash-2026-06.json (it predates row #34's cutoff but wasn't picked up there either) and is exactly reversed by row #36's 24.08.2026 STORNARE (-2742.87) — including both would add two offsetting, non-informative ledger rows for a unit whose real 19.08.2026 payment (FT262317M754, 2690.88 lei) is already correctly imported.",
   "cycleCode": "2026-07",
   "accounts": { "BANK": "BANK_LIBRA_RON", "CASH": "CASH_RON", "BANK_EUR": "BANK_LIBRA_EUR" },
   "tx": [
     { "n": 1, "acct": "BANK", "date": "2026-08-21", "ref": "FT26233Q16SX", "dir": "IN", "kind": "PAYMENT", "unit": "14A", "amount": 45.00,
-      "funds": { "EXPENSES": 2.08, "RULMENT": 14.52, "REPARATII": 28.40 }, "cycle": "2026-05", "memo": "Jarda Cristian — partial Mai 2026" },
+      "funds": { "EXPENSES": 2.08, "RULMENT": 14.52, "REPARATII": 28.40 }, "memo": "Jarda Cristian — partial Mai 2026" },
 
     { "n": 2, "acct": "BANK", "date": "2026-08-26", "ref": "FT262387FF8G", "dir": "IN", "kind": "PAYMENT", "unit": "31", "amount": 6825.00,
       "funds": { "RULMENT": 14.52, "REABILITARE_3": 6810.48 }, "memo": "Fikl Emil — fondul de reabilitare" },
 
     { "n": 3, "acct": "BANK", "date": "2026-08-26", "ref": "FT262383WFK4", "dir": "IN", "kind": "PAYMENT", "unit": "32", "amount": 123.00,
-      "funds": { "EXPENSES": 123.00 }, "cycle": "2026-06", "memo": "Dascal Adriana — Iun 2026 + avans" },
+      "funds": { "EXPENSES": 123.00 }, "memo": "Dascal Adriana — Iun 2026 + avans" },
 
     { "n": 4, "acct": "BANK", "date": "2026-08-28", "ref": "FT26240JLG26", "dir": "IN", "kind": "PAYMENT", "unit": "1B", "amount": 300.00,
-      "funds": { "EXPENSES": 100.00, "REABILITARE_1": 100.00, "REABILITARE_2": 100.00 }, "cycle": "2021-01",
+      "funds": { "EXPENSES": 100.00, "REABILITARE_1": 100.00, "REABILITARE_2": 100.00 },
       "memo": "Matei Viorel — partial Ian 2021 (via Revolut, Corina Matei)" },
 
     { "n": 5, "acct": "BANK", "date": "2026-08-31", "ref": "FT26243HDSL6", "dir": "IN", "kind": "PAYMENT", "unit": "5(I-A)", "amount": 112.65,
-      "funds": { "EXPENSES": 112.65 }, "cycle": "2026-06", "memo": "Olaru-Posair Lucian — Iun 2026" },
+      "funds": { "EXPENSES": 112.65 }, "memo": "Olaru-Posair Lucian — Iun 2026" },
 
     { "n": 6, "acct": "BANK", "date": "2026-08-31", "ref": "FT26243233F8", "dir": "IN", "kind": "PAYMENT", "unit": "14B", "amount": 5648.73,
       "funds": { "EXPENSES": 208.11, "RULMENT": 29.04, "REPARATII": 48.20, "REABILITARE_3": 5363.38 },
       "memo": "David Marius — Mai 2026 109.96 + Iun 2026 98.15" },
 
     { "n": 7, "acct": "BANK", "date": "2026-09-03", "ref": "FT26246MPX29", "dir": "IN", "kind": "PAYMENT", "unit": "5(I-B)", "amount": 1000.00,
-      "funds": { "EXPENSES": 307.62, "RULMENT": 14.52, "REPARATII": 27.60, "REABILITARE_2": 650.26 }, "cycle": "2026-06",
+      "funds": { "EXPENSES": 307.62, "RULMENT": 14.52, "REPARATII": 27.60, "REABILITARE_2": 650.26 },
       "memo": "Karaks Bebe — Iun 2026" },
 
     { "n": 8, "acct": "BANK", "date": "2026-09-04", "ref": "AOO/16088", "dir": "IN", "kind": "TRANSFER", "amount": 29000.00,
@@ -37,17 +37,17 @@
       "memo": "Gampe Svetlana — Mai 2026 249.46 + Iun 2026 227.32" },
 
     { "n": 11, "acct": "BANK", "date": "2026-09-07", "ref": "FT26250N29GB", "dir": "IN", "kind": "PAYMENT", "unit": "SP COM", "amount": 1078.80,
-      "funds": { "EXPENSES": 78.80, "RULMENT": 338.08, "REPARATII": 485.29, "REABILITARE_2": 176.63 }, "cycle": "2026-06",
+      "funds": { "EXPENSES": 78.80, "RULMENT": 338.08, "REPARATII": 485.29, "REABILITARE_2": 176.63 },
       "memo": "SC Minimarket Meltes SRL — Iun 2026 (register rows #45+#46, same ref, same day)" },
 
     { "n": 12, "acct": "BANK", "date": "2026-09-09", "ref": "FT2625258CGT", "dir": "IN", "kind": "PAYMENT", "unit": "SP COM", "amount": 9000.00,
       "funds": { "REABILITARE_2": 9000.00 }, "memo": "SC Minimarket Meltes SRL — dif. fact. 8/9" },
 
     { "n": 13, "acct": "BANK", "date": "2026-09-09", "ref": "FT2625230ZLZ", "dir": "IN", "kind": "PAYMENT", "unit": "12 (SAD4/A)", "amount": 41.03,
-      "funds": { "EXPENSES": 41.03 }, "cycle": "2026-06", "memo": "Primărie TM UAT — Catargiu — Iun 2026" },
+      "funds": { "EXPENSES": 41.03 }, "memo": "Primărie TM UAT — Catargiu — Iun 2026" },
 
     { "n": 14, "acct": "BANK", "date": "2026-09-09", "ref": "FT26252101ND", "dir": "IN", "kind": "PAYMENT", "unit": "4A", "amount": 408.86,
-      "funds": { "EXPENSES": 408.86 }, "cycle": "2026-06", "memo": "Catargiu Constantin — Iun 2026 + avans" },
+      "funds": { "EXPENSES": 408.86 }, "memo": "Catargiu Constantin — Iun 2026 + avans" },
 
     { "n": 15, "acct": "CASH", "date": "2026-09-03", "ref": "CHHF375", "dir": "IN", "kind": "PAYMENT", "unit": "5(I-A)", "amount": 29000.27,
       "funds": { "RULMENT": 14.52, "REPARATII": 27.00, "REABILITARE_2": 28958.75 },
