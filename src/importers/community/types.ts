@@ -75,6 +75,8 @@ export type StructureRow = {
 export type CommunityImportPlan = {
   communityId: string
   communityName: string
+  /** optional def.json `intakeHints`: association-specific guidance for the AI intake prompt */
+  intakeHints?: string[]
   billingEntityMeta?: Record<string, { name?: string; displayName?: string }>
   // Flattened from billingEntities[].displayNames[] — one row per version, across all BEs.
   billingEntityNameHistory?: Array<{ code: string; displayName: string; startPeriod?: string; endPeriod?: string }>

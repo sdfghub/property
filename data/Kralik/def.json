@@ -1968,5 +1968,28 @@
       "defaultFundCode": "EXPENSES",
       "bank": "Libra"
     }
+  ],
+  "intakeHints": [
+    "Archive `Facturi - YYYY.MM.zip` names the TARGET period. The invoices inside are normally issued in the following month (the June set was issued 30.06–03.08) — book them under the archive's period, not the issue month.",
+    "Aquatim `Perioada de facturare` runs from the 22nd to the 21st; the invoice belongs to the period of the END month (22.05–21.06 → 2026-06). Set servicePeriodStart/End to the two months it spans.",
+    "Aquatim: one invoice always spans two templates — `APA POTABILA` + `CANAL` + `Penalitati` → BILL_APA_RECE (apa_rece, canal, penalitati); `CANAL APA METEORICA` → BILL_APA_METEO (apa_meteo).",
+    "Aquatim: penalties carry no VAT, so net + VAT + penalties = gross. Report net/VAT as printed; the AMOUNT_MISMATCH warning by exactly the penalty amount is expected.",
+    "Aquatim: after a tariff change the invoice shows `cu pret vechi` / `cu pret nou` lines per service — sum them per service (with their VAT) into one allocation each.",
+    "Aquatim: `Totalul facturilor neachitate` / `Cod bare sold total` is prior debt and never part of the invoice; gross is `Total factura curenta`. Books hold the number as `TMA10/1015558474` (the PDF prints `TMA10 / 1015558474`).",
+    "PPC: gross is line 5 `Total de plata factura curenta`. Line 6 `Sold la data emiterii` is prior balance and line 7 `Total de plată` includes it — ignore both. Service period = the `Perioadă facturare` month.",
+    "PPC: line 1 `Valoare facturată fără TVA` can exceed line 2 `Total bază de impozitare` by a small amount — that is `Total dobânzi penalizatoare` (late-payment interest, no VAT), not rounding. Report net = line 1; net + VAT = gross still holds.",
+    "PPC: the contract is in a person's name (client printed as KORB ADRIAN, POD RO005E511102723, Str. Lazăr Gheorghe 4) — expected for the association's stairwell meter, not a wrong document.",
+    "Retim: gross is `Total factura`; `Sold precedent` / `Total de plata` include prior debt — ignore. Billing is per person (21 persons × monthly tariff) — the person count is a sanity check.",
+    "Rich Clean: the catalogue vendor is spelled `RICH CLLEAN` — it IS `RICH CLEAN SRL`, CIF 51704507. Match by vendorId/CUI, never propose it as new.",
+    "Rich Clean: the invoice names the NEXT month (June archive → \"iulie 2026\", July archive → \"august 2026\") and is issued on its due date. Book it under the archive's period; the printed month is expected, not a mismatch. Non-VAT payer: net = gross.",
+    "Administrator: catalogue vendor `RUSAVIT` = SC RUSADMINISTRA COMPANY SRL, CIF 31488140, IBAN RO23INGB0000999912925068 (same administrator). Map to RUSAVIT with match EXISTING — never a new vendor.",
+    "Administrator invoice: a scan/photo (often upside-down), 800.00 flat, no VAT, `lista <luna>` gives the service month, issued the month after. Number `TM 1830` is booked as `TM-1830`.",
+    "BILL_COMISION_BANCA has no supplier invoice: its amount is the SUM of `Comision tranzactie` debits on the Libra RON statement for the period (June 2026: 136.00). Emit it as an INVOICE record with vendor Libra, number = the statement window (e.g. `2026.07.01-08.19`), sourceFile = the statement, allocation comision_banca.",
+    "Libra statement: the archive's statement covers a wider window than the month and may not overlap it at all (the July archive carried 10.08–10.09) — still emit EVERY line as a BANK_LINE and derive BILL_COMISION_BANCA from it; the administrator confirms the window. Check it reconciles (SOLD INITIAL + credits − debits = SOLD FINAL) before trusting your parse.",
+    "Libra owner receipts carry the unit in `Detalii` (\"ap 3\", \"AP 32\", \"ap.4(III)\", \"ap5\") and often the month — keep `description` verbatim (phase 2 maps them to owners).",
+    "Libra vendor payments reference invoice numbers in `Detalii` (`fct 1015433016/04.03.2026`) — keep verbatim; they usually settle OLDER invoices, not this month's.",
+    "The EUR account (BANK_LIBRA_EUR) statement is usually empty — emit one OTHER record for the file, do not skip it silently.",
+    "Interfon (Schmidt) is not billed monthly — if there is no Schmidt invoice in the archive, emit nothing for BILL_INTERFON. Never invent a record for a template without a document.",
+    "A `facturi-YYYY-MM-upload.csv` in the archive is a human-made summary, not a source document — emit it as OTHER and use its `total_checksum` column only to cross-check your extraction."
   ]
 }

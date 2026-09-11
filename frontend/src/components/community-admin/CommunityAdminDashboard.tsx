@@ -29,6 +29,7 @@ import { AssociationInfoPanel } from './AssociationInfoPanel'
 import { PenaltyReviewPanel } from './PenaltyReviewPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { CorrectionsPanel } from './CorrectionsPanel'
+import { IntakePanel } from './intake/IntakePanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
 import { RiskPanel } from './RiskPanel'
@@ -58,6 +59,7 @@ export type CommunityAdminTabKey =
   | 'notifications'
   | 'decisions'
   | 'corrections'
+  | 'intake'
   | 'governance'
   | 'payments'
   | 'statements'
@@ -103,6 +105,7 @@ const FEATURE_BY_TAB: Partial<Record<CommunityAdminTabKey, string>> = {
   requests: 'tickets',
   notifications: 'notifications',
   decisions: 'committee',
+  intake: 'aiIntake',
 }
 function featureAllowsTab(key: CommunityAdminTabKey, features?: Record<string, boolean> | null): boolean {
   const flag = FEATURE_BY_TAB[key]
@@ -215,6 +218,7 @@ export function CommunityAdminDashboard({
         { key: 'avizier', label: t('tab.avizier') || 'Avizier' },
         { key: 'meters', label: t('tab.meters') || 'Meters' },
         { key: 'expenses', label: t('tab.expenses') || 'Invoices & expenses' },
+        { key: 'intake', label: t('tab.intake') || 'AI intake' },
         { key: 'periodFocus', label: t('tab.periodFocus') || 'Period detail' },
       ],
     },
@@ -778,6 +782,7 @@ function CommunityAdminContent({
         {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
         {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
         {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
+        {activeTab === 'intake' && <IntakePanel communityId={communityId} />}
         {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
         {activeTab === 'vendors' && (
           <div className="card">

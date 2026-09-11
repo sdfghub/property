@@ -224,6 +224,7 @@ model Community {
   features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
   paymentAllocation Json? @map("payment_allocation") // per-community payment→charge allocation strategy (see PaymentAllocationService; default FIFO)
   measureModes Json? @map("measure_modes") // per-type meter reading mode { "<typeCode>": "INDEX" | "CONSUMPTION" }; default CONSUMPTION
+  intakeHints  Json? @map("intake_hints")  // string[]: association-specific guidance appended to the AI intake prompt pack (docs/intake.md)
 
   periods                    Period[]
   units                      Unit[]
@@ -257,6 +258,7 @@ model Community {
   CashAccount                CashAccount[]
   CashTx                     CashTx[]
   corrections                Correction[]
+  intakeBatches              IntakeBatch[]
 
   @@map("community")
 }
@@ -296,6 +298,7 @@ model Period {
   @@unique([communityId, code])
   @@unique([communityId, seq])
   @@index([communityId, startDate, endDate])
+  intakeBatches              IntakeBatch[]
   @@map("period")
 }
 
@@ -1048,6 +1051,89 @@ model VendorInvoiceDoc {
   invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
 
   @@map("vendor_invoice_doc")
+}
+
+/// AI intake: a batch is one agent-produced `intake-import/v1` JSON payload, imported by an admin for
+/// one period. Records are the agent's proposals; nothing becomes a VendorInvoice / charge until an
+/// admin approves and the batch is applied — and apply only ever goes through TemplateService /
+/// VendorInvoiceService (never ledger rows). See docs/intake.md.
+enum IntakeBatchStatus {
+  REVIEW
+  APPLYING
+  APPLIED
+  FAILED
+}
+
+enum IntakeRecordKind {
+  INVOICE
+  BANK_LINE
+  OTHER
+}
+
+enum IntakeRecordStatus {
+  PROPOSED
+  NEEDS_REVIEW
+  APPROVED
+  STAGED
+  APPLIED
+  SKIPPED
+  FAILED
+}
+
+model IntakeBatch {
+  id              String            @id @default(cuid()) @map("id")
+  communityId     String            @map("community_id")
+  periodId        String            @map("period_id")
+  status          IntakeBatchStatus @default(REVIEW) @map("status")
+  contractVersion String            @map("contract_version")
+  promptVersion   String?           @map("prompt_version")
+  agentLabel      String?           @map("agent_label")
+  sourceFileName  String?           @map("source_file_name")
+  raw             Json              @map("raw")          // the agent payload verbatim (audit)
+  stats           Json?             @map("stats")        // { records, byStatus, byKind }
+  createdBy       String?           @map("created_by")
+  error           String?           @map("error")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  community Community      @relation(fields: [communityId], references: [id])
+  period    Period         @relation(fields: [periodId], references: [id])
+  records   IntakeRecord[]
+
+  @@index([communityId, createdAt])
+  @@map("intake_batch")
+}
+
+model IntakeRecord {
+  id                   String             @id @default(cuid()) @map("id")
+  batchId              String             @map("batch_id")
+  communityId          String             @map("community_id")
+  index                Int                @map("index")            // position in the agent's records[]
+  kind                 IntakeRecordKind   @map("kind")
+  status               IntakeRecordStatus @default(PROPOSED) @map("status")
+  sourceFile           String?            @map("source_file")
+  sourceSha256         String?            @map("source_sha256")
+  confidence           Float?             @map("confidence")
+  rationale            String?            @map("rationale")
+  extracted            Json               @map("extracted")        // invoice / bankLine block, verbatim
+  proposal             Json               @map("proposal")         // mapping block, verbatim (immutable)
+  review               Json?              @map("review")           // admin-edited mapping; effective = review ?? proposal
+  resolved             Json?              @map("resolved")         // server-side resolution (ids, duplicate hints)
+  blockers             Json?              @map("blockers")         // [{ code, message, path?, overridable }]
+  duplicateOfInvoiceId String?            @map("duplicate_of_invoice_id")
+  duplicateOfRecordId  String?            @map("duplicate_of_record_id")
+  appliedRefs          Json?              @map("applied_refs")
+  appliedAt            DateTime?          @map("applied_at")
+  error                String?            @map("error")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  batch IntakeBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, index])
+  @@index([communityId, sourceSha256])
+  @@index([batchId, status])
+  @@map("intake_record")
 }
 
 model InvoiceSplit {

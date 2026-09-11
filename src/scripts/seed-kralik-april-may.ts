@@ -44,7 +44,23 @@ async function main() {
   const ledger = loadJson('ledger-2026-04.json')
   const packet = loadJson('actuals-2026-05.json')
   const cpiByCode: Record<string, number> = Object.fromEntries((def.structure || []).filter((u: any) => u.cpi != null).map((u: any) => [u.code, Number(u.cpi)]))
-  const beByCode: Record<string, string> = Object.fromEntries((def.structure || []).map((u: any) => [u.code, u.billingEntity]))
+  // def.json models an ownership handover as EXTRA structure rows for the same unit code (Ap 2/2:
+  // Gampe Francisc through 2026-05, Valean Mirela from 2026-06), and the row carrying the unit's
+  // `name` may hold no billingEntity at all. A plain Object.fromEntries() lets the LAST row win, so
+  // the unit resolved to the INCOMING owner: April's ledger closing was filed under a BE that has no
+  // April statement, never applied, while the outgoing owner's `target` fell back to 0 and his real
+  // balance was booked away as a payment — 26,438.11 RON off the association's receivables, silently.
+  // This whole script is the April/May seam, which belongs to the earliest-starting owner; later
+  // ownership is applied through the membership ranges the period engine reads.
+  const beByCode: Record<string, string> = {}
+  {
+    const startOf: Record<string, string> = {}
+    for (const u of (def.structure || []) as any[]) {
+      if (!u.billingEntity) continue
+      const start = String(u.startPeriod ?? u.start_period ?? '')
+      if (!(u.code in beByCode) || start < startOf[u.code]) { beByCode[u.code] = u.billingEntity; startOf[u.code] = start }
+    }
+  }
 
   // Actual register cash per (BE, fund) for the April cycle — EXCLUDING cycle:"prior" receipts (those
   // settle a pre-April balance already baked into the April opening). Owner payments come from the
