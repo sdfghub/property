@@ -36,7 +36,7 @@ export function renderPromptPack({ catalogue: c, schema, example }: PromptPackIn
   const templateProse = c.templates
     .map((t) => {
       const items = t.items.map((i) => `\`${i.key}\` = ${i.label}${i.expenseTypeCode ? ` (${i.expenseTypeCode})` : ''}`).join('; ')
-      const flag = pc.templates.find((x) => x.code === t.code)?.alreadySubmittedThisPeriod ? ' — **already submitted this period, do not map to it**' : ''
+      const flag = pc.templates.find((x) => x.code === t.code)?.alreadySubmittedThisPeriod ? ' — **already has a submitted invoice this period**: still map to it, add a warning and lower confidence; the administrator decides' : ''
       return `- \`${t.code}\` — ${t.name}${t.vendorName ? `, vendor **${t.vendorName}**` : ''}${t.fundCode ? `, fund ${t.fundCode}` : ''}: ${items || '(no items)'}${flag}`
     })
     .join('\n')
@@ -79,7 +79,8 @@ of guessing. The association's administrator reviews every record before anythin
 - **Perioada de facturare / Perioada de consum / Luna** — the billed service period; emit as
   \`YYYY-MM\` (start and end; equal for a one-month bill).
 - **Total de plată / Total factură** — gross (with VAT). **Baza / Valoare fără TVA** — net. **TVA** — VAT.
-  VAT rates seen on utilities: 9%, 19%, 21%. Gross-only invoices are fine: leave net/vat \`null\`.
+  VAT rates differ per service (water 11%, electricity/waste 21%, some suppliers are not VAT payers).
+  Gross-only invoices are fine: leave net/vat \`null\`.
 - **Penalități / Majorări de întârziere** — late-payment penalties, usually a separate line; map them
   to a penalty item when the template has one.
 - **Apă rece / potabilă**, **Canalizare / Canal**, **Apă meteo / pluvială**, **Curent scară / Energie
@@ -148,7 +149,9 @@ ${c.hints.map((h, i) => `${i + 1}. ${h}`).join('\n')}
    water + sewerage on one template and rain water on another — emit one allocation per item, across
    templates, on the same record.
 4. **Pick the template by vendor first** (normalise "S.A.", "S.R.L.", diacritics), then by the items'
-   labels. Never map to a template marked "already submitted this period".
+   labels. A template marked "already has a submitted invoice this period" is still the right target —
+   map to it, say so in \`warnings\` and lower \`confidence\`; the app flags it and the administrator
+   decides. Never leave \`allocations\` empty just because of that flag.
 5. **Vendor mapping**: \`match: "EXISTING"\` + \`vendorId\` from the catalogue when the name/CUI matches;
    \`"NEW"\` with name/CUI/IBAN when it is clearly a new supplier; \`"UNKNOWN"\` when you cannot tell.
 6. **No fitting template** → leave \`allocations\` empty and set \`fallback\` with the best fund code and
