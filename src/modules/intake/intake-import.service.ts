@@ -110,13 +110,13 @@ export class IntakeImportService {
       index: r.index,
       input: this.toInput(r, rawRecords[r.index]?.warnings),
       review: (r.review as any) ?? null,
-      ownTemplates: ((r.appliedRefs as any)?.attemptedTemplates as string[]) ?? [],
+      ownTemplates: [...(((r.appliedRefs as any)?.attemptedTemplates as string[]) ?? []), ...(((r.appliedRefs as any)?.stagedTemplates as string[]) ?? [])],
     }))
     const checked = this.checkRecords(inputs, catalogue)
     for (const c of checked) {
       const row = batch.records.find((r) => r.index === c.index)!
       if (onlyRecordId && row.id !== onlyRecordId) continue
-      if (row.status === 'APPLIED' || row.status === 'SKIPPED') continue
+      if (row.status === 'APPLIED' || row.status === 'SKIPPED' || row.status === 'STAGED') continue
       const keepApproved = row.status === 'APPROVED' && !c.blockers.some((b) => !b.overridable)
       await this.prisma.intakeRecord.update({
         where: { id: row.id },

@@ -128,6 +128,7 @@ export function checkInvoice(input: InvoiceCheckInput, catalogue: IntakeCatalogu
   for (const [code, items] of Object.entries(byTemplate)) {
     const t = catalogue.templates.find((x) => x.code === code)
     for (const [key, amt] of Object.entries(items)) {
+      if ((input.ownTemplates ?? []).includes(code)) continue // values this record staged itself are not a conflict
       const existing = money((t?.instanceValues as any)?.[key])
       if (existing != null && Math.abs(existing - amt) > 0.005) push('VALUE_CONFLICT', `Template ${code} already holds ${key} = ${existing} (import says ${amt})`, `mapping.allocations.${code}.${key}`)
     }

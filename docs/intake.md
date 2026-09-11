@@ -113,7 +113,8 @@ and once more right before apply. They never call an LLM.
 Hard blockers must be fixed — in the record's mapping (drawer) or in the community setup (e.g. give
 the expense type a fund, then **Re-check**). Acknowledgeable ones are ticked on approve and stored in
 `review.overrides`. Statuses: `PROPOSED` (clean) → `NEEDS_REVIEW` (has checks) → `APPROVED` → `APPLIED`;
-`SKIPPED`; `FAILED` (apply threw — retryable, see §4).
+`STAGED` (values on the template, waiting for meter readings — see §4); `SKIPPED`; `FAILED` (apply
+threw — retryable, see §4).
 
 Vendor matching order: `vendorId` → CUI (digits, `RO` stripped) → normalised name ("AQUATIM S.A." ≡
 "Aquatim"; SC/SRL/SA/diacritics/punctuation removed, substring either way).
@@ -149,13 +150,22 @@ re-runs the checks, and per record:
 (`PeriodService.prepare` insists on it), so the admin keeps the existing "review each bill, then close"
 pass and can still edit values before preparing.
 
-**Partial failures are normal and retryable.** The allocation engine never falls back (CLAUDE.md #7):
-a water invoice applied before the month's `WATER_COLD` readings are entered fails with *"No WATER_COLD
-readings for this period — enter them before allocating"*. The record is marked `FAILED` with that
-message; enter the readings, press **Apply** again. Its own earlier partial output is recognised
-(`attemptedTemplates`, provenance) so it is not reported as `TEMPLATE_ALREADY_SUBMITTED` or
-`DUPLICATE_INVOICE`. Re-applying an applied batch is a no-op; a batch with applied records cannot be
-deleted.
+**Metered invoices before the readings exist → `STAGED`, not failed.** The allocation engine never
+falls back (CLAUDE.md #7): a water invoice cannot be allocated until the month's `WATER_COLD` readings
+are entered. Apply pre-checks every allocated expense type (its rule and split-template leaves: any
+`BY_CONSUMPTION` needs UNIT measures of its `weightSource`/`measureType` in the period — the same test as
+`allocation.service.ts unitMeasuresForWeight`). When something is missing, the amounts are merged onto
+the template as **`FILLED`** — the state the manual *Cheltuieli* form produces, visible and editable
+there immediately — and the record becomes `STAGED` with `appliedRefs.waitingFor = ['WATER_COLD']`.
+No invoice is created yet. Once the readings are in, **Apply** again finalises it (SUBMITTED +
+provenance + doc link → `APPLIED`). No new *template* state was needed; only the intake record has one.
+If the engine still refuses at submit time (a case the pre-check did not foresee), its "No X readings"
+error is caught and the record is staged the same way instead of failing.
+
+Other partial failures are retryable too: a record's own earlier output (`attemptedTemplates`,
+`stagedTemplates`, provenance) is recognised so it is not reported as `TEMPLATE_ALREADY_SUBMITTED`,
+`VALUE_CONFLICT` or `DUPLICATE_INVOICE` on the next attempt. Re-applying an applied batch is a no-op; a
+batch with applied records cannot be deleted.
 
 ## 5. Checking an agent's output without importing
 
@@ -188,7 +198,8 @@ is already in the books is caught at both levels.
 
 ## Gotchas
 
-- Water/metered invoices need the month's meter readings entered first (see §4).
+- Water/metered invoices can be imported before the readings exist: they are staged as FILLED templates
+  and finalised by the next Apply (see §4).
 - The target period must be OPEN; create the next period before importing its invoices.
 - One real invoice across two templates becomes two `VendorInvoice` rows with the same number — by
   design; the invoices list merges them.

@@ -167,6 +167,7 @@ export const INTAKE_RECORD_STATUS_META: EnumMeta[] = [
   { key: 'PROPOSED', label: 'Propus', labelEn: 'Proposed', hint: 'Fără probleme detectate; poate fi aprobat.', hintEn: 'No issues detected; can be approved.' },
   { key: 'NEEDS_REVIEW', label: 'De verificat', labelEn: 'Needs review', tone: 'warning', hint: 'Are blocaje sau avertismente de rezolvat.', hintEn: 'Has blockers or warnings to resolve.' },
   { key: 'APPROVED', label: 'Aprobat', labelEn: 'Approved', tone: 'positive' },
+  { key: 'STAGED', label: 'În așteptare citiri', labelEn: 'Waiting for readings', tone: 'warning', hint: 'Sumele sunt puse pe template (FILLED), dar factura și cheltuielile se creează abia după introducerea citirilor de contoare — apăsați din nou Aplică atunci.', hintEn: 'Amounts are on the template (FILLED); the invoice and expense lines are created once the meter readings exist — press Apply again then.' },
   { key: 'APPLIED', label: 'Aplicat', labelEn: 'Applied', tone: 'positive', hint: 'Factura și cheltuielile au fost create.', hintEn: 'Invoice and expenses were created.' },
   { key: 'SKIPPED', label: 'Omis', labelEn: 'Skipped' },
   { key: 'FAILED', label: 'Eșuat', labelEn: 'Failed', tone: 'negative' },

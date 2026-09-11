@@ -12,6 +12,10 @@ export type AppliedRefs = {
   /** templates this record has called saveBillTemplateState for, written BEFORE the call so a partial
    *  failure (e.g. missing meter readings) can be retried without tripping TEMPLATE_ALREADY_SUBMITTED */
   attemptedTemplates: string[]
+  /** STAGED: templates left FILLED (values on the template, no invoice/charges yet) and the measure
+   *  types the allocation still needs — filled in on the next apply once the readings exist */
+  stagedTemplates?: string[]
+  waitingFor?: string[]
   templateInstanceIds: string[]
   vendorInvoiceIds: string[]
   vendorInvoiceDocIds: string[]
@@ -50,19 +54,30 @@ export class IntakeApplyService {
       throw new ConflictException({ message: `Period ${catalogue.period.code} is ${catalogue.period.status}; intake applies only into OPEN periods`, blockers: [{ code: 'PERIOD_NOT_OPEN', overridable: false }] })
     }
 
-    // FAILED records were approved before they failed (e.g. missing meter readings) — retrying is the fix
-    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED'] }, kind: 'INVOICE' }
+    // FAILED records were approved before they failed — retrying is the fix; STAGED ones are waiting for
+    // meter readings and get finalised (FILLED → SUBMITTED) by the same apply once those exist
+    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED', 'STAGED'] }, kind: 'INVOICE' }
     if (recordIds?.length) where.id = { in: recordIds }
     const records = await this.prisma.intakeRecord.findMany({ where, orderBy: { index: 'asc' } })
     if (!records.length) return { applied: [], failed: [], batchStatus: batch.status }
 
     await this.prisma.intakeBatch.update({ where: { id: batch.id }, data: { status: 'APPLYING', error: null } })
     const applied: Array<{ recordId: string; appliedRefs: AppliedRefs }> = []
+    const staged: Array<{ recordId: string; waitingFor: string[] }> = []
     const failed: Array<{ recordId: string; error: string }> = []
     try {
       for (const record of records) {
         try {
           const refs = await this.applyRecord(record, catalogue, batch, roles)
+          if (refs.waitingFor?.length) {
+            await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: 'STAGED', appliedRefs: refs as any, error: null } })
+            staged.push({ recordId: record.id, waitingFor: refs.waitingFor })
+            for (const code of refs.stagedTemplates ?? []) {
+              const t = catalogue.templates.find((x) => x.code === code)
+              if (t) t.instanceState = 'FILLED'
+            }
+            continue
+          }
           await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: 'APPLIED', appliedRefs: refs as any, appliedAt: new Date(), error: null } })
           applied.push({ recordId: record.id, appliedRefs: refs })
           // the catalogue must see the new instance state so a second record cannot re-submit the same template
@@ -81,7 +96,7 @@ export class IntakeApplyService {
       await this.importer.refreshStats(batch.id) // decides REVIEW / APPLIED / FAILED from the records
     }
     const after = await this.prisma.intakeBatch.findUniqueOrThrow({ where: { id: batch.id }, select: { status: true } })
-    return { applied, failed, batchStatus: after.status }
+    return { applied, staged, failed, batchStatus: after.status }
   }
 
   // ── one record ────────────────────────────────────────────────────────────────────────────────
@@ -91,12 +106,17 @@ export class IntakeApplyService {
     // re-check against the live catalogue right before writing; hard blockers cannot be overridden
     const rawWarnings = (batch.raw as any)?.records?.[record.index]?.warnings
     const prior: any = record.appliedRefs ?? {}
-    const [checked] = this.importer.checkRecords([{ id: record.id, index: record.index, input: this.importer.toInput(record, rawWarnings), review: record.review ?? null, ownTemplates: prior.attemptedTemplates ?? [] }], catalogue)
+    const [checked] = this.importer.checkRecords([{ id: record.id, index: record.index, input: this.importer.toInput(record, rawWarnings), review: record.review ?? null, ownTemplates: [...(prior.attemptedTemplates ?? []), ...(prior.stagedTemplates ?? [])] }], catalogue)
     const left = remainingBlockers(checked.blockers as Blocker[], (record.review as any)?.overrides ?? [])
     if (left.length) throw new ConflictException(`Blocked: ${left.map((b) => `${b.code} (${b.message})`).join('; ')}`)
 
     const { invoice, mapping } = this.effective(record)
     const refs: AppliedRefs = { templateInstanceIds: [], vendorInvoiceIds: [], vendorInvoiceDocIds: [], standaloneInvoiceId: null, attemptedTemplates: [...((prior.attemptedTemplates as string[]) ?? [])] }
+    // Stageable? Every expense type the allocations touch that allocates BY_CONSUMPTION needs UNIT
+    // measures of its type in this period (allocation.service.ts unitMeasuresForWeight) — the engine never
+    // falls back. Without them we place the amounts on the template as FILLED (what the manual form does)
+    // and finish on a later apply, instead of failing.
+    const missing = await this.missingMeasureTypes(catalogue, mapping)
     const provenance = {
       intakeBatchId: batch.id,
       intakeRecordId: record.id,
@@ -137,9 +157,29 @@ export class IntakeApplyService {
         if (gNet != null) values[k('netKey', 'invoiceNet')] = gNet
         if (gVat != null) values[k('vatKey', 'invoiceVat')] = gVat
 
+        if (missing.length) {
+          // values on the template, nothing allocated: the admin sees them in Cheltuieli right away
+          await this.templates.saveBillTemplateState(catalogue.community.id, catalogue.period.code, code, roles, { state: 'FILLED', values })
+          refs.stagedTemplates = [...(refs.stagedTemplates ?? []), code]
+          refs.waitingFor = missing
+          await persistRefs()
+          continue
+        }
         if (!refs.attemptedTemplates.includes(code)) refs.attemptedTemplates.push(code)
         await persistRefs()
-        const instance: any = await this.templates.saveBillTemplateState(catalogue.community.id, catalogue.period.code, code, roles, { state: 'SUBMITTED', values })
+        let instance: any
+        try {
+          instance = await this.templates.saveBillTemplateState(catalogue.community.id, catalogue.period.code, code, roles, { state: 'SUBMITTED', values })
+        } catch (e: any) {
+          // safety net for a case the pre-check did not foresee: the engine itself says readings are missing
+          const m = /No (\S+) readings for this period/.exec(String(e?.message ?? e?.response?.message ?? ''))
+          if (!m) throw e
+          await this.templates.saveBillTemplateState(catalogue.community.id, catalogue.period.code, code, roles, { state: 'FILLED', values })
+          refs.stagedTemplates = [...(refs.stagedTemplates ?? []), code]
+          refs.waitingFor = [...new Set([...(refs.waitingFor ?? []), m[1]])]
+          await persistRefs()
+          continue
+        }
         refs.templateInstanceIds.push(instance.id)
         await persistRefs()
 
@@ -163,6 +203,11 @@ export class IntakeApplyService {
           if (doc) refs.vendorInvoiceDocIds.push(doc)
           await persistRefs()
         }
+      }
+      if (refs.waitingFor?.length) {
+        // a spanning invoice may have finalised one template and staged another; the whole record stays
+        // STAGED until every template is submitted, and the next apply re-runs all of them idempotently
+        refs.stagedTemplates = [...new Set(refs.stagedTemplates ?? [])]
       }
       return refs
     }
@@ -200,6 +245,55 @@ export class IntakeApplyService {
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────────────────────────
+
+  /** Measure types (e.g. WATER_COLD) the allocated expense types need and this period does not have. */
+  private async missingMeasureTypes(catalogue: IntakeCatalogue, mapping: any): Promise<string[]> {
+    const codes = new Set<string>()
+    for (const a of (mapping?.allocations ?? []) as Array<{ templateCode: string; itemKey: string }>) {
+      const t = catalogue.templates.find((x) => x.code === a.templateCode)
+      const item = t?.items.find((x) => x.key === a.itemKey)
+      if (item?.expenseTypeCode) codes.add(item.expenseTypeCode)
+    }
+    if (!codes.size) return []
+    const ets = await this.prisma.expenseType.findMany({ where: { communityId: catalogue.community.id, code: { in: [...codes] } }, select: { code: true, params: true, ruleId: true } })
+    const ruleIds = new Set<string>()
+    const needed = new Set<string>()
+    const fromRule = (rule: { method: string; params: any } | null | undefined, weight?: string | null) => {
+      if (!rule || rule.method !== 'BY_CONSUMPTION') return
+      needed.add(weight || rule.params?.weightSource || rule.params?.measureType || 'CONSUMPTION')
+    }
+    const leaves: Array<{ ruleCode?: string; weightSource?: string; method?: string; params?: any }> = []
+    for (const et of ets) {
+      ruleIds.add(et.ruleId)
+      const tpl: any[] = Array.isArray((et.params as any)?.splitTemplate) ? (et.params as any).splitTemplate : []
+      const walk = (nodes: any[]) => {
+        for (const n of nodes) {
+          if (n?.allocation) leaves.push(n.allocation)
+          if (Array.isArray(n?.children)) walk(n.children)
+        }
+      }
+      walk(tpl)
+    }
+    for (const l of leaves) if (l.ruleCode) ruleIds.add(`${l.ruleCode}-${catalogue.community.id}`)
+    const rules = await this.prisma.allocationRule.findMany({ where: { id: { in: [...ruleIds] } }, select: { id: true, method: true, params: true } })
+    const ruleById = new Map(rules.map((r) => [r.id, r]))
+    for (const et of ets) {
+      const tpl: any[] = Array.isArray((et.params as any)?.splitTemplate) ? (et.params as any).splitTemplate : []
+      if (!tpl.length) fromRule(ruleById.get(et.ruleId))
+    }
+    for (const l of leaves) {
+      if (l.method === 'BY_CONSUMPTION') needed.add(l.weightSource || l.params?.weightSource || 'CONSUMPTION')
+      else if (l.ruleCode) fromRule(ruleById.get(`${l.ruleCode}-${catalogue.community.id}`), l.weightSource)
+      else if (l.weightSource && l.weightSource !== 'SQM' && l.weightSource !== 'RESIDENTS') needed.add(l.weightSource)
+    }
+    const missing: string[] = []
+    for (const typeCode of needed) {
+      if (typeCode === 'SQM' || typeCode === 'RESIDENTS') continue
+      const n = await this.prisma.periodMeasure.count({ where: { communityId: catalogue.community.id, periodId: catalogue.period.id, scopeType: 'UNIT', typeCode } })
+      if (!n) missing.push(typeCode)
+    }
+    return missing.sort()
+  }
 
   effective(record: any): { invoice: any; mapping: any } {
     const review = (record.review as any) ?? null

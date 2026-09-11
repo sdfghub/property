@@ -117,13 +117,14 @@ export function IntakePanel({ communityId }: { communityId: string }) {
   const reopen = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'REOPEN' }); await refreshSelected() })
   const recheck = () => act('batch', async () => { await api.post(`${base}/batches/${selected!.batch.id}/recheck`, {}); await refreshSelected() })
   const applyBatch = () => {
-    const n = selected?.records.filter((r) => r.status === 'APPROVED' || r.status === 'FAILED').length ?? 0
+    const n = selected?.records.filter((r) => r.status === 'APPROVED' || r.status === 'FAILED' || r.status === 'STAGED').length ?? 0
     if (!n || !window.confirm(t('intake.batch.applyConfirm', { n }))) return
     act('batch', async () => {
-      const res = await api.post<{ applied: any[]; failed: Array<{ recordId: string; error: string }> }>(`${base}/batches/${selected!.batch.id}/apply`, {})
+      const res = await api.post<{ applied: any[]; staged: Array<{ recordId: string; waitingFor: string[] }>; failed: Array<{ recordId: string; error: string }> }>(`${base}/batches/${selected!.batch.id}/apply`, {})
       await refreshSelected()
-      if (res.failed?.length) setError(`${t('intake.msg.partial', { ok: res.applied.length, failed: res.failed.length })}\n${res.failed.map((f: { error: string }) => `• ${f.error}`).join('\n')}`)
-      else setNotice(t('intake.msg.applied', { n: res.applied.length }))
+      const stagedNote = res.staged?.length ? ` ${t('intake.msg.staged', { n: res.staged.length, types: [...new Set(res.staged.flatMap((s: { waitingFor: string[] }) => s.waitingFor))].join(', ') })}` : ''
+      if (res.failed?.length) setError(`${t('intake.msg.partial', { ok: res.applied.length, failed: res.failed.length })}${stagedNote}\n${res.failed.map((f: { error: string }) => `• ${f.error}`).join('\n')}`)
+      else setNotice(`${t('intake.msg.applied', { n: res.applied.length })}${stagedNote}`)
     })
   }
   const deleteBatch = () => {
@@ -143,7 +144,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
     return '—'
   }
   const confidenceTone = (c: number | null) => (c == null ? '' : c >= 0.85 ? 'positive' : c >= 0.6 ? 'warning' : 'negative')
-  const approvable = selected?.records.filter((r) => r.status === 'APPROVED' || r.status === 'FAILED').length ?? 0
+  const approvable = selected?.records.filter((r) => r.status === 'APPROVED' || r.status === 'FAILED' || r.status === 'STAGED').length ?? 0
   const periodOpen = ctx?.period?.status === 'OPEN'
 
   return (
@@ -279,10 +280,11 @@ export function IntakePanel({ communityId }: { communityId: string }) {
                           </span>
                         ))}
                         {r.error && <div style={{ color: 'var(--danger)' }}>{r.error}</div>}
+                        {r.status === 'STAGED' && r.appliedRefs?.waitingFor?.length > 0 && <div className="muted">{t('intake.msg.waitingFor', { types: r.appliedRefs.waitingFor.join(', ') })}</div>}
                         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {canApprove && <button className="btn small" disabled={busy === r.id} onClick={() => approve(r)}>{t('intake.action.approve', 'Approve')}</button>}
-                          {r.status !== 'APPLIED' && r.status !== 'SKIPPED' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => skip(r)}>{t('intake.action.skip', 'Skip')}</button>}
-                          {(r.status === 'SKIPPED' || r.status === 'APPROVED') && r.kind === 'INVOICE' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
+                          {r.status !== 'APPLIED' && r.status !== 'SKIPPED' && r.status !== 'STAGED' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => skip(r)}>{t('intake.action.skip', 'Skip')}</button>}
+                          {(r.status === 'SKIPPED' || r.status === 'APPROVED' || r.status === 'STAGED') && r.kind === 'INVOICE' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
                         </div>
                       </td>
                     </tr>

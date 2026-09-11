@@ -28,7 +28,7 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
   const blockerMeta = (c: string) => meta?.intakeBlockers?.find((m) => m.key === c)
 
   const isInvoice = record.kind === 'INVOICE'
-  const locked = record.status === 'APPLIED'
+  const locked = record.status === 'APPLIED' || record.status === 'STAGED' // staged values live on the template now; reopen to edit
   const [inv, setInv] = React.useState<InvoiceHeader>(() => ({ ...(record.effective?.invoice ?? record.extracted ?? {}) }))
   // the server may have matched the vendor by CUI/name even when the agent left vendorId null — show that
   const initialMap = () => {
@@ -85,6 +85,7 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
           )}
           {record.appliedRefs && <div className="muted" style={{ fontSize: 12 }}>{t('intake.drawer.applied', 'Applied')}: {(record.appliedRefs.vendorInvoiceIds ?? []).length} {t('intake.drawer.invoices', 'invoice(s)')}, {(record.appliedRefs.templateInstanceIds ?? []).length} {t('intake.drawer.templates', 'template(s)')}</div>}
           {record.error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{record.error}</div>}
+          {record.status === 'STAGED' && <div className="badge warning">{t('intake.msg.waitingFor', { types: (record.appliedRefs?.waitingFor ?? []).join(', ') })}</div>}
         </div>
 
         {/* ── right: what will be applied ── */}
