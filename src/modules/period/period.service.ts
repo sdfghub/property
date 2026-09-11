@@ -1001,12 +1001,50 @@ export class PeriodService {
     return `P-${nextSeq.toString().padStart(3, '0')}`
   }
 
+  // Re-derives every existing invoice-sourced charge's per-unit lines from the period's CURRENT
+  // measures (RESIDENTS, SQM, meter readings, ...) — needed because a charge's allocation is only
+  // computed at createExpense() time, so a unit's residents/CPI edited after a charge was entered
+  // (e.g. from an earlier prepare()) would otherwise stay split on stale weights forever.
+  // createExpense() itself is already idempotent on (sourceType, sourceId, sourceKey, fundId) — it
+  // upserts the charge and always deletes+recreates its lines — so recomputing is just calling it
+  // again with the charge's own stored inputs; no allocation logic is duplicated here.
+  //
+  // sourceType EXPENSE/VENDOR_INVOICE are the two paths that actually go through createExpense (see
+  // template.service.ts's chargeDrafts loop) and record enough on the charge (allocationSnapshot.
+  // expenseType, fundId) to reconstruct the call; FUND-sourced charges use a different, non-template
+  // allocation entirely and MANUAL ones have no expense type to re-derive from, so both are left as
+  // they are named in the original stub.
   private async recomputeAllocations(communityId: string, period: { id: string; seq: number; code: string }) {
     const charges = await this.prisma.communityCharge.findMany({
-      where: { communityId, periodId: period.id, sourceType: 'EXPENSE' },
-      select: { id: true },
+      where: { communityId, periodId: period.id, sourceType: { in: ['EXPENSE', 'VENDOR_INVOICE'] } },
+      select: {
+        sourceType: true, sourceId: true, sourceKey: true, amount: true, currency: true, fundId: true,
+        meta: true, allocationSnapshot: true,
+      },
     })
-    if (charges.length) return
+    if (!charges.length) return
+    // A single createExpense() call can fan out into one charge row per fund (split across
+    // RULMENT/REPARATII/etc.), all sharing the same (sourceId, sourceKey) — recompute once per group,
+    // not once per row, so we don't re-derive (and re-upsert) the same expense several times over.
+    const seen = new Set<string>()
+    for (const c of charges) {
+      const groupKey = `${c.sourceId}::${c.sourceKey}`
+      if (seen.has(groupKey)) continue
+      seen.add(groupKey)
+      const expenseTypeCode = (c.allocationSnapshot as any)?.expenseType ?? null
+      if (!expenseTypeCode) continue
+      const description = (c.meta as any)?.description ?? ''
+      await this.allocationService.createExpense(communityId, period, {
+        description,
+        amount: Number(c.amount),
+        currency: c.currency,
+        expenseTypeCode,
+        fundId: c.fundId ?? undefined,
+        sourceType: c.sourceType as any,
+        sourceId: c.sourceId,
+        sourceKey: c.sourceKey,
+      })
+    }
   }
 
   private async postOpeningBalances(tx: TxOrClient, communityId: string, periodId: string) {
