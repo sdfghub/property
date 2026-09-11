@@ -1357,18 +1357,27 @@ export class TemplateService {
   /**
    * Roll the raw MeterReadings for one (scope, type) up into its single PeriodMeasure — value = Σ readings,
    * which is what allocation/avizier consume. A scope with one meter reproduces that meter's value exactly.
+   *
+   * meterId on the written row: when exactly one physical meter fed this rollup (the common case —
+   * one unit, one meter), stamp its real Meter.meterId, not a synthetic `${typeCode}-${scopeId}`
+   * label. getMeterReading() looks the row up by that exact meterId (`periodMeasure.findFirst({where:
+   * {meterId}})`) to show the currently-saved value back in the entry form — a synthetic label never
+   * matches, so the form (and any other UI reading through getMeterReading) renders as empty even
+   * though the value is saved and already flowing into billing. Multi-meter scopes have no single
+   * meterId to attribute the sum to, so they keep the synthetic label as before.
    */
   async rollupUnitMeasure(communityId: string, periodId: string, scopeType: SeriesScope, scopeId: string, typeCode: string) {
     const rows: any[] = await (this.prisma as any).meterReading.findMany({
       where: { communityId, periodId, scopeType, scopeId, typeCode },
-      select: { value: true, reading: true },
+      select: { value: true, reading: true, meterId: true },
     })
     const value = rows.reduce((s, r) => s + Number(r.value || 0), 0)
     const reading = rows.length === 1 && rows[0].reading != null ? Number(rows[0].reading) : null
+    const meterId = rows.length === 1 ? rows[0].meterId : `${typeCode}-${scopeId}`
     return (this.prisma as any).periodMeasure.upsert({
       where: { communityId_periodId_scopeType_scopeId_typeCode: { communityId, periodId, scopeType, scopeId, typeCode } },
-      update: { value, reading, origin: SeriesOrigin.DERIVED, meterId: `${typeCode}-${scopeId}` },
-      create: { communityId, periodId, scopeType, scopeId, typeCode, origin: SeriesOrigin.DERIVED, value, reading, meterId: `${typeCode}-${scopeId}` },
+      update: { value, reading, origin: SeriesOrigin.DERIVED, meterId },
+      create: { communityId, periodId, scopeType, scopeId, typeCode, origin: SeriesOrigin.DERIVED, value, reading, meterId },
     })
   }
 
