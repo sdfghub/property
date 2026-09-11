@@ -2,11 +2,17 @@
 // data/Kralik/Consum_apa_Iulie_2026.csv (Unitate,Consum apa [m3]), sourced from the association's own
 // reading sheet. Only WATER_COLD — residents/invoices/bill submission are separate steps.
 //
-// Goes through TemplateService.upsertMeterReading — the same path the real "Contoare" UI step calls —
-// so it writes the raw MeterReading row against the unit's registered Meter, rolls it up into
-// PeriodMeasure, and runs recomputeAggregationsAndDerived. Writing PeriodMeasure directly (an earlier
-// version of this script did) bypasses MeterReading entirely, which is what the UI actually reads —
-// the values never showed up on screen even though the allocation engine had them.
+// Calls TWO things, matching what the real "Contoare" UI's Save button does (see
+// MeterEntryForm.tsx's save()):
+//  1. upsertMeterReading per unit — writes the raw MeterReading audit row and rolls it up into
+//     PeriodMeasure (what the allocation/avizier engine consumes).
+//  2. saveMeterTemplateState('MONTHLY_WATER_COLD', {state:'FILLED', values}) — persists the
+//     MeterEntryTemplateInstance snapshot the "Contoare" page actually renders from. The frontend
+//     never re-derives its displayed values from PeriodMeasure/MeterReading; on load it seeds
+//     purely from this template's own `values` JSON. Skipping step 2 (an earlier version of this
+//     script did) leaves the entry form showing empty fields forever, no matter how correct the
+//     underlying data is — the "de făcut: Introdu citirile de contoare" to-do never clears either,
+//     since it's driven by this same template state, not by whether PeriodMeasure rows exist.
 //
 // AP 4A is deliberately SKIPPED: the sheet reports -13.342 m³, which is physically impossible (a
 // negative consumption means the new index read lower than the old one) and would corrupt the
@@ -98,6 +104,7 @@ async function main() {
   const skipped: string[] = []
   const missing: string[] = []
   const negative: string[] = []
+  const templateValues: Record<string, number> = {}
 
   for (const { label, value } of rows) {
     if (SKIP_UNITS.has(label)) { negative.push(`${label} (${value} m³)`); continue }
@@ -108,8 +115,17 @@ async function main() {
     const meterId = longCode ? (meterIdByUnitCode.get(longCode) as string | undefined) : undefined
     if (!meterId) { missing.push(label); continue }
     await templates.upsertMeterReading(COMM, PERIOD_CODE, [], { meterId, value, origin: 'METER' })
+    templateValues[meterId] = value // template item key === meterId for this template (no typeCode expansion)
     nOk++
   }
+
+  // Persist the template-instance snapshot the "Contoare" page actually renders from (see header
+  // comment) — 'FILLED' with a partial values map is exactly what a real partial manual save looks
+  // like; AP 4A and SP. COM stay absent from it, same as their PeriodMeasure rows.
+  await templates.saveMeterTemplateState(COMM, PERIOD_CODE, 'MONTHLY_WATER_COLD', [], {
+    state: 'FILLED',
+    values: templateValues,
+  })
 
   console.log(`✅ imported WATER_COLD readings for ${nOk} units (period ${PERIOD_CODE})`)
   if (skipped.length) console.log(`  ⏭️  no reading in CSV (blank), left untouched: ${skipped.join(', ')}`)
