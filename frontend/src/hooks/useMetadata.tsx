@@ -19,6 +19,10 @@ export type CommunityMetadata = {
   fundDomains: (EnumMeta & { sortOrder: number })[]
   avizierFundGroups?: (EnumMeta & { sortOrder: number })[]
   riskTiers?: (EnumMeta & { sortOrder: number; maxDays: number | null; action: string })[]
+  intakeBatchStatuses?: EnumMeta[]
+  intakeRecordKinds?: EnumMeta[]
+  intakeRecordStatuses?: EnumMeta[]
+  intakeBlockers?: (EnumMeta & { overridable: boolean })[]
 }
 
 export const labelOf = (list: EnumMeta[] | undefined, key: string): string =>

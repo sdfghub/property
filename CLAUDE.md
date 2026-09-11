@@ -45,6 +45,10 @@ This file is only the rules that are easy to get wrong.
    conclusions — see `docs/architecture.md#auditing-charges`.
 10. **Money is `Decimal(18,4)`**; round only at the presentation edge and keep
     `dueEnd = dueStart + charges − payments + adjustments` intact.
+11. **Intake never writes charges, invoices or ledger rows itself.** `src/modules/intake/` applies
+    approved records only through `TemplateService.saveBillTemplateState({state:'SUBMITTED'})` /
+    `VendorInvoiceService.createInvoice`, only into OPEN periods, and never closes templates. The app
+    does not call an LLM in v1: it exports a prompt pack and imports the agent's JSON (`docs/intake.md`).
 
 ## Data & prod
 

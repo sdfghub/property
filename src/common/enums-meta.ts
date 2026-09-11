@@ -146,6 +146,55 @@ export const RISK_TIER_META: (EnumMeta & { sortOrder: number; maxDays: number | 
 ]
 
 /** Everything the frontend needs to render these taxonomies, served in one payload. */
+// AI intake — enum IntakeBatchStatus / IntakeRecordKind / IntakeRecordStatus (prisma/schema.prisma) and
+// the blocker codes computed by src/modules/intake/intake-import.service.ts. `overridable` blockers can
+// be acknowledged by the admin on approve; hard ones must be fixed (in the JSON or in the community
+// setup) before a record can be applied. See docs/intake.md.
+export const INTAKE_BATCH_STATUS_META: EnumMeta[] = [
+  { key: 'REVIEW', label: 'În revizuire', labelEn: 'In review', tone: 'warning' },
+  { key: 'APPLYING', label: 'Se aplică', labelEn: 'Applying', tone: 'warning' },
+  { key: 'APPLIED', label: 'Aplicat', labelEn: 'Applied', tone: 'positive' },
+  { key: 'FAILED', label: 'Eșuat', labelEn: 'Failed', tone: 'negative' },
+]
+
+export const INTAKE_RECORD_KIND_META: EnumMeta[] = [
+  { key: 'INVOICE', label: 'Factură', labelEn: 'Invoice' },
+  { key: 'BANK_LINE', label: 'Linie extras bancar', labelEn: 'Bank statement line' },
+  { key: 'OTHER', label: 'Alt document', labelEn: 'Other document' },
+]
+
+export const INTAKE_RECORD_STATUS_META: EnumMeta[] = [
+  { key: 'PROPOSED', label: 'Propus', labelEn: 'Proposed', hint: 'Fără probleme detectate; poate fi aprobat.', hintEn: 'No issues detected; can be approved.' },
+  { key: 'NEEDS_REVIEW', label: 'De verificat', labelEn: 'Needs review', tone: 'warning', hint: 'Are blocaje sau avertismente de rezolvat.', hintEn: 'Has blockers or warnings to resolve.' },
+  { key: 'APPROVED', label: 'Aprobat', labelEn: 'Approved', tone: 'positive' },
+  { key: 'APPLIED', label: 'Aplicat', labelEn: 'Applied', tone: 'positive', hint: 'Factura și cheltuielile au fost create.', hintEn: 'Invoice and expenses were created.' },
+  { key: 'SKIPPED', label: 'Omis', labelEn: 'Skipped' },
+  { key: 'FAILED', label: 'Eșuat', labelEn: 'Failed', tone: 'negative' },
+]
+
+export const INTAKE_BLOCKER_META: (EnumMeta & { overridable: boolean })[] = [
+  // hard — apply always refuses
+  { key: 'NO_ALLOCATION', overridable: false, tone: 'negative', label: 'Fără alocare', labelEn: 'No allocation', hint: 'Factura nu are nicio linie de template și nici fond/tip de cheltuială de rezervă.', hintEn: 'The invoice has no template allocation and no fallback fund/expense type.' },
+  { key: 'UNKNOWN_TEMPLATE', overridable: false, tone: 'negative', label: 'Template necunoscut', labelEn: 'Unknown template', hint: 'Codul de template nu există în această asociație.', hintEn: 'The template code does not exist in this community.' },
+  { key: 'UNKNOWN_ITEM', overridable: false, tone: 'negative', label: 'Linie de template necunoscută', labelEn: 'Unknown template item', hint: 'Cheia liniei nu există în template.', hintEn: 'The item key does not exist on that template.' },
+  { key: 'EXPENSE_TYPE_NO_FUND', overridable: false, tone: 'negative', label: 'Tip de cheltuială fără fond', labelEn: 'Expense type without fund', hint: 'Tipul de cheltuială nu are fundCode configurat — configurați-l înainte de aplicare.', hintEn: 'The expense type has no fundCode configured — set it up before applying.' },
+  { key: 'UNKNOWN_FUND', overridable: false, tone: 'negative', label: 'Fond necunoscut', labelEn: 'Unknown fund' },
+  { key: 'UNKNOWN_EXPENSE_TYPE', overridable: false, tone: 'negative', label: 'Tip de cheltuială necunoscut', labelEn: 'Unknown expense type' },
+  { key: 'PERIOD_NOT_OPEN', overridable: false, tone: 'negative', label: 'Perioada nu este deschisă', labelEn: 'Period not open', hint: 'Importul se aplică doar într-o perioadă OPEN.', hintEn: 'Intake applies only into an OPEN period.' },
+  { key: 'TEMPLATE_ALREADY_SUBMITTED', overridable: false, tone: 'negative', label: 'Template deja trimis', labelEn: 'Template already submitted', hint: 'Există deja o factură creată din acest template în perioada aleasă.', hintEn: 'An invoice was already created from this template in the chosen period.' },
+  { key: 'PHASE2_UNSUPPORTED', overridable: false, label: 'Neacceptat în v1', labelEn: 'Not supported in v1', hint: 'Liniile de extras bancar și alte documente se pot doar omite deocamdată.', hintEn: 'Bank statement lines and other documents can only be skipped for now.' },
+  // overridable — admin can acknowledge on approve
+  { key: 'VENDOR_UNKNOWN', overridable: true, tone: 'warning', label: 'Furnizor necunoscut', labelEn: 'Unknown vendor', hint: 'Furnizorul va fi creat la aplicare.', hintEn: 'The vendor will be created on apply.' },
+  { key: 'VENDOR_MISMATCH', overridable: true, tone: 'warning', label: 'Furnizor diferit de template', labelEn: 'Vendor differs from template', hint: 'Template-ul are alt furnizor configurat; factura se creează pe furnizorul template-ului.', hintEn: 'The template is configured for another vendor; the invoice is created on the template vendor.' },
+  { key: 'AMOUNT_MISMATCH', overridable: true, tone: 'warning', label: 'Net + TVA ≠ brut', labelEn: 'Net + VAT ≠ gross' },
+  { key: 'ALLOCATION_SUM_MISMATCH', overridable: true, tone: 'warning', label: 'Suma alocărilor ≠ brut', labelEn: 'Allocations ≠ gross' },
+  { key: 'PERIOD_MISMATCH', overridable: true, tone: 'warning', label: 'Perioada de serviciu diferă', labelEn: 'Service period differs', hint: 'Perioada facturată nu coincide cu perioada țintă.', hintEn: 'The billed service period does not match the target period.' },
+  { key: 'VALUE_CONFLICT', overridable: true, tone: 'warning', label: 'Valoare deja completată', labelEn: 'Value already filled', hint: 'Template-ul are deja o altă valoare introdusă manual pentru această linie.', hintEn: 'The template already holds a different hand-entered value for this line.' },
+  { key: 'DUPLICATE_IN_BATCH', overridable: true, tone: 'warning', label: 'Duplicat în lot', labelEn: 'Duplicate in batch' },
+  { key: 'DUPLICATE_INVOICE', overridable: true, tone: 'warning', label: 'Factură existentă', labelEn: 'Existing invoice', hint: 'O factură cu același număr și furnizor există deja.', hintEn: 'An invoice with the same number and vendor already exists.' },
+  { key: 'LOW_CONFIDENCE', overridable: true, tone: 'warning', label: 'Încredere scăzută', labelEn: 'Low confidence' },
+]
+
 export const COMMUNITY_METADATA = {
   roles: ROLE_META,
   governanceRoles: GOVERNANCE_ROLE_META,
@@ -161,6 +210,10 @@ export const COMMUNITY_METADATA = {
   fundDomains: FUND_DOMAIN_META,
   avizierFundGroups: AVIZIER_FUND_GROUP_META,
   riskTiers: RISK_TIER_META,
+  intakeBatchStatuses: INTAKE_BATCH_STATUS_META,
+  intakeRecordKinds: INTAKE_RECORD_KIND_META,
+  intakeRecordStatuses: INTAKE_RECORD_STATUS_META,
+  intakeBlockers: INTAKE_BLOCKER_META,
 }
 
 /** Helper for the validation Sets that used to hardcode their own code lists. */
