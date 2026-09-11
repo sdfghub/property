@@ -22,6 +22,7 @@ export function normalizeVendorName(name: string | null | undefined): string {
     .trim()
 }
 
+export const normalizeInvoiceNumber = (v: string) => String(v).toLowerCase().replace(/[^a-z0-9]/g, '')
 const normTaxId = (v: string | null | undefined) => String(v ?? '').replace(/^ro/i, '').replace(/\D/g, '')
 const money = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -160,13 +161,14 @@ export function checkInvoice(input: InvoiceCheckInput, catalogue: IntakeCatalogu
   const vendorKey = vendor.vendorId ?? normalizeVendorName(vendor.name)
   let duplicateOfInvoiceId: string | null = null
   if (number) {
-    const numNorm = number.replace(/\s+/g, '').toLowerCase()
+    // "TMA10 1015558474" ≡ "TMA10-1015558474" ≡ "TMA10/1015558474": compare alphanumerics only
+    const numNorm = normalizeInvoiceNumber(number)
     // an invoice this record already produced (fully, or partially before a failure) is not a duplicate
     const ownInstanceIds = new Set(catalogue.templates.filter((t) => (input.ownTemplates ?? []).includes(t.code)).map((t) => t.instanceId).filter(Boolean))
     const own = (i: { templateInstanceId: string | null; intakeRecordId: string | null }) => i.intakeRecordId === input.selfId || (i.templateInstanceId != null && ownInstanceIds.has(i.templateInstanceId))
     const hit = [...catalogue.unpaidInvoices, ...catalogue.recentInvoices].find((i) => {
       if (own(i)) return false
-      if (!i.number || i.number.replace(/\s+/g, '').toLowerCase() !== numNorm) return false
+      if (!i.number || normalizeInvoiceNumber(i.number) !== numNorm) return false
       const iv = (i as any).vendorId ?? normalizeVendorName(i.vendorName)
       return !vendorKey || !iv || iv === vendorKey || normalizeVendorName(i.vendorName) === normalizeVendorName(vendor.name)
     })
@@ -177,7 +179,7 @@ export function checkInvoice(input: InvoiceCheckInput, catalogue: IntakeCatalogu
   }
   let duplicateOfRecordId: string | null = null
   const sib = input.siblings.find(
-    (s) => s.id !== input.selfId && ((input.sourceSha256 && s.sha256 && s.sha256 === input.sourceSha256) || (number && s.number && s.number.replace(/\s+/g, '').toLowerCase() === number.replace(/\s+/g, '').toLowerCase() && s.vendorKey === vendorKey)),
+    (s) => s.id !== input.selfId && ((input.sourceSha256 && s.sha256 && s.sha256 === input.sourceSha256) || (number && s.number && normalizeInvoiceNumber(s.number) === normalizeInvoiceNumber(number) && s.vendorKey === vendorKey)),
   )
   if (sib) {
     duplicateOfRecordId = sib.id
