@@ -990,7 +990,7 @@ export class TemplateService {
     this.ensureAdmin(roles, communityId)
     const selfReported = !this.isCommunityAdmin(roles, communityId)
     const period = await this.getPeriod(communityId, periodCode)
-    const { template, items, meterById, keyByMeterId, itemLabelByKey } = await this.resolveMeterTemplateItems(
+    const { template, items, meterById, keyByMeterId } = await this.resolveMeterTemplateItems(
       communityId,
       periodCode,
       templateCode,
@@ -1024,8 +1024,6 @@ export class TemplateService {
       valuesByMeterId.set(meterId, valueNum)
     }
     if (!valuesByMeterId.size) throw new BadRequestException('No valid meter values found in CSV')
-    const pmRepo: any = (this.prisma as any).periodMeasure
-    if (!pmRepo) throw new NotFoundException('Meter readings not supported')
     let imported = 0
     for (const [meterId, valueNum] of valuesByMeterId.entries()) {
       const meter = meterById.get(meterId)
@@ -1033,51 +1031,15 @@ export class TemplateService {
         ignored.push({ meterId, reason: 'Meter not found' })
         continue
       }
-      const scopeType = meter.scopeType as any
-      const scopeId = scopeType === 'COMMUNITY' ? communityId : meter.scopeCode
-      const key = keyByMeterId.get(meterId)
-      const provenance = {
-        templateCode,
-        templateName: (template as any)?.template?.name ?? templateCode,
-        itemKey: key || meterId,
-        itemLabel: (key ? itemLabelByKey.get(key) : null) ?? meterId,
-      }
-      const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
-      const prior = mode === 'INDEX'
-        ? await this.priorReadingValue(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq)
-        : null
-      const openingIndex = meter.openingIndex != null ? Number(meter.openingIndex) : null
-      const { reading, value: derivedValue } = this.deriveMeasureValues(mode, valueNum, prior, openingIndex)
-      await pmRepo.upsert({
-        where: {
-          communityId_periodId_scopeType_scopeId_typeCode: {
-            communityId,
-            periodId: period.id,
-            scopeType,
-            scopeId,
-            typeCode: meter.typeCode,
-          },
-        },
-        update: { value: derivedValue, reading, origin: 'METER', estimated: false, meterId, provenance, enteredById: userId ?? null, selfReported },
-        create: {
-          communityId,
-          periodId: period.id,
-          scopeType,
-          scopeId,
-          typeCode: meter.typeCode,
-          origin: 'METER',
-          value: derivedValue,
-          reading,
-          estimated: false,
-          meterId,
-          provenance,
-          enteredById: userId ?? null,
-          selfReported,
-        },
-      })
-      if (mode === 'INDEX') {
-        await this.recomputeNextConsumption(communityId, scopeType, scopeId, meter.typeCode, (period as any).seq, valueNum)
-      }
+      // Route through the same write path as manual entry and the seed scripts: writes the raw
+      // MeterReading row and rolls it up into PeriodMeasure with the correct unit.id-keyed scopeId.
+      // The previous version of this loop upserted PeriodMeasure directly here, keyed by
+      // meter.scopeCode (a unit *code*, e.g. "400191-C1-U10-AP 4A") instead of the unit's real id,
+      // and never wrote MeterReading at all — so the rows it created were both invisible to the
+      // entry form (listMeterTemplates() looks up each item's value via meterReading.findFirst)
+      // and unreachable by billing (which reads PeriodMeasure keyed by unit.id), while silently
+      // leaving a same-typeCode-but-differently-keyed PeriodMeasure row behind on every re-import.
+      await this.upsertMeterReading(communityId, periodCode, roles, { meterId, value: valueNum, origin: 'METER', estimated: false }, userId)
       imported += 1
     }
     const valuesByKey: Record<string, number> = {}
