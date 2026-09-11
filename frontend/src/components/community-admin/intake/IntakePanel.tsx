@@ -166,7 +166,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
       {notice && <div className="badge positive">{notice}</div>}
 
       <div className="row" style={{ gap: 16, alignItems: 'stretch', flexWrap: 'wrap' }}>
-        <div className="card" style={{ flex: '1 1 320px' }}>
+        <div className="card" style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h3>{t('intake.prompt.title', '1 · Prompt pack')}</h3>
           <p className="muted" style={{ fontSize: 13 }}>{t('intake.prompt.hint', 'Give this prompt to an agent (Claude Code, claude.ai…) together with the month\'s zip of invoices and statements. It contains this association\'s templates, vendors and the exact JSON format to produce.')}</p>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -175,10 +175,10 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             <button className="btn tertiary" disabled={!periodCode || busy === 'prompt'} onClick={previewPrompt}>{showPrompt ? t('intake.prompt.hide', 'Hide') : t('intake.prompt.preview', 'Preview')}</button>
           </div>
           {prompt && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t('intake.prompt.version', 'Prompt version')}: {prompt.promptVersion}</div>}
-          {showPrompt && prompt && <pre style={{ maxHeight: 320, overflow: 'auto', fontSize: 11, background: 'var(--field-bg)', padding: 10, borderRadius: 8 }}>{prompt.prompt}</pre>}
+          {showPrompt && prompt && <pre style={{ maxHeight: 320, overflow: 'auto', fontSize: 11, background: 'var(--field-bg)', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%' }}>{prompt.prompt}</pre>}
         </div>
 
-        <div className="card" style={{ flex: '1 1 320px' }}>
+        <div className="card" style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h3>{t('intake.import.title', '2 · Import the agent\'s JSON')}</h3>
           <p className="muted" style={{ fontSize: 13 }}>{t('intake.import.hint', 'Upload the file the agent produced (or paste it). Records are checked against the live templates, vendors and existing invoices — nothing is written yet.')}</p>
           <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -234,9 +234,9 @@ export function IntakePanel({ communityId }: { communityId: string }) {
           </div>
           <p className="muted" style={{ fontSize: 13 }}>{t('intake.records.hint', 'Open a record to correct its mapping. Approve what is right, skip the rest, then Apply — invoices and expense lines are created only then, through the normal template submission.')}</p>
           <div style={{ overflowX: 'auto' }}>
-            <table className="table">
+            <table className="table" style={{ fontSize: 12 }}>
               <thead><tr>
-                <th>#</th><th>{t('intake.col.file', 'File')}</th><th>{t('intake.col.kind', 'Kind')}</th><th>{t('intake.col.vendor', 'Vendor')}</th><th>{t('intake.col.number', 'Number')}</th><th style={{ textAlign: 'right' }}>{t('intake.col.gross', 'Gross')}</th><th>{t('intake.col.mapping', 'Mapping')}</th><th>{t('intake.col.confidence', 'Conf.')}</th><th>{t('intake.col.status', 'Status')}</th><th>{t('intake.col.blockers', 'Blockers')}</th><th></th>
+                <th>#</th><th>{t('intake.col.file', 'File')}</th><th>{t('intake.col.vendor', 'Vendor')}</th><th>{t('intake.col.number', 'Number')}</th><th style={{ textAlign: 'right' }}>{t('intake.col.gross', 'Gross')}</th><th>{t('intake.col.mapping', 'Mapping')}</th><th>{t('intake.col.confidence', 'Conf.')}</th><th>{t('intake.col.status', 'Status')} · {t('intake.col.blockers', 'Checks')}</th>
               </tr></thead>
               <tbody>
                 {selected.records.map((r) => {
@@ -245,26 +245,28 @@ export function IntakePanel({ communityId }: { communityId: string }) {
                   return (
                     <tr key={r.id} onClick={() => setOpen(r)} style={{ cursor: 'pointer' }}>
                       <td>{r.index}</td>
-                      <td title={r.sourceFile ?? ''}>{r.sourceFile ?? '—'}</td>
-                      <td>{localized(meta?.intakeRecordKinds?.find((m) => m.key === r.kind)) || r.kind}</td>
-                      <td>{inv?.vendorName ?? r.extracted?.counterpartyName ?? '—'}</td>
-                      <td>{inv?.number ?? r.extracted?.reference ?? '—'}</td>
+                      <td title={r.sourceFile ?? ''} style={{ maxWidth: 130 }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sourceFile ?? '—'}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>{localized(meta?.intakeRecordKinds?.find((m) => m.key === r.kind)) || r.kind}</div>
+                      </td>
+                      <td style={{ maxWidth: 120 }}>{inv?.vendorName ?? r.extracted?.counterpartyName ?? '—'}</td>
+                      <td style={{ maxWidth: 100, wordBreak: 'break-word' }}>{inv?.number ?? r.extracted?.reference ?? '—'}</td>
                       <td style={{ textAlign: 'right' }}>{inv ? money(inv.gross, inv.currency ?? 'RON') : r.kind === 'BANK_LINE' ? money(r.extracted?.amount, r.extracted?.currency ?? 'RON') : ''}</td>
-                      <td style={{ fontSize: 12 }}>{summary(r)}</td>
+                      <td style={{ maxWidth: 200 }}>{summary(r)}</td>
                       <td>{r.confidence != null && <span className={`badge ${confidenceTone(r.confidence)}`}>{Math.round(r.confidence * 100)}%</span>}</td>
-                      <td><span className={`badge ${statusMeta(r.status)?.tone || ''}`} title={localizedHint(statusMeta(r.status)) || ''}>{localized(statusMeta(r.status)) || r.status}</span></td>
-                      <td style={{ fontSize: 12 }}>
+                      <td style={{ fontSize: 12, minWidth: 180 }}>
+                        <div style={{ marginBottom: 4 }}><span className={`badge ${statusMeta(r.status)?.tone || ''}`} title={localizedHint(statusMeta(r.status)) || ''}>{localized(statusMeta(r.status)) || r.status}</span></div>
                         {r.blockers.map((b, i) => (
                           <span key={i} className={`badge ${r.remaining.some((x) => x.code === b.code) ? (b.overridable ? 'warning' : 'negative') : ''}`} title={`${b.message}${localizedHint(blockerMeta(b.code)) ? ` — ${localizedHint(blockerMeta(b.code))}` : ''}`} style={{ marginRight: 4, marginBottom: 2 }}>
                             {blockerLabel(b)}{!r.remaining.some((x) => x.code === b.code) && b.overridable ? ' ✓' : ''}
                           </span>
                         ))}
                         {r.error && <div style={{ color: 'var(--danger)' }}>{r.error}</div>}
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
-                        {canApprove && <button className="btn small" disabled={busy === r.id} onClick={() => approve(r)}>{t('intake.action.approve', 'Approve')}</button>}{' '}
-                        {r.status !== 'APPLIED' && r.status !== 'SKIPPED' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => skip(r)}>{t('intake.action.skip', 'Skip')}</button>}
-                        {(r.status === 'SKIPPED' || r.status === 'APPROVED') && r.kind === 'INVOICE' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
+                        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {canApprove && <button className="btn small" disabled={busy === r.id} onClick={() => approve(r)}>{t('intake.action.approve', 'Approve')}</button>}
+                          {r.status !== 'APPLIED' && r.status !== 'SKIPPED' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => skip(r)}>{t('intake.action.skip', 'Skip')}</button>}
+                          {(r.status === 'SKIPPED' || r.status === 'APPROVED') && r.kind === 'INVOICE' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
+                        </div>
                       </td>
                     </tr>
                   )

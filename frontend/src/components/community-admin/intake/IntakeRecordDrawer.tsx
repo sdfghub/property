@@ -30,11 +30,18 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
   const isInvoice = record.kind === 'INVOICE'
   const locked = record.status === 'APPLIED'
   const [inv, setInv] = React.useState<InvoiceHeader>(() => ({ ...(record.effective?.invoice ?? record.extracted ?? {}) }))
-  const [map, setMap] = React.useState<InvoiceMapping>(() => structuredClone(record.effective?.mapping ?? { vendor: { match: 'UNKNOWN', vendorId: null, name: null, taxId: null, iban: null }, allocations: [], fallback: null, duplicateOf: null }))
+  // the server may have matched the vendor by CUI/name even when the agent left vendorId null — show that
+  const initialMap = () => {
+    const m: InvoiceMapping = structuredClone(record.effective?.mapping ?? { vendor: { match: 'UNKNOWN', vendorId: null, name: null, taxId: null, iban: null }, allocations: [], fallback: null, duplicateOf: null })
+    const rv = record.resolved?.vendor
+    if (!m.vendor.vendorId && rv?.vendorId) m.vendor = { ...m.vendor, match: 'EXISTING', vendorId: rv.vendorId, name: rv.name ?? m.vendor.name }
+    return m
+  }
+  const [map, setMap] = React.useState<InvoiceMapping>(initialMap)
   const [overrides, setOverrides] = React.useState<string[]>(() => record.review?.overrides ?? [])
   React.useEffect(() => {
     setInv({ ...(record.effective?.invoice ?? record.extracted ?? {}) })
-    setMap(structuredClone(record.effective?.mapping ?? { vendor: { match: 'UNKNOWN', vendorId: null, name: null, taxId: null, iban: null }, allocations: [], fallback: null, duplicateOf: null }))
+    setMap(initialMap())
     setOverrides(record.review?.overrides ?? [])
   }, [record])
 
