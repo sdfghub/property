@@ -124,6 +124,7 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   return {
     communityId: def.id,
     communityName: def.name,
+    intakeHints: Array.isArray((def as any).intakeHints) ? (def as any).intakeHints.map(String) : undefined,
     billingEntityMeta,
     periodCode: def.period.code,
     periodStart: def.period.start,

@@ -62,6 +62,8 @@ export type StructureRow = {
 export type CommunityImportPlan = {
   communityId: string
   communityName: string
+  /** optional def.json `intakeHints`: association-specific guidance for the AI intake prompt */
+  intakeHints?: string[]
   billingEntityMeta?: Record<string, { name?: string; displayName?: string }>
   periodCode: string
   periodStart?: string

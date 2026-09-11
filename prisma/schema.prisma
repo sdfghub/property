@@ -204,6 +204,7 @@ model Community {
   features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
   paymentAllocation Json? @map("payment_allocation") // per-community payment→charge allocation strategy (see PaymentAllocationService; default FIFO)
   measureModes Json? @map("measure_modes") // per-type meter reading mode { "<typeCode>": "INDEX" | "CONSUMPTION" }; default CONSUMPTION
+  intakeHints  Json? @map("intake_hints")  // string[]: association-specific guidance appended to the AI intake prompt pack (docs/intake.md)
 
   periods                    Period[]
   units                      Unit[]

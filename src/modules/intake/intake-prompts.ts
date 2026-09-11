@@ -12,6 +12,7 @@ const money = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(2
 export function promptCatalogue(c: IntakeCatalogue) {
   return {
     community: { code: c.community.code, name: c.community.name },
+    hints: c.hints,
     period: { code: c.period.code, startDate: c.period.startDate, endDate: c.period.endDate },
     currency: c.currency,
     templates: c.templates.map((t) => ({
@@ -128,6 +129,16 @@ ${JSON.stringify(pc, null, 2)}
 \`\`\`
 
 ## 4. Mapping guidelines
+${
+  c.hints.length
+    ? `
+### Association-specific hints (learned from previous imports — follow these first)
+
+${c.hints.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+`
+    : ''
+}
+### General
 
 1. **One invoice → one \`INVOICE\` record.** Fill \`invoice\` with what the document says; fill \`mapping\`
    with how it lands in the association's books.

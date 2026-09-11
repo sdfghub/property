@@ -12,7 +12,7 @@ import { z } from 'zod'
 export const CONTRACT_VERSION = 'intake-import/v1'
 // Bump when the prompt wording/guidelines change in a way that affects what agents emit. Batches record
 // which version the agent used so prompt regressions can be traced.
-export const PROMPT_VERSION = '2026-09-11.1'
+export const PROMPT_VERSION = '2026-09-11.2'
 
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
 const PeriodCode = z.string().regex(/^\d{4}-\d{2}$/, 'expected YYYY-MM')

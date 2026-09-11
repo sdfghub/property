@@ -54,6 +54,17 @@ export class IntakeController {
     return pack.prompt
   }
 
+  /** Association-specific hints appended to the pack (Community.intakeHints). */
+  @Get('hints')
+  hints(@Param('communityId') c: string) {
+    return this.prompt.getHints(c)
+  }
+
+  @Post('hints')
+  setHints(@Param('communityId') c: string, @Body() body: { hints?: unknown }) {
+    return this.prompt.setHints(c, body?.hints)
+  }
+
   /** Catalogue for the review UI's selects — same object the prompt is rendered from. */
   @Get('context')
   context(@Param('communityId') c: string, @Query('periodCode') periodCode: string) {

@@ -9,6 +9,8 @@ import { renderPromptPack, buildExamplePayload } from './intake-prompts'
 // object feeds the prompt pack, the review UI's selects (`GET intake/context`) and the blocker checks.
 export type IntakeCatalogue = {
   community: { id: string; code: string; name: string }
+  /** association-specific guidance kept on the community (Community.intakeHints), appended to the pack */
+  hints: string[]
   period: { id: string; code: string; status: string; startDate: string; endDate: string }
   currency: string
   templates: Array<{
@@ -41,9 +43,10 @@ export class IntakePromptService {
   constructor(private readonly prisma: PrismaService, private readonly finance: FinanceService) {}
 
   async resolveCommunity(ref: string) {
-    const c = await this.prisma.community.findFirst({ where: { OR: [{ id: ref }, { code: ref }] }, select: { id: true, code: true, name: true } })
+    const c = await this.prisma.community.findFirst({ where: { OR: [{ id: ref }, { code: ref }] }, select: { id: true, code: true, name: true, intakeHints: true } })
     if (!c) throw new NotFoundException('Community not found')
-    return c
+    const { intakeHints, ...rest } = c
+    return { ...rest, hints: Array.isArray(intakeHints) ? (intakeHints as unknown[]).map(String) : [] }
   }
 
   async buildCatalogue(communityRef: string, periodCode: string): Promise<IntakeCatalogue> {
@@ -75,8 +78,10 @@ export class IntakePromptService {
     const extraById = new Map(unpaidExtra.map((x) => [x.id, x]))
     const valuesByTemplate = new Map(instances.map((i) => [i.templateId, (i.values as Record<string, unknown> | null) ?? null]))
 
+    const { hints, ...communityRow } = community
     return {
-      community,
+      community: communityRow,
+      hints,
       period: { id: period.id, code: period.code, status: period.status, startDate: iso(period.startDate)!, endDate: iso(period.endDate)! },
       currency: 'RON',
       templates: templates
@@ -134,6 +139,23 @@ export class IntakePromptService {
         intakeRecordId: ((r.provenance as any)?.intakeRecordId as string) ?? null,
       })),
     }
+  }
+
+  async getHints(communityRef: string) {
+    const c = await this.resolveCommunity(communityRef)
+    return { hints: c.hints }
+  }
+
+  /** Replace the association's hints (one string per hint; blank lines dropped, trimmed, capped). */
+  async setHints(communityRef: string, hints: unknown) {
+    const c = await this.resolveCommunity(communityRef)
+    const list = (Array.isArray(hints) ? hints : typeof hints === 'string' ? hints.split(/\r?\n/) : [])
+      .map((h) => String(h).trim())
+      .filter(Boolean)
+      .slice(0, 200)
+      .map((h) => h.slice(0, 1000))
+    await this.prisma.community.update({ where: { id: c.id }, data: { intakeHints: list } })
+    return { hints: list }
   }
 
   async buildPack(communityRef: string, periodCode: string) {

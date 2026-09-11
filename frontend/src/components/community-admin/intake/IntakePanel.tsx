@@ -34,6 +34,9 @@ export function IntakePanel({ communityId }: { communityId: string }) {
   const [prompt, setPrompt] = React.useState<{ prompt: string; promptVersion: string } | null>(null)
   const [showPrompt, setShowPrompt] = React.useState(false)
   const [pasted, setPasted] = React.useState('')
+  const [hints, setHints] = React.useState<string>('')
+  const [hintsOpen, setHintsOpen] = React.useState(false)
+  const [hintsDirty, setHintsDirty] = React.useState(false)
   const [open, setOpen] = React.useState<IntakeRecordRow | null>(null)
 
   const base = `/communities/${communityId}/intake`
@@ -55,6 +58,8 @@ export function IntakePanel({ communityId }: { communityId: string }) {
   }, [communityId])
 
   const loadBatches = React.useCallback(() => api.get<IntakeBatchSummary[]>(`${base}/batches`).then(setBatches).catch(fail), [api, base])
+  React.useEffect(() => { api.get<{ hints: string[] }>(`${base}/hints`).then((h: { hints: string[] }) => { setHints((h.hints ?? []).join('\n')); setHintsDirty(false) }).catch(() => {}) }, [api, base])
+  const saveHints = () => act('hints', async () => { const h = await api.post<{ hints: string[] }>(`${base}/hints`, { hints }); setHints(h.hints.join('\n')); setHintsDirty(false); setPrompt(null) }, t('intake.hints.saved', 'Hints saved — the prompt pack now includes them'))
   React.useEffect(() => { loadBatches() }, [loadBatches])
   React.useEffect(() => {
     setPrompt(null)
@@ -175,6 +180,18 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             <button className="btn tertiary" disabled={!periodCode || busy === 'prompt'} onClick={previewPrompt}>{showPrompt ? t('intake.prompt.hide', 'Hide') : t('intake.prompt.preview', 'Preview')}</button>
           </div>
           {prompt && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t('intake.prompt.version', 'Prompt version')}: {prompt.promptVersion}</div>}
+          <div style={{ marginTop: 10 }}>
+            <button className="btn tertiary small" onClick={() => setHintsOpen((v) => !v)}>
+              {hintsOpen ? t('intake.hints.hide', 'Hide hints') : t('intake.hints.show', { n: hints.split('\n').filter((l) => l.trim()).length })}
+            </button>
+            {hintsOpen && (
+              <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+                <div className="muted" style={{ fontSize: 12 }}>{t('intake.hints.hint', 'One hint per line. These are appended to the prompt as "association-specific hints" — everything the agent should know about this association\'s suppliers and documents that it cannot guess (vendor name aliases, which template a supplier\'s lines go to, how prior balances appear, monthly quirks).')}</div>
+                <textarea className="input" rows={8} value={hints} onChange={(e) => { setHints(e.target.value); setHintsDirty(true) }} style={{ fontSize: 12 }} />
+                <div><button className="btn small" disabled={!hintsDirty || busy === 'hints'} onClick={saveHints}>{t('intake.hints.save', 'Save hints')}</button></div>
+              </div>
+            )}
+          </div>
           {showPrompt && prompt && <pre style={{ maxHeight: 320, overflow: 'auto', fontSize: 11, background: 'var(--field-bg)', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '100%' }}>{prompt.prompt}</pre>}
         </div>
 

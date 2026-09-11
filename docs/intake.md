@@ -44,6 +44,17 @@ Rendered by `intake-prompts.ts` from `IntakePromptService.buildCatalogue()`:
 `PROMPT_VERSION` (`intake-contract.ts`) is stamped on every batch — bump it when the guidelines change.
 Kralik's pack is ~44 KB.
 
+### Association-specific hints
+
+What an agent cannot guess about *this* association — vendor aliases ("RUSAVIT" = SC RUSADMINISTRA
+COMPANY SRL), which template a supplier's lines go to, how prior balances appear on each supplier's
+invoice, monthly quirks (Rich Clean names the next month, the bank commission is derived from the
+statement) — lives on the community as `Community.intakeHints` (string[]). It is rendered into section
+4 of the pack as "Association-specific hints — follow these first". Edit it in the Intake tab (prompt
+card → *Association hints*), or via `GET/POST /communities/:id/intake/hints`; `def.json` may carry an
+`intakeHints` array that the community import applies (Kralik's 20 hints from the first real dry run
+are there). Add a hint every time a review needed a correction the agent could have known about.
+
 ## 2. The contract `intake-import/v1` (`intake-contract.ts`)
 
 ```jsonc
