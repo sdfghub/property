@@ -25,30 +25,44 @@
       "items": [
         {
           "key": "apa_rece",
-          "label": "Apă rece (potabilă) - Aquatim",
+          "label": "Apă potabilă",
           "kind": "charge",
           "expenseTypeCode": "APA_RECE",
-          "expenseSplitId": "SPLIT_APA_RECE"
+          "expenseSplitId": "SPLIT_APA_RECE",
+          "displayOrder": 20
         },
         {
           "key": "canal",
-          "label": "Canalizare - Aquatim",
+          "label": "Canal",
           "kind": "charge",
           "expenseTypeCode": "CANALIZARE",
-          "expenseSplitId": "SPLIT_CANAL"
+          "expenseSplitId": "SPLIT_CANAL",
+          "displayOrder": 30
         },
         {
           "key": "penalitati",
-          "label": "Penalități apă rece - Aquatim",
+          "label": "Penalități",
           "kind": "charge",
           "expenseTypeCode": "PENALITATI_APA",
-          "expenseSplitId": "SPLIT_PENALITATI_APA"
+          "expenseSplitId": "SPLIT_PENALITATI_APA",
+          "displayOrder": 60
         },
         {
           "key": "branch_water_m3",
-          "label": "Consum contor branșament apă rece (m³) — pentru alocarea „apa dif”",
+          "label": "Consum facturat",
           "kind": "meter",
-          "meterId": "COMMUNITY_WATER_COLD"
+          "meterId": "COMMUNITY_WATER_COLD",
+          "displayOrder": 10,
+          "unit": "m³"
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_APA",
+          "expenseSplitId": "SPLIT_RESTANTE_APA",
+          "displayOrder": 55,
+          "arrears": true
         }
       ]
     }
@@ -79,10 +93,17 @@
       "items": [
         {
           "key": "apa_meteo",
-          "label": "Factură Apa Meteo - Aquatim",
+          "label": "Canal Apă Meteorică",
           "kind": "charge",
           "expenseTypeCode": "APA_METEO",
-          "expenseSplitId": "SPLIT_APA_METEO"
+          "expenseSplitId": "SPLIT_APA_METEO",
+          "displayOrder": 40
+        },
+        {
+          "key": "spacer_before_penalitati",
+          "label": "",
+          "kind": "spacer",
+          "displayOrder": 50
         }
       ]
     }
@@ -116,7 +137,25 @@
           "label": "Factură Curent Scara - PPC",
           "kind": "charge",
           "expenseTypeCode": "CURENT_SCARA",
-          "expenseSplitId": "SPLIT_CURENT_SCARA"
+          "expenseSplitId": "SPLIT_CURENT_SCARA",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_CURENT_SCARA",
+          "expenseSplitId": "SPLIT_RESTANTE_CURENT_SCARA",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_CURENT_SCARA",
+          "expenseSplitId": "SPLIT_PENALITATI_CURENT_SCARA",
+          "displayOrder": 60
         }
       ]
     }
@@ -150,7 +189,25 @@
           "label": "Factură Salubritate - Retim",
           "kind": "charge",
           "expenseTypeCode": "SALUBRITATE",
-          "expenseSplitId": "SPLIT_SALUBRITATE"
+          "expenseSplitId": "SPLIT_SALUBRITATE",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_SALUBRITATE",
+          "expenseSplitId": "SPLIT_RESTANTE_SALUBRITATE",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_SALUBRITATE",
+          "expenseSplitId": "SPLIT_PENALITATI_SALUBRITATE",
+          "displayOrder": 60
         }
       ]
     }
@@ -184,7 +241,25 @@
           "label": "Factură Curatenie - RICH CLLEAN",
           "kind": "charge",
           "expenseTypeCode": "CURATENIE",
-          "expenseSplitId": "SPLIT_CURATENIE"
+          "expenseSplitId": "SPLIT_CURATENIE",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_CURATENIE",
+          "expenseSplitId": "SPLIT_RESTANTE_CURATENIE",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_CURATENIE",
+          "expenseSplitId": "SPLIT_PENALITATI_CURATENIE",
+          "displayOrder": 60
         }
       ]
     }
@@ -218,7 +293,25 @@
           "label": "Factură Administrare - RUSAVIT",
           "kind": "charge",
           "expenseTypeCode": "ADMINISTRARE",
-          "expenseSplitId": "SPLIT_ADMINISTRARE"
+          "expenseSplitId": "SPLIT_ADMINISTRARE",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_ADMINISTRARE",
+          "expenseSplitId": "SPLIT_RESTANTE_ADMINISTRARE",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_ADMINISTRARE",
+          "expenseSplitId": "SPLIT_PENALITATI_ADMINISTRARE",
+          "displayOrder": 60
         }
       ]
     }
@@ -252,7 +345,25 @@
           "label": "Factură Comision Banca - Libra",
           "kind": "charge",
           "expenseTypeCode": "COMISION_BANCA",
-          "expenseSplitId": "SPLIT_COMISION_BANCA"
+          "expenseSplitId": "SPLIT_COMISION_BANCA",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_COMISION_BANCA",
+          "expenseSplitId": "SPLIT_RESTANTE_COMISION_BANCA",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_COMISION_BANCA",
+          "expenseSplitId": "SPLIT_PENALITATI_COMISION_BANCA",
+          "displayOrder": 60
         }
       ]
     }
@@ -286,7 +397,25 @@
           "label": "Factură Interfon - Schmidt",
           "kind": "charge",
           "expenseTypeCode": "INTERFON",
-          "expenseSplitId": "SPLIT_INTERFON"
+          "expenseSplitId": "SPLIT_INTERFON",
+          "displayOrder": 10
+        },
+        {
+          "key": "restante",
+          "label": "Restanțe",
+          "kind": "charge",
+          "expenseTypeCode": "RESTANTE_INTERFON",
+          "expenseSplitId": "SPLIT_RESTANTE_INTERFON",
+          "displayOrder": 55,
+          "arrears": true
+        },
+        {
+          "key": "penalitati",
+          "label": "Penalități",
+          "kind": "charge",
+          "expenseTypeCode": "PENALITATI_INTERFON",
+          "expenseSplitId": "SPLIT_PENALITATI_INTERFON",
+          "displayOrder": 60
         }
       ]
     }

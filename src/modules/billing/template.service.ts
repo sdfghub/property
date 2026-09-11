@@ -422,7 +422,12 @@ export class TemplateService {
       create: { communityId, periodId: period.id, templateId: tpl.id, state: nextState, values: payload.values ?? null },
     })
 
-    if (nextState === 'SUBMITTED') {
+    // 'CLOSED' is the UI's real finalize action (Confirm) — it must materialize the entered
+    // values into real ledger charges the same way 'SUBMITTED' does for seed-imported data,
+    // otherwise a bill can sit "Confirmed" in the UI while Avizier has nothing to show for it.
+    // Idempotent (persistChargesFromLines upserts on source+key+fund), so reopening and
+    // re-confirming a bill safely updates the same charge rows instead of duplicating them.
+    if (nextState === 'SUBMITTED' || nextState === 'CLOSED') {
       await this.applyBillTemplateSubmission(communityId, period.id, periodCode, tpl as any, res as any, (res as any)?.values ?? {})
     }
 
@@ -451,7 +456,7 @@ export class TemplateService {
 
     const valueFor = (key?: string | null) => (key ? (values as any)?.[key] : undefined)
 
-    const chargeItems = items.filter((it) => it.kind === 'charge' || it.kind === 'expense')
+    const chargeItems = items.filter((it) => (it.kind === 'charge' || it.kind === 'expense') && !it.arrears)
     const totalAmount = chargeItems.reduce((sum, it) => {
       const key = it.amountKey || it.key
       const val = Number(valueFor(key))
@@ -499,8 +504,8 @@ export class TemplateService {
       // Due date (scadența facturii): from the configured key, defaulting to 'invoiceDueDate'.
       const dueDateVal = valueFor(invoiceCfg.dueDateKey || 'invoiceDueDate') ?? invoiceCfg.dueDate ?? null
       const dueDate = dueDateVal ? new Date(dueDateVal) : null
-      const serviceStartPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceStartPeriodKey))
-      const serviceEndPeriodId = await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceEndPeriodKey))
+      const serviceStartPeriodId = (await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceStartPeriodKey))) ?? periodId
+      const serviceEndPeriodId = (await this.resolvePeriodIdFromValue(communityId, valueFor(invoiceCfg.serviceEndPeriodKey))) ?? periodId
       const currency = valueFor(invoiceCfg.currencyKey) ?? invoiceCfg.currency ?? output.currency ?? 'RON'
       const net = valueFor(invoiceCfg.netKey) ?? invoiceCfg.net ?? null
       const vat = valueFor(invoiceCfg.vatKey) ?? invoiceCfg.vat ?? null
@@ -1157,12 +1162,25 @@ export class TemplateService {
     })
     const mode = await this.resolveMeasureMode(communityId, meter.typeCode)
     const previousReading = await this.priorReadingByMeter(communityId, meterId, (period as any).seq)
+    // CONSUMPTION-mode meters have no running `reading` (only `value`, the entered consumption
+    // itself) — surface last month's `value` separately so the entry form can default a fresh
+    // (unentered) field to it, same spirit as INDEX's previousReading but off the right column.
+    // Resolved by (scopeType, scopeId, typeCode) rather than meterId: some historical Kralik
+    // period_measure rows were seeded with an ad hoc meterId label that never matches the real
+    // Meter registry's id (see listMeters(), which resolves the same way for currentValue).
+    let previousConsumption: number | null = null
+    if (mode === 'CONSUMPTION') {
+      const scopeId = meter.scopeType === 'UNIT'
+        ? (await this.prisma.unit.findFirst({ where: { communityId, code: meter.scopeCode }, select: { id: true } }))?.id ?? null
+        : meter.scopeCode
+      if (scopeId) previousConsumption = await this.priorValueByScope(communityId, meter.scopeType, scopeId, meter.typeCode, (period as any).seq)
+    }
     let enteredByName: string | null = null
     if ((pm as any)?.enteredById) {
       const u = await this.prisma.user.findUnique({ where: { id: (pm as any).enteredById }, select: { name: true, email: true } })
       enteredByName = u?.name || u?.email || null
     }
-    return { ...(pm ?? {}), meterId, typeCode: meter.typeCode, mode, previousReading, enteredByName }
+    return { ...(pm ?? {}), meterId, typeCode: meter.typeCode, mode, previousReading, previousConsumption, enteredByName }
   }
 
   /** Prior period's reading for a meter (by meterId), for display. */
@@ -1175,6 +1193,21 @@ export class TemplateService {
       communityId, meterId, currentSeq,
     )
     return rows.length ? Number(rows[0].reading) : null
+  }
+
+  /** Prior period's raw `value` (consumption) for a (scopeType, scopeId, typeCode) series, for
+   *  defaulting a fresh CONSUMPTION-mode entry — same lookup shape as priorReadingValue() below,
+   *  scope-based rather than meterId-based (see the caller's note on why). */
+  private async priorValueByScope(communityId: string, scopeType: string, scopeId: string, typeCode: string, currentSeq: number): Promise<number | null> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pm.value::float8 as value
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.scope_type::text = $2 and pm.scope_id = $3 and pm.type_code = $4
+          and pm.value is not null and p.seq < $5
+        order by p.seq desc limit 1`,
+      communityId, scopeType, scopeId, typeCode, currentSeq,
+    )
+    return rows.length ? Number(rows[0].value) : null
   }
 
   /** Recent reading history for a meter (period, reading index, consumption), newest first. */

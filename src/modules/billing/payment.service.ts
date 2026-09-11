@@ -400,8 +400,12 @@ export class PaymentService {
     // forward). So a line's amount routinely exceeds what it can actually consume here. That
     // leftover belongs to the line's OWN fund (it's still money paid "into Rulment"), not pooled
     // together with every other line's leftover and dumped into a single shared advance fund —
-    // tracked per fund here so the caller can credit each fund its own leftover as its own advance.
-    const leftoverByFund = new Map<string, number>()
+    // tracked per (fund, unit) here so the caller can credit each fund its own leftover as its
+    // own advance, keeping the line's own unitId (if any) — a fund like Reabilitare 1/2 rarely
+    // has a discrete open charge to match against, so most of a unit-tagged line's amount
+    // routinely ends up here rather than in `apps`; losing the tag at this point would silently
+    // make BeUnitStatement wrong for exactly the common case.
+    const leftoverByFund = new Map<string, { fundId: string; unitId: string | null; amount: number }>()
     for (let idx = 0; idx < allocationSpec.length; idx += 1) {
       if (remaining <= 0) break
       const line = allocationSpec[idx]
@@ -433,7 +437,10 @@ export class PaymentService {
       apps.push(...res.apps)
       remaining -= lineAmount - res.remaining
       if (res.remaining > 0.0001 && line.fundId) {
-        leftoverByFund.set(line.fundId, (leftoverByFund.get(line.fundId) ?? 0) + res.remaining)
+        const key = `${line.fundId}::${line.unitId ?? ''}`
+        const cur = leftoverByFund.get(key) ?? { fundId: line.fundId, unitId: line.unitId ?? null, amount: 0 }
+        cur.amount += res.remaining
+        leftoverByFund.set(key, cur)
       }
       // a line with no fundId can't self-advance — its leftover stays inside the pooled
       // `remaining` above, to be handled by the caller's shared advanceFundId fallback.
@@ -442,7 +449,7 @@ export class PaymentService {
     // fundId to self-advance into; for fundId'd lines, move their leftover out of the pooled
     // total (it's now accounted for per-fund) so it isn't double-counted by the caller.
     let pooledRemaining = remaining
-    for (const amt of leftoverByFund.values()) pooledRemaining -= amt
+    for (const e of leftoverByFund.values()) pooledRemaining -= e.amount
     return { apps, remaining: Number(pooledRemaining.toFixed(4)), leftoverByFund }
   }
 
@@ -672,7 +679,7 @@ export class PaymentService {
 
     let apps: Array<{ paymentId: string; chargeId: string; amount: number; spec: PaymentAllocationSpec | any }> = []
     let remaining = chargeApplicable
-    let leftoverByFund = new Map<string, number>()
+    let leftoverByFund = new Map<string, { fundId: string; unitId: string | null; amount: number }>()
     if (chargeApplicable > 0) {
       if (fixedLines.length) {
         const res = await this.applyPaymentWithSpec(
@@ -719,11 +726,11 @@ export class PaymentService {
     // that same fund) + (optionally) the payment's shared advance for any leftover with no fund.
     const ledgerApps = [
       ...apps,
-      ...Array.from(leftoverByFund.entries())
-        .filter(([, amt]) => amt > 0.0001)
-        .map(([fundId, amt]) => ({
-          paymentId: paymentIdStr, amount: Number(amt.toFixed(4)),
-          spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId, amount: Number(amt.toFixed(4)) },
+      ...Array.from(leftoverByFund.values())
+        .filter((e) => e.amount > 0.0001)
+        .map((e) => ({
+          paymentId: paymentIdStr, amount: Number(e.amount.toFixed(4)),
+          spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: e.fundId, unitId: e.unitId, amount: Number(e.amount.toFixed(4)) },
         })),
       ...(advanceTotal > 0.0001 && advanceFundId
         ? [{ paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, amount: advanceTotal } }]
@@ -795,7 +802,7 @@ export class PaymentService {
     const fundIdTotals = this.buildCommunityPaymentFundTotals(ledgerApps, 0)
     await this.replaceCommunityPaymentLedger(client, entryCtx as any, paymentIdStr, fundIdTotals)
     await this.replaceFundPaymentLedger(client, entryCtx as any, paymentIdStr, ledgerApps)
-    const perFundLeftoverTotal = Array.from(leftoverByFund.values()).reduce((s, v) => s + v, 0)
+    const perFundLeftoverTotal = Array.from(leftoverByFund.values()).reduce((s, v) => s + v.amount, 0)
     return {
       applied: Number((amount - advanceTotal - perFundLeftoverTotal).toFixed(4)),
       remaining: 0,

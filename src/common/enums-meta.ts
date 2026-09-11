@@ -70,6 +70,9 @@ export const CORRECTION_TYPE_META: EnumMeta[] = [
   { key: 'MANUAL_ADJUSTMENT', label: 'Ajustare manuală sold', labelEn: 'Manual balance adjustment',
     hint: 'O corecție simplă, la o singură unitate și un singur fond.',
     hintEn: 'A simple correction to one unit, on one fund.' },
+  { key: 'OWNERSHIP_TRANSFER', label: 'Transfer proprietate', labelEn: 'Ownership transfer',
+    hint: 'Restanța unei unități trece de la fostul proprietar la noul proprietar, la schimbarea proprietarului.',
+    hintEn: "A unit's outstanding balance moves from the old owner to the new owner, at an ownership change." },
 ]
 
 // Correction statuses — enum CorrectionStatus.

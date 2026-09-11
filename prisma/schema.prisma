@@ -1445,6 +1445,30 @@ model BeStatement {
   @@map("be_statement")
 }
 
+// Per-unit statement, parallel to BeStatement but unit-keyed — populated only where real
+// per-unit data exists (charges: always, from community_charge_line; payments/adjustments:
+// only when a ledger detail row carries a unitId; dueStart: chained from the prior period's
+// own dueEnd, anchored at April 2026-04's real per-unit closing for Kralik). A billing entity
+// with more than one unit has no per-unit split for the portion of its payments/adjustments
+// that was never unit-tagged — that portion simply doesn't appear here, it isn't fabricated.
+model BeUnitStatement {
+  id              String  @id @default(cuid()) @map("id")
+  communityId     String  @map("community_id")
+  periodId        String  @map("period_id")
+  unitId          String  @map("unit_id")
+  billingEntityId String  @map("billing_entity_id")
+  fundId          String  @map("fund_id")
+  currency        String  @default("RON") @map("currency")
+  dueStart        Decimal @default(0) @map("due_start")
+  charges         Decimal @default(0) @map("charges")
+  payments        Decimal @default(0) @map("payments")
+  adjustments     Decimal @default(0) @map("adjustments")
+  dueEnd          Decimal @default(0) @map("due_end")
+
+  @@unique([communityId, periodId, unitId, fundId])
+  @@map("be_unit_statement")
+}
+
 // ---------- Opening balance per community & period ----------
 model CommunityOpeningBalance {
   id          String   @id @default(cuid()) @map("id")
@@ -1687,11 +1711,14 @@ model CommitteeVote {
 /// entries are DERIVED from it (refType='CORRECTION', refId=id) by PeriodService.applyCorrections, and
 /// summed into be_statement like any other ledger legs. Targets the current non-CLOSED period.
 enum CorrectionType {
-  RESHUFFLE         // reponderare-cote → CHARGE per BE (payload.perUnit)
-  CREDIT_TRANSFER   // reatribuire-plata → negative PAYMENT on (be, fund)
-  PAYMENT_REATTRIB  // reatribuire-plata → negative PAYMENT on payload.fromFund
-  PENALTY_WRITEOFF  // scutire-penalizari → negative ADJUSTMENT on PENALIZARI
-  MANUAL_ADJUSTMENT // ajustare-manuala → ADJUSTMENT (±) on (be, fund)
+  RESHUFFLE          // reponderare-cote → CHARGE per BE (payload.perUnit)
+  CREDIT_TRANSFER    // reatribuire-plata → negative PAYMENT on (be, fund)
+  PAYMENT_REATTRIB   // reatribuire-plata → negative PAYMENT on payload.fromFund
+  PENALTY_WRITEOFF   // scutire-penalizari → negative ADJUSTMENT on PENALIZARI
+  MANUAL_ADJUSTMENT  // ajustare-manuala → ADJUSTMENT (±) on (be, fund)
+  OWNERSHIP_TRANSFER // transfer-proprietate → two-leg PAYMENT per fund, moving an outstanding
+                      // balance from one billing entity to another (payload.toBillingEntityId,
+                      // payload.perFund) — e.g. a unit's old-owner restanță carried to the new owner
 }
 
 enum CorrectionStatus {

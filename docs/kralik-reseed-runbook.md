@@ -77,9 +77,87 @@ npx ts-node --transpile-only src/scripts/add-kralik-fund-reattributions.ts
   double-entry fund-to-fund transfers) resolving credits stuck on the wrong fund for three
   billing entities: Fikl Emil (2×, → Reabilitare 3), Brînzeu Adina/SAD 2/2 (2×, → Reabilitare
   2 + Rulment), Macri Nicodemo/Francesco/Antonio (2×, → Reabilitare 2, mirroring two real
-  Registru Bancă cont EUR entries). See the script's own header comment for the reasoning
-  behind each transfer. Idempotent — attaches to `currentPeriod()` (June, since it's the
-  latest OPEN/PREPARED period at this point) and skips any transfer already ACTIVE.
+  Registru Bancă cont EUR entries, unit-tagged). See the script's own header comment for the
+  reasoning behind each transfer. Idempotent — attaches to `currentPeriod()` (June, since it's
+  the latest OPEN/PREPARED period at this point) and skips any transfer already ACTIVE.
+
+### 1c. Per-unit statements (BeUnitStatement) — real payments/restanțe/penalties by unit
+
+Avizier's "Unitatea"/"Grup Unități" modes show real per-unit figures (not just 0+🔗 badge) once
+`BeUnitStatement` exists — see [`docs/architecture.md`](./architecture.md) if that doc gets a
+section on it, otherwise `finance.service.ts`'s `avizier()` and `period.service.ts`'s
+`computeUnitStatements()` are the source of truth. Two steps, both idempotent, run once after
+May is CLOSED and once more after June's first prepare:
+
+```bash
+npx ts-node --transpile-only src/scripts/seed-kralik-april-unit-statements.ts
+npx ts-node --transpile-only src/scripts/retag-kralik-eur-unit-payments.ts
+```
+
+- `seed-kralik-april-unit-statements.ts` bootstraps April 2026-04's real per-unit
+  opening/charges/closing directly from `data/Kralik/ledger-2026-04.json`'s `byUnit` map — no
+  estimation, this file already has a genuine per-unit split (confirmed for Macri, Brînzeu, and
+  Primărie TM UAT's units individually). This becomes May's real per-unit `dueStart` once May is
+  (re)prepared.
+- `retag-kralik-eur-unit-payments.ts` tags the two Ap 11 / Ap 11A cash-register payments
+  (n=83/85) with their real `unitId` — `seed-kralik-june-complete.ts`'s generic allocationSpec
+  builder has no unit concept, so these land untagged otherwise.
+- Run order matters: bootstrap April → reopen+prepare May → reopen+prepare June →
+  `add-kralik-fund-reattributions.ts` (1b, now unit-tags Macri's two corrections too) →
+  `retag-kralik-eur-unit-payments.ts` → reopen+prepare June once more so
+  `computeUnitStatements()` picks up both tags in the same pass. `PeriodService.prepare()` calls
+  `computeUnitStatements()` automatically as part of `computeStatements()` — no separate command
+  needed once the ledger detail rows carry the right `unitId`s.
+- Only a per-unit split verified to sum back exactly to the billing entity's own `BeStatement`
+  total gets shown (`splitTrustedForBe` in `finance.service.ts`) — a partial/incomplete tagging
+  effort falls back to 0+badge on every one of that entity's units rather than showing numbers
+  that look real but understate what's actually been paid.
+- `retag-kralik-brinzeu-unit-payments.ts`: Brînzeu Adina's (SAD 1 + SAD 2/2) 8 June-cycle cash-
+  register payments already carry a real `providerMeta.unitLabel` in the source register — this
+  tags each one's `allocationSpec` lines with the matching `unitId`, resolved from that label
+  (no estimation). Run after `seed-kralik-june-complete.ts`. Also re-run
+  `add-kralik-fund-reattributions.ts` afterward — Brînzeu's two `PAYMENT_REATTRIB` corrections
+  there are unit-tagged too (SAD 2/2, confirmed against the real Registru Bancă reconciliation
+  entry n=54/ref FT26219H7R2L, memo "SAD 2/2 reconciliere fonduri" — **not** SAD 1, even though
+  SAD 1 is the unit that paid the source transaction; the register explicitly separates the two
+  ADJUSTMENT reconciliation legs from the PAYMENT itself, same as it does for Macri's), but only
+  take effect on a fresh `create()` call, so if they were declared before this script ran, void
+  the two existing ones first (the script itself is idempotent and skips already-ACTIVE
+  untagged ones otherwise).
+- `retag-kralik-primarie-unit-payments.ts`: Primărie TM UAT's (Ap 12 SAD 4/A, 4/B, 4/C) one real
+  June-cycle payment (52.00 RON, unitLabel "12 (SAD4/C)") also needs this — **without** the
+  unitId tag, `applyPaymentWithSpec`'s charge matching isn't unit-restricted and silently
+  settles whichever of the three units' open EXPENSES charge it finds first (observed: SAD 4/A's,
+  not SAD 4/C's) — the fix is the same shape as the two scripts above.
+- Note: `splitTrustedForBe`'s sum-check tolerance is `0.015`, and it accumulates the raw
+  (unrounded) per-unit total before rounding once — a naive per-row `round2()` accumulation can
+  land a genuinely-matching ~140k RON sum exactly on a `0.01` boundary and fail a strict `<`
+  purely from floating-point noise (observed for Primărie's 3-unit, 6-fund total). Already fixed
+  in `finance.service.ts`; noted here in case a similar-shaped BE trips it again.
+
+### 1d. Ownership-transfer debt carryover (Ap 2/2: Gampe Francisc → Valean Mirela)
+
+```bash
+npx ts-node --transpile-only src/scripts/transfer-kralik-ap22-ownership.ts
+```
+
+Ap 2/2 changed billing entity in June (`def.json`'s versioned `structure[]` split). Without
+this step, Gampe Francisc's real May closing balance sits frozen on his now-orphaned billing
+entity forever (unpayable — no new charges post to it, nothing settles it), while Valean
+Mirela's real payments toward that inherited debt (2026-08-05, refs CHHF370/CHHF371) show up as
+a phantom credit on her own ledger instead. The script declares an `OWNERSHIP_TRANSFER`
+correction (see `CorrectionType` in `prisma/schema.prisma`,
+`PeriodService.deriveCorrectionLegs()`) settling Gampe's balance to 0 via a real PAYMENT leg,
+plus a `BeOpeningBalance` row per fund for Valean's first period (June — her billing entity has
+no prior period to chain `dueStart` from otherwise). Idempotent. Requires a June reopen→prepare
+afterward (same as 1b/1c) for `computeStatements()` to pick up the new opening balance. Avizier
+then shows Valean's row with a small "↩" badge/tooltip naming Gampe and the inherited amount
+(`FinanceService.avizier()`'s `inheritedFrom` field) — Gampe's own row disappears from Avizier
+entirely once his net restanța (due_start − payments) reads 0.
+
+Requires `def.json`'s `BE_VALEAN_MIRELA` entry to have `"order": 4` (same slot as Gampe's,
+since it's the same physical unit) — a stale higher `order` value makes Ap 2/2 sort to the
+bottom of Avizier instead of its natural position next to Ap 2/1.
 
 ## 2. Verify
 

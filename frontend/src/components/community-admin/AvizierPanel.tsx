@@ -2,7 +2,7 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { PenaltyOverrideModal } from './PenaltyOverrideModal'
-import { beLabel } from './beLabel'
+import { beLabel, shortUnit } from './beLabel'
 import { usePeriodOptional } from '../../contexts/PeriodContext'
 
 const money = (n: number | null | undefined) =>
@@ -57,13 +57,13 @@ export function AvizierPanel({
   const associationInfoBase = associationInfoPath ?? `/communities/${communityId}/association-info`
   const RO = !!readOnly
 
-  // "Unitatea" / "Grup Unități" toggle — which row-grouping the backend's avizier() computes
-  // (billing entity / real unit / physical PHYS_ group, see FinanceService.avizier). Rows already
-  // arrive shaped for the existing `beLabel()` helper (displayName/units/beName/beCode), plus a
-  // `contactMismatch` flag when a physical group's units don't agree on a contact (e.g. a box sold
-  // separately from its apartment) — not available to the resident read-only embed, admin/censor-
-  // scoped like the rest of this toggle's data.
-  const [groupBy, setGroupBy] = React.useState<'entity' | 'unit' | 'group'>('unit')
+  // "Proprietar" / "Unitatea" / "Grup Unități" toggle — which row-grouping the backend's
+  // avizier() computes (billing entity / real unit / physical PHYS_ group, see
+  // FinanceService.avizier). Unit/group rows carry real per-unit Curente but zero out
+  // payments/restanțe (be_statement has no per-unit granularity) — flagged per-row via
+  // `sharedWithUnits` when the owning billing entity spans more than one unit, see the 🔗
+  // badge below.
+  const [groupBy, setGroupBy] = React.useState<'entity' | 'unit' | 'group'>('entity')
 
   // "Asociație" view — a structurally different 4th view (one row per vendor-service line, not
   // per payer), backed by its own endpoint/component (AvizierAssociationTable below). Kept
@@ -89,6 +89,11 @@ export function AvizierPanel({
   const isCensor = !RO && activeRole?.role === 'CENSOR' && cenzorEnabled
   const isAdmin = !RO && activeRole?.role === 'COMMUNITY_ADMIN'
   const [hoverBe, setHoverBe] = React.useState<string | null>(null)
+  // Proprietar-mode expand/collapse — a multi-unit billing entity's row can be expanded to show
+  // its member units' own real-where-available figures underneath (row.unitBreakdown, from the
+  // backend). Keyed by beCode.
+  const [expandedBe, setExpandedBe] = React.useState<Set<string>>(new Set())
+  const toggleExpandedBe = (beCode: string) => setExpandedBe((s) => { const n = new Set(s); n.has(beCode) ? n.delete(beCode) : n.add(beCode); return n })
   const [editBe, setEditBe] = React.useState<{ be: string; value: string } | null>(null)
   const saveDisplayName = async () => {
     if (!editBe) return
@@ -481,6 +486,16 @@ export function AvizierPanel({
       return sortDir === 'asc' ? cmp : -cmp
     })
   }
+  // Proprietar mode: interleave a multi-unit BE's expanded member-unit rows (row.unitBreakdown,
+  // from the backend) right after their parent — flattened once here so the table body below
+  // stays a single, uniform .map() over rows that already know their own indent level.
+  const renderRows: Array<{ row: any; indent: boolean }> = []
+  for (const r of displayRows) {
+    renderRows.push({ row: r, indent: false })
+    if (groupBy === 'entity' && r.unitBreakdown?.length && expandedBe.has(r.beCode)) {
+      for (const ur of r.unitBreakdown) renderRows.push({ row: ur, indent: true })
+    }
+  }
 
   return (
     <div
@@ -661,7 +676,7 @@ export function AvizierPanel({
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)', maxWidth: 190 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                    {groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
+                    {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
                     <SortIcon k="name" />
                     <button type="button"
                       onClick={(e) => {
@@ -735,11 +750,11 @@ export function AvizierPanel({
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {displayRows.map((r, rowIdx) => {
+              {renderRows.map(({ row: r, indent }, rowIdx) => {
                 const rowKey = r.rowKey ?? r.beCode
                 const hov = hoverBe === rowKey
                 const zebraBg = rowIdx % 2 === 1 ? 'var(--muted-bg, #fafafa)' : 'var(--bg, #fff)'
-                const rowBg = hov ? 'var(--hover-bg, #eef4ff)' : zebraBg
+                const rowBg = indent ? 'var(--muted-bg, #f7f7f8)' : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg)
                 // Row shape (displayName/units/beName/beCode) already matches beLabel()'s contract —
                 // the backend resolves "Unitatea"/"Grup Unități" grouping and Contact Principal
                 // itself now (FinanceService.avizier), including the red "contactMismatch" case
@@ -748,13 +763,15 @@ export function AvizierPanel({
                 // below — it stays stable even when the display axis is the unit/group.
                 const l = beLabel(r, { publicMode })
                 const secondary = publicMode ? undefined : l.secondary
+                const expandable = !indent && groupBy === 'entity' && r.unitBreakdown?.length
+                const isExpanded = expandable && expandedBe.has(r.beCode)
                 return (
                 <tr key={rowKey} onMouseEnter={() => setHoverBe(rowKey)} onMouseLeave={() => setHoverBe(null)}
-                  style={{ borderTop: '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
-                  <td style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, background: hov ? 'var(--hover-bg, #eef4ff)' : zebraBg,
+                  style={{ borderTop: indent ? 'none' : '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
+                  <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', left: 0, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
                       maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
                     title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
-                    {editBe?.be === r.beCode ? (
+                    {!indent && editBe?.be === r.beCode ? (
                       <span className="row" style={{ gap: 4, alignItems: 'center' }}>
                         <input className="input" autoFocus value={editBe.value} placeholder={beLabel({ ...r, displayName: null }).primary}
                           onChange={(e) => setEditBe({ be: r.beCode, value: e.target.value })}
@@ -764,8 +781,15 @@ export function AvizierPanel({
                       </span>
                     ) : (
                       <span>
-                          {RO ? (
-                            <span style={{ fontWeight: 600 }}>{l.primary}</span>
+                          {expandable ? (
+                            <button type="button" onClick={() => toggleExpandedBe(r.beCode)}
+                              title={isExpanded ? t('avizier.collapseUnits', 'Ascunde unitățile') : t('avizier.expandUnits', 'Arată unitățile')}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginRight: 4, fontSize: 11, color: 'var(--muted, #666)' }}>
+                              {isExpanded ? '▾' : '▸'}
+                            </button>
+                          ) : null}
+                          {RO || indent ? (
+                            <span style={{ fontWeight: indent ? 400 : 600, fontSize: indent ? 12 : undefined }}>{l.primary}</span>
                           ) : (
                             <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.rowDetail', 'Vezi restanțe/încasări pe fonduri')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit', fontWeight: 600, textDecoration: 'underline dotted' }}>
@@ -773,10 +797,26 @@ export function AvizierPanel({
                             </button>
                           )}
                           {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 11, marginLeft: 6 } : { fontSize: 11, marginLeft: 6 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
-                          {isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.rename', 'Redenumește')}
+                          {indent && r.trusted === false ? (
+                            <span title={t('avizier.unitEstimateHint', 'Restanțe necunoscute la nivel de unitate pentru această perioadă — doar taxele curente sunt reale aici')} style={{ marginLeft: 6, fontSize: 11, opacity: 0.6 }}>🔗</span>
+                          ) : null}
+                          {!indent && !RO && r.sharedWithUnits?.length ? (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); openSold(r.beCode) }}
+                              title={`${t('avizier.sharedArrearsHint', 'Restanțe comune cu')} ${r.sharedWithUnits.map(shortUnit).join(', ')} — ${t('avizier.entityOwner', 'Proprietar')}`}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, fontSize: 11, opacity: 0.7 }}>
+                              🔗
+                            </button>
+                          ) : null}
+                          {!indent && r.inheritedFrom ? (
+                            <span title={`${t('avizier.inheritedFromHint', 'Include')} ${money(r.inheritedFrom.total)} RON ${t('avizier.inheritedFromHint2', 'restanță moștenită de la')} ${r.inheritedFrom.beName}`}
+                              style={{ marginLeft: 6, fontSize: 11, opacity: 0.7, cursor: 'help' }}>
+                              ↩
+                            </span>
+                          ) : null}
+                          {!indent && isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.rename', 'Redenumește')}
                             onClick={(e) => { e.stopPropagation(); setEditBe({ be: r.beCode, value: r.displayName || '' }) }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 6, padding: 0 }}>✎</button> : null}
-                          {isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.renameFromPeriod', 'Redenumește de la o perioadă')}
+                          {!indent && isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.renameFromPeriod', 'Redenumește de la o perioadă')}
                             onClick={(e) => { e.stopPropagation(); setRenamingBe({ be: r.beCode, displayName: r.displayName || '' }); setRenameEffectiveFrom(data?.period?.code || ''); setRenameError(null) }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 4, padding: 0 }}>🕐</button> : null}
                         </span>
@@ -906,7 +946,7 @@ export function AvizierPanel({
                       <td key={`cu${i}`} style={{ padding: '8px 10px' }}>{money(isDeplata(col.group) ? totals.curentTotal : sumCats(totals.byCategory || {}, col.group.categories))}</td>
                     )
                     if (col.kind === 'restante') return (
-                      <td key={`r${i}`} style={{ padding: '8px 10px' }}>
+                      <td key={`r${i}`} style={{ padding: '8px 10px', color: 'var(--muted, #666)' }}>
                         {money(isDeplata(col.group) ? round2((Number(totals.soldPrecedent) || 0) - (Number(totals.payments) || 0)) : totals.soldByFund?.[col.group.key])}
                       </td>
                     )
@@ -1021,18 +1061,18 @@ export function AvizierPanel({
                   {(soldDetail.data.rows || []).map((r: any) => (
                     <tr key={r.fundCode} style={{ borderTop: '1px solid var(--border, #eee)' }}>
                       <td style={{ padding: '6px 8px' }}>{r.fundName}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.dueStart)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(r.dueStart)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.payments)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.amount)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(r.amount)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.charges)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(r.totalDue)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
                     <td style={{ padding: '8px' }}>{t('avizier.totalRow', 'TOTAL')}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.dueStartTotal)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(soldDetail.data.dueStartTotal)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.paymentsTotal)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.total)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(soldDetail.data.total)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.chargesTotal)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.totalDueTotal)}</td>
                   </tr>

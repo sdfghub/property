@@ -208,7 +208,7 @@
     {
       "code": "BE_VALEAN_MIRELA",
       "name": "Valean Mirela",
-      "order": 28,
+      "order": 4,
       "displayNames": [
         { "displayName": "Ap 2/2 · Valean Mirela", "startPeriod": "2026-06", "endPeriod": null }
       ]
@@ -1369,6 +1369,7 @@
     {
       "id": "SPLIT_APA_RECE",
       "expenseTypeCode": "APA_RECE",
+      "fundCode": "EXPENSES",
       "name": "Apa Rece",
       "splits": [
         {
@@ -1426,6 +1427,8 @@
     {
       "id": "SPLIT_CANAL",
       "expenseTypeCode": "CANALIZARE",
+      "fundCode": "EXPENSES",
+      "service": "APA_RECE",
       "name": "Canalizare",
       "splits": [
         {
@@ -1481,8 +1484,68 @@
       ]
     },
     {
+      "id": "SPLIT_RESTANTE_APA",
+      "expenseTypeCode": "RESTANTE_APA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe apă rece",
+      "splits": [
+        {
+          "id": "RESTANTE_PROPORTIONAL",
+          "name": "Restanțe apă (proporțional cu consumul)",
+          "mode": "PROPORTIONAL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "RESTANTE_CONTORIZATA",
+          "name": "Restanțe apă contorizată",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_COLD_CALC"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "RESTANTE_DIFERENTA",
+          "name": "Diferență restanțe apă",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
       "id": "SPLIT_PENALITATI_APA",
       "expenseTypeCode": "PENALITATI_APA",
+      "fundCode": "EXPENSES",
+      "service": "APA_RECE",
       "name": "Penalități apă rece",
       "splits": [
         {
@@ -1540,6 +1603,7 @@
     {
       "id": "SPLIT_APA_METEO",
       "expenseTypeCode": "APA_METEO",
+      "fundCode": "EXPENSES",
       "name": "Apa Meteo",
       "splits": [
         {
@@ -1557,7 +1621,44 @@
     {
       "id": "SPLIT_CURENT_SCARA",
       "expenseTypeCode": "CURENT_SCARA",
+      "fundCode": "EXPENSES",
       "name": "Curent Scara",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURENT_SCARA"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_CURENT_SCARA",
+      "expenseTypeCode": "RESTANTE_CURENT_SCARA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Curent Scara",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURENT_SCARA"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_CURENT_SCARA",
+      "expenseTypeCode": "PENALITATI_CURENT_SCARA",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Curent Scara",
       "splits": [
         {
           "share": 1,
@@ -1574,7 +1675,44 @@
     {
       "id": "SPLIT_SALUBRITATE",
       "expenseTypeCode": "SALUBRITATE",
+      "fundCode": "EXPENSES",
       "name": "Salubritate",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_SALUBRITATE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_SALUBRITATE",
+      "expenseTypeCode": "RESTANTE_SALUBRITATE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Salubritate",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_SALUBRITATE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_SALUBRITATE",
+      "expenseTypeCode": "PENALITATI_SALUBRITATE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Salubritate",
       "splits": [
         {
           "share": 1,
@@ -1591,7 +1729,44 @@
     {
       "id": "SPLIT_CURATENIE",
       "expenseTypeCode": "CURATENIE",
+      "fundCode": "EXPENSES",
       "name": "Curatenie",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURATENIE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_CURATENIE",
+      "expenseTypeCode": "RESTANTE_CURATENIE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Curatenie",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURATENIE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_CURATENIE",
+      "expenseTypeCode": "PENALITATI_CURATENIE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Curatenie",
       "splits": [
         {
           "share": 1,
@@ -1608,7 +1783,44 @@
     {
       "id": "SPLIT_ADMINISTRARE",
       "expenseTypeCode": "ADMINISTRARE",
+      "fundCode": "EXPENSES",
       "name": "Administrare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_ADMINISTRARE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_ADMINISTRARE",
+      "expenseTypeCode": "RESTANTE_ADMINISTRARE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Administrare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_ADMINISTRARE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_ADMINISTRARE",
+      "expenseTypeCode": "PENALITATI_ADMINISTRARE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Administrare",
       "splits": [
         {
           "share": 1,
@@ -1625,7 +1837,44 @@
     {
       "id": "SPLIT_COMISION_BANCA",
       "expenseTypeCode": "COMISION_BANCA",
+      "fundCode": "EXPENSES",
       "name": "Comision Banca",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_COMISION_BANCA"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_COMISION_BANCA",
+      "expenseTypeCode": "RESTANTE_COMISION_BANCA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Comision Banca",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_COMISION_BANCA"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_COMISION_BANCA",
+      "expenseTypeCode": "PENALITATI_COMISION_BANCA",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Comision Banca",
       "splits": [
         {
           "share": 1,
@@ -1642,7 +1891,44 @@
     {
       "id": "SPLIT_INTERFON",
       "expenseTypeCode": "INTERFON",
+      "fundCode": "EXPENSES",
       "name": "Interfon",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_INTERFON"
+            },
+            "ruleCode": "EQUAL"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_INTERFON",
+      "expenseTypeCode": "RESTANTE_INTERFON",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Interfon",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_INTERFON"
+            },
+            "ruleCode": "EQUAL"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_INTERFON",
+      "expenseTypeCode": "PENALITATI_INTERFON",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Interfon",
       "splits": [
         {
           "share": 1,

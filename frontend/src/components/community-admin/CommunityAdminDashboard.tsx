@@ -18,7 +18,7 @@ import { CommunicationsTab } from './CommunicationsTab'
 import { InventoryTab } from './InventoryTab'
 import { RequestsTab } from './RequestsTab'
 import { TodayHome } from './TodayHome'
-import { CloseBoard } from './CloseBoard'
+import { CloseWizard } from './CloseWizard'
 import { PeriodSettingsPanel } from './PeriodSettingsPanel'
 import { DebtorsPanel } from '../money/DebtorsPanel'
 import { InvoicesStatusTable } from '../money/InvoicesStatusTable'
@@ -758,7 +758,7 @@ function CommunityAdminContent({
           <TodayHome communityId={communityId} communityCode={communityCode} onNavigate={navigate} viewerRole={viewerRole} />
         )}
         {activeTab === 'close' && (
-          <CloseBoard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
+          <CloseWizard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
         )}
         {activeTab === 'association' && (
           <AssociationInfoPanel communityId={communityId} communityCode={communityCode} readOnly={readOnly} />

@@ -125,7 +125,16 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
         const alloc = firstLeaf?.allocation ?? {}
         const ruleCode = alloc.ruleCode || alloc.method || 'BY_RESIDENTS'
         const name = s.name ? String(s.name) : String(s.expenseTypeCode)
-        return { code: String(s.expenseTypeCode), name, ruleCode, currency: s.currency ?? 'RON', splitTemplate: s.splits ?? s }
+        // fundCode lives on the expenseSplit (mirroring the same field on each bill template's
+        // own output.fundCode) — AllocationService.createExpense's own fund resolution reads it
+        // from the ExpenseType's params, so it must be carried through here, not just on the bill.
+        // `service` (optional) names the real ExpenseType.code this one is actually the same
+        // physical service as (e.g. CANALIZARE's service is APA_RECE) — finance.service.ts's
+        // serviceMergeMap reads it to fold multi-line invoices back into one avizier column.
+        const params: any = {}
+        if (s.fundCode) params.fundCode = s.fundCode
+        if (s.service) params.service = s.service
+        return { code: String(s.expenseTypeCode), name, ruleCode, currency: s.currency ?? 'RON', params: Object.keys(params).length ? params : undefined, splitTemplate: s.splits ?? s }
       })
   }
 

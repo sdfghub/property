@@ -502,11 +502,30 @@ export class PeriodService {
         order by pm.scope_id, pm.type_code, p.seq desc`,
       communityId, period.seq,
     )
+    // Strictly BEFORE the current period — unlike the query above (<=, which reads the current
+    // period's own row once it has one), this stays pinned to "last month" regardless of what's
+    // since been saved for the current period, for the copy-from-last-month button and the
+    // increased/decreased/same indicator (both need last month, not "current or fallback").
+    const prevRows: Array<{ scopeId: string; typeCode: string; value: number }> = await this.prisma.$queryRawUnsafe(
+      `select distinct on (pm.scope_id, pm.type_code)
+              pm.scope_id as "scopeId", pm.type_code as "typeCode", pm.value::float8 as value
+         from period_measure pm join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.type_code in ('RESIDENTS','SQM')
+          and pm.scope_type::text = 'UNIT' and p.seq < $2
+        order by pm.scope_id, pm.type_code, p.seq desc`,
+      communityId, period.seq,
+    )
     const byUnit = new Map<string, { residents?: number; sqm?: number }>()
     for (const r of rows) {
       const u = byUnit.get(r.scopeId) ?? {}
       if (r.typeCode === 'RESIDENTS') u.residents = Number(r.value); else u.sqm = Number(r.value)
       byUnit.set(r.scopeId, u)
+    }
+    const prevByUnit = new Map<string, { residents?: number; sqm?: number }>()
+    for (const r of prevRows) {
+      const u = prevByUnit.get(r.scopeId) ?? {}
+      if (r.typeCode === 'RESIDENTS') u.residents = Number(r.value); else u.sqm = Number(r.value)
+      prevByUnit.set(r.scopeId, u)
     }
     const label = (code: string) => code.split('-').slice(3).join('-') || code // "…-U28-AP 1/B" → "AP 1/B"
     return {
@@ -515,6 +534,8 @@ export class PeriodService {
         unitId: u.id, code: u.code, label: label(u.code),
         residents: byUnit.get(u.id)?.residents ?? null,
         sqm: byUnit.get(u.id)?.sqm ?? null,
+        prevResidents: prevByUnit.get(u.id)?.residents ?? null,
+        prevSqm: prevByUnit.get(u.id)?.sqm ?? null,
       })),
     }
   }
@@ -653,6 +674,7 @@ export class PeriodService {
         await tx.beLedgerEntry.deleteMany({ where: { id: { in: prepIds } } })
       }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
+      await tx.beUnitStatement.deleteMany({ where: { communityId, periodId: period.id } })
       const communityEntries = await tx.communityLedgerEntry.findMany({
         where: { communityId, periodId: period.id, refType: 'CLOSE_PREP', refId: period.id },
         select: { id: true },
@@ -727,6 +749,7 @@ export class PeriodService {
         await tx.beLedgerEntry.deleteMany({ where: { id: { in: paymentEntryIds } } })
       }
       await tx.beStatement.deleteMany({ where: { communityId, periodId: period.id } })
+      await tx.beUnitStatement.deleteMany({ where: { communityId, periodId: period.id } })
       // clean penalty artifacts (dedicated PENALTY_* refTypes + penalty:* community charges); these
       // are not covered by the CLOSE_* cleanup above, so leaving them would double-count on re-prepare.
       const penaltyLedgerRows = await tx.beLedgerEntry.findMany({
@@ -840,7 +863,7 @@ export class PeriodService {
       for (const leg of this.deriveCorrectionLegs(c, fundIdByCode)) {
         if (!leg.billingEntityId || !leg.fundId || Math.abs(leg.amount) < 0.005) continue
         const le = await tx.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: leg.billingEntityId, kind: leg.kind, lane: leg.kind === 'PAYMENT' ? 'CASH' : 'ACCRUAL', amount: leg.amount, currency: 'RON', refType: 'CORRECTION', refId: c.id, fundId: leg.fundId } })
-        await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: leg.billingEntityId, kind: leg.kind, fundId: leg.fundId, currency: 'RON', refType: 'CORRECTION', refId: c.id, unitId: null, amount: leg.amount, meta: { reason: c.reason, correctionId: c.id, type: c.type, note: c.note ?? undefined, actor: c.createdBy } } })
+        await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: leg.billingEntityId, kind: leg.kind, fundId: leg.fundId, currency: 'RON', refType: 'CORRECTION', refId: c.id, unitId: leg.unitId ?? null, amount: leg.amount, meta: { reason: c.reason, correctionId: c.id, type: c.type, note: c.note ?? undefined, actor: c.createdBy } } })
       }
     }
   }
@@ -849,29 +872,51 @@ export class PeriodService {
   private deriveCorrectionLegs(
     c: { type: string; billingEntityId: string | null; fundCode: string | null; amount: any; payload: any },
     fundIdByCode: Map<string, string>,
-  ): Array<{ kind: 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT'; billingEntityId: string | null; fundId: string | null; amount: number }> {
+  ): Array<{ kind: 'CHARGE' | 'PAYMENT' | 'ADJUSTMENT'; billingEntityId: string | null; fundId: string | null; amount: number; unitId?: string | null }> {
     const payload = (c.payload ?? {}) as any
     const amt = Number(c.amount ?? 0)
     const fId = (code: string | null | undefined) => (code ? fundIdByCode.get(code) ?? null : null)
+    // Optional: which unit within a multi-unit billing entity this correction is known to belong
+    // to (e.g. a bank register line that names one specific unit) — feeds BeUnitStatement. Omitted
+    // for corrections whose source doesn't say, which is the common case.
+    const unitId: string | null = payload.unitId ?? null
     switch (c.type) {
       case 'MANUAL_ADJUSTMENT':
-        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: amt }]
+        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: amt, unitId }]
       case 'PENALTY_WRITEOFF':
-        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId('PENALIZARI'), amount: -Math.abs(amt) }]
+        return [{ kind: 'ADJUSTMENT', billingEntityId: c.billingEntityId, fundId: fId('PENALIZARI'), amount: -Math.abs(amt), unitId }]
       case 'CREDIT_TRANSFER':
-        return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: -Math.abs(amt) }]
+        return [{ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(c.fundCode), amount: -Math.abs(amt), unitId }]
       case 'PAYMENT_REATTRIB':
         // A real fund-to-fund transfer needs both legs of the double-entry: the source fund loses
         // the (phantom) payment it never should have kept, and the target fund gains a real payment
         // credit — not just a charge reduction, so `receivables()`'s due_start − payments arrears
         // figure reflects it too, not only due_end.
         return [
-          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.fromFund), amount: -Math.abs(amt) },
-          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.toFund), amount: Math.abs(amt) },
+          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.fromFund), amount: -Math.abs(amt), unitId },
+          { kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(payload.toFund), amount: Math.abs(amt), unitId },
         ]
       case 'RESHUFFLE': {
         const fid = fId(c.fundCode)
         return Object.entries(payload.perBe ?? {}).map(([beId, a]) => ({ kind: 'CHARGE' as const, billingEntityId: beId, fundId: fid, amount: Number(a) }))
+      }
+      case 'OWNERSHIP_TRANSFER': {
+        // Only the OLD owner's side is a ledger leg here — a POSITIVE payment settles their
+        // balance to 0 exactly like a real payment would (so both due_end AND receivables()'s
+        // due_start − payments Restanțe read clean, not just due_end). The NEW owner's side
+        // isn't a ledger leg at all: since their billing entity has no prior period to chain
+        // dueStart from, the correct home for "start owing this much" is a BeOpeningBalance row
+        // for their first period (created directly by the declaring script, tagged with this
+        // correction's id via originKey — see transfer-kralik-ap22-ownership.ts) — a CHARGE or
+        // PAYMENT leg here would either wrongly inflate their Curente or fail to make Restanțe
+        // reflect it until a real payment arrives.
+        const legs: Array<{ kind: 'PAYMENT'; billingEntityId: string | null; fundId: string | null; amount: number }> = []
+        for (const [fundCode, a] of Object.entries(payload.perFund ?? {})) {
+          const famt = Math.abs(Number(a))
+          if (!(famt > 0)) continue
+          legs.push({ kind: 'PAYMENT', billingEntityId: c.billingEntityId, fundId: fId(fundCode), amount: famt })
+        }
+        return legs
       }
       default:
         return []
@@ -1547,6 +1592,71 @@ export class PeriodService {
           },
         })
       }
+    }
+
+    await this.computeUnitStatements(tx, communityId, periodId)
+  }
+
+  /**
+   * Per-unit statement (`BeUnitStatement`), parallel to the per-BE one above but scoped to real
+   * per-unit ledger detail rows only — charges are always unit-tagged (community_charge_line has
+   * real unit granularity, see postChargesForStage), payments/adjustments only when a source
+   * explicitly named a unit (a payment's allocationSpec line, or a Correction's payload.unitId —
+   * both optional). A (unit, fund) with zero tagged activity this period simply carries its prior
+   * dueEnd forward unchanged; nothing here is estimated or split proportionally.
+   */
+  private async computeUnitStatements(tx: TxOrClient, communityId: string, periodId: string) {
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true } })
+    const details = await tx.beLedgerEntryDetail.findMany({
+      where: { communityId, periodId, unitId: { not: null } },
+      select: { unitId: true, billingEntityId: true, fundId: true, kind: true, amount: true },
+    })
+    type Agg = { unitId: string; billingEntityId: string; fundId: string; charges: number; payments: number; adjustments: number }
+    const byUnitFund = new Map<string, Agg>()
+    for (const d of details) {
+      if (!d.unitId || !d.fundId) continue
+      const key = `${d.unitId}::${d.fundId}`
+      const e = byUnitFund.get(key) ?? { unitId: d.unitId, billingEntityId: d.billingEntityId, fundId: d.fundId, charges: 0, payments: 0, adjustments: 0 }
+      const amt = Number(d.amount ?? 0)
+      if (d.kind === 'CHARGE') e.charges += amt
+      else if (d.kind === 'PAYMENT') e.payments += amt
+      else if (d.kind === 'ADJUSTMENT') e.adjustments += amt
+      byUnitFund.set(key, e)
+    }
+
+    const previousPeriod = await tx.period.findFirst({
+      where: { communityId, seq: { lt: period?.seq ?? 0 }, status: 'CLOSED' },
+      orderBy: { seq: 'desc' },
+      select: { id: true },
+    })
+    // A (unit, fund) that carried a balance last period but has no tagged activity this period
+    // still needs a row here (dueEnd carries forward unchanged) — otherwise its arrears would
+    // silently vanish from BeUnitStatement the first quiet month.
+    if (previousPeriod) {
+      const prevRows = await tx.beUnitStatement.findMany({
+        where: { communityId, periodId: previousPeriod.id },
+        select: { unitId: true, billingEntityId: true, fundId: true },
+      })
+      for (const p of prevRows) {
+        const key = `${p.unitId}::${p.fundId}`
+        if (!byUnitFund.has(key)) byUnitFund.set(key, { unitId: p.unitId, billingEntityId: p.billingEntityId, fundId: p.fundId, charges: 0, payments: 0, adjustments: 0 })
+      }
+    }
+
+    for (const e of byUnitFund.values()) {
+      const previousStatement = previousPeriod
+        ? await tx.beUnitStatement.findUnique({
+            where: { communityId_periodId_unitId_fundId: { communityId, periodId: previousPeriod.id, unitId: e.unitId, fundId: e.fundId } },
+            select: { dueEnd: true, currency: true },
+          })
+        : null
+      const dueStart = Number(previousStatement?.dueEnd ?? 0)
+      const dueEnd = dueStart + e.charges - e.payments + e.adjustments
+      await tx.beUnitStatement.upsert({
+        where: { communityId_periodId_unitId_fundId: { communityId, periodId, unitId: e.unitId, fundId: e.fundId } },
+        update: { billingEntityId: e.billingEntityId, dueStart, charges: e.charges, payments: e.payments, adjustments: e.adjustments, dueEnd, currency: previousStatement?.currency ?? 'RON' },
+        create: { communityId, periodId, unitId: e.unitId, billingEntityId: e.billingEntityId, fundId: e.fundId, dueStart, charges: e.charges, payments: e.payments, adjustments: e.adjustments, dueEnd, currency: previousStatement?.currency ?? 'RON' },
+      })
     }
   }
 

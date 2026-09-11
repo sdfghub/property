@@ -34,19 +34,19 @@ class ScriptModule {}
 const COMM = 'Kralik'
 const PERIOD_CODE = '2026-06' // must be the community's currentPeriod() (latest OPEN/PREPARED) when this runs
 
-const transfers = [
+const transfers: Array<{ beName: string; fromFund: string; toFund: string; amount: number; note: string; unitCode?: string }> = [
   { beName: 'Fikl Emil', fromFund: 'EXPENSES', toFund: 'REABILITARE_3', amount: 208.79,
     note: 'Transfer credit Expenses → Reabilitare 3, Fikl Emil — reface restricția allocationSpec-ului plății FT26196GJ8C0 (12676.78, restrânsă la Reabilitare 3 ca să nu se scurgă via FIFO în Expenses/Rulment).' },
   { beName: 'Fikl Emil', fromFund: 'RULMENT', toFund: 'REABILITARE_3', amount: 14.52,
     note: 'Transfer credit Rulment → Reabilitare 3, Fikl Emil — vezi nota de mai sus (aceeași plată FT26196GJ8C0).' },
-  { beName: 'Brînzeu Adina', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 1361.80,
-    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Brînzeu Adina (SAD 1 + SAD 2/2) — aduce Reabilitare 2 exact la 0, per decizia utilizatorului.' },
-  { beName: 'Brînzeu Adina', fromFund: 'REABILITARE_1', toFund: 'RULMENT', amount: 30.20,
-    note: 'Transfer credit Reabilitare 1 → Rulment, Brînzeu Adina (SAD 1 + SAD 2/2) — restul creditului după cei 1361.80 către Reabilitare 2.' },
-  { beName: 'Macri Nicodemo', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 5743.00,
-    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Ap 11 — replică exact tranzacția reală din Registru Bancă cont EUR (n=82, 15.07.2026, "Ap 11 reconciliere fonduri", 5743.00).' },
-  { beName: 'Macri Nicodemo', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 289.00,
-    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Ap 11A — replică exact tranzacția reală din Registru Bancă cont EUR (n=84, 15.07.2026, "Ap 11A reconciliere fonduri", 289.00).' },
+  { beName: 'Brînzeu Adina', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 1361.80, unitCode: '400191-C1-U17-SAD 2/2',
+    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Brînzeu Adina (SAD 1 + SAD 2/2) — aduce Reabilitare 2 exact la 0. Unit-tagged (SAD 2/2): replică exact tranzacția reală din Registru Bancă (n=54, ref FT26219H7R2L, 07.08.2026, memo "SAD 2/2 reconciliere fonduri" — REABILITARE_1 -1392.00 / REABILITARE_2 +1361.80 / RULMENT +30.20). SAD 1 doar a plătit sursa (n=55, 3181.80, aceeași dată/ref) — destinația reconcilierii e explicit SAD 2/2, nu SAD 1.' },
+  { beName: 'Brînzeu Adina', fromFund: 'REABILITARE_1', toFund: 'RULMENT', amount: 30.20, unitCode: '400191-C1-U17-SAD 2/2',
+    note: 'Transfer credit Reabilitare 1 → Rulment, Brînzeu Adina (SAD 1 + SAD 2/2) — restul creditului după cei 1361.80 către Reabilitare 2. Unit-tagged (SAD 2/2), vezi nota de mai sus.' },
+  { beName: 'Macri Nicodemo', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 5743.00, unitCode: '400191-C1-U32-AP 11',
+    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Ap 11 — replică exact tranzacția reală din Registru Bancă cont EUR (n=82, 15.07.2026, "Ap 11 reconciliere fonduri", 5743.00). Unit-tagged pentru granularitate reală per-unitate în Avizier (BeUnitStatement).' },
+  { beName: 'Macri Nicodemo', fromFund: 'REABILITARE_1', toFund: 'REABILITARE_2', amount: 289.00, unitCode: '400191-C1-U14-AP 11A',
+    note: 'Transfer credit Reabilitare 1 → Reabilitare 2, Ap 11A — replică exact tranzacția reală din Registru Bancă cont EUR (n=84, 15.07.2026, "Ap 11A reconciliere fonduri", 289.00). Unit-tagged pentru granularitate reală per-unitate în Avizier (BeUnitStatement).' },
 ]
 
 async function main() {
@@ -65,8 +65,14 @@ async function main() {
     const be = await prisma.billingEntity.findFirst({ where: { communityId: COMM, name: { contains: t.beName } }, select: { id: true } })
     if (!be) { console.log(`  ⚠ BE not found: ${t.beName}`); continue }
     if (already.has(key(be.id, t.fromFund, t.toFund, t.amount))) { console.log(`  = already active: ${t.beName} ${t.fromFund}→${t.toFund} ${t.amount}`); continue }
+    let unitId: string | undefined
+    if (t.unitCode) {
+      const unit = await prisma.unit.findFirst({ where: { communityId: COMM, code: t.unitCode }, select: { id: true } })
+      if (!unit) { console.log(`  ⚠ unit not found: ${t.unitCode}`); continue }
+      unitId = unit.id
+    }
     const r = await corrections.create(COMM, 'script:add-kralik-fund-reattributions', {
-      type: 'PAYMENT_REATTRIB', billingEntityId: be.id, fromFund: t.fromFund, toFund: t.toFund, amount: t.amount, note: t.note,
+      type: 'PAYMENT_REATTRIB', billingEntityId: be.id, fromFund: t.fromFund, toFund: t.toFund, amount: t.amount, unitId, note: t.note,
     })
     console.log(`  created: ${t.beName} ${t.fromFund}→${t.toFund} ${t.amount} (${r.id}, period ${r.periodCode})`)
   }
