@@ -99,19 +99,26 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   const periodEndDate = (selectedPeriodRow?.afisareDate ?? selectedPeriodRow?.endDate) as string | undefined
   const refDate = asOfDate ? new Date(asOfDate) : periodEndDate ? new Date(periodEndDate) : null
 
-  const buckets: any[] = detail?.buckets || []
+  const allBuckets: any[] = detail?.buckets || []
+  // A bucket whose OWN due date hasn't been reached yet isn't a restanță at all — it's the
+  // currently-open period's own freshly-issued charge, not overdue debt (e.g. viewing Iulie's
+  // ledger, Iulie's own bucket has scadență 11.10.2026, which is still in the future — it hasn't
+  // even come due, let alone entered a grace period). Excluding it is what makes the total below
+  // match the unit's actual current restanță (be_statement) — including it was double-counting a
+  // charge that isn't due yet as if it were unpaid debt.
+  const buckets = allBuckets.filter((b) => !b.dueDate || !refDate || new Date(b.dueDate) <= refDate)
   const totals = buckets.reduce(
     (acc, b) => ({ restanta: acc.restanta + (b.principalRemaining || 0), penalizare: acc.penalizare + (b.penaltyToDate || 0) }),
     { restanta: 0, penalizare: 0 },
   )
 
   // Perioada de calcul = scadență + 30 zile; o restanță "se califică" abia după ce acest prag e
-  // atins. Restanțele mai proaspete rămân în listă — doar fără zile/penalizare — ca luna deschisă
-  // să-și arate mereu toate restanțele (ex. iunie, cât timp iulie e deschisă), nu doar cele care
-  // acumulează deja penalizări; altfel totalul de mai jos (care le include mereu, ca să rămână
-  // egal cu restanța curentă a unității) nu s-ar potrivi cu ce se vede în listă. Ordinea: cele care
-  // acumulează deja penalizări primele (câte zile mai multe, mai sus), apoi restul, cele mai
-  // aproape de a intra la calcul primele.
+  // atins. Restanțele mai proaspete (deja scadente, dar încă în termenul de grație) rămân în listă
+  // — doar fără zile/penalizare — ca luna deschisă să-și arate mereu toate restanțele reale (ex.
+  // iunie, cât timp iulie e deschisă), nu doar cele care acumulează deja penalizări; altfel totalul
+  // de mai jos (care le include mereu, ca să rămână egal cu restanța curentă a unității) nu s-ar
+  // potrivi cu ce se vede în listă. Ordinea: cele care acumulează deja penalizări primele (câte
+  // zile mai multe, mai sus), apoi restul, cele mai aproape de a intra la calcul primele.
   const rows = buckets
     .map((b) => {
       const calcStart = b.dueDate ? addDays(b.dueDate, 30) : null
