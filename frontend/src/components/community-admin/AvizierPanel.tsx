@@ -516,12 +516,29 @@ export function AvizierPanel({
   // boundary (a band is just a run of contiguous funds), so this single line covers both.
   const fundBoundaryIdx = new Set<number>()
   { let idx = 0; for (const run of groupRuns) { fundBoundaryIdx.add(idx); idx += run.span } }
-  const FUND_SEPARATOR = '2px solid var(--border-strong, var(--border, #a8a8a8))'
-  const colSepStyle = (i: number): React.CSSProperties => (fundBoundaryIdx.has(i) ? { borderLeft: FUND_SEPARATOR } : {})
-  // Finer, dotted divider inside the sticky lead block itself (identity vs. the CPI/Pers/Apă info
-  // columns) — a lighter touch than FUND_SEPARATOR since it's splitting one logical block, not
-  // marking a fund boundary.
-  const DOTTED_SEPARATOR = '1px dotted var(--border-strong, var(--border, #a8a8a8))'
+  // A plain literal, not var(--border, ...): this app's own --border resolves to rgba(0,0,0,.08),
+  // an Apple-style hairline that's invisible at the weight these dividers need (confirmed via
+  // devtools — a border-left using that token computed to a barely-there 0.667px line once
+  // border-collapse got through with it). No --border-strong token exists here to fall back to
+  // and there's no dark theme to reconcile, so a plain, clearly visible gray is the honest choice.
+  const SEP_COLOR = '#9a9a9a'
+  // box-shadow, not border-left: this table is border-collapse:collapse, and collapsed borders on
+  // a `position:sticky` cell are a known rendering trap — the browser computes/paints the border
+  // against the table's pre-scroll grid, so it can end up a fraction of a pixel wide, the wrong
+  // color (as above), or visually left behind while the cell itself scrolls (exactly "linia nu e
+  // locked" — the sticky cell moves, its collapsed border doesn't). An inset box-shadow paints as
+  // part of the cell's own box, immune to border-collapse, and simply moves with the cell.
+  const FUND_SEPARATOR_SHADOW = `inset 2px 0 0 0 ${SEP_COLOR}`
+  const colSepStyle = (i: number): React.CSSProperties => (fundBoundaryIdx.has(i) ? { boxShadow: FUND_SEPARATOR_SHADOW } : {})
+  // Finer, dashed divider inside the sticky lead block itself (identity vs. the CPI/Pers/Apă info
+  // columns, and De plată vs. the repeated identity column) — a lighter touch than the fund
+  // separator since it's splitting one logical block, not marking a fund boundary. box-shadow
+  // can't do a dashed pattern, so this is a background-image gradient instead — same reasoning as
+  // above (both cells this lands on are themselves sticky), and equally immune to border-collapse.
+  const DOTTED_SEPARATOR: React.CSSProperties = {
+    backgroundImage: `repeating-linear-gradient(to bottom, ${SEP_COLOR} 0 4px, transparent 4px 8px)`,
+    backgroundPosition: 'left top', backgroundSize: '2px 100%', backgroundRepeat: 'repeat-y',
+  }
   // The identity column repeats at the far right too — past a wide fund section you'd otherwise
   // lose track of which row you're even on. Sticky right:0, same width as the real one; De plată
   // (the actual last data column) shifts its own sticky offset left by that width to sit right
@@ -838,7 +855,7 @@ export function AvizierPanel({
                       style={{
                         padding: '4px 10px', textAlign: 'center', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600,
                         color: isCollapsed ? 'var(--accent, #0071e3)' : 'var(--muted, #666)', cursor: collapsible ? 'pointer' : 'default',
-                        borderLeft: (i === 0 || run.label) ? FUND_SEPARATOR : 'none',
+                        boxShadow: (i === 0 || run.label) ? FUND_SEPARATOR_SHADOW : 'none',
                       }}>
                       {collapsible ? (isCollapsed ? '+ ' : '− ') : ''}{run.label}
                     </th>
@@ -855,7 +872,7 @@ export function AvizierPanel({
                     style={{
                       padding: '4px 10px', textAlign: 'center', fontSize: 12, fontWeight: 500,
                       color: run.kind === 'fund' && collapsedFunds.has(run.key) ? 'var(--accent, #0071e3)' : 'var(--muted, #666)',
-                      cursor: run.kind === 'fund' ? 'pointer' : 'default', borderLeft: FUND_SEPARATOR,
+                      cursor: run.kind === 'fund' ? 'pointer' : 'default', boxShadow: FUND_SEPARATOR_SHADOW,
                     }}>
                     {run.kind === 'fund' ? `${collapsedFunds.has(run.key) ? '+' : '−'} ${run.label}` : ''}
                   </th>
@@ -879,7 +896,7 @@ export function AvizierPanel({
                     </button>
                   </span>
                 </th>
-                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
+                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, ...DOTTED_SEPARATOR }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
                 {infoVis.residents && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.persHint', 'Număr persoane')}><HLabel2 label={t('avizier.persLabel', 'Pers')} unit={t('avizier.persUnit', '[#]')} sortKey="residents" /></th>}
                 {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel2 label={t('avizier.apaLabel', 'Apa')} unit={t('avizier.apaUnit', '[m3]')} sortKey="consumption" /></th>}
                 {cols.map((col, i) => {
@@ -929,7 +946,7 @@ export function AvizierPanel({
                   // Fund-boundary separator: cloned onto whichever element the branch above returned,
                   // rather than threading a border prop through every branch individually.
                 }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
-                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, borderLeft: DOTTED_SEPARATOR }}>
+                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>
                   {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
                 </th>
               </tr>
@@ -1011,7 +1028,7 @@ export function AvizierPanel({
                       </span>
                     )}
                   </td>
-                  {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
+                  {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, ...DOTTED_SEPARATOR }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{r.residents != null ? r.residents : ''}</td>}
                   {infoVis.consumption && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{r.consumption != null ? money(r.consumption) : ''}</td>}
                   {cols.map((col, i) => {
@@ -1102,7 +1119,7 @@ export function AvizierPanel({
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
                   <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', right: 0, zIndex: 1,
                       background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
-                      width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: DOTTED_SEPARATOR }}
+                      width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, overflow: 'hidden', textOverflow: 'ellipsis', ...DOTTED_SEPARATOR }}
                     title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
                     <span style={{ fontWeight: indent ? 400 : 600, fontSize: indent ? 12 : undefined }}>{l.primary}</span>
                   </td>
@@ -1112,7 +1129,7 @@ export function AvizierPanel({
               {totals ? (
                 <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'center', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)', position: 'sticky', bottom: 0, zIndex: 3 }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX }}>{t('avizier.totalRow', 'TOTAL')}</td>
-                  {infoVis.cpi && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
+                  {infoVis.cpi && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, ...DOTTED_SEPARATOR }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{totals.residents != null ? totals.residents : ''}</td>}
                   {infoVis.consumption && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>}
                   {cols.map((col, i) => {
@@ -1144,7 +1161,7 @@ export function AvizierPanel({
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}>{money(totals.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
-                  <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, borderLeft: DOTTED_SEPARATOR }}>{t('avizier.totalRow', 'TOTAL')}</td>
+                  <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>{t('avizier.totalRow', 'TOTAL')}</td>
                 </tr>
               ) : null}
             </tbody>
