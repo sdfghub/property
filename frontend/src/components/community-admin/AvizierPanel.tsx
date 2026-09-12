@@ -513,10 +513,10 @@ export function AvizierPanel({
   // Vertical separators between fund groups (Cheltuieli Întreținere, Penalizări, Fond Rulment,
   // Reparații, Reabilitare 1/2/3…), carried down through every row — the header already draws one
   // via groupRuns'/sgRuns' own borderLeft, but only on itself. A band boundary is always also a fund
-  // boundary (a band is just a run of contiguous funds), so this single, very light line covers both.
+  // boundary (a band is just a run of contiguous funds), so this single line covers both.
   const fundBoundaryIdx = new Set<number>()
   { let idx = 0; for (const run of groupRuns) { if (idx > 0) fundBoundaryIdx.add(idx); idx += run.span } }
-  const FUND_SEPARATOR = '1px solid var(--border-subtle, var(--border, #e3e3e3))'
+  const FUND_SEPARATOR = '2px solid var(--border-strong, var(--border, #a8a8a8))'
   const colSepStyle = (i: number): React.CSSProperties => (fundBoundaryIdx.has(i) ? { borderLeft: FUND_SEPARATOR } : {})
   // Încasări always reports the prior period's collection cycle (e.g. shows 2026-05's receipts
   // while viewing 2026-06) — no longer spelled out in the header itself, just the plain label.
@@ -829,7 +829,7 @@ export function AvizierPanel({
                       style={{
                         padding: '4px 10px', textAlign: 'center', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600,
                         color: isCollapsed ? 'var(--accent, #0071e3)' : 'var(--muted, #666)', cursor: collapsible ? 'pointer' : 'default',
-                        borderLeft: run.label ? '1px solid var(--border, #e5e5e5)' : 'none',
+                        borderLeft: run.label ? FUND_SEPARATOR : 'none',
                       }}>
                       {collapsible ? (isCollapsed ? '+ ' : '− ') : ''}{run.label}
                     </th>
@@ -845,7 +845,7 @@ export function AvizierPanel({
                     style={{
                       padding: '4px 10px', textAlign: 'center', fontSize: 12, fontWeight: 500,
                       color: run.kind === 'fund' && collapsedFunds.has(run.key) ? 'var(--accent, #0071e3)' : 'var(--muted, #666)',
-                      cursor: run.kind === 'fund' ? 'pointer' : 'default', borderLeft: '1px solid var(--border, #e5e5e5)',
+                      cursor: run.kind === 'fund' ? 'pointer' : 'default', borderLeft: FUND_SEPARATOR,
                     }}>
                     {run.kind === 'fund' ? `${collapsedFunds.has(run.key) ? '+' : '−'} ${run.label}` : ''}
                   </th>
