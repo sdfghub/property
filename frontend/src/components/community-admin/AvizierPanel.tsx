@@ -151,12 +151,12 @@ export function AvizierPanel({
   const [soldDetail, setSoldDetail] = React.useState<{ be: string; data: any } | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [showInfo, setShowInfo] = React.useState(true) // #7 INFO columns (CPI / persoane / consum apă)
-  const [showIncasari, setShowIncasari] = React.useState(true) // per-fund/De-plată Încasări column (prior period's receipts)
-  const [publicMode, setPublicMode] = React.useState(false) // #10 GDPR: hide owner names (posted/exported view)
+  const [showIncasari, setShowIncasari] = React.useState(false) // per-fund/De-plată Încasări column (prior period's receipts) — off by default
+  const [publicMode, setPublicMode] = React.useState(true) // #10 GDPR: hide owner names (posted/exported view) — "Nume" off by default
   // Zoom: one stepper that bulk-sets every band/fund/category collapse state at once —
   // 0 = every super-band collapsed, 1 = bands open but every fund collapsed, 2 = normal
-  // (Curente/Restanțe per fund, the landing state), 3 = every multi-category fund expanded.
-  const [zoomLevel, setZoomLevel] = React.useState(2)
+  // (Curente/Restanțe per fund), 3 = every multi-category fund expanded — the landing state.
+  const [zoomLevel, setZoomLevel] = React.useState(3)
   // Single-column sort applied to the row list (not the totals row, which stays a whole-community sum).
   const [sortKey, setSortKey] = React.useState<string | null>(null)
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc')
@@ -322,6 +322,18 @@ export function AvizierPanel({
   type Group = { key: string; label: string; superGroup?: SuperGroup; categories: string[] }
   const groups: Group[] =
     data?.groups ?? cats.map((c) => ({ key: c, label: catLabel(c), categories: [c] }))
+  // Default landing view is zoom level 3 (every multi-category fund expanded), applied once the
+  // first real `groups` list arrives — collapsedBands/collapsedFunds are already at their level-3
+  // values from their own initial state (only De plată starts collapsed, independent of zoom; see
+  // applyZoom), so only `expanded` and the stepper's own displayed level need setting here. Guarded
+  // to run once so switching periods afterwards doesn't stomp on whatever zoom the admin picked.
+  const defaultZoomApplied = React.useRef(false)
+  React.useEffect(() => {
+    if (defaultZoomApplied.current || !groups.length) return
+    defaultZoomApplied.current = true
+    setExpanded(new Set(groups.filter((g) => g.categories.length > 1).map((g) => g.key)))
+    setZoomLevel(3)
+  }, [groups])
   // Column labels are supplied by the backend; fall back to the raw code.
   const catLabels: Record<string, string> = (data as any)?.categoryLabels ?? {}
   const catLabel = (c: string) => (c.startsWith('PEN:') ? `Penaliz. ${catLabels[c.slice(4)] ?? c.slice(4)}` : (catLabels[c] ?? c))
