@@ -2,7 +2,6 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
-import { PenaltyOverrideModal } from './PenaltyOverrideModal'
 import { beLabel, shortUnit } from './beLabel'
 import { usePeriodOptional } from '../../contexts/PeriodContext'
 
@@ -248,9 +247,6 @@ export function AvizierPanel({
       .catch(() => setPenDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
   }
 
-  // Admin manual penalty override — modal extracted to PenaltyOverrideModal (shared with the wizard list).
-  const [ovrTarget, setOvrTarget] = React.useState<{ be: string; beName?: string; computed: number } | null>(null)
-
   // Cell click router: penalty columns go to the rich per-bucket drilldown (per fund for a `PEN:<fund>`
   // category, all funds for the aggregate PENALIZARI); every other category keeps the generic per-unit
   // formula.
@@ -326,8 +322,6 @@ export function AvizierPanel({
   type Group = { key: string; label: string; superGroup?: SuperGroup; categories: string[] }
   const groups: Group[] =
     data?.groups ?? cats.map((c) => ({ key: c, label: catLabel(c), categories: [c] }))
-  const penaltyFunds: string[] = data?.penaltyFunds ?? []
-  const canOverride = isAdmin && data?.period?.status === 'PREPARED'
   // Column labels are supplied by the backend; fall back to the raw code.
   const catLabels: Record<string, string> = (data as any)?.categoryLabels ?? {}
   const catLabel = (c: string) => (c.startsWith('PEN:') ? `Penaliz. ${catLabels[c.slice(4)] ?? c.slice(4)}` : (catLabels[c] ?? c))
@@ -443,11 +437,6 @@ export function AvizierPanel({
       }
       cols2.push({ kind: 'curente', group: g, sg })
       cols2.push({ kind: 'restante', group: g, sg })
-      // a fund's penalties (this month + cumulative) sit immediately to the right of the fund's column
-      if (penaltyFunds.includes(g.key)) {
-        cols2.push({ kind: 'pen', scope: 'month', group: g, sg })
-        cols2.push({ kind: 'pen', scope: 'total', group: g, sg })
-      }
     }
     // The grand-total band — always present, defaults collapsed (see collapsedBands init) to a
     // single "Total" column, exactly like the reference report's "De plată" band.
@@ -909,15 +898,6 @@ export function AvizierPanel({
                   if (col.kind === 'restante') return (
                     <th key={`r${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)' }}><HLabel>{t('avizier.soldPrec', 'Restanțe')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
-                  if (col.kind === 'pen') return (
-                    <th key={`p${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}
-                      title={`${col.scope === 'total' ? t('avizier.penTotalHint', 'Penalizări restante (rămase de plată, acumulate)') : t('avizier.penMonthHint', 'Penalizări curente (luna aceasta)')} — ${catLabels[col.group.key] ?? col.group.key}`}>
-                      <HLabel>
-                        {col.scope === 'total' ? t('avizier.penTotalShort', 'Penaliz. restante') : t('avizier.penMonthShort', 'Penaliz. curente')}
-                        <SortIcon k={colKey(col)} />
-                      </HLabel>
-                    </th>
-                  )
                   if (col.kind === 'fundTotal') return (
                     <th key={`ft${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 700 }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
@@ -1084,24 +1064,6 @@ export function AvizierPanel({
                         </td>
                       )
                     }
-                    if (col.kind === 'pen') {
-                      const v = r.penaltyByFund?.[col.group.key]?.[col.scope]
-                      const editable = canOverride && col.scope === 'month'
-                      return (
-                        <td key={`p${i}`} style={{ padding: '6px 10px', color: 'var(--danger, #b45309)', fontWeight: col.scope === 'total' ? 700 : 400 }}>
-                          {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> : (
-                            <button type="button" onClick={() => openPenalty(r.beCode, col.scope, col.group.key)} title={t('avizier.explain', 'Cum s-a calculat?')}
-                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
-                              {money(v)}
-                            </button>
-                          )) : ''}
-                          {editable ? (
-                            <button type="button" onClick={() => setOvrTarget({ be: r.beCode, beName: r.beName, computed: Number(v) || 0 })} title={t('avizier.override', 'Ajustează manual penalizarea')}
-                              style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 13 }}>✎</button>
-                          ) : null}
-                        </td>
-                      )
-                    }
                     if (col.kind === 'fundTotal') {
                       const v = round2(sumCats(r.charges, col.group.categories) + (Number(r.soldByFund?.[col.group.key]) || 0))
                       return <td key={`ft${i}`} style={{ padding: '6px 10px', fontWeight: 700 }}>{v ? money(v) : ''}</td>
@@ -1147,9 +1109,6 @@ export function AvizierPanel({
                     )
                     if (col.kind === 'cat') return (
                       <td key={`c${i}`} style={{ padding: '8px 10px' }}>{money(totals.byCategory?.[col.cat])}</td>
-                    )
-                    if (col.kind === 'pen') return (
-                      <td key={`p${i}`} style={{ padding: '8px 10px', color: 'var(--danger, #b45309)' }}>{money(totals.penaltyByFund?.[col.group.key]?.[col.scope])}</td>
                     )
                     if (col.kind === 'fundTotal') return (
                       <td key={`ft${i}`} style={{ padding: '8px 10px' }}>{money(round2(sumCats(totals.byCategory || {}, col.group.categories) + (Number(totals.soldByFund?.[col.group.key]) || 0)))}</td>
@@ -1556,12 +1515,6 @@ export function AvizierPanel({
             )}
           </div>
         </div>
-      )}
-
-      {ovrTarget && (
-        <PenaltyOverrideModal communityId={communityId} period={data?.period?.code || period}
-          be={ovrTarget.be} beName={ovrTarget.beName} computed={ovrTarget.computed}
-          onClose={() => setOvrTarget(null)} onSaved={() => { setOvrTarget(null); reloadAvizier() }} />
       )}
 
       {explain && (
