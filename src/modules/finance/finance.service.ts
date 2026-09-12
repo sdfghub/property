@@ -1711,10 +1711,13 @@ export class FinanceService {
       // import's own catch-all for whatever predates this system's own tracked charge history.
       const isOpening = b.originKey === 'opening' || /:opening$/.test(b.originKey || '')
       // The overdue month, for a separate display column: 'period:<id>' resolves via the join above;
-      // 'hist:<unitId>:<periodCode>' carries it as the key's own last segment; opening/cutover buckets
-      // have no single origin month.
-      const histMatch = /^hist:[^:]+:(.+)$/.exec(b.originKey || '')
-      const originPeriodCode: string | null = isOpening ? null : (b.originPeriodCodeJoined ?? (histMatch ? histMatch[1] : null))
+      // 'hist:<unitId>:<periodCode>' (historical import) and 'cent:<unitId>:<periodCode>'
+      // (centralizator-PDF import) both carry it as the key's own last segment, no join needed —
+      // matches any such '<prefix>:<unitId>:<code>' key so a future import source needs no matching
+      // change here (mirrors originAnchorDate's identical generalization in penalty-rate.ts).
+      // Opening/cutover buckets have no single origin month.
+      const keyedMonthMatch = /^[a-z]+:[^:]+:(.+)$/.exec(b.originKey || '')
+      const originPeriodCode: string | null = isOpening ? null : (b.originPeriodCodeJoined ?? (keyedMonthMatch ? keyedMonthMatch[1] : null))
       // Migrated buckets carry no real "original principal" — they use a 1e9 sentinel to disable the
       // legal cap (the penalty was already accrued in the source system). Flag them so the UI omits the
       // meaningless "Datorie" figure and never claims the cap was reached.
