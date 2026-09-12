@@ -44,7 +44,12 @@ async function main() {
   const apply = args.includes('--apply')
   const fundArg = args.find((a) => a.startsWith('--fund='))
   const fundCode = fundArg ? fundArg.slice('--fund='.length) : 'EXPENSES'
-  if (!communityId) throw new Error('usage: import-historical-penalty-buckets <COMMUNITY_ID> [--apply] [--fund=EXPENSES]')
+  // Staged rollout: scope a run to specific BE codes (comma-separated) instead of the whole
+  // community — e.g. re-running after the existingRemaining fix above one BE at a time to check
+  // its output before trusting it community-wide.
+  const beArg = args.find((a) => a.startsWith('--be='))
+  const beCodes = beArg ? new Set(beArg.slice('--be='.length).split(',')) : null
+  if (!communityId) throw new Error('usage: import-historical-penalty-buckets <COMMUNITY_ID> [--apply] [--fund=EXPENSES] [--be=CODE1,CODE2]')
 
   const community = await prisma.community.findUnique({ where: { id: communityId }, select: { penaltyGraceDays: true } })
   const graceDays = Number((community as any)?.penaltyGraceDays ?? 30)
@@ -75,7 +80,8 @@ async function main() {
   const fundAlloc = fund.allocation as any
   const fallbackRatePct = Number(fundAlloc?.penaltyPerDayPct ?? 0)
 
-  const bes = await prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true } })
+  const bes = (await prisma.billingEntity.findMany({ where: { communityId }, select: { id: true, code: true, name: true } }))
+    .filter((be) => !beCodes || beCodes.has(be.code))
 
   let totalCreated = 0
   let totalAmount = 0
@@ -96,14 +102,24 @@ async function main() {
     // re-run: without it, a second pass would see last run's historical buckets as pre-existing
     // coverage, push earliestExistingDue back to the dawn of the ledger, and collapse everything into
     // one lump "opening" bucket instead of the real per-month breakdown.
+    //
+    // Also excludes the ANCHOR period's own bucket (period:<latestPeriod.id>) — a real bug found
+    // 2026-09-12 (see BOITI/JARDA session notes): `be_statement.due_start` for period X is the
+    // balance carried INTO X, i.e. through period (X-1)'s own charge — it does NOT yet include X's
+    // own new charge (confirmed: due_start(Jul) - due_start(Jun) = Jun's own charge, not Jul's).
+    // Netting the anchor period's own live bucket out of `beDebt` therefore over-subtracts by
+    // exactly that period's charge, silently shrinking `beBackfill` and truncating however many of
+    // the oldest historical months it should have covered — reproduced exactly on BOITI, where this
+    // one bug alone was the difference between March correctly showing its real 87.21 charge and
+    // wrongly showing a leftover 13.70.
     const existing: any[] = await prisma.$queryRawUnsafe(
       `select pb.id, pb.due_date as "dueDate",
               (select pbp.principal_remaining::float8 from penalty_bucket_period pbp
                 where pbp.bucket_id = pb.id order by pbp.period_seq desc limit 1) as "lastRemaining"
          from penalty_bucket pb
         where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.fund_id = $3
-          and pb.origin_key like 'period:%'`,
-      communityId, be.id, fund.id,
+          and pb.origin_key like 'period:%' and pb.origin_key <> ('period:' || $4)`,
+      communityId, be.id, fund.id, latestPeriod.id,
     )
     const existingRemaining = round2(existing.reduce((s, r) => s + (r.lastRemaining != null ? Number(r.lastRemaining) : Number(0)), 0))
     const earliestExistingDue = existing.reduce((min: Date | null, r) => {
@@ -174,14 +190,41 @@ async function main() {
         c.seedPenaltyAccrued = round2(Math.min(c.principal * (ratePct / 100) * days, c.principal))
       }
 
+      // A prior run of this script (with a different total to backfill — e.g. before the
+      // existingRemaining fix above, or simply because more debt has since been paid down) may have
+      // left 'hist:' buckets for months THIS run no longer covers (its backward walk now runs out
+      // sooner, or later, than last time). Those are stale — bug found 2026-09-12 on BOITI, where
+      // two runs 3 minutes apart left January's bucket (from the first, buggy run) sitting alongside
+      // February/March's corrected ones (from the second), none of them consistent with each other.
+      // Only ever remove a stale bucket that's still fully provisional (no COMMITTED period row) —
+      // one with real committed history represents penalty already posted in a closed period, and
+      // must never be silently deleted; flag it instead for manual review.
+      const newKeys = new Set(createdForUnit.map((c) => c.originKey))
+      const staleRows: any[] = await prisma.$queryRawUnsafe(
+        `select pb.id, pb.origin_key as "originKey",
+                exists(select 1 from penalty_bucket_period pbp where pbp.bucket_id = pb.id and pbp.status = 'COMMITTED') as "hasCommitted"
+           from penalty_bucket pb
+          where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.fund_id = $3
+            and pb.origin_key like $4`,
+        communityId, be.id, fund.id, `hist:${u.id}:%`,
+      )
+      const stale = staleRows.filter((r) => !newKeys.has(r.originKey))
+      const staleRemovable = stale.filter((r) => !r.hasCommitted)
+      const staleBlocked = stale.filter((r) => r.hasCommitted)
+
       report.push({
         be: be.code, unit: u.code, share: round2(share * 100) + '%',
         backfilled: round2(createdForUnit.reduce((s, c) => s + c.principal, 0)),
         seededPenalty: round2(createdForUnit.reduce((s, c) => s + c.seedPenaltyAccrued, 0)),
         buckets: createdForUnit.length,
+        staleRemoved: staleRemovable.map((r) => r.originKey),
+        staleNeedsReview: staleBlocked.map((r) => r.originKey),
       })
 
       if (apply) {
+        if (staleRemovable.length) {
+          await prisma.penaltyBucket.deleteMany({ where: { id: { in: staleRemovable.map((r) => r.id) } } })
+        }
         for (const c of createdForUnit) {
           await prisma.penaltyBucket.upsert({
             where: { communityId_billingEntityId_fundId_originKey: { communityId, billingEntityId: be.id, fundId: fund.id, originKey: c.originKey } },
