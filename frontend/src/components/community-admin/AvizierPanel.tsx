@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { PenaltyOverrideModal } from './PenaltyOverrideModal'
@@ -595,36 +596,55 @@ export function AvizierPanel({
     }
   }
   // One page per zoom level (0 = most collapsed .. 3 = fully expanded), each sized to fit the
-  // entire table on a single A3-landscape sheet: the font shrinks as the column count (and so the
-  // table's natural width) grows. Tuned against A3 landscape's ~400mm usable width.
-  // Font size per page: A3 landscape's usable area (~400×277mm ≈ 1512×1047px at 96dpi) constrains
-  // BOTH dimensions, and — since the table cells use nowrap and the table itself scales with
-  // `width:100%` — height (driven by row count, same on every page) is usually the binding
-  // constraint, while width (driven by column count, which grows sharply with zoom level) only
-  // binds on the most-expanded pages. The coefficients below were fit against this table's real
-  // rendered metrics (see the fix-avizier-print-multipage session notes) and use two different,
-  // deliberately-not-interchangeable conventions: the height ones are absolute px measured AT an
-  // 11px reference font (so they need `* REF_FONT` to convert back to "required font size"), while
-  // the width ones are already normalized to px-per-1px-of-font (fit directly from
-  // naturalWidth/fontSizeUsed across the 4 zoom levels, so they need no such conversion). Each page
-  // then gets the smaller of the two required sizes, so a page that's both tall (many units) AND
-  // wide (many expanded fund columns) is capped by whichever actually wouldn't fit.
-  const usableWidthPx = 1512 * 0.96 // ~4% safety margin under A3 landscape's ~400mm usable width
-  const usableHeightPx = 1047 * 0.94 // ~6% safety margin under A3 landscape's ~277mm usable height
-  const REF_FONT = 11
-  const pxOverheadAtRef11 = 261 // title + 3 header rows + totals row + signatures, at an 11px font
-  const pxPerDataRowAtRef11 = 34.4 // one printRenderRows row, at an 11px font (most rows are 2 lines: name + secondary)
-  const widthBasePerFontPx = 26 // fixed per-page width (identity column etc.), per 1px of font size
-  const widthPerColPerFontPx = 5.8 // marginal width per extra data column, per 1px of font size
+  // entire table on a single A3-landscape sheet at the largest legible font. The print table uses
+  // `table-layout:fixed` with an explicit `<colgroup>` (below) instead of the browser's normal
+  // content-driven auto layout: auto layout has no single column that can "give" — nowrap numeric
+  // cells refuse to shrink, so once a page has enough columns to exceed the physical page width,
+  // ALL the necessary shrinking gets dumped onto whichever one cell is still allowed to wrap (the
+  // identity column), which can cascade into that column wrapping to 3-4 lines and wildly
+  // inflating every row's height in a way that has nothing to do with the font size actually
+  // chosen. Fixed layout makes column widths a deterministic function of the page's physical
+  // width and the column count — never the browser's content-fitting heuristics — so width can
+  // never silently blow up the height budget.
+  const usableWidthPx = 1512 * 0.97 // ~3% safety margin under A3 landscape's ~400mm usable width
+  const usableHeightPx = 1047 * 0.95 // ~5% safety margin under A3 landscape's ~277mm usable height
+  const IDENTITY_COL_PX = 208 // ~55mm — fixed width for the Proprietar/Unitatea column; a rare very
+  // long shared-unit label wraps to 2 lines within this budget rather than widening the column
+  const INFO_COL_PX = 50 // ~13mm — fixed width for each of CPI/Pers/Apa, short 1-6 digit numbers
+  // Widest real number this table renders (measured: a 6-figure fund total, "168.254,10" ≈ 67px at
+  // an 11px reference font) sets how narrow a data column can get before that number would clip.
+  // +10% to cover the TOTAL row specifically: it's bold, and bold digits measure wider than the
+  // regular weight this was measured in — without the margin, only the totals row's biggest sums
+  // clipped by a couple of px.
+  const PX_PER_FONT_UNIT_FOR_NUMBERS = (67 / 11) * 1.1
+  // These height coefficients (unlike the width one above) are absolute px measured AT a 6px
+  // reference font — a small one deliberately chosen so measuring it involved no risk of the
+  // identity column wrapping and inflating the sample (see fix-avizier-print-multipage session
+  // notes): 182px of fixed overhead (title + 3 header rows + totals row + signatures) plus ~11.6px
+  // per single-line data row, both level-invariant since neither the header's own height nor a
+  // row's height depends on how many fund columns are on the page.
+  const REF_FONT = 6
+  const pxOverheadAtRef = 182
+  const pxPerDataRowAtRef = 11.6
   const dataRows = printRenderRows.length
-  const heightDrivenFont = (usableHeightPx * REF_FONT) / (pxOverheadAtRef11 + pxPerDataRowAtRef11 * dataRows)
+  const heightDrivenFont = (usableHeightPx * REF_FONT) / (pxOverheadAtRef + pxPerDataRowAtRef * dataRows)
+  const infoColsCount = (infoVis.cpi ? 1 : 0) + (infoVis.residents ? 1 : 0) + (infoVis.consumption ? 1 : 0)
   const printPages = [0, 1, 2, 3].map((level) => {
     const sets = zoomSetsForLevel(level)
     const { cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns } = buildCols(sets.collapsedBands, sets.collapsedFunds, sets.expanded)
-    const totalCols = leadColspan + pCols.length
-    const widthDrivenFont = usableWidthPx / (widthBasePerFontPx + widthPerColPerFontPx * totalCols)
-    const fontSize = Math.max(6, Math.min(13, Math.min(heightDrivenFont, widthDrivenFont)))
-    return { level, cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns, expanded: sets.expanded, collapsedFunds: sets.collapsedFunds, fontSize }
+    const dataColWidthPx = (usableWidthPx - IDENTITY_COL_PX - infoColsCount * INFO_COL_PX) / pCols.length
+    const widthDrivenFont = dataColWidthPx / PX_PER_FONT_UNIT_FOR_NUMBERS
+    // No lower clamp above what width/height actually allow: the most-expanded zoom level
+    // legitimately needs the smallest font on a table this wide (that's the fundamental trade-off
+    // of showing every fund's every category on one A3 sheet), and forcing a floor here previously
+    // caused those columns to visually overflow instead of just being smaller.
+    const fontSize = Math.max(4.5, Math.min(15, Math.min(heightDrivenFont, widthDrivenFont)))
+    const colWidthPct = {
+      identity: (IDENTITY_COL_PX / usableWidthPx) * 100,
+      info: (INFO_COL_PX / usableWidthPx) * 100,
+      data: (dataColWidthPx / usableWidthPx) * 100,
+    }
+    return { level, cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns, expanded: sets.expanded, collapsedFunds: sets.collapsedFunds, fontSize, colWidthPct }
   })
 
   return (
@@ -1149,11 +1169,23 @@ export function AvizierPanel({
           document (app chrome included) so print shows literally just this. Fully static: no
           click handlers, no sort/collapse/expand affordances — none of that means anything on
           paper, and it always shows every row (see printRenderRows above), regardless of any
-          on-screen filter or per-BE collapse state. */}
+          on-screen filter or per-BE collapse state.
+
+          Portaled straight to <body>: AvizierPanel is hosted inside layers of app layout (cards,
+          the fullscreen overlay, dashboard tabs) that this component doesn't control, and any one
+          of them setting `position` or `overflow` would silently break the print isolation CSS's
+          `position:absolute` (wrong containing block) or clip content taller than that ancestor,
+          which showed up as pages not actually splitting apart when printed. A body-level portal
+          makes <body> the only ancestor, always, regardless of where this panel is mounted. */}
+      {createPortal(
       <div className="avizier-print-root" style={{ display: 'none' }}>
         {printPages.map((page, pageIdx) => (
           <div key={page.level} style={{
+            // `page-break-after` is the legacy (but still Chrome-honored) property name;
+            // `breakAfter` is its modern replacement — set both since print-CSS support for the
+            // newer name alone is inconsistent across engines.
             pageBreakAfter: pageIdx < printPages.length - 1 ? 'always' : 'auto',
+            breakAfter: pageIdx < printPages.length - 1 ? 'page' : 'auto',
             fontSize: page.fontSize, fontFamily: 'inherit', color: '#000', padding: '4mm 6mm',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2mm' }}>
@@ -1163,7 +1195,18 @@ export function AvizierPanel({
               </div>
               <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.zoom', 'Zoom')} {page.level + 1}/{printPages.length}</div>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'inherit', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 'inherit', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {/* table-layout:fixed uses ONLY these widths (ignoring cell content) to size every
+                  column — see printPages/colWidthPct above for why. Must list one <col> per column
+                  actually rendered below, in the same order: identity, then whichever of CPI/Pers/
+                  Apa are on, then one per page.cols entry. */}
+              <colgroup>
+                <col style={{ width: `${page.colWidthPct.identity}%` }} />
+                {infoVis.cpi && <col style={{ width: `${page.colWidthPct.info}%` }} />}
+                {infoVis.residents && <col style={{ width: `${page.colWidthPct.info}%` }} />}
+                {infoVis.consumption && <col style={{ width: `${page.colWidthPct.info}%` }} />}
+                {page.cols.map((_, i) => <col key={i} style={{ width: `${page.colWidthPct.data}%` }} />)}
+              </colgroup>
               <thead>
                 <tr>
                   <th colSpan={leadColspan} />
@@ -1224,9 +1267,20 @@ export function AvizierPanel({
                   const secondary = publicMode ? undefined : l.secondary
                   return (
                     <tr key={`${r.rowKey ?? r.beCode}-${rowIdx}`} style={{ borderTop: indent ? 'none' : '1px solid #ddd' }}>
-                      <td style={{ textAlign: 'left', padding: indent ? '0.15em 0.3em 0.15em 1em' : '0.15em 0.3em' }}>
-                        <div style={{ fontWeight: indent ? 400 : 600 }}>{l.primary}</div>
-                        {secondary ? <div style={{ fontSize: '0.85em', color: '#666' }}>{secondary}</div> : null}
+                      {/* One line, not stacked like the on-screen table (see beLabel's
+                          {primary,secondary} contract) — with ~35 units on a page, doubling every
+                          row's height for a second name line was the single biggest cost against
+                          a readable font size; on paper, "AP 1 · Guțuleac Alexandru" reads fine
+                          run together. The column's actual width comes from the <colgroup> above
+                          (IDENTITY_COL_PX) — `whiteSpace:'normal'` here just lets an occasional
+                          long shared-unit label wrap within that fixed width instead of overflowing
+                          it, unlike every other (nowrap) column. */}
+                      <td style={{
+                        textAlign: 'left', padding: indent ? '0.15em 0.3em 0.15em 1em' : '0.15em 0.3em',
+                        whiteSpace: 'normal', overflowWrap: 'break-word',
+                      }}>
+                        <span style={{ fontWeight: indent ? 400 : 600 }}>{l.primary}</span>
+                        {secondary ? <span style={{ color: '#666' }}> · {secondary}</span> : null}
                       </td>
                       {infoVis.cpi && <td style={{ textAlign: 'center', padding: '0.15em 0.3em', color: '#666' }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
                       {infoVis.residents && <td style={{ textAlign: 'center', padding: '0.15em 0.3em', color: '#666' }}>{r.residents != null ? r.residents : ''}</td>}
@@ -1288,7 +1342,9 @@ export function AvizierPanel({
             </div>
           </div>
         ))}
-      </div>
+      </div>,
+      document.body,
+      )}
 
       {filterOpen && filterAnchor && (
         <>
