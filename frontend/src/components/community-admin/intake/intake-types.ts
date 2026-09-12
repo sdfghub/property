@@ -108,7 +108,7 @@ export type IntakeContext = {
   cashAccounts: Array<{ id: string; code: string; name: string; type: string; currency: string }>
   units: Array<{ id: string; code: string; label: string; billingEntityId: string | null; billingEntityName: string | null; billingEntityCode: string | null }>
   defaultAdvanceFundCode: string | null
-  unpaidInvoices: Array<{ id: string; number: string | null; vendorName: string | null; gross: number; outstanding: number; dueDate: string | null }>
+  unpaidInvoices: Array<{ id: string; number: string | null; vendorName: string | null; gross: number; outstanding: number; dueDate: string | null; templateCode: string | null }>
 }
 
 export type ContractIssue = { index: number | null; path: string; message: string }

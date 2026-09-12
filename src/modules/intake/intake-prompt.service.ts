@@ -35,7 +35,7 @@ export type IntakeCatalogue = {
   units: Array<{ id: string; code: string; label: string; billingEntityId: string | null; billingEntityName: string | null; billingEntityCode: string | null }>
   /** where an owner's overpayment is credited when the line names no fund (EXPENSES when it exists) */
   defaultAdvanceFundCode: string | null
-  unpaidInvoices: Array<{ id: string; number: string | null; vendorName: string | null; gross: number; outstanding: number; dueDate: string | null; templateInstanceId: string | null; intakeRecordId: string | null }>
+  unpaidInvoices: Array<{ id: string; number: string | null; vendorName: string | null; gross: number; outstanding: number; dueDate: string | null; templateInstanceId: string | null; templateCode: string | null; intakeRecordId: string | null }>
   recentInvoices: Array<{ id: string; number: string | null; vendorName: string | null; vendorId: string | null; gross: number | null; issueDate: string | null; templateInstanceId: string | null; intakeRecordId: string | null }>
 }
 
@@ -84,7 +84,8 @@ export class IntakePromptService {
     const idByTemplate = new Map(instances.map((i) => [i.templateId, i.id]))
     // unpaid rows come from raw SQL; fetch the two provenance fields the self-dedupe needs
     const unpaidIds = (unpaid.invoices as any[]).map((r) => r.id)
-    const unpaidExtra = unpaidIds.length ? await this.prisma.vendorInvoice.findMany({ where: { id: { in: unpaidIds } }, select: { id: true, templateInstanceId: true, provenance: true } }) : []
+    // templateCode labels the parts of an invoice split over templates (Aquatim apă rece / apă meteo)
+    const unpaidExtra = unpaidIds.length ? await this.prisma.vendorInvoice.findMany({ where: { id: { in: unpaidIds } }, select: { id: true, templateInstanceId: true, provenance: true, templateInstance: { select: { template: { select: { code: true } } } } } }) : []
     const extraById = new Map(unpaidExtra.map((x) => [x.id, x]))
     const valuesByTemplate = new Map(instances.map((i) => [i.templateId, (i.values as Record<string, unknown> | null) ?? null]))
 
@@ -143,6 +144,7 @@ export class IntakePromptService {
         outstanding: Number(r.outstanding ?? 0),
         dueDate: iso(r.dueDate),
         templateInstanceId: extraById.get(r.id)?.templateInstanceId ?? null,
+        templateCode: (extraById.get(r.id) as any)?.templateInstance?.template?.code ?? null,
         intakeRecordId: ((extraById.get(r.id)?.provenance as any)?.intakeRecordId as string) ?? null,
       })),
       recentInvoices: recent.map((r) => ({

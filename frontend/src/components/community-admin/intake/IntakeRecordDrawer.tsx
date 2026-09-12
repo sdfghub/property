@@ -68,6 +68,24 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
   const fundSum = (bank.funds ?? []).reduce((s, f) => s + (Number(f.amount) || 0), 0)
   const unpaid = ctx?.unpaidInvoices ?? []
   const normNo = (v: string | null | undefined) => String(v ?? '').replace(/[^0-9a-z]/gi, '').toUpperCase()
+  const normName = (v: string | null | undefined) => String(v ?? '').toLowerCase().replace(/\b(s\.?a\.?|s\.?r\.?l\.?|sc|srl|sa)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+  // the paying vendor: whoever the quoted numbers / the mapping / the counterparty point at — its invoices go first
+  const [showAllVendors, setShowAllVendors] = React.useState(false)
+  const payingVendor = React.useMemo(() => {
+    if (!isBank) return null
+    const byNumber = unpaid.find((u) => bank.invoiceNumbers.some((n) => normNo(n) && normNo(u.number).endsWith(normNo(n))))
+    if (byNumber?.vendorName) return byNumber.vendorName
+    const names = [bank.vendorName, record.extracted?.counterpartyName].map(normName).filter(Boolean)
+    const tokens = (n: string) => n.split(' ').filter((t) => t.length > 2)
+    const hit = unpaid.find((u) => { const v = normName(u.vendorName); return names.some((n) => n && (v.includes(n) || n.includes(v) || tokens(n).some((t) => tokens(v).includes(t)))) })
+    return hit?.vendorName ?? null
+  }, [isBank, unpaid, bank.invoiceNumbers, bank.vendorName, record.extracted?.counterpartyName])
+  const unpaidGroups = React.useMemo(() => {
+    const groups = new Map<string, typeof unpaid>()
+    for (const u of unpaid) { const k = u.vendorName ?? '?'; groups.set(k, [...(groups.get(k) ?? []), u]) }
+    const order = [...groups.keys()].sort((a, b) => (a === payingVendor ? -1 : b === payingVendor ? 1 : a.localeCompare(b)))
+    return order.map((k) => ({ vendor: k, own: k === payingVendor, rows: groups.get(k)! }))
+  }, [unpaid, payingVendor])
   const invoiceChecked = (no: string | null) => bank.invoiceNumbers.some((n) => normNo(n) && normNo(no).endsWith(normNo(n)))
   const toggleInvoice = (no: string | null) => {
     if (!no) return
@@ -188,14 +206,24 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
                   {bank.invoiceNumbers.length > 0 && <div className="muted" style={{ fontSize: 12 }}>{t('intake.form.quoted', 'Quoted on the line')}: {bank.invoiceNumbers.join(', ')}{bank.vendorName ? ` · ${bank.vendorName}` : ''}</div>}
                   {unpaid.length === 0 && <div className="muted" style={{ fontSize: 12 }}>{t('intake.form.noUnpaid', 'No unpaid invoices in the books.')}</div>}
                   {unpaid.length > 0 && (
-                    <div className="stack" style={{ gap: 4, maxHeight: 220, overflow: 'auto', fontSize: 13 }}>
-                      {unpaid.map((u) => (
-                        <label key={u.id} className="row" style={{ gap: 8, alignItems: 'center' }}>
-                          <input type="checkbox" checked={invoiceChecked(u.number)} disabled={locked || !u.number} onChange={() => toggleInvoice(u.number)} />
-                          <span style={{ flex: 1 }}>{u.vendorName ?? '?'} · {u.number ?? '—'}</span>
-                          <span className="muted">{money(u.outstanding, line?.currency ?? 'RON')}</span>
-                        </label>
+                    <div className="stack" style={{ gap: 4, maxHeight: 260, overflow: 'auto', fontSize: 13 }}>
+                      {unpaidGroups.filter((g) => g.own || showAllVendors || !payingVendor).map((g) => (
+                        <React.Fragment key={g.vendor}>
+                          <div className="muted" style={{ fontSize: 11, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.3 }}>{g.vendor}{g.own ? ` — ${t('intake.form.payingVendor', 'matches this line')}` : ''}</div>
+                          {g.rows.map((u) => (
+                            <label key={u.id} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                              <input type="checkbox" checked={invoiceChecked(u.number)} disabled={locked || !u.number} onChange={() => toggleInvoice(u.number)} />
+                              <span style={{ flex: 1 }}>{u.number ?? '—'}{u.templateCode && g.rows.some((o) => o.id !== u.id && o.number === u.number) ? <span className="muted"> · {u.templateCode}</span> : null}{u.dueDate ? <span className="muted" style={{ fontSize: 11 }}> · {u.dueDate}</span> : null}</span>
+                              <span className="muted">{money(u.outstanding, line?.currency ?? 'RON')}</span>
+                            </label>
+                          ))}
+                        </React.Fragment>
                       ))}
+                      {payingVendor && unpaidGroups.length > 1 && (
+                        <button className="btn tertiary small" type="button" style={{ alignSelf: 'flex-start' }} onClick={() => setShowAllVendors((v) => !v)}>
+                          {showAllVendors ? t('intake.form.hideOtherVendors', 'Hide other vendors') : t('intake.form.showOtherVendors', { n: unpaidGroups.length - 1 })}
+                        </button>
+                      )}
                     </div>
                   )}
                   {(record.resolved?.invoices?.length ?? 0) > 0 && <div className="muted" style={{ fontSize: 12 }}>→ {record.resolved.invoices.map((x: any) => `${x.vendorName ?? '?'} ${x.number}`).join(', ')} · {t('intake.form.outstanding', 'outstanding')} {money(record.resolved.outstandingTotal, line?.currency ?? 'RON')}</div>}
