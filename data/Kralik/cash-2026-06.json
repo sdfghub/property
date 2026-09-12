@@ -987,9 +987,11 @@
       "unit": "4A",
       "payer": "Catargiu Constantin",
       "funds": {
-        "REABILITARE_3": 8312.13
+        "EXPENSES": 394.16,
+        "REPARATII": 89.40,
+        "REABILITARE_3": 7828.57
       },
-      "memo": "F.Reabilitare.3 — adăugat. Găsită abia în august; reconfirmat cycle 2026-07 (toate tranzacțiile din fereastra de suprapunere Mai/Iunie aparțin lui Iunie, apar ca Încasări (Iunie) în Iulie).",
+      "memo": "F.Reabilitare.3 — adăugat. Găsită abia în august; reconfirmat cycle 2026-07 (toate tranzacțiile din fereastra de suprapunere Mai/Iunie aparțin lui Iunie, apar ca Încasări (Iunie) în Iulie). Fund split corrected to match Registru Bancă row #16's own breakdown (Cheltuieli comune 394.16 + FOND DE REPARATII 89.40 + Fond reabilitare 3 7828.57 = 8312.13) — the whole amount had been wrongly lumped into REABILITARE_3 alone, understating this unit's EXPENSES/REPARATII paydown.",
       "cycle": "2026-07"
     },
     {
@@ -1019,9 +1021,11 @@
       "unit": "SAD 1",
       "payer": "Brinzeu Adina",
       "funds": {
-        "EXPENSES": 667.92
+        "EXPENSES": 605.60,
+        "RULMENT": 14.52,
+        "REPARATII": 47.80
       },
-      "memo": "cv cheltuieli si restante sad 1 — adăugat",
+      "memo": "cv cheltuieli si restante sad 1 — adăugat. Fund split corrected to match Registru Bancă row #20's own breakdown (Cheltuieli comune 605.60 + FOND RULMENT 14.52 + FOND DE REPARATII 47.80 = 667.92) — the whole amount had been wrongly lumped into EXPENSES alone, overstating this unit's întreținere paydown.",
       "cycle": "2026-07"
     },
     {
@@ -1211,9 +1215,12 @@
       "unit": "4(III)",
       "payer": "Alexandru Grosu",
       "funds": {
-        "EXPENSES": 2690.88
+        "EXPENSES": 71.61,
+        "RULMENT": 14.52,
+        "REPARATII": 23.20,
+        "REABILITARE_3": 2581.55
       },
-      "memo": "Tabel iunie 2026 — din ExtrasCont, absent din Registru Bancă",
+      "memo": "Tabel iunie 2026 — din ExtrasCont, absent din Registru Bancă. Fund split corrected to match Registru Bancă row #34's own breakdown (Cheltuieli comune 71.61 Iun 2026 + FOND RULMENT 14.52 + FOND DE REPARATII 23.20 + Fond reabilitare 3 2581.55 = 2690.88) — the whole amount had been wrongly lumped into EXPENSES alone, vastly overstating this unit's întreținere paydown (showed as a 2,619 lei credit instead of a normal monthly payment).",
       "cycle": "2026-07"
     },
     {
