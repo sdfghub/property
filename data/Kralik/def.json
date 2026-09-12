@@ -87,7 +87,11 @@
       "name": "Gampe Francisc",
       "order": 4,
       "displayNames": [
-        { "displayName": "Ap 2/2 · Gampe Francisc", "startPeriod": "2026-03", "endPeriod": "2026-05" }
+        {
+          "displayName": "Ap 2/2 · Gampe Francisc",
+          "startPeriod": "2026-03",
+          "endPeriod": "2026-05"
+        }
       ]
     },
     {
@@ -210,7 +214,11 @@
       "name": "Valean Mirela",
       "order": 4,
       "displayNames": [
-        { "displayName": "Ap 2/2 · Valean Mirela", "startPeriod": "2026-06", "endPeriod": null }
+        {
+          "displayName": "Ap 2/2 · Valean Mirela",
+          "startPeriod": "2026-06",
+          "endPeriod": null
+        }
       ]
     }
   ],
@@ -1984,12 +1992,15 @@
     "Rich Clean: the invoice names the NEXT month (June archive → \"iulie 2026\", July archive → \"august 2026\") and is issued on its due date. Book it under the archive's period; the printed month is expected, not a mismatch. Non-VAT payer: net = gross.",
     "Administrator: catalogue vendor `RUSAVIT` = SC RUSADMINISTRA COMPANY SRL, CIF 31488140, IBAN RO23INGB0000999912925068 (same administrator). Map to RUSAVIT with match EXISTING — never a new vendor.",
     "Administrator invoice: a scan/photo (often upside-down), 800.00 flat, no VAT, `lista <luna>` gives the service month, issued the month after. Number `TM 1830` is booked as `TM-1830`.",
-    "BILL_COMISION_BANCA has no supplier invoice: its amount is the SUM of `Comision tranzactie` debits on the Libra RON statement for the period (June 2026: 136.00). Emit it as an INVOICE record with vendor Libra, number = the statement window (e.g. `2026.07.01-08.19`), sourceFile = the statement, allocation comision_banca.",
+    "BILL_COMISION_BANCA has no supplier invoice: its amount is the SUM of `Comision tranzactie` debits on the Libra RON statement for the period (June 2026: 136.00). Emit it as an INVOICE record with vendor Libra, number = the statement window (e.g. `2026.07.01-08.19`), sourceFile = the statement, allocation comision_banca — AND map each `Comision tranzactie` line as VENDOR_SETTLEMENT of that same number (`invoiceNumbers: [\"2026.07.01-08.19\"]`, vendorName Libra), so the invoice ends up paid by its own lines. A commission line shares the reference of the transfer it belongs to — that is expected, not a duplicate.",
     "Libra statement: the archive's statement covers a wider window than the month and may not overlap it at all (the July archive carried 10.08–10.09) — still emit EVERY line as a BANK_LINE and derive BILL_COMISION_BANCA from it; the administrator confirms the window. Check it reconciles (SOLD INITIAL + credits − debits = SOLD FINAL) before trusting your parse.",
-    "Libra owner receipts carry the unit in `Detalii` (\"ap 3\", \"AP 32\", \"ap.4(III)\", \"ap5\") and often the month — keep `description` verbatim (phase 2 maps them to owners).",
-    "Libra vendor payments reference invoice numbers in `Detalii` (`fct 1015433016/04.03.2026`) — keep verbatim; they usually settle OLDER invoices, not this month's.",
+    "Libra owner receipts (credits) → OWNER_PAYMENT. The unit is in `Detalii` (\"ap 3\", \"AP 32\", \"ap.4(III)\", \"ap5\", \"apt 10 B\") — echo the matching catalogue `units[].code` (AP 4 (I) / AP 4A / AP 4B and AP 5 (I-A) / AP 5 (I-B) are different units; \"ap.4(III)\" is AP 4 (III)). No apartment in the text → `unitCode: null`, `payerName` as printed, add a warning; the app suggests the owner by name and the administrator confirms.",
+    "Fund words in a receipt → `mapping.funds` with the amount written next to them, nothing else: \"fond rulment\"/\"rulment\" → RULMENT, \"fond reparatii\"/\"reparatii\" → REPARATII, \"reabilitare 1/2/3\"/\"reab. 3\" → REABILITARE_1/2/3, \"penalizari\"/\"penalitati\" → PENALIZARI. \"intretinere\", \"lista\", \"tabel\", \"cota\" name NO fund — leave `funds: []` and the app spreads the amount over the owner's open charges. Never split an amount that the text does not split.",
+    "A month in a receipt (\"tabel aprilie\", \"lista mai 2026\", \"iunie\") is the list the owner is paying → `cycleCode` = that month (\"aprilie\" in a July statement = 2026-04). No month → `cycleCode: null` (= the archive's period).",
+    "Libra vendor payments (debits with `fct …`) → VENDOR_SETTLEMENT with every quoted number in `invoiceNumbers` exactly as printed (`fct 1015433016/04.03.2026` → \"1015433016\"; the app matches the number's tail against the unpaid list) and `vendorName`. They usually settle OLDER invoices from the unpaid list, not this month's; a number the unpaid list does not have is fine — keep it, the app flags INVOICE_NOT_FOUND for the administrator.",
     "The EUR account (BANK_LIBRA_EUR) statement is usually empty — emit one OTHER record for the file, do not skip it silently.",
     "Interfon (Schmidt) is not billed monthly — if there is no Schmidt invoice in the archive, emit nothing for BILL_INTERFON. Never invent a record for a template without a document.",
-    "A `facturi-YYYY-MM-upload.csv` in the archive is a human-made summary, not a source document — emit it as OTHER and use its `total_checksum` column only to cross-check your extraction."
+    "A `facturi-YYYY-MM-upload.csv` in the archive is a human-made summary, not a source document — emit it as OTHER and use its `total_checksum` column only to cross-check your extraction.",
+    "Debits that are neither an invoice nor a commission (transfer to the association's own EUR/deposit account, a refund to an owner, a cash withdrawal to `CASH_RON`) → CASH_TX on EXPENSES with `kind` TRANSFER/ADJUSTMENT, or IGNORE with a `reason` when the line is the mirror of a transfer already booked from the other account."
   ]
 }

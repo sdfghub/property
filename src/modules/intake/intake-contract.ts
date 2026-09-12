@@ -9,10 +9,12 @@
 //     expected, missing optional keys). Validation errors then point at what is genuinely wrong.
 import { z } from 'zod'
 
-export const CONTRACT_VERSION = 'intake-import/v1'
+export const CONTRACT_VERSION = 'intake-import/v2'
+/** Older payloads still import; their bank lines simply carry no proposal (NO_PROPOSAL, admin fills the drawer). */
+export const ACCEPTED_CONTRACT_VERSIONS = ['intake-import/v1', 'intake-import/v2'] as const
 // Bump when the prompt wording/guidelines change in a way that affects what agents emit. Batches record
 // which version the agent used so prompt regressions can be traced.
-export const PROMPT_VERSION = '2026-09-11.3'
+export const PROMPT_VERSION = '2026-09-12.1'
 
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
 const PeriodCode = z.string().regex(/^\d{4}-\d{2}$/, 'expected YYYY-MM')
@@ -100,11 +102,34 @@ export const BankLineSchema = z.object({
   balanceAfter: Money.nullable(),
 })
 
+export const BankLineMappingSchema = z.object({
+  target: z.enum(['OWNER_PAYMENT', 'VENDOR_SETTLEMENT', 'CASH_TX', 'IGNORE']).describe(
+    'OWNER_PAYMENT = an owner paying the association (credit); VENDOR_SETTLEMENT = the association paying a supplier invoice (debit); CASH_TX = any other movement (bank fees, refunds, transfers); IGNORE = do not book (own-account transfer, already in the books)',
+  ),
+  // OWNER_PAYMENT
+  unitCode: Str.describe('The paying unit: a `units[].code` from the catalogue, never invented; null when the line does not say'),
+  payerName: Str.describe('Payer as printed on the statement'),
+  funds: z.array(z.object({ fundCode: z.string(), amount: Money })).describe('ONLY when the description names funds ("fond rulment 14.52"); otherwise empty — the app spreads the money over the owner\'s open charges itself'),
+  advanceFundCode: Str.describe('Fund credited with any amount beyond what is owed; null = the association default'),
+  cycleCode: PeriodCode.nullable().describe('Month the payment is FOR when the description names one ("Tabel aprilie 2026" → 2026-04); null = the archive period'),
+  // VENDOR_SETTLEMENT
+  invoiceNumbers: z.array(z.string()).describe('Invoice numbers quoted in the description ("fct 1015433016/04.03.2026" → "1015433016")'),
+  vendorName: Str,
+  // CASH_TX
+  fundCode: Str.describe('Fund for a CASH_TX (e.g. EXPENSES for bank commissions)'),
+  expenseTypeCode: Str,
+  kind: z.enum(['PAYMENT', 'TRANSFER', 'ADJUSTMENT', 'OTHER']).nullable(),
+  // IGNORE
+  reason: Str,
+  /** cash account code when the statement account is ambiguous; null = resolved by the statement currency */
+  accountCode: Str,
+})
+
 export const BankLineRecordSchema = z.object({
   kind: z.literal('BANK_LINE'),
   ...recordBase,
   bankLine: BankLineSchema,
-  mapping: z.null().describe('Reserved for a later contract version — always null in v1'),
+  mapping: BankLineMappingSchema.nullable().describe('How this line lands in the books; null only if you cannot tell at all'),
 })
 
 export const OtherRecordSchema = z.object({
@@ -116,7 +141,7 @@ export const OtherRecordSchema = z.object({
 export const IntakeRecordSchema = z.discriminatedUnion('kind', [InvoiceRecordSchema, BankLineRecordSchema, OtherRecordSchema])
 
 export const ImportPayloadSchema = z.object({
-  contractVersion: z.literal(CONTRACT_VERSION),
+  contractVersion: z.enum(ACCEPTED_CONTRACT_VERSIONS),
   promptVersion: Str.describe('Copy from the prompt pack'),
   community: Str.describe('Community code from the prompt pack'),
   periodCode: PeriodCode.describe('Target period from the prompt pack'),
@@ -134,6 +159,7 @@ export type IntakeRecordInput = z.infer<typeof IntakeRecordSchema>
 export type InvoiceRecordInput = z.infer<typeof InvoiceRecordSchema>
 export type BankLineRecordInput = z.infer<typeof BankLineRecordSchema>
 export type InvoiceMapping = z.infer<typeof InvoiceMappingSchema>
+export type BankLineMapping = z.infer<typeof BankLineMappingSchema>
 export type Allocation = z.infer<typeof AllocationSchema>
 
 export const contractJsonSchema = () => z.toJSONSchema(ImportPayloadSchema, { target: 'draft-7' })
@@ -142,8 +168,9 @@ export const contractJsonSchema = () => z.toJSONSchema(ImportPayloadSchema, { ta
 
 const MONEY_KEYS = new Set(['quantity', 'unitPrice', 'net', 'vat', 'gross', 'amount', 'balanceAfter'])
 const DATE_KEYS = new Set(['issueDate', 'dueDate', 'date', 'valueDate'])
-const PERIOD_KEYS = new Set(['servicePeriodStart', 'servicePeriodEnd', 'periodCode'])
+const PERIOD_KEYS = new Set(['servicePeriodStart', 'servicePeriodEnd', 'periodCode', 'cycleCode'])
 const STRING_KEYS = new Set([
+  'unitCode', 'payerName', 'advanceFundCode', 'reason', 'accountCode',
   'vendorName', 'vendorTaxId', 'vendorIban', 'number', 'currency', 'description', 'reason', 'vendorId', 'name',
   'taxId', 'iban', 'fundCode', 'expenseTypeCode', 'invoiceNumber', 'sourceFile', 'sourceSha256', 'rationale',
   'bankName', 'counterpartyName', 'counterpartyIban', 'reference', 'note', 'agent', 'generatedAt',
@@ -242,7 +269,11 @@ export function normalizePayload(raw: unknown): unknown {
         'date', 'valueDate', 'currency', 'counterpartyName', 'counterpartyIban', 'description', 'reference', 'balanceAfter',
       ])
       r.bankLine.account = fillNull(r.bankLine.account ?? {}, ['iban', 'bankName'])
-      r.mapping = null
+      if (r.mapping && typeof r.mapping === 'object' && r.mapping.target) {
+        r.mapping = fillNull(r.mapping, ['unitCode', 'payerName', 'advanceFundCode', 'cycleCode', 'vendorName', 'fundCode', 'expenseTypeCode', 'kind', 'reason', 'accountCode'])
+        r.mapping.funds = Array.isArray(r.mapping.funds) ? r.mapping.funds : []
+        r.mapping.invoiceNumbers = Array.isArray(r.mapping.invoiceNumbers) ? r.mapping.invoiceNumbers.map(String) : []
+      } else r.mapping = null
     } else if (r.kind === 'OTHER') {
       r.note ??= null
     }

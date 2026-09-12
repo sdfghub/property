@@ -28,9 +28,13 @@ export type IntakeCatalogue = {
     items: Array<{ key: string; label: string; kind: string; expenseTypeCode: string | null; fundCode: string | null }>
   }>
   expenseTypes: Array<{ code: string; name: string; fundCode: string | null }>
-  funds: Array<{ code: string; name: string }>
+  funds: Array<{ id: string; code: string; name: string }>
   vendors: Array<{ id: string; name: string; taxId: string | null; iban: string | null }>
   cashAccounts: Array<{ id: string; code: string; name: string; type: string; currency: string }>
+  /** units with their owner as of the target period — bank-line receipts resolve to a billing entity through these */
+  units: Array<{ id: string; code: string; label: string; billingEntityId: string | null; billingEntityName: string | null; billingEntityCode: string | null }>
+  /** where an owner's overpayment is credited when the line names no fund (EXPENSES when it exists) */
+  defaultAdvanceFundCode: string | null
   unpaidInvoices: Array<{ id: string; number: string | null; vendorName: string | null; gross: number; outstanding: number; dueDate: string | null; templateInstanceId: string | null; intakeRecordId: string | null }>
   recentInvoices: Array<{ id: string; number: string | null; vendorName: string | null; vendorId: string | null; gross: number | null; issueDate: string | null; templateInstanceId: string | null; intakeRecordId: string | null }>
 }
@@ -55,11 +59,11 @@ export class IntakePromptService {
     const period = await this.prisma.period.findUnique({ where: { communityId_code: { communityId, code: periodCode } } })
     if (!period) throw new NotFoundException(`Period ${periodCode} not found`)
 
-    const [templates, instances, expenseTypes, funds, vendors, cashAccounts, unpaid, recent] = await Promise.all([
+    const [templates, instances, expenseTypes, funds, vendors, cashAccounts, unpaid, recent, unitRows, members] = await Promise.all([
       this.prisma.billTemplate.findMany({ where: { communityId }, select: { id: true, code: true, name: true, template: true, order: true } }),
       this.prisma.billTemplateInstance.findMany({ where: { communityId, periodId: period.id }, select: { id: true, templateId: true, state: true, values: true } }),
       this.prisma.expenseType.findMany({ where: { communityId }, select: { code: true, name: true, params: true } }),
-      this.prisma.fund.findMany({ where: { communityId }, select: { code: true, name: true } }),
+      this.prisma.fund.findMany({ where: { communityId }, select: { id: true, code: true, name: true } }),
       this.prisma.vendor.findMany({ where: { communityId }, select: { id: true, name: true, taxId: true, iban: true } }),
       this.prisma.cashAccount.findMany({ where: { communityId, status: 'ACTIVE' }, select: { id: true, code: true, name: true, type: true, currency: true } }),
       this.finance.unpaidVendorInvoices(communityId),
@@ -69,7 +73,13 @@ export class IntakePromptService {
         orderBy: [{ issueDate: 'desc' }],
         take: 300,
       }),
+      this.prisma.unit.findMany({ where: { communityId }, select: { id: true, code: true, name: true, order: true } }),
+      this.prisma.billingEntityMember.findMany({
+        where: { unit: { communityId }, startSeq: { lte: period.seq }, OR: [{ endSeq: null }, { endSeq: { gte: period.seq } }] },
+        select: { unitId: true, billingEntity: { select: { id: true, code: true, name: true } } },
+      }),
     ])
+    const ownerByUnit = new Map(members.map((m) => [m.unitId, m.billingEntity]))
     const stateByTemplate = new Map(instances.map((i) => [i.templateId, i.state]))
     const idByTemplate = new Map(instances.map((i) => [i.templateId, i.id]))
     // unpaid rows come from raw SQL; fetch the two provenance fields the self-dedupe needs
@@ -118,6 +128,13 @@ export class IntakePromptService {
       funds: funds.sort(byCode),
       vendors: vendors.sort((a, b) => a.name.localeCompare(b.name)),
       cashAccounts: cashAccounts.sort(byCode),
+      units: unitRows
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || byCode(a, b))
+        .map((u) => {
+          const be = ownerByUnit.get(u.id) ?? null
+          return { id: u.id, code: u.code, label: u.name ?? u.code.replace(/^.*?-(?=[A-Z]{2,}\s)/, ''), billingEntityId: be?.id ?? null, billingEntityName: be?.name ?? null, billingEntityCode: be?.code ?? null }
+        }),
+      defaultAdvanceFundCode: funds.some((f) => f.code === 'EXPENSES') ? 'EXPENSES' : funds[0]?.code ?? null,
       unpaidInvoices: (unpaid.invoices as any[]).map((r) => ({
         id: r.id,
         number: r.number ?? null,

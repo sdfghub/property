@@ -68,6 +68,6 @@ import { ReportsModule } from '../reports/reports.module';
     CashService,
     PrismaService,
   ],
-  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, MemberAccessService, VendorInvoiceService],
+  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, MemberAccessService, VendorInvoiceService, PaymentService, CashService],
 })
 export class BillingModule {}

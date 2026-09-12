@@ -132,8 +132,23 @@ export function IntakePanel({ communityId }: { communityId: string }) {
     act('batch', async () => { await api.del(`${base}/batches/${selected.batch.id}`); setSelected(null); await loadBatches() })
   }
 
+  const bankSummary = (r: IntakeRecordRow) => {
+    const m = r.effective?.bankLine ? r.effective.mapping : null
+    const res = r.resolved ?? {}
+    if (!m) return r.extracted?.description ?? '—'
+    const target = localized(meta?.intakeBankTargets?.find((x) => x.key === m.target)) || m.target
+    if (m.target === 'OWNER_PAYMENT') {
+      const who = res.unitLabel ? `${res.unitLabel} · ${res.billingEntityName ?? '?'}` : res.suggestedUnitCode ? `${res.suggestedUnitCode}?` : m.unitCode ?? m.payerName ?? '?'
+      const funds = m.funds.map((f) => `${f.fundCode} ${Number(f.amount).toFixed(2)}`).join(', ')
+      return `${target} → ${who}${funds ? ` · ${funds}` : ''}${m.cycleCode ? ` · ${m.cycleCode}` : ''}`
+    }
+    if (m.target === 'VENDOR_SETTLEMENT') return `${target} → ${(res.invoices ?? []).map((x: any) => `${x.vendorName ?? '?'} ${x.number}`).join(', ') || m.invoiceNumbers.join(', ') || m.vendorName || '?'}`
+    if (m.target === 'CASH_TX') return `${target} → ${res.cashFundCode ?? m.fundCode ?? m.expenseTypeCode ?? '?'}${m.kind ? ` · ${m.kind}` : ''}`
+    return `${target}${m.reason ? ` · ${m.reason}` : ''}`
+  }
   const summary = (r: IntakeRecordRow) => {
-    if (r.kind !== 'INVOICE' || !r.effective) return r.kind === 'BANK_LINE' ? `${r.extracted?.date ?? ''} · ${r.extracted?.counterpartyName ?? ''}` : r.extracted?.note ?? ''
+    if (r.kind === 'BANK_LINE') return bankSummary(r)
+    if (r.kind !== 'INVOICE' || !r.effective?.invoice) return r.extracted?.note ?? ''
     const m = r.effective.mapping
     if (m?.allocations?.length) {
       const by: Record<string, string[]> = {}
@@ -206,7 +221,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             </label>
             <span className="muted" style={{ fontSize: 12 }}>{t('intake.import.or', 'or paste below')}</span>
           </div>
-          <textarea className="input" rows={4} placeholder='{ "contractVersion": "intake-import/v1", … }' value={pasted} onChange={(e) => setPasted(e.target.value)} style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12 }} />
+          <textarea className="input" rows={4} placeholder='{ "contractVersion": "intake-import/v2", … }' value={pasted} onChange={(e) => setPasted(e.target.value)} style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 12 }} />
           <div style={{ marginTop: 8 }}>
             <button className="btn small" disabled={!pasted.trim() || busy === 'import'} onClick={importPasted}>{t('intake.import.submit', 'Import pasted JSON')}</button>
           </div>
@@ -259,7 +274,9 @@ export function IntakePanel({ communityId }: { communityId: string }) {
               <tbody>
                 {selected.records.map((r) => {
                   const inv = r.effective?.invoice
-                  const canApprove = r.kind === 'INVOICE' && r.status !== 'APPLIED' && r.status !== 'APPROVED' && r.remaining.length === 0
+                  const actionable = r.kind === 'INVOICE' || r.kind === 'BANK_LINE'
+                  const canApprove = actionable && r.status !== 'APPLIED' && r.status !== 'APPROVED' && r.remaining.length === 0 && (r.kind !== 'BANK_LINE' || (!!r.effective?.mapping && !(r.status === 'SKIPPED' && (r.effective.mapping as any).target === 'IGNORE')))
+                  const lineAmt = r.kind === 'BANK_LINE' ? Number(r.extracted?.amount) || 0 : 0
                   return (
                     <tr key={r.id} onClick={() => setOpen(r)} style={{ cursor: 'pointer' }}>
                       <td>{r.index}</td>
@@ -269,7 +286,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
                       </td>
                       <td style={{ maxWidth: 120 }}>{inv?.vendorName ?? r.extracted?.counterpartyName ?? '—'}</td>
                       <td style={{ maxWidth: 100, wordBreak: 'break-word' }}>{inv?.number ?? r.extracted?.reference ?? '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{inv ? money(inv.gross, inv.currency ?? 'RON') : r.kind === 'BANK_LINE' ? money(r.extracted?.amount, r.extracted?.currency ?? 'RON') : ''}</td>
+                      <td style={{ textAlign: 'right', color: r.kind === 'BANK_LINE' ? (lineAmt < 0 ? 'var(--danger)' : 'var(--success, inherit)') : undefined }}>{inv ? money(inv.gross, inv.currency ?? 'RON') : r.kind === 'BANK_LINE' ? money(lineAmt, r.extracted?.currency ?? 'RON') : ''}</td>
                       <td style={{ maxWidth: 200 }}>{summary(r)}</td>
                       <td>{r.confidence != null && <span className={`badge ${confidenceTone(r.confidence)}`}>{Math.round(r.confidence * 100)}%</span>}</td>
                       <td style={{ fontSize: 12, minWidth: 180 }}>
@@ -281,10 +298,11 @@ export function IntakePanel({ communityId }: { communityId: string }) {
                         ))}
                         {r.error && <div style={{ color: 'var(--danger)' }}>{r.error}</div>}
                         {r.status === 'STAGED' && r.appliedRefs?.waitingFor?.length > 0 && <div className="muted">{t('intake.msg.waitingFor', { types: r.appliedRefs.waitingFor.join(', ') })}</div>}
+                        {r.status === 'APPLIED' && r.appliedRefs?.paymentId && <div className="muted">{money(r.appliedRefs.applied ?? 0, r.extracted?.currency ?? 'RON')} {t('intake.drawer.onCharges', 'on charges')}{(r.appliedRefs.advance ?? 0) > 0 ? ` · ${money(r.appliedRefs.advance, r.extracted?.currency ?? 'RON')} ${t('intake.drawer.asAdvance', 'as advance')}` : ''}</div>}
                         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {canApprove && <button className="btn small" disabled={busy === r.id} onClick={() => approve(r)}>{t('intake.action.approve', 'Approve')}</button>}
                           {r.status !== 'APPLIED' && r.status !== 'SKIPPED' && r.status !== 'STAGED' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => skip(r)}>{t('intake.action.skip', 'Skip')}</button>}
-                          {(r.status === 'SKIPPED' || r.status === 'APPROVED' || r.status === 'STAGED') && r.kind === 'INVOICE' && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
+                          {(r.status === 'SKIPPED' || r.status === 'APPROVED' || r.status === 'STAGED') && actionable && <button className="btn tertiary small" disabled={busy === r.id} onClick={() => reopen(r)}>{t('intake.action.reopen', 'Reopen')}</button>}
                         </div>
                       </td>
                     </tr>

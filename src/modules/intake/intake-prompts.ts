@@ -24,8 +24,11 @@ export function promptCatalogue(c: IntakeCatalogue) {
       items: t.items.map((i) => ({ key: i.key, label: i.label, expenseTypeCode: i.expenseTypeCode })),
     })),
     expenseTypes: c.expenseTypes,
-    funds: c.funds,
+    funds: c.funds.map((f) => ({ code: f.code, name: f.name })),
     vendors: c.vendors,
+    units: c.units.map((u) => ({ code: u.code, label: u.label, owner: u.billingEntityName })),
+    cashAccounts: c.cashAccounts.map((a) => ({ code: a.code, name: a.name, type: a.type, currency: a.currency })),
+    defaultAdvanceFundCode: c.defaultAdvanceFundCode,
     unpaidInvoices: c.unpaidInvoices.map((i) => ({ number: i.number, vendorName: i.vendorName, gross: i.gross, dueDate: i.dueDate })),
     recentInvoices: c.recentInvoices.map((i) => ({ number: i.number, vendorName: i.vendorName, gross: i.gross, issueDate: i.issueDate })),
   }
@@ -123,6 +126,17 @@ ${unpaidTable}
 |---|---|---|---|
 ${recentTable}
 
+### Units and their owners (for bank-statement receipts: echo the \`code\` in \`mapping.unitCode\`)
+
+| code | label | owner (billing entity) |
+|---|---|---|
+${c.units.length ? c.units.map((u) => `| \`${u.code}\` | ${u.label} | ${u.billingEntityName ?? '—'} |`).join('\n') : '| — | (no units) | |'}
+
+### Cash accounts
+
+${c.cashAccounts.map((a) => `- \`${a.code}\` — ${a.name} (${a.type}, ${a.currency})`).join('\n') || '- (none)'}
+Overpayments with no fund named are credited to \`${c.defaultAdvanceFundCode ?? 'EXPENSES'}\`.
+
 ### Machine-readable catalogue
 
 \`\`\`json
@@ -161,9 +175,24 @@ ${c.hints.map((h, i) => `${i + 1}. ${h}`).join('\n')}
    still emit the record but set \`duplicateOf\` and lower confidence.
 8. **Service period**: \`servicePeriodStart\`/\`End\` as \`YYYY-MM\`. Utilities are usually billed for the
    previous month; that is expected — do not "fix" it to ${c.period.code}.
-9. **Bank statements** → one \`BANK_LINE\` record per line with \`mapping: null\` (this contract version
-   only extracts them; the admin settles them separately). Signed amounts: money in positive, money
-   out negative. Include opening/closing balance lines only if they are actual transactions.
+9. **Bank statements** → one \`BANK_LINE\` record per line, signed amount (money in positive, money out
+   negative), the bank's reference verbatim, and a \`mapping\` saying how it lands in the books:
+   - **Money in from an owner** → \`target: "OWNER_PAYMENT"\`. Find the unit in the description ("ap 3",
+     "AP 32", "ap.4(III)", "ap5") and put the matching \`units[].code\` in \`unitCode\`; put the payer as
+     printed in \`payerName\`. Fill \`funds\` ONLY when the text names funds ("Fond rulment 14.52" →
+     \`{ fundCode: "RULMENT", amount: 14.52 }\`; "reparatii" → REPARATII; "reabilitare 2" → REABILITARE_2);
+     otherwise leave it empty — the app spreads the money over the owner's open charges by the
+     association's own rule. If the text names the month it is for ("Tabel aprilie 2026", "luna iunie"),
+     put it in \`cycleCode\`; else null. Cannot tell the unit → \`unitCode: null\` + a warning; the
+     administrator picks.
+   - **Money out to a supplier quoting invoice numbers** ("fct 1015433016/04.03.2026") →
+     \`target: "VENDOR_SETTLEMENT"\`, \`invoiceNumbers: ["1015433016"]\`, \`vendorName\`. These usually settle
+     OLDER invoices from the unpaid table, not this month's.
+   - **Bank fees, refunds, interest, anything else** → \`target: "CASH_TX"\` with \`fundCode\` (bank commissions →
+     \`EXPENSES\`) and \`kind\` (\`OTHER\` for fees).
+   - **Transfers between the association's own accounts, or lines you know are already in the books** →
+     \`target: "IGNORE"\` with a \`reason\`.
+   Include opening/closing balance lines only if they are actual transactions.
 10. **Confidence** is your honest estimate (0–1) that the record is complete and correctly mapped;
     add a one-sentence \`rationale\` and put every doubt into \`warnings\`.
 11. Dates as \`YYYY-MM-DD\`. Currency as an ISO code. Use \`null\` for anything the document does not state.
@@ -203,6 +232,7 @@ export function buildExamplePayload(c: IntakeCatalogue): ImportPayload {
   ]
   const gross = Number(allocations.reduce((s, a) => s + a.amount, 0).toFixed(2)) || 541
   const prev = prevPeriod(c.period.code)
+  const u0 = c.units.find((u) => u.billingEntityId) ?? c.units[0]
   return {
     contractVersion: CONTRACT_VERSION,
     promptVersion: PROMPT_VERSION,
@@ -258,7 +288,77 @@ export function buildExamplePayload(c: IntakeCatalogue): ImportPayload {
           reference: 'FT26183ABCDE',
           balanceAfter: 12850.4,
         },
-        mapping: null,
+        mapping: {
+          target: 'OWNER_PAYMENT',
+          unitCode: u0?.code ?? '400191-C1-U7-AP 7',
+          payerName: 'Popescu Ion',
+          funds: [],
+          advanceFundCode: null,
+          cycleCode: prev,
+          invoiceNumbers: [],
+          vendorName: null,
+          fundCode: null,
+          expenseTypeCode: null,
+          kind: null,
+          reason: null,
+          accountCode: null,
+        },
+      },
+      {
+        kind: 'BANK_LINE',
+        sourceFile: 'extras-cont.pdf',
+        sourceSha256: null,
+        confidence: 0.95,
+        rationale: 'Supplier payment quoting an invoice number that is in the unpaid table.',
+        warnings: [],
+        bankLine: {
+          account: { iban: 'RO49AAAA1B31007593840000', bankName: 'Banca Exemplu' },
+          date: `${c.period.code}-09`,
+          valueDate: `${c.period.code}-09`,
+          amount: -(c.unpaidInvoices[0]?.outstanding ?? 538.95),
+          currency: 'RON',
+          counterpartyName: c.unpaidInvoices[0]?.vendorName ?? 'Furnizor SA',
+          counterpartyIban: 'RO54CCCC0000000000000002',
+          description: `fct ${c.unpaidInvoices[0]?.number ?? '19466015'}/30.04.2026`,
+          reference: 'FT26190X930X',
+          balanceAfter: 12311.45,
+        },
+        mapping: {
+          target: 'VENDOR_SETTLEMENT',
+          unitCode: null,
+          payerName: null,
+          funds: [],
+          advanceFundCode: null,
+          cycleCode: null,
+          invoiceNumbers: [c.unpaidInvoices[0]?.number ?? '19466015'],
+          vendorName: c.unpaidInvoices[0]?.vendorName ?? 'Furnizor SA',
+          fundCode: null,
+          expenseTypeCode: null,
+          kind: null,
+          reason: null,
+          accountCode: null,
+        },
+      },
+      {
+        kind: 'BANK_LINE',
+        sourceFile: 'extras-cont.pdf',
+        sourceSha256: null,
+        confidence: 0.99,
+        rationale: 'Bank transaction fee.',
+        warnings: [],
+        bankLine: {
+          account: { iban: 'RO49AAAA1B31007593840000', bankName: 'Banca Exemplu' },
+          date: `${c.period.code}-09`,
+          valueDate: `${c.period.code}-09`,
+          amount: -6,
+          currency: 'RON',
+          counterpartyName: null,
+          counterpartyIban: null,
+          description: 'Comision tranzactie',
+          reference: 'FT26190X930Y',
+          balanceAfter: 12305.45,
+        },
+        mapping: { target: 'CASH_TX', unitCode: null, payerName: null, funds: [], advanceFundCode: null, cycleCode: null, invoiceNumbers: [], vendorName: null, fundCode: c.defaultAdvanceFundCode ?? 'EXPENSES', expenseTypeCode: null, kind: 'OTHER', reason: null, accountCode: null },
       },
       {
         kind: 'OTHER',

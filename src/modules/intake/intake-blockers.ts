@@ -3,7 +3,7 @@
 // every review save, in `intake:validate`, and again right before apply.
 import { INTAKE_BLOCKER_META } from '../../common/enums-meta'
 import type { IntakeCatalogue } from './intake-prompt.service'
-import type { InvoiceMapping } from './intake-contract'
+import type { BankLineMapping, InvoiceMapping } from './intake-contract'
 
 export type Blocker = { code: string; message: string; path?: string; overridable: boolean }
 
@@ -207,4 +207,201 @@ export function phase2Blocker(kind: string): Blocker {
 export function remainingBlockers(blockers: Blocker[], overrides: string[] | undefined): Blocker[] {
   const ack = new Set(overrides ?? [])
   return blockers.filter((b) => !(b.overridable && ack.has(b.code)))
+}
+
+// ── Bank statement lines ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Idempotency key of a statement line. A bank reference alone is not unique: Libra books the commission
+ * of a transfer under the transfer's own reference ("Comision tranzactie (FT26222VJN8V)"), so the key
+ * carries the absolute amount too. Two lines with the same reference AND amount are a real duplicate.
+ */
+export const bankLineKey = (reference: string | null | undefined, amount: unknown): string | null => {
+  const ref = reference ? String(reference).trim() : ''
+  if (!ref) return null
+  const n = Number(amount)
+  return `${ref}/${Number.isFinite(n) ? Math.abs(n).toFixed(2) : '?'}`
+}
+
+export type BankRefs = {
+  /** line keys (see bankLineKey) already booked as owner payments (Payment.providerRef + amount, or refId 'bank:<key>') */
+  payments: Set<string>
+  /** line keys already booked as vendor settlements (VendorPayment.refId 'bank:<key>') */
+  vendorPayments: Set<string>
+  /** line keys already booked as plain cash transactions (CashTx refType BANK_STATEMENT, refId key) */
+  cashTx: Set<string>
+}
+
+export type BankLineCheckInput = {
+  bankLine: any // BankLine (extracted)
+  mapping: BankLineMapping | null // effective = review ?? proposal
+  confidence: number | null
+  selfId: string
+  /** sibling bank lines in the batch, for in-batch duplicate lines */
+  siblings: Array<{ id: string; lineKey: string | null }>
+  existing: BankRefs
+}
+
+export type ResolvedBankLine = {
+  target: string | null
+  reference: string | null
+  /** idempotency key: `<reference>/<abs amount>` — Libra stamps a transfer's commission with the transfer's reference */
+  lineKey: string | null
+  accountId: string | null
+  accountCode: string | null
+  unitId: string | null
+  unitCode: string | null
+  unitLabel: string | null
+  billingEntityId: string | null
+  billingEntityName: string | null
+  suggestedUnitCode: string | null
+  fundLines: Array<{ fundCode: string; amount: number }>
+  advanceFundCode: string | null
+  cycleCode: string | null
+  invoices: Array<{ id: string; number: string | null; vendorName: string | null; outstanding: number }>
+  outstandingTotal: number
+  cashFundCode: string | null
+  cashKind: string | null
+}
+
+export type BankLineCheckResult = { blockers: Blocker[]; resolved: ResolvedBankLine }
+
+const normName = (s: string | null | undefined) => normalizeVendorName(s)
+/** "ap 3" / "AP 3" / "ap.3" / "ap3" / "ap 4 (III)" → "ap 3" / "ap 4 (iii)" — for unit label matching */
+const normUnitLabel = (s: string | null | undefined) =>
+  String(s ?? '')
+    .toLowerCase()
+    .replace(/\bap(?:artament)?\.?\s*/g, 'ap ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\(\s*/g, ' (')
+    .replace(/\s*\)\s*/g, ')')
+    .trim()
+
+export function checkBankLine(input: BankLineCheckInput, catalogue: IntakeCatalogue): BankLineCheckResult {
+  const { bankLine, mapping } = input
+  const blockers: Blocker[] = []
+  const push = (code: string, message: string, path?: string) => blockers.push({ code, message, path, overridable: isOverridable(code) })
+  const amount = money(bankLine?.amount) ?? 0
+  const reference = bankLine?.reference ? String(bankLine.reference).trim() : null
+  const lineKey = bankLineKey(reference, bankLine?.amount)
+  const resolved: ResolvedBankLine = {
+    target: mapping?.target ?? null, reference, lineKey, accountId: null, accountCode: null, unitId: null, unitCode: null, unitLabel: null,
+    billingEntityId: null, billingEntityName: null, suggestedUnitCode: null, fundLines: [], advanceFundCode: null,
+    cycleCode: null, invoices: [], outstandingTotal: 0, cashFundCode: null, cashKind: null,
+  }
+
+  if (catalogue.period.status !== 'OPEN') push('PERIOD_NOT_OPEN', `Period ${catalogue.period.code} is ${catalogue.period.status}`)
+  if (!mapping || !mapping.target) {
+    push('NO_PROPOSAL', 'No mapping for this bank line', 'mapping')
+    return { blockers, resolved }
+  }
+  if (mapping.target === 'IGNORE') return { blockers, resolved }
+
+  // account: explicit code, else the single BANK account in the statement currency
+  const currency = String(bankLine?.currency ?? 'RON').toUpperCase()
+  const explicit = mapping.accountCode ? catalogue.cashAccounts.find((a) => a.code === mapping.accountCode) : null
+  const candidates = explicit ? [explicit] : catalogue.cashAccounts.filter((a) => a.type === 'BANK' && a.currency.toUpperCase() === currency)
+  if (candidates.length === 1) { resolved.accountId = candidates[0].id; resolved.accountCode = candidates[0].code }
+  else push('ACCOUNT_UNKNOWN', candidates.length ? `${candidates.length} bank accounts in ${currency}` : `No bank account in ${currency}`, 'mapping.accountCode')
+
+  // in-batch duplicate reference (same statement line twice, or the same line in two files)
+  if (lineKey && input.siblings.some((s) => s.id !== input.selfId && s.lineKey && s.lineKey === lineKey)) {
+    push('DUPLICATE_IN_BATCH', `Bank reference ${reference} with this amount appears twice in this import`, 'bankLine.reference')
+  }
+
+  if (mapping.target === 'OWNER_PAYMENT') {
+    if (amount <= 0) push('AMOUNT_SIGN', 'An owner payment must be money in (positive amount)', 'bankLine.amount')
+    if (lineKey && input.existing.payments.has(lineKey)) push('DUPLICATE_PAYMENT', `Payment with bank reference ${reference} already exists`, 'bankLine.reference')
+
+    // unit → owner as of the period
+    let unit = mapping.unitCode ? catalogue.units.find((u) => u.code === mapping.unitCode) ?? null : null
+    if (mapping.unitCode && !unit) {
+      // leniency: the agent may echo the label instead of the code
+      const wanted = normUnitLabel(mapping.unitCode)
+      unit = catalogue.units.find((u) => normUnitLabel(u.label) === wanted) ?? null
+      if (!unit) push('UNIT_UNKNOWN', `Unit "${mapping.unitCode}" does not exist`, 'mapping.unitCode')
+    }
+    if (!mapping.unitCode) {
+      // suggest by payer name ≈ owner name (all payer tokens present in the owner's name, or vice versa)
+      const payer = normName(mapping.payerName ?? bankLine?.counterpartyName)
+      const tokens = payer.split(' ').filter((t) => t.length > 2)
+      const hits = tokens.length >= 2
+        ? catalogue.units.filter((u) => {
+            const owner = normName(u.billingEntityName)
+            if (!owner) return false
+            const ownerTokens = owner.split(' ').filter((t) => t.length > 2)
+            return tokens.every((t) => ownerTokens.includes(t)) || ownerTokens.every((t) => tokens.includes(t))
+          })
+        : []
+      const distinctOwners = new Set(hits.map((h) => h.billingEntityId))
+      if (hits.length && distinctOwners.size === 1) {
+        unit = hits[0]
+        resolved.suggestedUnitCode = unit.code
+        push('UNIT_SUGGESTED', `No unit on the line; "${mapping.payerName ?? bankLine?.counterpartyName}" matches owner ${unit.billingEntityName} (${unit.label})`, 'mapping.unitCode')
+      } else {
+        push('UNIT_UNSPECIFIED', hits.length ? `Payer matches ${distinctOwners.size} different owners` : 'No unit on the line and no owner matches the payer', 'mapping.unitCode')
+      }
+    }
+    if (unit) {
+      resolved.unitId = unit.id; resolved.unitCode = unit.code; resolved.unitLabel = unit.label
+      if (!unit.billingEntityId) push('OWNER_UNKNOWN', `Unit ${unit.label} has no billing entity in ${catalogue.period.code}`, 'mapping.unitCode')
+      else { resolved.billingEntityId = unit.billingEntityId; resolved.billingEntityName = unit.billingEntityName }
+    }
+
+    // named funds (optional) + advance fund
+    let sum = 0
+    for (const [i, f] of (mapping.funds ?? []).entries()) {
+      if (!catalogue.funds.some((x) => x.code === f.fundCode)) push('FUND_UNKNOWN', `Fund "${f.fundCode}" does not exist`, `mapping.funds[${i}]`)
+      const amt = money(f.amount) ?? 0
+      sum += amt
+      resolved.fundLines.push({ fundCode: f.fundCode, amount: r2(amt) })
+    }
+    if (sum > amount + 0.005) push('FUNDS_EXCEED_AMOUNT', `named funds sum to ${r2(sum)}, line amount is ${r2(amount)}`, 'mapping.funds')
+    const dominant = resolved.fundLines.length ? [...resolved.fundLines].sort((a, b) => b.amount - a.amount)[0].fundCode : null
+    resolved.advanceFundCode = mapping.advanceFundCode ?? dominant ?? catalogue.defaultAdvanceFundCode
+    if (resolved.advanceFundCode && !catalogue.funds.some((x) => x.code === resolved.advanceFundCode)) push('FUND_UNKNOWN', `Advance fund "${resolved.advanceFundCode}" does not exist`, 'mapping.advanceFundCode')
+    if (!resolved.advanceFundCode) push('FUND_UNKNOWN', 'No fund to credit an overpayment to', 'mapping.advanceFundCode')
+
+    // cycle month
+    resolved.cycleCode = mapping.cycleCode ?? catalogue.period.code
+    if (mapping.cycleCode) {
+      const p1 = prevPeriodCode(catalogue.period.code), p2 = prevPeriodCode(p1)
+      if (![catalogue.period.code, p1, p2].includes(mapping.cycleCode)) push('CYCLE_MISMATCH', `cycle ${mapping.cycleCode} is not ${catalogue.period.code} / ${p1} / ${p2}`, 'mapping.cycleCode')
+    }
+  }
+
+  if (mapping.target === 'VENDOR_SETTLEMENT') {
+    if (amount >= 0) push('AMOUNT_SIGN', 'A supplier settlement must be money out (negative amount)', 'bankLine.amount')
+    if (lineKey && input.existing.vendorPayments.has(lineKey)) push('DUPLICATE_SETTLEMENT', `Settlement with bank reference ${reference} already exists`, 'bankLine.reference')
+    const wanted = (mapping.invoiceNumbers ?? []).map(normalizeInvoiceNumber).filter(Boolean)
+    const hits = catalogue.unpaidInvoices.filter((i) => i.number && wanted.some((w) => normalizeInvoiceNumber(i.number!).endsWith(w) || w.endsWith(normalizeInvoiceNumber(i.number!))))
+    const vendors = new Set(hits.map((h) => normName(h.vendorName)))
+    if (!wanted.length || !hits.length) push('INVOICE_NOT_FOUND', wanted.length ? `No unpaid invoice matches ${mapping.invoiceNumbers.join(', ')}` : 'No invoice number quoted', 'mapping.invoiceNumbers')
+    else if (vendors.size > 1) push('INVOICE_AMBIGUOUS', `Quoted number(s) match invoices of ${vendors.size} vendors`, 'mapping.invoiceNumbers')
+    else {
+      resolved.invoices = hits.map((h) => ({ id: h.id, number: h.number, vendorName: h.vendorName, outstanding: r2(h.outstanding) }))
+      resolved.outstandingTotal = r2(hits.reduce((s, h) => s + h.outstanding, 0))
+      if (-amount > resolved.outstandingTotal + 0.01) push('SETTLEMENT_EXCEEDS_OUTSTANDING', `paid ${r2(-amount)}, outstanding ${resolved.outstandingTotal}`, 'bankLine.amount')
+    }
+    resolved.cashFundCode = catalogue.defaultAdvanceFundCode // where an INVOICE_NOT_FOUND settlement lands on ack
+  }
+
+  if (mapping.target === 'CASH_TX') {
+    if (lineKey && input.existing.cashTx.has(lineKey)) push('DUPLICATE_CASH_TX', `Cash transaction with bank reference ${reference} already exists`, 'bankLine.reference')
+    let fundCode = mapping.fundCode ?? null
+    if (!fundCode && mapping.expenseTypeCode) {
+      const et = catalogue.expenseTypes.find((e) => e.code === mapping.expenseTypeCode)
+      if (!et) push('UNKNOWN_EXPENSE_TYPE', `Expense type "${mapping.expenseTypeCode}" does not exist`, 'mapping.expenseTypeCode')
+      else if (!et.fundCode) push('EXPENSE_TYPE_NO_FUND', `Expense type ${et.code} has no fundCode configured`, 'mapping.expenseTypeCode')
+      else fundCode = et.fundCode
+    }
+    if (!fundCode) push('FUND_UNKNOWN', 'A cash transaction needs a fund', 'mapping.fundCode')
+    else if (!catalogue.funds.some((x) => x.code === fundCode)) push('FUND_UNKNOWN', `Fund "${fundCode}" does not exist`, 'mapping.fundCode')
+    resolved.cashFundCode = fundCode
+    resolved.cashKind = mapping.kind ?? 'OTHER'
+  }
+
+  if (amount === 0) push('AMOUNT_SIGN', 'Zero amount', 'bankLine.amount')
+  if (input.confidence != null && input.confidence < 0.6) push('LOW_CONFIDENCE', `agent confidence ${input.confidence}`)
+  return { blockers, resolved }
 }

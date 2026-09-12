@@ -810,6 +810,13 @@ export class PaymentService {
     }
   }
 
+  private async periodIdByCode(communityId: string, code: string) {
+    const c = await this.prisma.community.findFirst({ where: { OR: [{ id: communityId }, { code: communityId }] }, select: { id: true } })
+    const p = await this.prisma.period.findUnique({ where: { communityId_code: { communityId: c?.id ?? communityId, code } }, select: { id: true } })
+    if (!p) throw new BadRequestException(`Period ${code} not found`)
+    return p.id
+  }
+
   private async latestPeriodId(communityId: string) {
     const p = await this.prisma.period.findFirst({
       where: { communityId },
@@ -825,8 +832,16 @@ export class PaymentService {
     const beId = await this.ensureBillingEntity(communityId, body.billingEntityId)
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount must be positive')
-    const periodId = await this.latestPeriodId(communityId)
+    // Default: the latest period. Callers importing a statement for a given month (intake) pass
+    // `periodCode` so the ledger legs land in that period rather than whatever is newest.
+    const periodId = body.periodCode ? await this.periodIdByCode(communityId, String(body.periodCode)) : await this.latestPeriodId(communityId)
     const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : null
+    // Provenance for imported payments (register/intake): `provider`, `providerRef` (the bank reference)
+    // and `providerMeta` (e.g. cycleCode, which scopes the payment to one collection cycle on reapply).
+    const provenance: any = {}
+    if (body.provider !== undefined) provenance.provider = body.provider ?? null
+    if (body.providerRef !== undefined) provenance.providerRef = body.providerRef ?? null
+    if (body.providerMeta !== undefined) provenance.providerMeta = body.providerMeta ?? null
 
     // idempotent on refId if provided
     let payment = body.refId
@@ -853,6 +868,7 @@ export class PaymentService {
           method: body.method ?? undefined,
           status: 'POSTED',
           allocationSpec,
+          ...provenance,
         },
       })
     } else {
@@ -868,6 +884,7 @@ export class PaymentService {
           refId: body.refId ?? null,
           status: 'POSTED',
           allocationSpec,
+          ...provenance,
         },
       })
     }

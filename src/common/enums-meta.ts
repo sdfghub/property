@@ -197,6 +197,13 @@ export const INTAKE_RECORD_KIND_META: EnumMeta[] = [
   { key: 'OTHER', label: 'Alt document', labelEn: 'Other document' },
 ]
 
+export const INTAKE_BANK_TARGET_META: EnumMeta[] = [
+  { key: 'OWNER_PAYMENT', label: 'Încasare proprietar', labelEn: 'Owner receipt', hint: 'Plată de la un proprietar; se repartizează pe debitele deschise după regula asociației.', hintEn: 'Payment from an owner; spread over open charges by the community rule.' },
+  { key: 'VENDOR_SETTLEMENT', label: 'Plată factură', labelEn: 'Vendor settlement', hint: 'Achită una sau mai multe facturi de furnizor.', hintEn: 'Settles one or more vendor invoices.' },
+  { key: 'CASH_TX', label: 'Tranzacție de casă', labelEn: 'Cash transaction', hint: 'Comisioane, transferuri, ajustări — pe un fond, fără factură.', hintEn: 'Fees, transfers, adjustments — on a fund, without an invoice.' },
+  { key: 'IGNORE', label: 'Ignoră', labelEn: 'Ignore', hint: 'Linia nu se contabilizează (ex. transfer între conturile proprii).', hintEn: 'The line is not booked (e.g. a transfer between own accounts).' },
+]
+
 export const INTAKE_RECORD_STATUS_META: EnumMeta[] = [
   { key: 'PROPOSED', label: 'Propus', labelEn: 'Proposed', hint: 'Fără probleme detectate; poate fi aprobat.', hintEn: 'No issues detected; can be approved.' },
   { key: 'NEEDS_REVIEW', label: 'De verificat', labelEn: 'Needs review', tone: 'warning', hint: 'Are blocaje sau avertismente de rezolvat.', hintEn: 'Has blockers or warnings to resolve.' },
@@ -217,7 +224,25 @@ export const INTAKE_BLOCKER_META: (EnumMeta & { overridable: boolean })[] = [
   { key: 'UNKNOWN_EXPENSE_TYPE', overridable: false, tone: 'negative', label: 'Tip de cheltuială necunoscut', labelEn: 'Unknown expense type' },
   { key: 'PERIOD_NOT_OPEN', overridable: false, tone: 'negative', label: 'Perioada nu este deschisă', labelEn: 'Period not open', hint: 'Importul se aplică doar într-o perioadă OPEN.', hintEn: 'Intake applies only into an OPEN period.' },
   { key: 'TEMPLATE_ALREADY_SUBMITTED', overridable: false, tone: 'negative', label: 'Template deja trimis', labelEn: 'Template already submitted', hint: 'Există deja o factură creată din acest template în perioada aleasă.', hintEn: 'An invoice was already created from this template in the chosen period.' },
-  { key: 'PHASE2_UNSUPPORTED', overridable: false, label: 'Neacceptat în v1', labelEn: 'Not supported in v1', hint: 'Liniile de extras bancar și alte documente se pot doar omite deocamdată.', hintEn: 'Bank statement lines and other documents can only be skipped for now.' },
+  { key: 'PHASE2_UNSUPPORTED', overridable: false, label: 'Neacceptat', labelEn: 'Not supported', hint: 'Acest tip de document se poate doar omite.', hintEn: 'This kind of document can only be skipped.' },
+  // bank lines — hard
+  { key: 'NO_PROPOSAL', overridable: false, tone: 'negative', label: 'Fără propunere', labelEn: 'No proposal', hint: 'Agentul nu a spus cum se contabilizează linia — completați în panou.', hintEn: 'The agent gave no mapping for this line — fill it in the drawer.' },
+  { key: 'ACCOUNT_UNKNOWN', overridable: false, tone: 'negative', label: 'Cont bancar nerezolvat', labelEn: 'Cash account unresolved', hint: 'Niciun cont (sau mai multe) cu moneda extrasului — alegeți contul.', hintEn: 'No cash account (or several) for the statement currency — pick the account.' },
+  { key: 'UNIT_UNKNOWN', overridable: false, tone: 'negative', label: 'Apartament necunoscut', labelEn: 'Unknown unit', hint: 'Codul de apartament nu există în asociație.', hintEn: 'The unit code does not exist in this community.' },
+  { key: 'UNIT_UNSPECIFIED', overridable: false, tone: 'negative', label: 'Apartament nespecificat', labelEn: 'Unit not identified', hint: 'Linia nu spune ce apartament plătește și niciun proprietar nu se potrivește cu plătitorul — alegeți apartamentul.', hintEn: 'The line does not say which unit pays and no owner matches the payer — pick the unit.' },
+  { key: 'OWNER_UNKNOWN', overridable: false, tone: 'negative', label: 'Fără proprietar în perioadă', labelEn: 'No owner in period', hint: 'Apartamentul nu are entitate de facturare în perioada țintă.', hintEn: 'The unit has no billing entity as of the target period.' },
+  { key: 'FUND_UNKNOWN', overridable: false, tone: 'negative', label: 'Fond necunoscut', labelEn: 'Unknown fund' },
+  { key: 'FUNDS_EXCEED_AMOUNT', overridable: false, tone: 'negative', label: 'Fondurile depășesc suma', labelEn: 'Named funds exceed the amount' },
+  { key: 'AMOUNT_SIGN', overridable: false, tone: 'negative', label: 'Semn greșit', labelEn: 'Wrong sign', hint: 'Încasările de la proprietari sunt intrări; plățile către furnizori sunt ieșiri.', hintEn: 'Owner receipts are money in; supplier settlements are money out.' },
+  { key: 'DUPLICATE_PAYMENT', overridable: false, tone: 'negative', label: 'Încasare deja înregistrată', labelEn: 'Payment already booked', hint: 'O încasare cu această referință bancară există deja (ex. importată din registrul de casă).', hintEn: 'A payment with this bank reference already exists (e.g. imported from the cash register).' },
+  { key: 'DUPLICATE_SETTLEMENT', overridable: false, tone: 'negative', label: 'Plată furnizor deja înregistrată', labelEn: 'Settlement already booked' },
+  { key: 'DUPLICATE_CASH_TX', overridable: false, tone: 'negative', label: 'Tranzacție deja înregistrată', labelEn: 'Cash transaction already booked' },
+  { key: 'INVOICE_AMBIGUOUS', overridable: false, tone: 'negative', label: 'Factură ambiguă', labelEn: 'Ambiguous invoice', hint: 'Numărul citat se potrivește cu facturi ale mai multor furnizori — alegeți factura.', hintEn: 'The quoted number matches invoices of several vendors — pick the invoice.' },
+  // bank lines — acknowledgeable
+  { key: 'UNIT_SUGGESTED', overridable: true, tone: 'warning', label: 'Apartament dedus din plătitor', labelEn: 'Unit inferred from payer', hint: 'Linia nu numește apartamentul; a fost dedus din numele plătitorului — confirmați.', hintEn: 'The line names no unit; it was inferred from the payer name — confirm.' },
+  { key: 'CYCLE_MISMATCH', overridable: true, tone: 'warning', label: 'Luna încasării diferă', labelEn: 'Cycle month differs', hint: 'Luna numită în descriere nu este perioada țintă sau una recentă.', hintEn: 'The month named in the description is not the target period or a recent one.' },
+  { key: 'INVOICE_NOT_FOUND', overridable: true, tone: 'warning', label: 'Factura nu e în evidență', labelEn: 'Invoice not in the books', hint: 'Numărul citat nu e printre facturile neplătite — la confirmare se înregistrează ca plată din fond, fără factură.', hintEn: 'The quoted number is not among unpaid invoices — on ack it is booked as a fund payment without an invoice.' },
+  { key: 'SETTLEMENT_EXCEEDS_OUTSTANDING', overridable: true, tone: 'warning', label: 'Plata depășește restul de plată', labelEn: 'Settlement exceeds outstanding' },
   // overridable — admin can acknowledge on approve
   { key: 'VENDOR_UNKNOWN', overridable: true, tone: 'warning', label: 'Furnizor necunoscut', labelEn: 'Unknown vendor', hint: 'Furnizorul va fi creat la aplicare.', hintEn: 'The vendor will be created on apply.' },
   { key: 'VENDOR_MISMATCH', overridable: true, tone: 'warning', label: 'Furnizor diferit de template', labelEn: 'Vendor differs from template', hint: 'Template-ul are alt furnizor configurat; factura se creează pe furnizorul template-ului.', hintEn: 'The template is configured for another vendor; the invoice is created on the template vendor.' },
@@ -252,6 +277,7 @@ export const COMMUNITY_METADATA = {
   intakeRecordKinds: INTAKE_RECORD_KIND_META,
   intakeRecordStatuses: INTAKE_RECORD_STATUS_META,
   intakeBlockers: INTAKE_BLOCKER_META,
+  intakeBankTargets: INTAKE_BANK_TARGET_META,
 }
 
 /** Helper for the validation Sets that used to hardcode their own code lists. */

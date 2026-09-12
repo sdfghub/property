@@ -26,6 +26,7 @@ export type CommunityMetadata = {
   intakeRecordKinds?: EnumMeta[]
   intakeRecordStatuses?: EnumMeta[]
   intakeBlockers?: (EnumMeta & { overridable: boolean })[]
+  intakeBankTargets?: EnumMeta[]
 }
 
 export const labelOf = (list: EnumMeta[] | undefined, key: string): string =>

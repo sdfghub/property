@@ -2,9 +2,11 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../user/prisma.service'
 import { TemplateService } from '../billing/template.service'
 import { VendorInvoiceService } from '../billing/vendor-invoice.service'
+import { PaymentService } from '../billing/payment.service'
+import { CashService } from '../billing/cash.service'
 import { IntakeImportService } from './intake-import.service'
 import { IntakePromptService, type IntakeCatalogue } from './intake-prompt.service'
-import { remainingBlockers, type Blocker } from './intake-blockers'
+import { remainingBlockers, type BankRefs, type Blocker } from './intake-blockers'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
@@ -20,6 +22,14 @@ export type AppliedRefs = {
   vendorInvoiceIds: string[]
   vendorInvoiceDocIds: string[]
   standaloneInvoiceId?: string | null
+  /** bank lines: what the line became */
+  paymentId?: string | null
+  vendorPaymentIds?: string[]
+  cashTxId?: string | null
+  applied?: number | null
+  remaining?: number | null
+  advance?: number | null
+  target?: string | null
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -37,6 +47,8 @@ export class IntakeApplyService {
     private readonly prisma: PrismaService,
     private readonly templates: TemplateService,
     private readonly invoices: VendorInvoiceService,
+    private readonly payments: PaymentService,
+    private readonly cash: CashService,
     private readonly importer: IntakeImportService,
     private readonly prompt: IntakePromptService,
   ) {}
@@ -49,26 +61,38 @@ export class IntakeApplyService {
 
     // Precondition enforced HERE, not only at import: saveBillTemplateState silently reopens a PREPARED /
     // CLOSED period (template.service.ts, "Reopening any template moves the period back to OPEN").
-    const catalogue = await this.prompt.buildCatalogue(community.id, batch.period.code)
+    let catalogue = await this.prompt.buildCatalogue(community.id, batch.period.code)
     if (catalogue.period.status !== 'OPEN') {
       throw new ConflictException({ message: `Period ${catalogue.period.code} is ${catalogue.period.status}; intake applies only into OPEN periods`, blockers: [{ code: 'PERIOD_NOT_OPEN', overridable: false }] })
     }
 
     // FAILED records were approved before they failed — retrying is the fix; STAGED ones are waiting for
     // meter readings and get finalised (FILLED → SUBMITTED) by the same apply once those exist
-    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED', 'STAGED'] }, kind: 'INVOICE' }
+    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED', 'STAGED'] }, kind: { in: ['INVOICE', 'BANK_LINE'] } }
     if (recordIds?.length) where.id = { in: recordIds }
-    const records = await this.prisma.intakeRecord.findMany({ where, orderBy: { index: 'asc' } })
-    if (!records.length) return { applied: [], failed: [], batchStatus: batch.status }
+    const all = await this.prisma.intakeRecord.findMany({ where, orderBy: { index: 'asc' } })
+    // invoices first: a settlement in the same batch may target an invoice this batch creates
+    const records = [...all.filter((r) => r.kind === 'INVOICE'), ...all.filter((r) => r.kind === 'BANK_LINE')]
+    if (!records.length) return { applied: [], staged: [], failed: [], batchStatus: batch.status }
 
     await this.prisma.intakeBatch.update({ where: { id: batch.id }, data: { status: 'APPLYING', error: null } })
     const applied: Array<{ recordId: string; appliedRefs: AppliedRefs }> = []
     const staged: Array<{ recordId: string; waitingFor: string[] }> = []
     const failed: Array<{ recordId: string; error: string }> = []
+    let bankRefs: BankRefs | null = null
     try {
       for (const record of records) {
         try {
-          const refs = await this.applyRecord(record, catalogue, batch, roles)
+          if (record.kind === 'BANK_LINE' && !bankRefs) {
+            // invoices are done: refresh the catalogue (unpaid list) and load the booked bank references once
+            catalogue = await this.prompt.buildCatalogue(community.id, batch.period.code)
+            bankRefs = await this.importer.loadBankRefs(community.id, records.filter((r) => r.kind === 'BANK_LINE').map((r) => this.importer.toInput(r)))
+          }
+          const refs = record.kind === 'BANK_LINE' ? await this.applyBankLine(record, catalogue, batch, bankRefs!) : await this.applyRecord(record, catalogue, batch, roles)
+          if (refs.target === 'IGNORE') {
+            await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: 'SKIPPED', appliedRefs: refs as any, error: null } })
+            continue
+          }
           if (refs.waitingFor?.length) {
             await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: 'STAGED', appliedRefs: refs as any, error: null } })
             staged.push({ recordId: record.id, waitingFor: refs.waitingFor })
@@ -242,6 +266,112 @@ export class IntakeApplyService {
     if (doc) refs.vendorInvoiceDocIds.push(doc)
     await persistRefs()
     return refs
+  }
+
+  // ── one bank line ─────────────────────────────────────────────────────────────────────────────
+
+  private async applyBankLine(record: any, catalogue: IntakeCatalogue, batch: any, bankRefs: BankRefs): Promise<AppliedRefs> {
+    if (record.status === 'APPLIED') throw new ConflictException('Record is already applied')
+    const rawWarnings = (batch.raw as any)?.records?.[record.index]?.warnings
+    const siblings = await this.prisma.intakeRecord.findMany({ where: { batchId: batch.id, kind: 'BANK_LINE' }, select: { id: true, index: true, extracted: true, proposal: true, review: true, sourceFile: true, sourceSha256: true, confidence: true, rationale: true, kind: true } })
+    const rows = siblings.map((r) => ({ id: r.id, index: r.index, input: this.importer.toInput(r as any, r.id === record.id ? rawWarnings : undefined), review: (r.review as any) ?? null }))
+    const checked = this.importer.checkRecords(rows, catalogue, bankRefs).find((c) => c.index === record.index)!
+    const left = remainingBlockers(checked.blockers as Blocker[], (record.review as any)?.overrides ?? [])
+    if (left.length) throw new ConflictException(`Blocked: ${left.map((b) => `${b.code} (${b.message})`).join('; ')}`)
+
+    const line = record.extracted ?? {}
+    const mapping: any = (record.review as any)?.mapping ?? record.proposal ?? {}
+    const res: any = checked.resolved ?? {}
+    const reference: string | null = res.reference ?? null
+    const lineKey: string | null = res.lineKey ?? null
+    // idempotency: `bank:<reference>/<amount>` (a commission shares its transfer's reference), else the record
+    const refKey = lineKey ? `bank:${lineKey}` : `intake:${record.id}`
+    const amount = Number(line.amount ?? 0)
+    const ts = line.date ? new Date(line.date) : new Date()
+    const memo = [line.counterpartyName, line.description].filter(Boolean).join(' — ').slice(0, 500) || null
+    const provenance = { intakeBatchId: batch.id, intakeRecordId: record.id, sourceFile: record.sourceFile ?? null, bankReference: reference }
+    const refs: AppliedRefs = { attemptedTemplates: [], templateInstanceIds: [], vendorInvoiceIds: [], vendorInvoiceDocIds: [], target: mapping.target ?? null }
+    const fundId = (code: string | null) => (code ? catalogue.funds.find((f) => f.code === code)?.id ?? null : null)
+
+    if (mapping.target === 'IGNORE') return refs
+
+    if (mapping.target === 'OWNER_PAYMENT') {
+      // the same primitive as a hand-recorded receipt. No named funds → one advance line, and the engine
+      // spreads the whole amount by the community strategy. Named funds → fixed lines for them, then a
+      // fund-less fixed line for the remainder (FIFO over every open charge — a fixed line's leftover
+      // would otherwise go straight to advance), and the advance line catches what nothing consumed.
+      const spec: any[] = (res.fundLines ?? []).map((l: any) => ({ fundId: fundId(l.fundCode), amount: l.amount })).filter((l: any) => l.fundId)
+      const named = r2(spec.reduce((s: number, l: any) => s + Number(l.amount || 0), 0))
+      if (spec.length && amount - named > 0.005) spec.push({ amount: r2(amount - named) })
+      const advanceFundId = fundId(res.advanceFundCode)
+      if (!advanceFundId) throw new ConflictException('No advance fund resolved')
+      spec.push({ advance: true, fundId: advanceFundId })
+      const r = await this.payments.createOrApply(catalogue.community.id, {
+        billingEntityId: res.billingEntityId,
+        amount,
+        currency: line.currency ?? 'RON',
+        accountId: res.accountId,
+        ts,
+        method: 'BANK',
+        refId: refKey,
+        provider: 'intake',
+        providerRef: reference,
+        providerMeta: { cycleCode: res.cycleCode ?? catalogue.period.code, ...provenance },
+        periodCode: catalogue.period.code,
+        allocationSpec: spec,
+      })
+      refs.paymentId = r.payment?.id ?? null
+      refs.applied = r.applied ?? null
+      refs.remaining = r.remaining ?? null
+      refs.advance = r.advance ?? null
+      if (lineKey) bankRefs.payments.add(lineKey)
+      return refs
+    }
+
+    if (mapping.target === 'VENDOR_SETTLEMENT') {
+      const invoices: Array<{ id: string; outstanding: number }> = res.invoices ?? []
+      if (!invoices.length) {
+        // INVOICE_NOT_FOUND acknowledged: book the outflow on the default fund, without an invoice
+        const fid = fundId(res.cashFundCode)
+        if (!fid) throw new ConflictException('No fund for an unmatched settlement')
+        const tx = await this.createCashTxOnce(catalogue.community.id, { accountId: res.accountId, fundId: fid, amount: Math.abs(amount), direction: 'OUT', kind: 'PAYMENT', ts, memo, reference: lineKey, meta: provenance })
+        refs.cashTxId = tx.id
+        if (lineKey) bankRefs.cashTx.add(lineKey)
+        return refs
+      }
+      // split the payment over the matched invoices, oldest first; the last one absorbs any overpayment
+      let left = Math.abs(amount)
+      refs.vendorPaymentIds = []
+      for (const [i, inv] of invoices.entries()) {
+        const share = i === invoices.length - 1 ? r2(left) : r2(Math.min(left, inv.outstanding))
+        if (share <= 0) continue
+        const existing = await this.prisma.vendorPayment.findFirst({ where: { communityId: catalogue.community.id, refId: refKey, invoiceId: inv.id }, select: { id: true } })
+        if (existing) { refs.vendorPaymentIds.push(existing.id); left = r2(left - share); continue }
+        const vp: any = await this.invoices.createVendorPayment(catalogue.community.id, inv.id, { amount: share, accountId: res.accountId, ts, method: 'BANK', refId: refKey, currency: line.currency ?? 'RON' })
+        refs.vendorPaymentIds.push(vp?.id ?? vp?.payment?.id ?? null)
+        left = r2(left - share)
+      }
+      if (lineKey) bankRefs.vendorPayments.add(lineKey)
+      return refs
+    }
+
+    if (mapping.target === 'CASH_TX') {
+      const fid = fundId(res.cashFundCode)
+      if (!fid) throw new ConflictException('No fund for the cash transaction')
+      const tx = await this.createCashTxOnce(catalogue.community.id, { accountId: res.accountId, fundId: fid, amount: Math.abs(amount), direction: amount < 0 ? 'OUT' : 'IN', kind: res.cashKind ?? 'OTHER', ts, memo, reference: lineKey, meta: provenance })
+      refs.cashTxId = tx.id
+      if (lineKey) bankRefs.cashTx.add(lineKey)
+      return refs
+    }
+    throw new ConflictException(`Unknown bank-line target ${mapping.target}`)
+  }
+
+  private async createCashTxOnce(communityId: string, p: { accountId: string; fundId: string; amount: number; direction: 'IN' | 'OUT'; kind: string; ts: Date; memo: string | null; reference: string | null; meta: any }) {
+    if (p.reference) {
+      const existing = await this.prisma.cashTx.findFirst({ where: { communityId, refType: 'BANK_STATEMENT', refId: p.reference, direction: p.direction, fundId: p.fundId }, select: { id: true } })
+      if (existing) return existing
+    }
+    return this.cash.createTx(communityId, { accountId: p.accountId, fundId: p.fundId, amount: p.amount, direction: p.direction, kind: p.kind, ts: p.ts, memo: p.memo, refType: 'BANK_STATEMENT', refId: p.reference, meta: p.meta })
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────────────────────────

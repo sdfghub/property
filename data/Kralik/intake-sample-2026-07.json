@@ -1,7 +1,7 @@
 {
-  "_note": "SYNTHETIC intake-import/v1 sample for exercising the Intake tab against Kralik's template set. Amounts, numbers and names are invented. Expected after `npm run intake:validate -- data/Kralik/intake-sample-2026-07.json Kralik`: #0 and #1 clean, #2 AMOUNT_MISMATCH, #3 VENDOR_UNKNOWN, #4 and #5 PHASE2_UNSUPPORTED.",
-  "contractVersion": "intake-import/v1",
-  "promptVersion": "2026-09-11.1",
+  "_note": "SYNTHETIC intake-import/v2 sample for exercising the Intake tab against Kralik's template set. Amounts, numbers and bank references are invented. Expected after `npm run intake:validate -- data/Kralik/intake-sample-2026-07.json Kralik`: #0 and #1 clean, #2 AMOUNT_MISMATCH, #3 VENDOR_UNKNOWN, #4 clean (receipt, cycle 2026-06), #5 clean (receipt with a named fund), #6 UNIT_UNSPECIFIED (payer name only — the server suggests AP 6), #7 INVOICE_NOT_FOUND until #2's invoice is applied (settlement of an invoice from the same batch; clean once it exists), #8 clean (commission → CASH_TX), #9 clean (IGNORE), #10 PHASE2_UNSUPPORTED (other document).",
+  "contractVersion": "intake-import/v2",
+  "promptVersion": "2026-09-12.1",
   "community": "Kralik",
   "periodCode": "2026-07",
   "meta": {
@@ -30,19 +30,61 @@
         "currency": "RON",
         "net": 496.33,
         "vat": 44.67,
-        "gross": 541.00,
+        "gross": 541.0,
         "lines": [
-          { "description": "Apa potabila", "quantity": 52, "unitPrice": null, "net": null, "vat": null, "gross": 412.30 },
-          { "description": "Canalizare", "quantity": 52, "unitPrice": null, "net": null, "vat": null, "gross": 98.10 },
-          { "description": "Apa meteo", "quantity": null, "unitPrice": null, "net": null, "vat": null, "gross": 30.60 }
+          {
+            "description": "Apa potabila",
+            "quantity": 52,
+            "unitPrice": null,
+            "net": null,
+            "vat": null,
+            "gross": 412.3
+          },
+          {
+            "description": "Canalizare",
+            "quantity": 52,
+            "unitPrice": null,
+            "net": null,
+            "vat": null,
+            "gross": 98.1
+          },
+          {
+            "description": "Apa meteo",
+            "quantity": null,
+            "unitPrice": null,
+            "net": null,
+            "vat": null,
+            "gross": 30.6
+          }
         ]
       },
       "mapping": {
-        "vendor": { "match": "EXISTING", "vendorId": null, "name": "Aquatim", "taxId": "3041480", "iban": null },
+        "vendor": {
+          "match": "EXISTING",
+          "vendorId": null,
+          "name": "Aquatim",
+          "taxId": "3041480",
+          "iban": null
+        },
         "allocations": [
-          { "templateCode": "BILL_APA_RECE", "itemKey": "apa_rece", "amount": 412.30, "reason": "Apa potabila line" },
-          { "templateCode": "BILL_APA_RECE", "itemKey": "canal", "amount": 98.10, "reason": "Canalizare line" },
-          { "templateCode": "BILL_APA_METEO", "itemKey": "apa_meteo", "amount": 30.60, "reason": "Apa meteo line, billed on the same invoice" }
+          {
+            "templateCode": "BILL_APA_RECE",
+            "itemKey": "apa_rece",
+            "amount": 412.3,
+            "reason": "Apa potabila line"
+          },
+          {
+            "templateCode": "BILL_APA_RECE",
+            "itemKey": "canal",
+            "amount": 98.1,
+            "reason": "Canalizare line"
+          },
+          {
+            "templateCode": "BILL_APA_METEO",
+            "itemKey": "apa_meteo",
+            "amount": 30.6,
+            "reason": "Apa meteo line, billed on the same invoice"
+          }
         ],
         "fallback": null,
         "duplicateOf": null
@@ -68,11 +110,33 @@
         "net": 157.52,
         "vat": 29.93,
         "gross": 187.45,
-        "lines": [{ "description": "Energie electrica", "quantity": 218, "unitPrice": null, "net": 157.52, "vat": 29.93, "gross": 187.45 }]
+        "lines": [
+          {
+            "description": "Energie electrica",
+            "quantity": 218,
+            "unitPrice": null,
+            "net": 157.52,
+            "vat": 29.93,
+            "gross": 187.45
+          }
+        ]
       },
       "mapping": {
-        "vendor": { "match": "EXISTING", "vendorId": null, "name": "PPC", "taxId": "14476722", "iban": null },
-        "allocations": [{ "templateCode": "BILL_CURENT_SCARA", "itemKey": "curent_scara", "amount": 187.45, "reason": "whole invoice" }],
+        "vendor": {
+          "match": "EXISTING",
+          "vendorId": null,
+          "name": "PPC",
+          "taxId": "14476722",
+          "iban": null
+        },
+        "allocations": [
+          {
+            "templateCode": "BILL_CURENT_SCARA",
+            "itemKey": "curent_scara",
+            "amount": 187.45,
+            "reason": "whole invoice"
+          }
+        ],
         "fallback": null,
         "duplicateOf": null
       }
@@ -83,7 +147,9 @@
       "sourceSha256": null,
       "confidence": 0.88,
       "rationale": "Waste collection; totals on the scan are partly illegible (VAT read as 60.00).",
-      "warnings": ["VAT figure partly illegible; net + VAT does not add up to the printed total"],
+      "warnings": [
+        "VAT figure partly illegible; net + VAT does not add up to the printed total"
+      ],
       "invoice": {
         "vendorName": "RETIM ECOLOGIC SERVICE SA",
         "vendorTaxId": "1780350",
@@ -94,14 +160,36 @@
         "servicePeriodStart": "2026-07",
         "servicePeriodEnd": "2026-07",
         "currency": "RON",
-        "net": 300.00,
-        "vat": 60.00,
-        "gross": 357.00,
-        "lines": [{ "description": "Salubritate", "quantity": null, "unitPrice": null, "net": 300.00, "vat": 60.00, "gross": 357.00 }]
+        "net": 300.0,
+        "vat": 60.0,
+        "gross": 357.0,
+        "lines": [
+          {
+            "description": "Salubritate",
+            "quantity": null,
+            "unitPrice": null,
+            "net": 300.0,
+            "vat": 60.0,
+            "gross": 357.0
+          }
+        ]
       },
       "mapping": {
-        "vendor": { "match": "EXISTING", "vendorId": null, "name": "Retim", "taxId": "1780350", "iban": null },
-        "allocations": [{ "templateCode": "BILL_SALUBRITATE", "itemKey": "salubritate", "amount": 357.00, "reason": "whole invoice" }],
+        "vendor": {
+          "match": "EXISTING",
+          "vendorId": null,
+          "name": "Retim",
+          "taxId": "1780350",
+          "iban": null
+        },
+        "allocations": [
+          {
+            "templateCode": "BILL_SALUBRITATE",
+            "itemKey": "salubritate",
+            "amount": 357.0,
+            "reason": "whole invoice"
+          }
+        ],
         "fallback": null,
         "duplicateOf": null
       }
@@ -112,7 +200,9 @@
       "sourceSha256": null,
       "confidence": 0.75,
       "rationale": "One-off plumbing repair; no template matches, proposing the expenses fund.",
-      "warnings": ["No bill template for repairs"],
+      "warnings": [
+        "No bill template for repairs"
+      ],
       "invoice": {
         "vendorName": "INSTALATORUL PRIETENOS SRL",
         "vendorTaxId": "44556677",
@@ -123,15 +213,33 @@
         "servicePeriodStart": "2026-07",
         "servicePeriodEnd": "2026-07",
         "currency": "RON",
-        "net": 250.00,
-        "vat": 47.50,
-        "gross": 297.50,
-        "lines": [{ "description": "Reparatie coloana apa sc. B", "quantity": 1, "unitPrice": 250.00, "net": 250.00, "vat": 47.50, "gross": 297.50 }]
+        "net": 250.0,
+        "vat": 47.5,
+        "gross": 297.5,
+        "lines": [
+          {
+            "description": "Reparatie coloana apa sc. B",
+            "quantity": 1,
+            "unitPrice": 250.0,
+            "net": 250.0,
+            "vat": 47.5,
+            "gross": 297.5
+          }
+        ]
       },
       "mapping": {
-        "vendor": { "match": "NEW", "vendorId": null, "name": "Instalatorul Prietenos SRL", "taxId": "44556677", "iban": "RO12BTRL0000000000000012" },
+        "vendor": {
+          "match": "NEW",
+          "vendorId": null,
+          "name": "Instalatorul Prietenos SRL",
+          "taxId": "44556677",
+          "iban": "RO12BTRL0000000000000012"
+        },
         "allocations": [],
-        "fallback": { "fundCode": "REPARATII", "expenseTypeCode": null },
+        "fallback": {
+          "fundCode": "REPARATII",
+          "expenseTypeCode": null
+        },
         "duplicateOf": null
       }
     },
@@ -140,21 +248,237 @@
       "sourceFile": "extras-libra-2026-07.pdf",
       "sourceSha256": null,
       "confidence": 0.98,
-      "rationale": "Owner payment with the apartment in the description.",
+      "rationale": "Owner payment; the description names the apartment and the month (June list).",
       "warnings": [],
       "bankLine": {
-        "account": { "iban": "RO49LIBR0000000000000001", "bankName": "Libra Internet Bank" },
-        "date": "2026-07-03",
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
         "valueDate": "2026-07-03",
-        "amount": 350.00,
         "currency": "RON",
-        "counterpartyName": "POPESCU ION",
         "counterpartyIban": "RO12BTRL0000000000000099",
-        "description": "Intretinere ap 7 iunie",
-        "reference": "FT26184ABCDE",
-        "balanceAfter": 12850.40
+        "balanceAfter": 12850.4,
+        "date": "2026-07-03",
+        "amount": 350.0,
+        "counterpartyName": "POPESCU ION",
+        "description": "Intretinere ap 9 iunie",
+        "reference": "FT26184ABCDE"
       },
-      "mapping": null
+      "mapping": {
+        "target": "OWNER_PAYMENT",
+        "unitCode": "400191-C1-U29-AP 9",
+        "payerName": "POPESCU ION",
+        "funds": [],
+        "advanceFundCode": null,
+        "cycleCode": "2026-06",
+        "invoiceNumbers": [],
+        "vendorName": null,
+        "fundCode": null,
+        "expenseTypeCode": null,
+        "kind": null,
+        "reason": null,
+        "accountCode": null
+      }
+    },
+    {
+      "kind": "BANK_LINE",
+      "sourceFile": "extras-libra-2026-07.pdf",
+      "sourceSha256": null,
+      "confidence": 0.95,
+      "rationale": "Owner payment naming a fund: 100 goes to the working fund, the rest to the current list.",
+      "warnings": [],
+      "bankLine": {
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
+        "valueDate": "2026-07-04",
+        "currency": "RON",
+        "counterpartyIban": "RO12BTRL0000000000000042",
+        "balanceAfter": 13270.4,
+        "date": "2026-07-04",
+        "amount": 420.0,
+        "counterpartyName": "CODREA RUXANDRA",
+        "description": "ap 3 intretinere + fond rulment 100",
+        "reference": "FT26185ABCDF"
+      },
+      "mapping": {
+        "target": "OWNER_PAYMENT",
+        "unitCode": "400191-C1-U8-AP 3",
+        "payerName": "CODREA RUXANDRA",
+        "funds": [
+          {
+            "fundCode": "RULMENT",
+            "amount": 100.0
+          }
+        ],
+        "advanceFundCode": "EXPENSES",
+        "cycleCode": null,
+        "invoiceNumbers": [],
+        "vendorName": null,
+        "fundCode": null,
+        "expenseTypeCode": null,
+        "kind": null,
+        "reason": null,
+        "accountCode": null
+      }
+    },
+    {
+      "kind": "BANK_LINE",
+      "sourceFile": "extras-libra-2026-07.pdf",
+      "sourceSha256": null,
+      "confidence": 0.6,
+      "rationale": "Owner payment with no apartment in the description; the payer name must be matched by the admin.",
+      "warnings": [
+        "No apartment in the description; unit left for the admin"
+      ],
+      "bankLine": {
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
+        "valueDate": "2026-07-05",
+        "currency": "RON",
+        "counterpartyIban": "RO12BTRL0000000000000061",
+        "balanceAfter": 13530.4,
+        "date": "2026-07-05",
+        "amount": 260.0,
+        "counterpartyName": "FLOREA LUCIAN",
+        "description": "intretinere",
+        "reference": "FT26186ABCDG"
+      },
+      "mapping": {
+        "target": "OWNER_PAYMENT",
+        "unitCode": null,
+        "payerName": "FLOREA LUCIAN",
+        "funds": [],
+        "advanceFundCode": null,
+        "cycleCode": null,
+        "invoiceNumbers": [],
+        "vendorName": null,
+        "fundCode": null,
+        "expenseTypeCode": null,
+        "kind": null,
+        "reason": null,
+        "accountCode": null
+      }
+    },
+    {
+      "kind": "BANK_LINE",
+      "sourceFile": "extras-libra-2026-07.pdf",
+      "sourceSha256": null,
+      "confidence": 0.97,
+      "rationale": "Outgoing payment quoting the Retim invoice imported in this batch.",
+      "warnings": [],
+      "bankLine": {
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
+        "valueDate": "2026-07-10",
+        "currency": "RON",
+        "counterpartyIban": "RO77BTRL0000000000000777",
+        "balanceAfter": 13173.4,
+        "date": "2026-07-10",
+        "amount": -357.0,
+        "counterpartyName": "RETIM ECOLOGIC SERVICE SA",
+        "description": "fct RT 202607-4411/01.07.2026 Retim",
+        "reference": "FT26191ABCDH"
+      },
+      "mapping": {
+        "target": "VENDOR_SETTLEMENT",
+        "unitCode": null,
+        "payerName": null,
+        "funds": [],
+        "advanceFundCode": null,
+        "cycleCode": null,
+        "invoiceNumbers": [
+          "RT 202607-4411"
+        ],
+        "vendorName": "Retim",
+        "fundCode": "EXPENSES",
+        "expenseTypeCode": null,
+        "kind": null,
+        "reason": null,
+        "accountCode": null
+      }
+    },
+    {
+      "kind": "BANK_LINE",
+      "sourceFile": "extras-libra-2026-07.pdf",
+      "sourceSha256": null,
+      "confidence": 0.99,
+      "rationale": "Bank commission for the transfer above.",
+      "warnings": [],
+      "bankLine": {
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
+        "valueDate": "2026-07-10",
+        "currency": "RON",
+        "counterpartyIban": null,
+        "balanceAfter": 13170.4,
+        "date": "2026-07-10",
+        "amount": -3.0,
+        "counterpartyName": null,
+        "description": "Comision tranzactie",
+        "reference": "FT26191ABCDH-C"
+      },
+      "mapping": {
+        "target": "CASH_TX",
+        "unitCode": null,
+        "payerName": null,
+        "funds": [],
+        "advanceFundCode": null,
+        "cycleCode": null,
+        "invoiceNumbers": [],
+        "vendorName": null,
+        "fundCode": "EXPENSES",
+        "expenseTypeCode": null,
+        "kind": "OTHER",
+        "reason": null,
+        "accountCode": null
+      }
+    },
+    {
+      "kind": "BANK_LINE",
+      "sourceFile": "extras-libra-2026-07.pdf",
+      "sourceSha256": null,
+      "confidence": 0.99,
+      "rationale": "Transfer to the association's own EUR account — not a payment.",
+      "warnings": [],
+      "bankLine": {
+        "account": {
+          "iban": "RO49LIBR0000000000000001",
+          "bankName": "Libra Internet Bank"
+        },
+        "valueDate": "2026-07-15",
+        "currency": "RON",
+        "counterpartyIban": "RO49LIBR0000000000000002",
+        "balanceAfter": 12170.4,
+        "date": "2026-07-15",
+        "amount": -1000.0,
+        "counterpartyName": "ASOCIATIA DE PROPRIETARI KRALIK",
+        "description": "Transfer cont EUR propriu",
+        "reference": "FT26196ABCDI"
+      },
+      "mapping": {
+        "target": "IGNORE",
+        "unitCode": null,
+        "payerName": null,
+        "funds": [],
+        "advanceFundCode": null,
+        "cycleCode": null,
+        "invoiceNumbers": [],
+        "vendorName": null,
+        "fundCode": null,
+        "expenseTypeCode": null,
+        "kind": null,
+        "reason": "own-account transfer",
+        "accountCode": null
+      }
     },
     {
       "kind": "OTHER",
@@ -162,7 +486,9 @@
       "sourceSha256": null,
       "confidence": 0.7,
       "rationale": "Meeting minutes, not a financial document.",
-      "warnings": ["Skipped: not an invoice or a statement"],
+      "warnings": [
+        "Skipped: not an invoice or a statement"
+      ],
       "note": "Proces-verbal adunare generală"
     }
   ]
