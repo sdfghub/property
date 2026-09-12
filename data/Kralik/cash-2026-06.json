@@ -1004,6 +1004,7 @@
       "kind": "PAYMENT",
       "unit": "SAD 2/2",
       "payer": "Brinzeu Adina",
+      "_correctedSplit": "Confirmed by Adriana Dascal: this Fond Reabilitare 3 payment is actually for BOTH of Brînzeu Adina's units, not SAD 2/2 alone — SAD 1: 4284.03, SAD 2/2: 5318.87 (sums to 9602.90; the extra 0.10 needed to reach the real 9603.00 payment is absorbed into SAD 2/2's line — see fix-brinzeu-reabilitare3-split.ts's own comment on why an unabsorbed gap breaks BeUnitStatement's per-unit trust check). This generic per-BE import format has no way to express a split across two units of the same billing entity, so the real per-unit split is applied directly via allocationSpec by src/scripts/fix-brinzeu-reabilitare3-split.ts, not derived from this file's own `funds` object. Re-running fix-kralik-june-payment-specs.ts would wrongly re-collapse it back to a single-unit lump — re-run fix-brinzeu-reabilitare3-split.ts afterward if that ever happens.",
       "funds": {
         "REABILITARE_3": 9603
       },
