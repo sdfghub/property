@@ -106,8 +106,12 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   )
 
   // Perioada de calcul = scadență + 30 zile; o restanță "se califică" abia după ce acest prag e
-  // atins — sub el nu are încă o perioadă de calcul reală, deci nu apare în listă (dar contribuie
-  // în continuare la totalul de mai sus, ca să rămână egal cu restanța curentă a unității).
+  // atins. Restanțele mai proaspete rămân în listă — doar fără zile/penalizare — ca luna deschisă
+  // să-și arate mereu toate restanțele (ex. iunie, cât timp iulie e deschisă), nu doar cele care
+  // acumulează deja penalizări; altfel totalul de mai jos (care le include mereu, ca să rămână
+  // egal cu restanța curentă a unității) nu s-ar potrivi cu ce se vede în listă. Ordinea: cele care
+  // acumulează deja penalizări primele (câte zile mai multe, mai sus), apoi restul, cele mai
+  // aproape de a intra la calcul primele.
   const rows = buckets
     .map((b) => {
       const calcStart = b.dueDate ? addDays(b.dueDate, 30) : null
@@ -115,9 +119,11 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
       const days = qualifies ? countDays(calcStart as Date, refDate as Date) : 0
       return { b, calcStart, qualifies, days }
     })
-    .filter((r) => r.qualifies)
-    .sort((a, b) => b.days - a.days)
-  const hiddenCount = buckets.length - rows.length
+    .sort((a, b) => {
+      if (a.qualifies !== b.qualifies) return a.qualifies ? -1 : 1
+      if (a.qualifies) return b.days - a.days
+      return (a.calcStart?.getTime() ?? Infinity) - (b.calcStart?.getTime() ?? Infinity)
+    })
 
   return (
     <div className="stack" style={{ gap: 12 }}>
@@ -216,10 +222,6 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
 
               {!buckets.length ? (
                 <div className="empty" style={{ marginTop: 10 }}>{t('penledger.none', 'Nicio penalizare pentru această unitate.')}</div>
-              ) : !rows.length ? (
-                <div className="empty" style={{ marginTop: 10 }}>
-                  {t('penledger.noneQualify', 'Nicio restanță nu a ajuns încă în perioada de calcul (scadență + 30 zile) la data aleasă.')}
-                </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 700 }}>
@@ -236,16 +238,19 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ b, calcStart, days }, i: number) => (
-                      <tr key={i} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)' }}>
+                    {rows.map(({ b, calcStart, qualifies, days }, i: number) => (
+                      <tr key={i} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)', opacity: qualifies ? 1 : 0.7 }}>
                         <td style={{ textAlign: 'left', padding: '6px 8px' }}>
                           {monthLabel(b.originPeriodCode) ?? t('penledger.carriedOver', 'Restanță reportată')}
                           {b.capReached ? <span className="badge secondary" style={{ marginLeft: 6 }} title={t('avizier.penCapHint', 'Penalizarea a atins valoarea datoriei (plafon legal)')}>{t('avizier.penCap', 'plafonat')}</span> : null}
+                          {!qualifies ? <span className="badge secondary" style={{ marginLeft: 6 }} title={t('penledger.graceHint', 'Nu acumulează încă penalizări — scadență + 30 zile nu a fost atinsă la data aleasă')}>{t('penledger.grace', 'perioadă de grație')}</span> : null}
                         </td>
                         <td style={{ padding: '6px 8px' }}>{fmtDate(b.dueDate) ?? '-'}</td>
-                        <td style={{ textAlign: 'left', padding: '6px 8px' }}>{calcStart && refDate ? `${fmtDate(calcStart)} – ${fmtDate(refDate)}` : '-'}</td>
+                        <td style={{ textAlign: 'left', padding: '6px 8px' }}>
+                          {qualifies ? `${fmtDate(calcStart)} – ${fmtDate(refDate)}` : calcStart ? `${t('penledger.startsOn', 'începe')} ${fmtDate(calcStart)}` : '-'}
+                        </td>
                         <td style={{ padding: '6px 8px' }}>{money(b.principalRemaining)}</td>
-                        <td style={{ padding: '6px 8px' }}>{days}</td>
+                        <td style={{ padding: '6px 8px' }}>{qualifies ? days : '-'}</td>
                         <td style={{ padding: '6px 8px' }}>{b.ratePerDayPct}%</td>
                         <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(b.penaltyToDate)}</td>
                         <td style={{ padding: '6px 8px', fontWeight: 700 }}>{money((b.principalRemaining || 0) + (b.penaltyToDate || 0))}</td>
@@ -261,12 +266,6 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                     </tr>
                   </tbody>
                 </table>
-                {hiddenCount > 0 ? (
-                  <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-                    <strong style={{ color: 'var(--text, inherit)' }}>{hiddenCount}</strong>{' '}
-                    {t('penledger.hiddenNote', 'restanțe încă în termenul de grație (sub scadență + 30 zile) — incluse în totalul de mai sus, dar nu au încă o perioadă de calcul.')}
-                  </div>
-                ) : null}
                 </div>
               )}
               {!isAdmin ? null : (
