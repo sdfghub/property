@@ -606,8 +606,16 @@ export function AvizierPanel({
   // chosen. Fixed layout makes column widths a deterministic function of the page's physical
   // width and the column count — never the browser's content-fitting heuristics — so width can
   // never silently blow up the height budget.
-  const usableWidthPx = 1512 * 0.97 // ~3% safety margin under A3 landscape's ~400mm usable width
-  const usableHeightPx = 1047 * 0.95 // ~5% safety margin under A3 landscape's ~277mm usable height
+  // Margins here are deliberately generous (not just a couple % like a normal print margin): a
+  // real headless print (page-break-driven pagination confirmed correct in isolation — see
+  // fix-avizier-print-multipage session notes) of oversized content showed that any page whose
+  // *actual* rendered height exceeds the physical page — even slightly — spills onto an extra
+  // page, silently breaking the "4 pages" promise instead of just being a bit cozy. Since this
+  // height is only ever estimated from an on-screen DOM clone (there's no way to safely measure
+  // real print-engine layout from here), that estimate needs real headroom against whatever
+  // print-specific layout differences it doesn't capture, not just a rounding buffer.
+  const usableWidthPx = 1512 * 0.94
+  const usableHeightPx = 1047 * 0.85
   const IDENTITY_COL_PX = 208 // ~55mm — fixed width for the Proprietar/Unitatea column; a rare very
   // long shared-unit label wraps to 2 lines within this budget rather than widening the column
   const INFO_COL_PX = 50 // ~13mm — fixed width for each of CPI/Pers/Apa, short 1-6 digit numbers
