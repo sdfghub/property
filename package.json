@@ -37,6 +37,7 @@
     "api:reset-import-ui": "ts-node --transpile-only src/scripts/api-reset-and-import-ui.ts",
     "typecheck": "tsc -p . --noEmit",
     "reopen:period": "ts-node --transpile-only src/scripts/reopen-period.ts",
+    "set:penalty-rate-history": "ts-node --transpile-only src/scripts/set-penalty-rate-history.ts",
     "prepare:period": "ts-node --transpile-only src/scripts/prepare-period.ts",
     "backfill:corrections": "ts-node --transpile-only src/scripts/backfill-corrections.ts",
     "backfill:meter-readings": "ts-node --transpile-only src/scripts/backfill-meter-readings.ts",

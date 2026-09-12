@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
 import { resolveBeName as resolveBeNameShared } from '../../common/billing-entity-name.util'
+import { rateForDate } from '../period/penalty-rate'
 
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
@@ -1656,11 +1657,14 @@ export class FinanceService {
     let monthTotal = 0
     let grandTotal = 0
     const buckets = bucketRows.map((b) => {
-      // The bucket carries the rate stamped at its creation; only fall back to the fund's current rate
-      // for legacy buckets with no stamped rate. (Showing the fund rate made rate-stamped buckets read 0%.)
-      const ratePerDayPct = b.bucketRate != null ? Number(b.bucketRate) : Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
-      const rate = ratePerDayPct / 100
       const firstPenal = new Date(b.firstPenalDay)
+      // Resolve the rate live from the source fund's penaltyRateHistory schedule (if configured), using
+      // this debt's own origin day — the same lookup PenaltyLedgerService#advance uses to accrue it, so
+      // the displayed rate always matches the posted amount. The bucket's stamped rate (falling back to
+      // the fund's current flat rate for legacy buckets) is the fallback for funds with no schedule.
+      const stampedFallbackPct = b.bucketRate != null ? Number(b.bucketRate) : Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
+      const ratePerDayPct = rateForDate(b.srcAlloc, firstPenal, stampedFallbackPct)
+      const rate = ratePerDayPct / 100
       const due = b.dueDate ? new Date(b.dueDate) : null
       let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
       const hist = (periodsByBucket.get(b.bucketId) ?? []).map((pr) => {

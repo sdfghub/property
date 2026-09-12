@@ -35,6 +35,16 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
   })
   const set = (patch: Partial<typeof form>) => setForm((s) => ({ ...s, ...patch }))
 
+  // Penalty rate schedule (allocation.penaltyRateHistory): a fund can carry a HISTORY of rate changes
+  // instead of one flat %/day, so a debt keeps the rate that was in force when it originated (e.g. the
+  // 0.02%/day of 2021–2023 vs. today's 0.2%/day) rather than every bucket re-rating to whatever the
+  // flat field says right now. Empty by default — funds that don't need this keep using the flat field.
+  const [rateHistory, setRateHistory] = React.useState<Array<{ from: string; ratePerDayPct: string }>>([])
+  const setRateRow = (i: number, patch: Partial<{ from: string; ratePerDayPct: string }>) =>
+    setRateHistory((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  const addRateRow = () => setRateHistory((rows) => [...rows, { from: '', ratePerDayPct: '' }])
+  const removeRateRow = (i: number) => setRateHistory((rows) => rows.filter((_, idx) => idx !== i))
+
   React.useEffect(() => {
     if (!communityCode) return
     api.get<PeriodRow[]>(`/communities/${communityCode}/periods`)
@@ -50,12 +60,15 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
       startPeriodCode: f.startPeriodCode || '', type: a.type || '', method: a.method || '',
       shortName: a.shortName || '', abbrev: a.abbrev || '', penaltyPerDayPct: a.penaltyPerDayPct != null ? String(a.penaltyPerDayPct) : '',
     })
+    const hist = Array.isArray(a.penaltyRateHistory) ? a.penaltyRateHistory : []
+    setRateHistory(hist.map((h: any) => ({ from: h?.from ? String(h.from).slice(0, 10) : '', ratePerDayPct: h?.ratePerDayPct != null ? String(h.ratePerDayPct) : '' })))
   }, [])
 
   const startEdit = () => { if (fund) { setMode('edit'); loadForEdit(fund); setOpen(true); setError(null); setMsg(null) } }
   const startCreate = () => {
     setMode('create'); setOpen(true); setError(null); setMsg(null)
     setForm({ code: '', name: '', description: '', status: 'PLANNED', currency: 'RON', totalTarget: '', startPeriodCode: '', type: '', method: '', shortName: '', abbrev: '', penaltyPerDayPct: '' })
+    setRateHistory([])
   }
 
   async function save(e: React.FormEvent) {
@@ -70,6 +83,12 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
     if (form.shortName) allocation.shortName = form.shortName
     if (form.abbrev) allocation.abbrev = form.abbrev
     if (form.penaltyPerDayPct !== '') allocation.penaltyPerDayPct = Number(form.penaltyPerDayPct)
+    const cleanHistory = rateHistory
+      .filter((r) => r.from && r.ratePerDayPct !== '')
+      .map((r) => ({ from: r.from, ratePerDayPct: Number(r.ratePerDayPct) }))
+      .sort((a, b) => a.from.localeCompare(b.from))
+    if (cleanHistory.length) allocation.penaltyRateHistory = cleanHistory
+    else delete allocation.penaltyRateHistory
     const body: any = {
       name: form.name.trim(),
       description: form.description || null,
@@ -131,6 +150,28 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
             </select>
             <input className="input" style={{ width: 120 }} type="number" step="0.001" placeholder={t('fundEdit.penalty', 'Penaliz. %/zi')} value={form.penaltyPerDayPct} onChange={(e) => set({ penaltyPerDayPct: e.target.value })} />
           </div>
+
+          <div className="stack" style={{ gap: 6, padding: '8px 10px', border: '1px solid var(--border,#e0e0e0)', borderRadius: 8 }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{t('fundEdit.rateHistory', 'Istoric rată penalizare')}</span>
+              <button type="button" className="btn ghost small" onClick={addRateRow}>+ {t('fundEdit.rateHistoryAdd', 'Adaugă schimbare de rată')}</button>
+            </div>
+            <div className="muted" style={{ fontSize: 11 }}>
+              {t('fundEdit.rateHistoryHint', 'Opțional. O restanță păstrează rata în vigoare la data ei de scadență — util când asociația a schimbat procentul de penalizare în timp (ex. istoricul din fișele vechi). Fără niciun rând aici, se folosește doar câmpul „Penaliz. %/zi” de mai sus, ca până acum.')}
+            </div>
+            {rateHistory.length === 0 ? (
+              <div className="muted" style={{ fontSize: 12 }}>{t('fundEdit.rateHistoryEmpty', 'Nicio schimbare de rată configurată.')}</div>
+            ) : rateHistory.map((row, i) => (
+              <div key={i} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <input className="input" type="date" style={{ width: 150 }} value={row.from}
+                  onChange={(e) => setRateRow(i, { from: e.target.value })} title={t('fundEdit.rateHistoryFrom', 'Valabil de la')} />
+                <input className="input" type="number" step="0.001" style={{ width: 110 }} placeholder={t('fundEdit.penalty', 'Penaliz. %/zi')}
+                  value={row.ratePerDayPct} onChange={(e) => setRateRow(i, { ratePerDayPct: e.target.value })} />
+                <button type="button" className="btn ghost small" onClick={() => removeRateRow(i)} title={t('common.remove', 'Elimină')}>✕</button>
+              </div>
+            ))}
+          </div>
+
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
             <button className="btn primary" type="submit" disabled={busy}>{mode === 'create' ? t('fundEdit.create', 'Creează fondul') : t('common.save', 'Salvează')}</button>
             <button className="btn ghost" type="button" onClick={() => setOpen(false)}>{t('common.cancel', 'Anulează')}</button>

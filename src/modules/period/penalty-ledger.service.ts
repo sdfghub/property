@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { rateForDate } from './penalty-rate'
 
 type TxOrClient = PrismaClient | Prisma.TransactionClient
 const DAY = 24 * 60 * 60 * 1000
 
-type PenalFund = { id: string; code: string; rate: number; targetId: string; targetCode: string }
+type PenalFund = { id: string; code: string; rate: number; alloc: any; targetId: string; targetCode: string }
 
 /**
  * Stateful per-bucket penalty aging ledger. Replaces the old stateless recompute
@@ -37,7 +38,7 @@ export class PenaltyLedgerService {
         const rate = Number(alloc.penaltyPerDayPct ?? 0) / 100
         const targetCode = alloc.penaltyFundCode || 'PENALIZARI'
         const target = byCode.get(targetCode)
-        return { id: f.id, code: f.code, rate, targetId: target?.id as string, targetCode, configured }
+        return { id: f.id, code: f.code, rate, alloc, targetId: target?.id as string, targetCode, configured }
       })
       .filter((f) => (f as any).configured && f.targetId)
   }
@@ -113,7 +114,10 @@ export class PenaltyLedgerService {
             communityId, billingEntityId: r.beId, fundId: f.id, targetFundId: f.targetId,
             originKey: `period:${periodId}`, dueDate: period?.dueDate ?? null, firstPenalDay,
             principalOriginal: principal, status: 'OPEN',
-            ratePerDayPct: f.rate * 100, // stamp the rate in effect when this debt's bucket is created
+            // Informational snapshot only — `advance()` re-derives the live rate from the fund's
+            // schedule (if configured) using this debt's own firstPenalDay, so a later rate change
+            // never permanently freezes an older bucket at whatever the flat rate happened to be here.
+            ratePerDayPct: rateForDate(f.alloc, firstPenalDay, f.rate * 100),
           } as any,
         })
       }
@@ -183,9 +187,12 @@ export class PenaltyLedgerService {
         // exact, due-date-anchored penalizable days within this period
         const lo = new Date(b.firstPenalDay) > pStart ? new Date(b.firstPenalDay) : pStart
         const days = this.countDays(lo, pEnd)
-        // Each bucket accrues at the rate stamped when it was created (the schedule rate for its origin
-        // month); fall back to the fund's current rate for buckets created before rate-stamping existed.
-        const bucketRate = (b as any).ratePerDayPct != null ? Number((b as any).ratePerDayPct) / 100 : g.f.rate
+        // Each bucket accrues at the rate in force when IT originated (firstPenalDay), resolved live
+        // from the fund's penaltyRateHistory schedule if one is configured — not the rate frozen on
+        // the bucket at creation time, which would otherwise stay stale forever once the association
+        // changes its rate. Funds without a schedule fall back to the stamped/current rate, unchanged.
+        const stampedFallbackPct = (b as any).ratePerDayPct != null ? Number((b as any).ratePerDayPct) : g.f.rate * 100
+        const bucketRate = rateForDate(g.f.alloc, new Date(b.firstPenalDay), stampedFallbackPct) / 100
         const penaltyN = principalRemaining * bucketRate * days
         const accrued = Math.min(penaltyAccrued + penaltyN, Number(b.principalOriginal)) // per-bucket cap
         const posted = Math.max(0, accrued - penaltyAccrued)
