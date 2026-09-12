@@ -43,7 +43,10 @@ export function rateForDate(alloc: any, date: Date, fallbackPct: number): number
  */
 export function originAnchorDate(originKey: string | null | undefined, dueDate: Date | string | null, originPeriodStart?: Date | null): Date {
   if (originPeriodStart) return originPeriodStart
-  const histMatch = /^hist:[^:]+:(\d{4}-\d{2})$/.exec(originKey || '')
-  if (histMatch) return new Date(`${histMatch[1]}-01T00:00:00.000Z`)
+  // Matches both 'hist:<unitId>:<YYYY-MM>' (the backward-reconstruction script) and
+  // 'cent:<unitId>:<YYYY-MM>' (the centralizator-PDF import) — any non-'period:' bucket whose key
+  // embeds its own origin month directly, so a new import source doesn't need a matching regex here.
+  const monthMatch = /^[a-z]+:[^:]+:(\d{4}-\d{2})$/.exec(originKey || '')
+  if (monthMatch) return new Date(`${monthMatch[1]}-01T00:00:00.000Z`)
   return dueDate ? new Date(dueDate) : new Date(0)
 }
