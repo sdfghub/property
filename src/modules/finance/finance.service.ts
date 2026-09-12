@@ -800,13 +800,25 @@ export class FinanceService {
         consumption: r.consumption == null ? null : round2(Number(r.consumption)),
       }]),
     )
+    // Accumulate raw (unrounded) sums per BE and round only once at the end — rounding at every
+    // step (as this used to) compounds: e.g. a 3-unit BE with CPI 2.297+2.297+2.296=6.890 rounded
+    // incrementally goes 2.30 -> 4.60 -> 6.90, a 0.01 excess that then propagates into the
+    // avizier's CPI-sum Total row (which itself just adds up these already-rounded per-row values).
     const infoByBe = new Map<string, { cpi: number | null; residents: number | null; consumption: number | null }>()
+    const rawByBe = new Map<string, { cpi: number; hasCpi: boolean; residents: number; hasResidents: boolean; consumption: number; hasConsumption: boolean }>()
     for (const r of infoRows) {
-      const cur = infoByBe.get(r.beId) ?? { cpi: null, residents: null, consumption: null }
-      if (r.cpi != null) cur.cpi = round2((cur.cpi ?? 0) + Number(r.cpi))
-      if (r.residents != null) cur.residents = (cur.residents ?? 0) + Number(r.residents)
-      if (r.consumption != null) cur.consumption = round2((cur.consumption ?? 0) + Number(r.consumption))
-      infoByBe.set(r.beId, cur)
+      const cur = rawByBe.get(r.beId) ?? { cpi: 0, hasCpi: false, residents: 0, hasResidents: false, consumption: 0, hasConsumption: false }
+      if (r.cpi != null) { cur.cpi += Number(r.cpi); cur.hasCpi = true }
+      if (r.residents != null) { cur.residents += Number(r.residents); cur.hasResidents = true }
+      if (r.consumption != null) { cur.consumption += Number(r.consumption); cur.hasConsumption = true }
+      rawByBe.set(r.beId, cur)
+    }
+    for (const [beId, cur] of rawByBe) {
+      infoByBe.set(beId, {
+        cpi: cur.hasCpi ? round2(cur.cpi) : null,
+        residents: cur.hasResidents ? cur.residents : null,
+        consumption: cur.hasConsumption ? round2(cur.consumption) : null,
+      })
     }
     // Column display labels come from the data (expense-type / fund names) — the frontend renders these
     // rather than hardcoding a code→label map. APA_DIF is the synthetic water-difference column.
