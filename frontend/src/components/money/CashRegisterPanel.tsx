@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
+import { FundSelect } from './FundSelect'
 
 type SortKey = 'date' | 'amount'
 type GroupBy = 'none' | 'account' | 'fund'
@@ -35,12 +36,33 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
   const isReceiptsScope = scope === 'receipts' && !!period
   const isFixedMultiAccount = !!fixedAccountIds && !initialAccount && !isReceiptsScope
 
+  const [reloadKey, setReloadKey] = React.useState(0)
   React.useEffect(() => {
     if (!communityId) return
     api.get<any>(`/communities/${communityId}/cash-accounts/balances`)
       .then((b: any) => setAccounts(b?.accounts ?? []))
       .catch(() => setAccounts([]))
-  }, [api, communityId])
+  }, [api, communityId, reloadKey])
+
+  // migration cutover: opening balance rows (one per account/fund) — shown and edited when one account is selected
+  const [openings, setOpenings] = React.useState<any[]>([])
+  const [openingFund, setOpeningFund] = React.useState('')
+  const [openingAmount, setOpeningAmount] = React.useState('')
+  const [openingDate, setOpeningDate] = React.useState('')
+  const [openingBusy, setOpeningBusy] = React.useState(false)
+  const [openingError, setOpeningError] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    if (!communityId || isReceiptsScope) return
+    api.get<any[]>(`/communities/${communityId}/cash-accounts/openings`).then((r: any[]) => setOpenings(Array.isArray(r) ? r : [])).catch(() => setOpenings([]))
+  }, [api, communityId, isReceiptsScope, reloadKey])
+  const saveOpening = async () => {
+    if (!selectedAccountId || !openingFund || openingAmount.trim() === '') return
+    setOpeningBusy(true); setOpeningError(null)
+    try {
+      await api.post(`/communities/${communityId}/cash-accounts/${selectedAccountId}/opening`, { fundId: openingFund, amount: Number(openingAmount.replace(',', '.')), date: openingDate || undefined })
+      setOpeningAmount(''); setReloadKey((k) => k + 1)
+    } catch (err: any) { setOpeningError(err?.message || 'Failed') } finally { setOpeningBusy(false) }
+  }
 
   React.useEffect(() => {
     if (!communityId) return
@@ -63,7 +85,7 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
       .catch((err: any) => { if (alive) { setRows([]); setError(err?.message || 'Failed to load') } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [api, communityId, selectedAccountId, isReceiptsScope, period, accounts])
+  }, [api, communityId, selectedAccountId, isReceiptsScope, period, accounts, reloadKey])
 
   const total = rows.reduce((acc: Record<string, number>, r: any) => {
     const ccy = r.currency || 'RON'
@@ -131,6 +153,23 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
           </div>
         )}
       </div>
+
+      {!isReceiptsScope && selectedAccountId && (
+        <details className="card soft" style={{ fontSize: 13 }}>
+          <summary style={{ cursor: 'pointer' }}>
+            {t('cashRegister.opening', 'Sold inițial (migrare)')}
+            {openings.filter((o) => o.accountId === selectedAccountId).length > 0 && <span className="muted"> · {openings.filter((o) => o.accountId === selectedAccountId).map((o) => `${o.fundCode} ${money(o.amount, accounts.find((a) => a.id === selectedAccountId)?.currency || 'RON')} (${o.date})`).join(' · ')}</span>}
+          </summary>
+          <div className="muted" style={{ margin: '6px 0' }}>{t('cashRegister.openingHint', 'Soldul contului la data de la care începe evidența, pe fonduri. Fără el, contul pornește de la zero și soldul afișat nu corespunde extrasului. Se înlocuiește la fiecare salvare; 0 șterge rândul.')}</div>
+          <div className="row" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 200 }}><FundSelect communityCode={communityId} value={openingFund} onChange={(id) => setOpeningFund(id)} label={t('funds.label', 'Fond')} /></div>
+            <div className="stack" style={{ gap: 4 }}><label className="label">{t('receipt.amount', 'Sumă')}</label><input className="input" style={{ width: 140 }} value={openingAmount} onChange={(e) => setOpeningAmount(e.target.value)} placeholder="161389.38" /></div>
+            <div className="stack" style={{ gap: 4 }}><label className="label">{t('receipt.date', 'Data')}</label><input className="input" type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} /></div>
+            <button type="button" className="btn secondary small" disabled={openingBusy || !openingFund || openingAmount.trim() === ''} onClick={saveOpening}>{t('cashRegister.openingSave', 'Setează sold inițial')}</button>
+          </div>
+          {openingError && <div className="badge negative" style={{ marginTop: 6 }}>{openingError}</div>}
+        </details>
+      )}
 
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>

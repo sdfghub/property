@@ -187,7 +187,10 @@ ${c.hints.map((h, i) => `${i + 1}. ${h}`).join('\n')}
      administrator picks.
    - **Money out to a supplier quoting invoice numbers** ("fct 1015433016/04.03.2026") →
      \`target: "VENDOR_SETTLEMENT"\`, \`invoiceNumbers: ["1015433016"]\`, \`vendorName\`. These usually settle
-     OLDER invoices from the unpaid table, not this month's.
+     OLDER invoices from the unpaid table, not this month's. When the quoted invoice is clearly from
+     BEFORE the books started (older than anything in the two invoice tables, issue date before the
+     earliest one) set \`openingInvoice: true\` — the app creates a virtual pre-cutover invoice for the
+     amount paid and settles it, keeping the supplier account right without double-counting expenses.
    - **Bank fees, refunds, interest, anything else** → \`target: "CASH_TX"\` with \`fundCode\` (bank commissions →
      \`EXPENSES\`) and \`kind\` (\`OTHER\` for fees).
    - **Transfers between the association's own accounts, or lines you know are already in the books** →
@@ -302,6 +305,7 @@ export function buildExamplePayload(c: IntakeCatalogue): ImportPayload {
           kind: null,
           reason: null,
           accountCode: null,
+        openingInvoice: false,
         },
       },
       {
@@ -337,6 +341,7 @@ export function buildExamplePayload(c: IntakeCatalogue): ImportPayload {
           kind: null,
           reason: null,
           accountCode: null,
+        openingInvoice: false,
         },
       },
       {
@@ -358,7 +363,7 @@ export function buildExamplePayload(c: IntakeCatalogue): ImportPayload {
           reference: 'FT26190X930Y',
           balanceAfter: 12305.45,
         },
-        mapping: { target: 'CASH_TX', unitCode: null, payerName: null, funds: [], advanceFundCode: null, cycleCode: null, invoiceNumbers: [], vendorName: null, fundCode: c.defaultAdvanceFundCode ?? 'EXPENSES', expenseTypeCode: null, kind: 'OTHER', reason: null, accountCode: null },
+        mapping: { target: 'CASH_TX', unitCode: null, payerName: null, funds: [], advanceFundCode: null, cycleCode: null, invoiceNumbers: [], vendorName: null, fundCode: c.defaultAdvanceFundCode ?? 'EXPENSES', expenseTypeCode: null, kind: 'OTHER', reason: null, accountCode: null, openingInvoice: false },
       },
       {
         kind: 'OTHER',

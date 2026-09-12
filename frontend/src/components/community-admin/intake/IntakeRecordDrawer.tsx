@@ -227,6 +227,12 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
                     </div>
                   )}
                   {(record.resolved?.invoices?.length ?? 0) > 0 && <div className="muted" style={{ fontSize: 12 }}>→ {record.resolved.invoices.map((x: any) => `${x.vendorName ?? '?'} ${x.number}`).join(', ')} · {t('intake.form.outstanding', 'outstanding')} {money(record.resolved.outstandingTotal, line?.currency ?? 'RON')}</div>}
+                  {(record.resolved?.invoices?.length ?? 0) === 0 && (
+                    <label className="row" style={{ gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
+                      <input type="checkbox" checked={!!bank.openingInvoice} disabled={locked} onChange={(e) => setB({ openingInvoice: e.target.checked })} />
+                      <span><strong>{t('intake.form.openingInvoice', 'Pays an invoice from before the books started')}</strong><div className="muted" style={{ fontSize: 12 }}>{t('intake.form.openingInvoiceHint', 'A virtual pre-migration invoice is created for exactly this amount (no expense — it is already in the history) and settled by this line. Otherwise the outflow is booked on the fund below without an invoice.')}</div></span>
+                    </label>
+                  )}
                   <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                     <label className="stack" style={{ gap: 2, flex: '1 1 180px' }}>
                       <span className="muted" style={{ fontSize: 11 }}>{t('intake.form.fallbackFund', 'If no invoice matches: fund')}</span>

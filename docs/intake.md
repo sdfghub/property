@@ -224,9 +224,16 @@ caught as `DUPLICATE_PAYMENT` line by line.
   period on reapply. `appliedRefs` records `paymentId`, `applied`, `advance`.
 - **VENDOR_SETTLEMENT** → `VendorInvoiceService.createVendorPayment` per matched invoice, oldest first,
   split by outstanding, the last one absorbing any surplus; guarded by `VendorPayment(refId, invoiceId)`.
-  With `INVOICE_NOT_FOUND` acknowledged → `CashService.createTx` OUT on `fundCode` instead.
+  With `INVOICE_NOT_FOUND` acknowledged → either a virtual pre-cutover invoice created and settled
+  (`mapping.openingInvoice: true`, `VendorInvoiceService.payOpening`, see `docs/cutover.md`) or
+  `CashService.createTx` OUT on `fundCode` without an invoice.
 - **CASH_TX** → `CashService.createTx({ refType: 'BANK_STATEMENT', refId: reference, direction by sign, kind, memo: counterparty — description })`, guarded by lookup.
 - **IGNORE** → nothing written; record `SKIPPED`.
+
+**Statement check.** After import/recheck/apply the batch carries `stats.balanceCheck`: per bank
+account, the statement's opening and closing balance vs Σ `cash_tx` of that account at those dates
+(shown above the review table). A difference is informational — usually a missing opening balance at
+the migration cutover (`docs/cutover.md`).
 
 Everything below the intake layer is the ordinary engine: `be_statement.payments`, penalties and the
 avizier pick the payment up at the next `prepare` like any receipt recorded in *Plăți*.

@@ -265,6 +265,10 @@ export type ResolvedBankLine = {
   outstandingTotal: number
   cashFundCode: string | null
   cashKind: string | null
+  /** VENDOR_SETTLEMENT with no matching invoice and the admin/agent chose "pays a pre-cutover invoice" */
+  openingInvoice: boolean
+  /** number the OPENING invoice will carry (the first quoted number, else derived at apply) */
+  openingNumber: string | null
 }
 
 export type BankLineCheckResult = { blockers: Blocker[]; resolved: ResolvedBankLine }
@@ -290,7 +294,7 @@ export function checkBankLine(input: BankLineCheckInput, catalogue: IntakeCatalo
   const resolved: ResolvedBankLine = {
     target: mapping?.target ?? null, reference, lineKey, accountId: null, accountCode: null, unitId: null, unitCode: null, unitLabel: null,
     billingEntityId: null, billingEntityName: null, suggestedUnitCode: null, fundLines: [], advanceFundCode: null,
-    cycleCode: null, invoices: [], outstandingTotal: 0, cashFundCode: null, cashKind: null,
+    cycleCode: null, invoices: [], outstandingTotal: 0, cashFundCode: null, cashKind: null, openingInvoice: false, openingNumber: null,
   }
 
   // bank lines are plain payments/cash rows: `prepare` re-applies payments, so a PREPARED month is fine
@@ -384,7 +388,14 @@ export function checkBankLine(input: BankLineCheckInput, catalogue: IntakeCatalo
     // where an acknowledged INVOICE_NOT_FOUND settlement lands: the mapping's fund, else the default
     const fallbackFund = mapping.fundCode && catalogue.funds.some((x) => x.code === mapping.fundCode) ? mapping.fundCode : catalogue.defaultAdvanceFundCode
     if (mapping.fundCode && fallbackFund !== mapping.fundCode) push('FUND_UNKNOWN', `Fund "${mapping.fundCode}" does not exist`, 'mapping.fundCode')
-    if (!wanted.length || !hits.length) push('INVOICE_NOT_FOUND', `${wanted.length ? `No unpaid invoice matches ${mapping.invoiceNumbers.join(', ')}` : 'No invoice number quoted'} — on acknowledge the outflow is booked on ${fallbackFund ?? '?'} without an invoice`, 'mapping.invoiceNumbers')
+    if (!wanted.length || !hits.length) {
+      resolved.openingInvoice = mapping.openingInvoice === true
+      resolved.openingNumber = mapping.invoiceNumbers?.[0] ?? null
+      const landing = resolved.openingInvoice
+        ? `on acknowledge a virtual pre-cutover invoice ${resolved.openingNumber ?? '(no number)'} is created on ${fallbackFund ?? '?'} and settled`
+        : `on acknowledge the outflow is booked on ${fallbackFund ?? '?'} without an invoice`
+      push('INVOICE_NOT_FOUND', `${wanted.length ? `No unpaid invoice matches ${mapping.invoiceNumbers.join(', ')}` : 'No invoice number quoted'} — ${landing}`, 'mapping.invoiceNumbers')
+    }
     else if (vendors.size > 1) push('INVOICE_AMBIGUOUS', `Quoted number(s) match invoices of ${vendors.size} vendors`, 'mapping.invoiceNumbers')
     else {
       resolved.invoices = hits.map((h) => ({ id: h.id, number: h.number, vendorName: h.vendorName, outstanding: r2(h.outstanding) }))

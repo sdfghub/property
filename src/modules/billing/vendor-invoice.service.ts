@@ -418,6 +418,76 @@ export class VendorInvoiceService {
     return invoice
   }
 
+  /**
+   * A payable from before the migration cutover, discovered when the bank pays it: a virtual invoice
+   * (`source: 'OPENING'`) with no accrual, no template and no expense charges — the expense is already
+   * in the injected history. Amount = what is being paid, so partial/lump settlements are right by
+   * construction. Idempotent on `provenance.openingKey` when given.
+   */
+  async createOpeningInvoice(
+    communityId: string,
+    body: { vendorId?: string | null; vendorName?: string | null; number?: string | null; amount: number; currency?: string | null; fundId?: string | null; fundCode?: string | null; issueDate?: string | Date | null; openingKey?: string | null; provenance?: any },
+  ) {
+    const amount = Number(body.amount)
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('Opening invoice amount must be positive')
+    if (body.openingKey) {
+      const existing = await this.prisma.vendorInvoice.findFirst({ where: { communityId, source: 'OPENING', provenance: { path: ['openingKey'], equals: body.openingKey } } })
+      if (existing) return existing
+    }
+    const issue = body.issueDate ? new Date(body.issueDate) : null
+    const vendorLabel = (body.vendorName ?? '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase().slice(0, 24)
+    return this.createInvoice(communityId, {
+      vendorId: body.vendorId ?? undefined,
+      vendorName: body.vendorName ?? undefined,
+      number: body.number || `OPENING-${vendorLabel || 'VENDOR'}-${(issue ?? new Date()).toISOString().slice(0, 10)}`,
+      issueDate: issue,
+      dueDate: issue,
+      currency: body.currency || 'RON',
+      gross: amount,
+      net: null,
+      vat: null,
+      source: 'OPENING',
+      fundId: body.fundId ?? undefined,
+      fundCode: body.fundCode ?? undefined,
+      provenance: { ...(body.provenance ?? {}), opening: true, openingKey: body.openingKey ?? null },
+    })
+  }
+
+  /**
+   * Marks an invoice as paid before the migration cutover: a virtual VendorPayment (`method: 'OPENING'`)
+   * closes the outstanding amount with no cash row and no ledger legs — the cash left before the books
+   * started. Used for seeded invoices the register already paid. Idempotent per invoice.
+   */
+  async settleAtCutover(communityId: string, invoiceId: string, body: { ts?: string | Date | null; note?: string | null } = {}) {
+    const invoice = await this.prisma.vendorInvoice.findFirst({ where: { id: invoiceId, communityId }, select: { id: true, vendorId: true, gross: true, currency: true, issueDate: true } })
+    if (!invoice) throw new NotFoundException('Invoice not found')
+    const refId = `opening:${invoice.id}`
+    const existing = await this.prisma.vendorPayment.findFirst({ where: { communityId, invoiceId: invoice.id, refId } })
+    if (existing) return existing
+    const applied = await this.prisma.vendorPaymentApplication.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } })
+    const outstanding = Math.round((Number(invoice.gross ?? 0) - Number(applied._sum.amount ?? 0)) * 100) / 100
+    if (outstanding <= 0) throw new BadRequestException('Invoice has nothing outstanding')
+    const { payment } = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.vendorPayment.create({
+        data: { communityId, vendorId: invoice.vendorId ?? null, invoiceId: invoice.id, accountId: null, amount: outstanding, currency: invoice.currency || 'RON', ts: body.ts ? new Date(body.ts) : invoice.issueDate ?? new Date(), method: 'OPENING', refId, status: 'POSTED' },
+      })
+      await tx.vendorPaymentApplication.create({ data: { paymentId: created.id, invoiceId: invoice.id, amount: outstanding, spec: { source: 'OPENING', invoiceId: invoice.id, note: body.note ?? null } } })
+      return { payment: created }
+    })
+    return payment
+  }
+
+  /** createOpeningInvoice + createVendorPayment for the same amount — the *Plăți* / intake path. */
+  async payOpening(communityId: string, body: { vendorId?: string | null; vendorName?: string | null; number?: string | null; amount: number; currency?: string | null; fundId?: string | null; fundCode?: string | null; issueDate?: string | null; accountId?: string | null; ts?: string | Date | null; method?: string | null; refId?: string | null; openingKey?: string | null; provenance?: any }) {
+    const invoice = await this.createOpeningInvoice(communityId, { vendorId: body.vendorId, vendorName: body.vendorName, number: body.number, amount: body.amount, currency: body.currency, fundId: body.fundId, fundCode: body.fundCode, issueDate: body.issueDate, openingKey: body.openingKey, provenance: body.provenance })
+    if (body.refId) {
+      const existing = await this.prisma.vendorPayment.findFirst({ where: { communityId, invoiceId: invoice.id, refId: body.refId } })
+      if (existing) return { invoice, payment: existing }
+    }
+    const payment = await this.createVendorPayment(communityId, invoice.id, { amount: body.amount, currency: body.currency, accountId: body.accountId ?? null, ts: body.ts ?? null, method: body.method ?? 'BANK', refId: body.refId ?? null })
+    return { invoice, payment }
+  }
+
   async updateInvoice(communityId: string, id: string, body: any) {
     const invoice = await this.prisma.vendorInvoice.findFirst({ where: { id, communityId }, select: { id: true } })
     if (!invoice) throw new NotFoundException('Invoice not found')
@@ -699,9 +769,12 @@ export class VendorInvoiceService {
     })
     const invoice = await this.prisma.vendorInvoice.findUnique({
       where: { id: data.invoiceId },
-      select: { id: true, gross: true, currency: true, issueDate: true, serviceStartPeriodId: true, serviceEndPeriodId: true },
+      select: { id: true, gross: true, currency: true, issueDate: true, serviceStartPeriodId: true, serviceEndPeriodId: true, source: true },
     })
     if (!fund || !invoice) return
+    // OPENING invoices (payables from before the migration cutover) carry no accrual: the expense
+    // already lives in the injected history. They exist only so a later payment has something to settle.
+    if (invoice.source === 'OPENING') return
     const amount = data.amount ?? (invoice.gross ? Number(invoice.gross) : 0)
     const periodId = await this.resolveFundSpendPeriodId(communityId, invoice)
     const entry = await this.prisma.beLedgerEntry.upsert({

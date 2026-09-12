@@ -10,7 +10,7 @@ export type IntakeBatchSummary = {
   promptVersion: string | null
   agentLabel: string | null
   sourceFileName: string | null
-  stats: { records: number; byStatus: Record<string, number>; byKind: Record<string, number> } | null
+  stats: { records: number; byStatus: Record<string, number>; byKind: Record<string, number>; balanceCheck?: Array<{ accountCode: string; from: string; to: string; statementOpening: number; appOpening: number; statementClosing: number; appClosing: number; lines: number }> } | null
   error: string | null
   createdAt: string
   updatedAt: string
@@ -55,6 +55,7 @@ export type BankLineMapping = {
   kind: 'PAYMENT' | 'TRANSFER' | 'ADJUSTMENT' | 'OTHER' | null
   reason: string | null
   accountCode: string | null
+  openingInvoice: boolean
 }
 export type BankLine = {
   date: string | null
@@ -65,7 +66,7 @@ export type BankLine = {
   reference: string | null
   description: string | null
 }
-export const EMPTY_BANK_MAPPING: BankLineMapping = { target: 'OWNER_PAYMENT', unitCode: null, payerName: null, funds: [], advanceFundCode: null, cycleCode: null, invoiceNumbers: [], vendorName: null, fundCode: null, expenseTypeCode: null, kind: null, reason: null, accountCode: null }
+export const EMPTY_BANK_MAPPING: BankLineMapping = { target: 'OWNER_PAYMENT', unitCode: null, payerName: null, funds: [], advanceFundCode: null, cycleCode: null, invoiceNumbers: [], vendorName: null, fundCode: null, expenseTypeCode: null, kind: null, reason: null, accountCode: null, openingInvoice: false }
 
 export type IntakeRecordRow = {
   id: string

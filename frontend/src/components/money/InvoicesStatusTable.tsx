@@ -147,6 +147,22 @@ export function InvoicesStatusTable({
     }
   }
 
+  // migration cutover: the invoice was paid before the books started — close it without a cash row
+  const settleAtCutover = async (inv: any) => {
+    if (!communityId) return
+    if (!window.confirm(t('invoices.settleAtCutoverConfirm', 'Marchează factura ca plătită înainte de migrare? Nu se înregistrează nicio mișcare de numerar.'))) return
+    setBusyId(inv.id)
+    setActionError(null)
+    try {
+      for (const id of (inv.mergedIds ?? [inv.id]) as string[]) await api.post(`/communities/${communityId}/invoices/${id}/settle-at-cutover`, {})
+      onChanged?.()
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to settle at cutover')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const markPaid = async (inv: any) => {
     if (!communityId || !payDate) return
     setBusyId(inv.id)
@@ -504,6 +520,12 @@ export function InvoicesStatusTable({
                               <button type="button" className="btn secondary small" disabled={busyId === inv.id}
                                 onClick={() => { setPayingId(inv.id); setPayDate(new Date().toISOString().slice(0, 10)); setPayAmount(due > 0.005 ? due.toFixed(2) : gross.toFixed(2)) }}>
                                 {t('invoices.markPaid', 'Marchează plătită')}
+                              </button>
+                            )}
+                            {!isPaid && (
+                              <button type="button" className="btn ghost small" disabled={busyId === inv.id} title={t('invoices.settleAtCutoverHint', 'Plătită înainte ca evidența să înceapă — se închide fără mișcare de numerar')}
+                                onClick={() => settleAtCutover(inv)}>
+                                {t('invoices.settleAtCutover', 'Plătită înainte de migrare')}
                               </button>
                             )}
                           </div>

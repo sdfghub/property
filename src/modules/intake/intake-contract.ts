@@ -14,7 +14,7 @@ export const CONTRACT_VERSION = 'intake-import/v2'
 export const ACCEPTED_CONTRACT_VERSIONS = ['intake-import/v1', 'intake-import/v2'] as const
 // Bump when the prompt wording/guidelines change in a way that affects what agents emit. Batches record
 // which version the agent used so prompt regressions can be traced.
-export const PROMPT_VERSION = '2026-09-12.1'
+export const PROMPT_VERSION = '2026-09-12.2'
 
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
 const PeriodCode = z.string().regex(/^\d{4}-\d{2}$/, 'expected YYYY-MM')
@@ -123,6 +123,10 @@ export const BankLineMappingSchema = z.object({
   reason: Str,
   /** cash account code when the statement account is ambiguous; null = resolved by the statement currency */
   accountCode: Str,
+  /** VENDOR_SETTLEMENT of an invoice from before the books started (none matches): create a virtual
+   *  OPENING invoice for the amount paid and settle it. Set by the admin in review, or by the agent when
+   *  the quoted invoice clearly predates the catalogue. */
+  openingInvoice: z.boolean().default(false),
 })
 
 export const BankLineRecordSchema = z.object({
@@ -273,6 +277,7 @@ export function normalizePayload(raw: unknown): unknown {
         r.mapping = fillNull(r.mapping, ['unitCode', 'payerName', 'advanceFundCode', 'cycleCode', 'vendorName', 'fundCode', 'expenseTypeCode', 'kind', 'reason', 'accountCode'])
         r.mapping.funds = Array.isArray(r.mapping.funds) ? r.mapping.funds : []
         r.mapping.invoiceNumbers = Array.isArray(r.mapping.invoiceNumbers) ? r.mapping.invoiceNumbers.map(String) : []
+        r.mapping.openingInvoice = r.mapping.openingInvoice === true || r.mapping.openingInvoice === 'true'
       } else r.mapping = null
     } else if (r.kind === 'OTHER') {
       r.note ??= null

@@ -30,6 +30,7 @@ export type AppliedRefs = {
   remaining?: number | null
   advance?: number | null
   target?: string | null
+  openingInvoiceId?: string | null
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -334,9 +335,24 @@ export class IntakeApplyService {
     if (mapping.target === 'VENDOR_SETTLEMENT') {
       const invoices: Array<{ id: string; outstanding: number }> = res.invoices ?? []
       if (!invoices.length) {
-        // INVOICE_NOT_FOUND acknowledged: book the outflow on the default fund, without an invoice
         const fid = fundId(res.cashFundCode)
         if (!fid) throw new ConflictException('No fund for an unmatched settlement')
+        if (res.openingInvoice) {
+          // INVOICE_NOT_FOUND acknowledged as "pays an invoice from before the books": a virtual OPENING
+          // invoice for exactly this amount, settled by this line (docs/cutover.md)
+          const vendorName: string | null = mapping.vendorName ?? line.counterpartyName ?? null
+          const r = await this.invoices.payOpening(catalogue.community.id, {
+            vendorName, number: res.openingNumber, amount: Math.abs(amount), currency: line.currency ?? 'RON', fundId: fid,
+            issueDate: line.date ?? null, accountId: res.accountId, ts, method: 'BANK', refId: refKey,
+            openingKey: refKey, provenance: { ...provenance, opening: true },
+          })
+          refs.vendorInvoiceIds = [r.invoice.id]
+          refs.vendorPaymentIds = [r.payment.id]
+          refs.openingInvoiceId = r.invoice.id
+          if (lineKey) bankRefs.vendorPayments.add(lineKey)
+          return refs
+        }
+        // INVOICE_NOT_FOUND acknowledged: book the outflow on the default fund, without an invoice
         const tx = await this.createCashTxOnce(catalogue.community.id, { accountId: res.accountId, fundId: fid, amount: Math.abs(amount), direction: 'OUT', kind: 'PAYMENT', ts, memo, reference: lineKey, meta: provenance })
         refs.cashTxId = tx.id
         if (lineKey) bankRefs.cashTx.add(lineKey)

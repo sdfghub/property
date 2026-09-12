@@ -178,6 +178,43 @@ export class CashService {
     })
   }
 
+  /**
+   * Opening balance of a cash account at the migration cutover: one ADJUSTMENT row per (account, fund),
+   * refType OPENING_BALANCE, replaced on every call (idempotent). The book starts at zero otherwise, so
+   * a bank account that only received post-cutover movements shows a nonsense (often negative) balance.
+   */
+  async setOpening(communityRef: string, accountId: string, body: { fundId?: string | null; fundCode?: string | null; amount: number; date?: string | null; memo?: string | null }) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    const account = await this.prisma.cashAccount.findFirst({ where: { id: accountId, communityId }, select: { id: true, code: true, currency: true } })
+    if (!account) throw new NotFoundException('Cash account not found')
+    const fund = body.fundId
+      ? await this.prisma.fund.findFirst({ where: { id: body.fundId, communityId }, select: { id: true, code: true } })
+      : await this.prisma.fund.findFirst({ where: { communityId, code: body.fundCode ?? 'EXPENSES' }, select: { id: true, code: true } })
+    if (!fund) throw new BadRequestException('Fund not found for the opening balance')
+    const amount = Number(body.amount)
+    if (!Number.isFinite(amount)) throw new BadRequestException('amount must be a number')
+    const ts = body.date ? new Date(body.date) : new Date()
+    const refId = `opening:${account.id}:${fund.id}`
+    await this.prisma.cashTx.deleteMany({ where: { communityId, refType: 'OPENING_BALANCE', refId } })
+    if (Math.abs(amount) < 0.005) return { removed: true, accountCode: account.code, fundCode: fund.code }
+    return this.prisma.cashTx.create({
+      data: {
+        communityId, accountId: account.id, fundId: fund.id,
+        amount: Math.abs(amount), currency: account.currency, ts,
+        direction: amount >= 0 ? 'IN' : 'OUT', kind: 'ADJUSTMENT', status: 'POSTED',
+        memo: body.memo ?? `Sold inițial ${account.code} / ${fund.code} la ${ts.toISOString().slice(0, 10)}`,
+        refType: 'OPENING_BALANCE', refId, meta: { opening: true, fundCode: fund.code },
+      },
+    })
+  }
+
+  /** Opening rows currently on file, per account/fund (for the settings UI). */
+  async listOpenings(communityRef: string) {
+    const communityId = await this.ensureCommunityId(communityRef)
+    const rows = await this.prisma.cashTx.findMany({ where: { communityId, refType: 'OPENING_BALANCE' }, select: { id: true, accountId: true, fundId: true, amount: true, direction: true, ts: true, fund: { select: { code: true } }, account: { select: { code: true } } }, orderBy: { ts: 'asc' } })
+    return rows.map((r) => ({ id: r.id, accountId: r.accountId, accountCode: r.account.code, fundId: r.fundId, fundCode: r.fund.code, amount: Number(r.amount) * (r.direction === 'IN' ? 1 : -1), date: r.ts.toISOString().slice(0, 10) }))
+  }
+
   async createTx(communityRef: string, body: any) {
     const communityId = await this.ensureCommunityId(communityRef)
     if (!body.accountId) throw new BadRequestException('accountId is required')

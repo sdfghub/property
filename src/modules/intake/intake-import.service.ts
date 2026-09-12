@@ -20,6 +20,8 @@ export type CheckedRecord = {
 
 // Turns an agent payload into IntakeBatch + IntakeRecord rows and computes the blockers. The check
 // logic itself is in intake-blockers.ts so `intake:validate` and the review endpoints share it.
+const r2 = (n: number) => Math.round(n * 100) / 100
+
 @Injectable()
 export class IntakeImportService {
   constructor(private readonly prisma: PrismaService, private readonly prompt: IntakePromptService) {}
@@ -93,6 +95,7 @@ export class IntakeImportService {
         })
       }
     }
+    await this.refreshStats(batch.id) // adds the statement-vs-book balance check
     return batch
   }
 
@@ -136,7 +139,9 @@ export class IntakeImportService {
   }
 
   async refreshStats(batchId: string) {
-    const rows = await this.prisma.intakeRecord.findMany({ where: { batchId }, select: { status: true, kind: true } })
+    const rows = await this.prisma.intakeRecord.findMany({ where: { batchId }, select: { status: true, kind: true, extracted: true, resolved: true } })
+    const batchRow = await this.prisma.intakeBatch.findUnique({ where: { id: batchId }, select: { communityId: true } })
+    const balanceCheck = batchRow ? await this.balanceCheck(batchRow.communityId, rows) : []
     const byStatus: Record<string, number> = {}
     const byKind: Record<string, number> = {}
     for (const r of rows) {
@@ -152,7 +157,7 @@ export class IntakeImportService {
     const current = await this.prisma.intakeBatch.findUnique({ where: { id: batchId }, select: { status: true } })
     await this.prisma.intakeBatch.update({
       where: { id: batchId },
-      data: { stats: { records: rows.length, byStatus, byKind }, ...(current?.status === 'APPLYING' ? {} : { status }) },
+      data: { stats: { records: rows.length, byStatus, byKind, balanceCheck }, ...(current?.status === 'APPLYING' ? {} : { status }) },
     })
   }
 
@@ -203,6 +208,42 @@ export class IntakeImportService {
   }
 
   /** Bank references already in the books, so a statement line imported twice (or after a register import) is refused. */
+  /**
+   * Statement vs. cash book: for each bank account the batch's lines resolve to, the statement's opening
+   * (first line's balanceAfter − amount) and closing (last line's balanceAfter) against Σ cash_tx of that
+   * account before / through those dates. A difference means movements the book lacks (or has twice) —
+   * typically a missing opening balance at the migration cutover (docs/cutover.md). Informational only.
+   */
+  private async balanceCheck(communityId: string, rows: Array<{ kind: string; extracted: any; resolved: any }>) {
+    type Line = { date: string; amount: number; balanceAfter: number }
+    const byAccount = new Map<string, { accountCode: string; lines: Line[] }>()
+    for (const r of rows) {
+      if (r.kind !== 'BANK_LINE') continue
+      const l = r.extracted ?? {}
+      const accountId = r.resolved?.accountId
+      if (!accountId || l.balanceAfter == null || l.date == null) continue
+      const g = byAccount.get(accountId) ?? { accountCode: r.resolved?.accountCode ?? '?', lines: [] as Line[] }
+      g.lines.push({ date: String(l.date), amount: Number(l.amount) || 0, balanceAfter: Number(l.balanceAfter) })
+      byAccount.set(accountId, g)
+    }
+    const out: Array<{ accountCode: string; from: string; to: string; statementOpening: number; appOpening: number; statementClosing: number; appClosing: number; lines: number }> = []
+    for (const [accountId, g] of byAccount) {
+      const sorted = [...g.lines].sort((a, b) => a.date.localeCompare(b.date))
+      const first = sorted[0], last = sorted[sorted.length - 1]
+      const from = new Date(`${first.date}T00:00:00Z`), toExcl = new Date(`${last.date}T00:00:00Z`); toExcl.setUTCDate(toExcl.getUTCDate() + 1)
+      const sum = async (before: Date) => {
+        const g2 = await this.prisma.cashTx.groupBy({ by: ['direction'], where: { communityId, accountId, status: 'POSTED', ts: { lt: before } }, _sum: { amount: true } })
+        return r2(g2.reduce((s, x) => s + (x.direction === 'IN' ? 1 : -1) * Number(x._sum.amount ?? 0), 0))
+      }
+      out.push({
+        accountCode: g.accountCode, from: first.date, to: last.date, lines: g.lines.length,
+        statementOpening: r2(first.balanceAfter - first.amount), appOpening: await sum(from),
+        statementClosing: r2(last.balanceAfter), appClosing: await sum(toExcl),
+      })
+    }
+    return out
+  }
+
   async loadBankRefs(communityId: string, records: IntakeRecordInput[]): Promise<BankRefs> {
     const lines = records.filter((r) => r.kind === 'BANK_LINE').map((r: any) => r.bankLine ?? {})
     const refs = [...new Set(lines.map((l) => (l.reference ? String(l.reference).trim() : '')).filter(Boolean))]

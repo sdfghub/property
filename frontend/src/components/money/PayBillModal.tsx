@@ -45,6 +45,12 @@ export function PayBillModal({
   const [accountId, setAccountId] = React.useState('')
   const [accountName, setAccountName] = React.useState('')
   const [fundId, setFundId] = React.useState('')
+  // migration cutover: paying an invoice from before the books — a virtual OPENING invoice is created for the amount
+  const OPENING = '__opening__'
+  const [openingVendor, setOpeningVendor] = React.useState('')
+  const [openingNumber, setOpeningNumber] = React.useState('')
+  const [openingDate, setOpeningDate] = React.useState('')
+  const isOpening = invoiceId === OPENING
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<{ paid: number; remaining: number } | null>(null)
@@ -65,7 +71,7 @@ export function PayBillModal({
   const outstanding = num2(inv?.outstanding)
   const currency = inv?.currency || 'RON'
   const amt = num2(amount)
-  const exceeds = amt > outstanding + 0.005
+  const exceeds = !isOpening && amt > outstanding + 0.005
 
   React.useEffect(() => {
     if (inv) setAmount(String(num2(inv.outstanding)))
@@ -75,6 +81,7 @@ export function PayBillModal({
   function reset() {
     setInvoiceId(''); setAmount(''); setTs(today); setMethod(''); setRefId('')
     setFundId(''); setError(null); setSuccess(null); setReceipt(null)
+    setOpeningVendor(''); setOpeningNumber(''); setOpeningDate('')
   }
 
   async function submit(e: React.FormEvent) {
@@ -83,8 +90,19 @@ export function PayBillModal({
     if (!fundId) { setError(t('paybill.needFund', 'Alegeți fondul din care se plătește.')); return }
     if (!accountId) { setError(t('receipt.needAccount', 'Alegeți un cont / casierie.')); return }
     if (exceeds) { setError(t('paybill.exceeds', 'Suma depășește restul de plată.')); return }
+    if (isOpening && !openingVendor.trim()) { setError(t('paybill.openingNeedVendor', 'Scrieți furnizorul.')); return }
     setSubmitting(true); setError(null)
     try {
+      if (isOpening) {
+        await api.post(`/communities/${communityId}/invoices/opening-payments`, {
+          vendorName: openingVendor.trim(), number: openingNumber.trim() || undefined, amount: amt, currency: 'RON',
+          fundId, accountId, issueDate: openingDate || undefined, ts: ts || undefined, method: method || undefined, refId: refId || undefined,
+        })
+        setSuccess({ paid: amt, remaining: 0 })
+        setReceipt({ kind: 'OUT', number: refId || `${openingNumber || 'OPENING'}-${ts}`, date: ts || today, party: openingVendor.trim(), amount: amt, currency: 'RON', method: method || undefined, accountName: accountName || undefined, communityName, lines: [{ label: `${t('paybill.invoice', 'Factură')} ${openingNumber || t('paybill.openingShort', 'dinainte de migrare')}`.trim(), amount: amt }] })
+        onDone()
+        return
+      }
       await api.post(`/communities/${communityId}/invoices/${invoiceId}/payments`, {
         amount: amt,
         currency,
@@ -137,6 +155,7 @@ export function PayBillModal({
             {loadingList ? <div className="muted">{t('common.loading', 'Loading…')}</div> : (
               <select className="input" value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
                 <option value="">{t('paybill.select', 'Selectează factura')}</option>
+                <option value={OPENING}>— {t('paybill.opening', 'Factură dinainte de migrare (nu e în evidență)')} —</option>
                 {invoices.map((i) => (
                   <option key={i.id} value={i.id}>
                     {(i.number || '—')} · {i.vendor || '—'} · {money(i.outstanding, i.currency)}{i.dueDate ? ` · scad. ${fmtDate(i.dueDate)}${isOverdue(i.dueDate) ? ' ⚠' : ''}` : ''}
@@ -153,16 +172,35 @@ export function PayBillModal({
             {!loadingList && invoices.length === 0 && <div className="empty">{t('unpaid.clear', 'Toate facturile sunt plătite 🎉')}</div>}
           </div>
 
-          {inv && (
+          {isOpening && (
+            <div className="card soft" style={{ fontSize: 13, display: 'grid', gap: 8 }}>
+              <div className="muted">{t('paybill.openingHint', 'Plata unei facturi emise înainte ca evidența să înceapă: se creează o factură virtuală pentru suma plătită (fără cheltuială — aceasta e deja în istoric) și se achită.')}</div>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <div className="stack" style={{ gap: 4, flex: '1 1 160px' }}>
+                  <label className="label">{t('paybill.openingVendor', 'Furnizor')}</label>
+                  <input className="input" value={openingVendor} onChange={(e) => setOpeningVendor(e.target.value)} placeholder="Aquatim" />
+                </div>
+                <div className="stack" style={{ gap: 4, flex: '1 1 140px' }}>
+                  <label className="label">{t('paybill.openingNumber', 'Nr. factură (dacă se știe)')}</label>
+                  <input className="input" value={openingNumber} onChange={(e) => setOpeningNumber(e.target.value)} placeholder="TMA10/1015495562" />
+                </div>
+                <div className="stack" style={{ gap: 4 }}>
+                  <label className="label">{t('paybill.openingDate', 'Data facturii')}</label>
+                  <input className="input" type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+          {(inv || isOpening) && (
             <>
               <div className="stack" style={{ gap: 6 }}>
                 <label className="label">{t('receipt.amount', 'Sumă')}</label>
                 <div className="row" style={{ gap: 8 }}>
                   <input className="input" type="number" step="0.01" style={{ width: 140 }} value={amount}
                     onChange={(e) => setAmount(e.target.value)} required />
-                  <button type="button" className="btn ghost small" onClick={() => setAmount(String(outstanding))}>
+                  {inv && <button type="button" className="btn ghost small" onClick={() => setAmount(String(outstanding))}>
                     {t('paybill.payFull', 'Plătește integral')}
-                  </button>
+                  </button>}
                 </div>
               </div>
 
@@ -189,8 +227,8 @@ export function PayBillModal({
               </div>
 
               <div className="card soft muted" style={{ fontSize: 13 }}>
-                {t('paybill.previewLead', 'Se plătește')} {money(amt, currency)} {t('paybill.previewOf', 'din')} {money(outstanding, currency)}
-                {inv.vendor ? ` ${t('paybill.previewTo', 'către')} ${inv.vendor}` : ''}
+                {t('paybill.previewLead', 'Se plătește')} {money(amt, currency)}{inv ? ` ${t('paybill.previewOf', 'din')} ${money(outstanding, currency)}` : ''}
+                {inv?.vendor ? ` ${t('paybill.previewTo', 'către')} ${inv.vendor}` : isOpening && openingVendor ? ` ${t('paybill.previewTo', 'către')} ${openingVendor}` : ''}
                 {accountName ? ` · ${t('paybill.previewFrom', 'din')} ${accountName}` : ''}.
               </div>
 

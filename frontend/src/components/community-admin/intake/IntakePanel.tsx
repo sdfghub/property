@@ -181,6 +181,16 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             </select>
           </label>
         </div>
+        {selected?.batch.stats?.balanceCheck?.map((b) => {
+          const dOpen = Math.round((b.appOpening - b.statementOpening) * 100) / 100
+          const dClose = Math.round((b.appClosing - b.statementClosing) * 100) / 100
+          const ok = Math.abs(dOpen) < 0.005 && Math.abs(dClose) < 0.005
+          return (
+            <div key={b.accountCode} className={`badge ${ok ? 'positive' : 'warning'}`} style={{ marginTop: 8, display: 'block' }} title={t('intake.balance.hint', 'Statement balance vs. the cash book (Σ transactions of this account). A difference usually means a missing opening balance at the migration cutover — set it in Registru → account → Sold inițial.')}>
+              {t('intake.balance.line', { account: b.accountCode, from: b.from, to: b.to })}: {t('intake.balance.opening', 'opening')} {money(b.statementOpening, 'RON')} / {t('intake.balance.book', 'book')} {money(b.appOpening, 'RON')}{Math.abs(dOpen) >= 0.005 ? ` (${dOpen > 0 ? '+' : ''}${money(dOpen, 'RON')})` : ' ✓'} · {t('intake.balance.closing', 'closing')} {money(b.statementClosing, 'RON')} / {t('intake.balance.book', 'book')} {money(b.appClosing, 'RON')}{Math.abs(dClose) >= 0.005 ? ` (${dClose > 0 ? '+' : ''}${money(dClose, 'RON')})` : ' ✓'}
+            </div>
+          )
+        })}
         {ctx && !periodOpen && <div className="badge warning" style={{ marginTop: 8 }}>{periodPrepared ? t('intake.msg.periodPrepared', { code: ctx.period.code }) : t('intake.msg.periodNotOpen', { code: ctx.period.code, status: ctx.period.status })}</div>}
       </div>
 

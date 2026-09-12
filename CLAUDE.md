@@ -52,6 +52,11 @@ This file is only the rules that are easy to get wrong.
     bank reference), only into OPEN periods, and never closes templates. The agent never picks charges —
     the community's allocation strategy does. The app does not call an LLM: it exports a prompt pack and
     imports the agent's JSON (`docs/intake.md`).
+12. **Pre-cutover state is explicit, never guessed.** A payment for an invoice the app never saw creates a
+    virtual `source: 'OPENING'` invoice (no accrual, no charges) and settles it; seeded invoices paid
+    before the cutover close with a `method: 'OPENING'` payment (no cash); cash accounts get one
+    `OPENING_BALANCE` row per fund. Never book such things as plain cash transactions or fake expenses
+    (`docs/cutover.md`).
 
 ## Data & prod
 
