@@ -929,27 +929,29 @@ select option {
   margin: 10mm;
 }
 
-/* AvizierPanel renders a hidden `.avizier-print-root` containing 4 fully static pages (one per
-   zoom level) purpose-built for paper — see AvizierPanel.tsx's `printPages`. Printing must show
-   ONLY that content, not the app chrome around it (sidebar/header/toolbar) or the on-screen
-   interactive table, regardless of what page/component happens to host the panel — so this hides
-   literally everything in the document except that one subtree, then pulls it out of normal flow
-   (its real ancestors — chrome we just hid, but whose layout boxes still take up space since
-   visibility:hidden doesn't collapse them like display:none would) so it starts at the top of the
-   page instead of wherever it naturally sits once those hidden ancestors are edited out visually. */
+/* AvizierPanel portals a hidden `.avizier-print-root` (React `createPortal`, straight to
+   `document.body`) containing 4 fully static pages (one per zoom level) purpose-built for paper —
+   see AvizierPanel.tsx's `printPages`. Printing must show ONLY that content, not the app chrome
+   around it (sidebar/header/toolbar) or the on-screen interactive table.
+
+   This used to be done with `body * { visibility: hidden }` plus `position:absolute` on the print
+   root to pull it out of the (still layout-occupying, since visibility:hidden doesn't collapse
+   like display:none does) space its hidden ancestors left behind. That broke pagination: Chrome's
+   print engine only paginates elements participating in normal document flow, and an absolutely
+   positioned element sized taller than one page doesn't get split page-by-page the way
+   `page-break-after`/`break-after` on its in-flow children would suggest — it just renders as one
+   tall, unpaginated block, however many physical pages that spills across. Since the portal makes
+   `.avizier-print-root` a direct child of <body>, this instead `display:none`s every OTHER direct
+   child of <body> (collapsing the rest of the app out of the layout entirely, not just hiding it)
+   so the print root is the only thing left in the document AND stays in normal flow — letting
+   `page-break-after`/`break-after` on its own children (one per zoom level) actually paginate. */
 @media print {
-  body * {
-    visibility: hidden;
+  body > *:not(.avizier-print-root) {
+    display: none !important;
   }
-  .avizier-print-root,
-  .avizier-print-root * {
-    visibility: visible;
-  }
+  /* The print root's own default is `display:none` (kept invisible outside of print) — override
+     it here rather than in a screen rule, so nothing else has to know it exists. */
   .avizier-print-root {
     display: block !important;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
   }
 }
