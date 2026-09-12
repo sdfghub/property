@@ -27,6 +27,7 @@ import { VendorSummaryTable } from '../money/VendorSummaryTable'
 import { AvizierPanel } from './AvizierPanel'
 import { AssociationInfoPanel } from './AssociationInfoPanel'
 import { PenaltyReviewPanel } from './PenaltyReviewPanel'
+import { PenaltyLedgerPanel } from './PenaltyLedgerPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { CorrectionsPanel } from './CorrectionsPanel'
 import { IntakePanel } from './intake/IntakePanel'
@@ -42,6 +43,7 @@ export type CommunityAdminTabKey =
   | 'association'
   | 'avizier'
   | 'penalties'
+  | 'penaltyLedger'
   | 'debtors'
   | 'vendors'
   | 'cashRegister'
@@ -83,8 +85,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
+  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -218,6 +220,7 @@ export function CommunityAdminDashboard({
         { key: 'avizier', label: t('tab.avizier') || 'Avizier' },
         { key: 'meters', label: t('tab.meters') || 'Meters' },
         { key: 'expenses', label: t('tab.expenses') || 'Invoices & expenses' },
+        { key: 'penaltyLedger', label: t('tab.penaltyLedger') || 'Penalty check' },
         { key: 'intake', label: t('tab.intake') || 'AI intake' },
         { key: 'periodFocus', label: t('tab.periodFocus') || 'Period detail' },
       ],
@@ -777,6 +780,7 @@ function CommunityAdminContent({
           />
         )}
         {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
+        {activeTab === 'penaltyLedger' && <PenaltyLedgerPanel communityId={communityId} />}
         {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
         {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
         {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}

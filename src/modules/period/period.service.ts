@@ -44,7 +44,7 @@ export class PeriodService {
     return this.prisma.period.findMany({
       where: { communityId },
       orderBy: { seq: 'asc' },
-      select: { id: true, code: true, seq: true, status: true, closedAt: true, startDate: true, afisareDate: true, dueDate: true },
+      select: { id: true, code: true, seq: true, status: true, closedAt: true, startDate: true, endDate: true, afisareDate: true, dueDate: true },
     })
   }
 

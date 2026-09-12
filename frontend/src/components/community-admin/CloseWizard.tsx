@@ -174,6 +174,9 @@ export function CloseWizard({ communityId, onNavigate, readOnly = false }: Props
           <button className="btn secondary" onClick={() => onNavigate('expenses')}>
             {billsDone ? t('common.review', undefined, 'Review') : t('close.record', undefined, 'Record invoices')}
           </button>
+          <button className="btn link small" style={{ marginTop: 10 }} onClick={() => onNavigate('penaltyLedger')}>
+            {t('close.wizard.optionalPenaltyLedger', undefined, 'Quick check: penalty ledger per unit')}
+          </button>
         </StepBody>
       )}
 
