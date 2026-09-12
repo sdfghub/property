@@ -2,14 +2,13 @@ import { PrismaClient } from '@prisma/client'
 
 /**
  * Seeds the EXPENSES fund's penalty rate schedule for one community, from the historical rates
- * visible on the old homefile.ro exports (e.g. "Iulie - Fișă penalizări apartament AP MATEI"):
- * 0.02%/day through mid-2023, a gap at 0%, then 0.2%/day from May 2026 — the rate the association
- * currently charges. This is a best-effort reconstruction of the REGIME changes, not a reproduction
- * of every row: a few individual months in the old export show a rate that doesn't match the regime
- * around them (e.g. Jul–Sep 2021 read 0% inside what is otherwise the 0.02% era) — those read like
- * one-off exceptions in the old system (payment plans, disputes), not a real schedule change, so they
- * are not encoded here. Adjust the dates/rates below — or edit them afterwards from the Fund editor's
- * "Istoric rată penalizare" — before relying on this for real charges.
+ * visible on the old homefile.ro exports (e.g. "Gh Lazar 4 - Penalitati - 1B-Jul", the detailed
+ * per-month sheet for Ap 1/B): 0.02%/day from Jan 2021, a real 0% dip Jul–Sep 2021 (confirmed by
+ * the association, 2026-09 — an earlier version of this script treated that dip as a one-off
+ * export glitch and dropped it; it is a genuine regime change), back to 0.02%/day Oct 2021–Jun
+ * 2023, 0% Jul 2023–Apr 2026, then 0.2%/day from May 2026 — the rate the association currently
+ * charges. Adjust the dates/rates below — or edit them afterwards from the Fund editor's "Istoric
+ * rată penalizare" — before relying on this for real charges.
  *
  *   npm run set:penalty-rate-history -- <COMMUNITY_ID> [FUND_CODE]
  */
@@ -17,6 +16,8 @@ const prisma = new PrismaClient()
 
 const DEFAULT_HISTORY = [
   { from: '2021-01-01', ratePerDayPct: 0.02 },
+  { from: '2021-07-01', ratePerDayPct: 0 },
+  { from: '2021-10-01', ratePerDayPct: 0.02 },
   { from: '2023-07-01', ratePerDayPct: 0 },
   { from: '2026-05-01', ratePerDayPct: 0.2 },
 ]
