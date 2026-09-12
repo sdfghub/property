@@ -38,6 +38,11 @@ type FundAllocation = {
   split?: string | null
   penaltyPerDayPct?: number | null
   penaltyFundCode?: string | null
+  // Date-anchored schedule the penalty engine actually resolves each debt's rate from (see
+  // PenaltyLedgerService#advance / penalty-rate.ts's rateForDate) — each entry's rate applies from
+  // its own `from` date up to (not including) the next entry's, the last one open-ended. When
+  // present this is the source of truth; `penaltyPerDayPct` above is just its current/fallback rate.
+  penaltyRateHistory?: Array<{ from: string; ratePerDayPct: number }> | null
   altName?: string | null
   shortName?: string | null
   abbrev?: string | null
@@ -183,6 +188,19 @@ function FundConfigDetail({ f, funds, currency, t }: { f: FundRow; funds: FundRo
     : null
   const penaltyFund = a.penaltyFundCode ? funds.find((x) => x.code === a.penaltyFundCode) : null
   const totalTarget = f.totalTarget != null ? Number(f.totalTarget) : null
+  const fmtRateDate = (iso: string) => new Date(iso).toLocaleDateString('ro-RO')
+  const fmtPct = (pct: number) => pct.toLocaleString('ro-RO', { maximumFractionDigits: 2 }) + '%'
+  // One row per era: each entry's rate runs from its own date up to (not including) the next
+  // entry's — the same schedule PenaltyLedgerService#advance resolves every unit's penalty from
+  // (see penalty-rate.ts's rateForDate), so this is never out of sync with what's actually charged.
+  const rateHistory = (a.penaltyRateHistory ?? [])
+    .slice()
+    .sort((x, y) => x.from.localeCompare(y.from))
+    .map((entry, i, arr) => {
+      const next = arr[i + 1]
+      const until = next ? new Date(new Date(next.from).getTime() - 24 * 60 * 60 * 1000) : null
+      return { from: entry.from, rate: entry.ratePerDayPct, until }
+    })
   return (
     <div className="stack" style={{ gap: 3, padding: '2px 16px 12px 16px', fontSize: 12.5 }}>
       {f.description && <div>{f.description}</div>}
@@ -201,8 +219,29 @@ function FundConfigDetail({ f, funds, currency, t }: { f: FundRow; funds: FundRo
       {!!a.penaltyPerDayPct && (
         <div>
           <span className="muted">{t('assocInfo.fundPenaltyRate', 'Penalizare întârziere')}: </span>
-          {t('assocInfo.fundPenaltyPerDay', '{pct}/zi întârziere').replace('{pct}', `${(a.penaltyPerDayPct * 100).toLocaleString()}%`)}
+          {/* penaltyPerDayPct is already a percent value (0.2 means "0.2%/day" — see
+              PenaltyLedgerService#penalFunds, which divides this same field by 100 to get the
+              fraction it actually multiplies into the accrual math), not a fraction — multiplying
+              by 100 here was a display-only bug showing 0.2%/day as a wildly wrong 20%/day. */}
+          {t('assocInfo.fundPenaltyPerDay', '{pct}/zi întârziere').replace('{pct}', `${a.penaltyPerDayPct.toLocaleString()}%`)}
           {penaltyFund && <span className="muted"> · {t('assocInfo.fundPenaltyFund', 'se încasează în')} {penaltyFund.name || penaltyFund.code}</span>}
+        </div>
+      )}
+      {rateHistory.length > 0 && (
+        <div>
+          <span className="muted">{t('assocInfo.fundPenaltyHistory', 'Istoric rată penalizare')}: </span>
+          <span className="muted" style={{ fontSize: 11.5 }}>{t('assocInfo.fundPenaltyHistoryHint', '(se aplică la fel pentru toate unitățile)')}</span>
+          <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+            {rateHistory.map((r, i) => (
+              <li key={i}>
+                {r.until
+                  ? `${fmtRateDate(r.from)} – ${fmtRateDate(r.until.toISOString())}`
+                  : `${t('assocInfo.fundPenaltyHistoryFrom', 'de la')} ${fmtRateDate(r.from)}${i === rateHistory.length - 1 ? ` (${t('assocInfo.fundPenaltyHistoryCurrent', 'curent')})` : ''}`
+                }
+                {': '}<strong>{fmtPct(r.rate)}</strong>{t('assocInfo.fundPenaltyHistoryPerDay', '/zi')}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {a.eur && (
