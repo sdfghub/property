@@ -58,8 +58,15 @@ async function main() {
   const apply = args.includes('--apply')
   const fundArg = args.find((a) => a.startsWith('--fund='))
   const fundCode = fundArg ? fundArg.slice('--fund='.length) : 'EXPENSES'
+  // Override for specific BE codes: import EVERY PDF month for these BEs even if a native
+  // 'period:' bucket already covers it — the admin has reviewed the native figure for these units
+  // specifically and wants the PDF's own restanță trusted instead. Never touches or removes the
+  // native bucket itself (committed history stays exactly as posted); this only adds/keeps the
+  // 'cent:' bucket alongside it, so the caller is knowingly accepting that the two may overlap.
+  const forceArg = args.find((a) => a.startsWith('--force-be='))
+  const forceBeCodes = forceArg ? new Set(forceArg.slice('--force-be='.length).split(',')) : new Set<string>()
   if (!communityId || !dataFile) {
-    throw new Error('usage: import-penalties-from-centralizator <COMMUNITY_ID> <dataFile.json> [--apply] [--fund=EXPENSES]')
+    throw new Error('usage: import-penalties-from-centralizator <COMMUNITY_ID> <dataFile.json> [--apply] [--fund=EXPENSES] [--force-be=CODE1,CODE2]')
   }
 
   const entries: UnitEntry[] = JSON.parse(fs.readFileSync(dataFile, 'utf8'))
@@ -131,7 +138,7 @@ async function main() {
         report.push({ unit: entry.unitLabel, be: entry.beCode, month: m.code, skipped: 'no period and no dueDateOverride' })
         continue
       }
-      if (earliestNativeDue && dueDate >= earliestNativeDue) {
+      if (earliestNativeDue && dueDate >= earliestNativeDue && !forceBeCodes.has(entry.beCode)) {
         report.push({ unit: entry.unitLabel, be: entry.beCode, month: m.code, skipped: 'already tracked by a native period: bucket' })
         continue
       }
