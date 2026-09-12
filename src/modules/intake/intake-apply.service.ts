@@ -6,7 +6,7 @@ import { PaymentService } from '../billing/payment.service'
 import { CashService } from '../billing/cash.service'
 import { IntakeImportService } from './intake-import.service'
 import { IntakePromptService, type IntakeCatalogue } from './intake-prompt.service'
-import { remainingBlockers, type BankRefs, type Blocker } from './intake-blockers'
+import { BANK_LINE_PERIOD_STATUSES, remainingBlockers, type BankRefs, type Blocker } from './intake-blockers'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
@@ -61,14 +61,17 @@ export class IntakeApplyService {
 
     // Precondition enforced HERE, not only at import: saveBillTemplateState silently reopens a PREPARED /
     // CLOSED period (template.service.ts, "Reopening any template moves the period back to OPEN").
+    // Bank lines only touch payments / cash rows, which `prepare` re-applies, so they may also go into a
+    // PREPARED month (the admin re-prepares afterwards); invoice records wait for OPEN and are left as they are.
     let catalogue = await this.prompt.buildCatalogue(community.id, batch.period.code)
-    if (catalogue.period.status !== 'OPEN') {
-      throw new ConflictException({ message: `Period ${catalogue.period.code} is ${catalogue.period.status}; intake applies only into OPEN periods`, blockers: [{ code: 'PERIOD_NOT_OPEN', overridable: false }] })
+    const periodOpen = catalogue.period.status === 'OPEN'
+    if (!periodOpen && !BANK_LINE_PERIOD_STATUSES.has(catalogue.period.status)) {
+      throw new ConflictException({ message: `Period ${catalogue.period.code} is ${catalogue.period.status}; intake applies only into OPEN (bank lines: OPEN or PREPARED) periods`, blockers: [{ code: 'PERIOD_NOT_OPEN', overridable: false }] })
     }
 
     // FAILED records were approved before they failed — retrying is the fix; STAGED ones are waiting for
     // meter readings and get finalised (FILLED → SUBMITTED) by the same apply once those exist
-    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED', 'STAGED'] }, kind: { in: ['INVOICE', 'BANK_LINE'] } }
+    const where: any = { batchId: batch.id, status: { in: ['APPROVED', 'FAILED', 'STAGED'] }, kind: { in: periodOpen ? ['INVOICE', 'BANK_LINE'] : ['BANK_LINE'] } }
     if (recordIds?.length) where.id = { in: recordIds }
     const all = await this.prisma.intakeRecord.findMany({ where, orderBy: { index: 'asc' } })
     // invoices first: a settlement in the same batch may target an invoice this batch creates

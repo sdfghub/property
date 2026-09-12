@@ -161,6 +161,10 @@ export function IntakePanel({ communityId }: { communityId: string }) {
   const confidenceTone = (c: number | null) => (c == null ? '' : c >= 0.85 ? 'positive' : c >= 0.6 ? 'warning' : 'negative')
   const approvable = selected?.records.filter((r) => r.status === 'APPROVED' || r.status === 'FAILED' || r.status === 'STAGED').length ?? 0
   const periodOpen = ctx?.period?.status === 'OPEN'
+  // PREPARED: bank lines can still be applied (prepare re-applies payments); invoices wait for OPEN
+  const periodPrepared = ctx?.period?.status === 'PREPARED'
+  const approvableBank = selected?.records.filter((r) => r.kind === 'BANK_LINE' && (r.status === 'APPROVED' || r.status === 'FAILED')).length ?? 0
+  const canApply = periodOpen ? approvable > 0 : periodPrepared && approvableBank > 0
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -177,7 +181,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             </select>
           </label>
         </div>
-        {ctx && !periodOpen && <div className="badge warning" style={{ marginTop: 8 }}>{t('intake.msg.periodNotOpen', { code: ctx.period.code, status: ctx.period.status })}</div>}
+        {ctx && !periodOpen && <div className="badge warning" style={{ marginTop: 8 }}>{periodPrepared ? t('intake.msg.periodPrepared', { code: ctx.period.code }) : t('intake.msg.periodNotOpen', { code: ctx.period.code, status: ctx.period.status })}</div>}
       </div>
 
       {error && <div className="card" style={{ borderColor: 'var(--danger)' }}>
@@ -260,7 +264,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <button className="btn tertiary small" disabled={busy === 'batch'} onClick={recheck}>{t('intake.action.recheck', 'Re-check')}</button>
               <button className="btn tertiary small" disabled={busy === 'batch' || selected.batch.status === 'APPLIED'} onClick={deleteBatch}>{t('intake.action.delete', 'Delete import')}</button>
-              <button className="btn small" disabled={busy === 'batch' || !approvable || !periodOpen} onClick={applyBatch} title={!periodOpen ? t('intake.msg.periodNotOpenShort', 'Period is not OPEN') : ''}>
+              <button className="btn small" disabled={busy === 'batch' || !canApply} onClick={applyBatch} title={!periodOpen && !periodPrepared ? t('intake.msg.periodNotOpenShort', 'Period is not OPEN') : ''}>
                 {t('intake.action.apply', { n: approvable })}
               </button>
             </div>

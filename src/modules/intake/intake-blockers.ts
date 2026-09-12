@@ -223,6 +223,9 @@ export const bankLineKey = (reference: string | null | undefined, amount: unknow
   return `${ref}/${Number.isFinite(n) ? Math.abs(n).toFixed(2) : '?'}`
 }
 
+/** period statuses a bank line may be applied into (invoices: OPEN only) */
+export const BANK_LINE_PERIOD_STATUSES = new Set(['OPEN', 'PREPARED'])
+
 export type BankRefs = {
   /** line keys (see bankLineKey) already booked as owner payments (Payment.providerRef + amount, or refId 'bank:<key>') */
   payments: Set<string>
@@ -290,7 +293,9 @@ export function checkBankLine(input: BankLineCheckInput, catalogue: IntakeCatalo
     cycleCode: null, invoices: [], outstandingTotal: 0, cashFundCode: null, cashKind: null,
   }
 
-  if (catalogue.period.status !== 'OPEN') push('PERIOD_NOT_OPEN', `Period ${catalogue.period.code} is ${catalogue.period.status}`)
+  // bank lines are plain payments/cash rows: `prepare` re-applies payments, so a PREPARED month is fine
+  // (re-prepare afterwards); invoices need OPEN because submitting a template reopens the period.
+  if (!BANK_LINE_PERIOD_STATUSES.has(catalogue.period.status)) push('PERIOD_NOT_OPEN', `Period ${catalogue.period.code} is ${catalogue.period.status}`)
   if (!mapping || !mapping.target) {
     push('NO_PROPOSAL', 'No mapping for this bank line', 'mapping')
     return { blockers, resolved }
