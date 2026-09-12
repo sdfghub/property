@@ -2001,6 +2001,8 @@
     "The EUR account (BANK_LIBRA_EUR) statement is usually empty — emit one OTHER record for the file, do not skip it silently.",
     "Interfon (Schmidt) is not billed monthly — if there is no Schmidt invoice in the archive, emit nothing for BILL_INTERFON. Never invent a record for a template without a document.",
     "A `facturi-YYYY-MM-upload.csv` in the archive is a human-made summary, not a source document — emit it as OTHER and use its `total_checksum` column only to cross-check your extraction.",
-    "Debits that are neither an invoice nor a commission (transfer to the association's own EUR/deposit account, a refund to an owner, a cash withdrawal to `CASH_RON`) → CASH_TX on EXPENSES with `kind` TRANSFER/ADJUSTMENT, or IGNORE with a `reason` when the line is the mirror of a transfer already booked from the other account."
+    "Debits that are neither an invoice nor a commission (transfer to the association's own EUR/deposit account, a refund to an owner, a cash withdrawal to `CASH_RON`) → CASH_TX on EXPENSES with `kind` TRANSFER/ADJUSTMENT, or IGNORE with a `reason` when the line is the mirror of a transfer already booked from the other account.",
+    "`Incasare numerar … FOND REABILITARE NUME: <administrator>` (a large credit at the counter) is the administrator depositing cash-register collections into the bank → CASH_TX, `kind: TRANSFER`, `fundCode: REABILITARE_3` (the rehabilitation campaign currently charged), `accountCode: null` (it lands on the bank account, not on CASH_RON).",
+    "Large debits to construction contractors (PROFI VENT SRL, SM LARISUK, ADAMS CONSTRUCT, …) are rehabilitation works: VENDOR_SETTLEMENT with any quoted number and `fundCode: REABILITARE_3`, so a payment with no invoice in the books lands on the rehabilitation fund when acknowledged — never on EXPENSES."
   ]
 }

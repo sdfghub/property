@@ -170,7 +170,9 @@ export class IntakeImportService {
     const bankSiblings = rows.filter((r) => r.input.kind === 'BANK_LINE').map((r) => ({ id: r.id, lineKey: bankLineKey((r.input as any).bankLine?.reference, (r.input as any).bankLine?.amount) }))
     // siblings for in-batch duplicate detection use the *effective* mapping's vendor
     const siblings = rows.map((row) => {
-      if (row.input.kind !== 'INVOICE') return { id: row.id, number: null, vendorKey: '', sha256: row.input.sourceSha256 }
+      // only invoices take part in the sha256 match: the bank lines of a statement legitimately share the
+      // file (and hash) of the commission invoice derived from that same statement
+      if (row.input.kind !== 'INVOICE') return { id: row.id, number: null, vendorKey: '', sha256: null }
       const mapping = row.review?.mapping ?? row.input.mapping
       const invoice = { ...row.input.invoice, ...(row.review?.invoice ?? {}) }
       const vendorKey = mapping?.vendor?.vendorId ?? normalizeVendorName(mapping?.vendor?.name ?? invoice.vendorName)

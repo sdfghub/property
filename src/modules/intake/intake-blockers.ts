@@ -376,14 +376,17 @@ export function checkBankLine(input: BankLineCheckInput, catalogue: IntakeCatalo
     const wanted = (mapping.invoiceNumbers ?? []).map(normalizeInvoiceNumber).filter(Boolean)
     const hits = catalogue.unpaidInvoices.filter((i) => i.number && wanted.some((w) => normalizeInvoiceNumber(i.number!).endsWith(w) || w.endsWith(normalizeInvoiceNumber(i.number!))))
     const vendors = new Set(hits.map((h) => normName(h.vendorName)))
-    if (!wanted.length || !hits.length) push('INVOICE_NOT_FOUND', wanted.length ? `No unpaid invoice matches ${mapping.invoiceNumbers.join(', ')}` : 'No invoice number quoted', 'mapping.invoiceNumbers')
+    // where an acknowledged INVOICE_NOT_FOUND settlement lands: the mapping's fund, else the default
+    const fallbackFund = mapping.fundCode && catalogue.funds.some((x) => x.code === mapping.fundCode) ? mapping.fundCode : catalogue.defaultAdvanceFundCode
+    if (mapping.fundCode && fallbackFund !== mapping.fundCode) push('FUND_UNKNOWN', `Fund "${mapping.fundCode}" does not exist`, 'mapping.fundCode')
+    if (!wanted.length || !hits.length) push('INVOICE_NOT_FOUND', `${wanted.length ? `No unpaid invoice matches ${mapping.invoiceNumbers.join(', ')}` : 'No invoice number quoted'} — on acknowledge the outflow is booked on ${fallbackFund ?? '?'} without an invoice`, 'mapping.invoiceNumbers')
     else if (vendors.size > 1) push('INVOICE_AMBIGUOUS', `Quoted number(s) match invoices of ${vendors.size} vendors`, 'mapping.invoiceNumbers')
     else {
       resolved.invoices = hits.map((h) => ({ id: h.id, number: h.number, vendorName: h.vendorName, outstanding: r2(h.outstanding) }))
       resolved.outstandingTotal = r2(hits.reduce((s, h) => s + h.outstanding, 0))
       if (-amount > resolved.outstandingTotal + 0.01) push('SETTLEMENT_EXCEEDS_OUTSTANDING', `paid ${r2(-amount)}, outstanding ${resolved.outstandingTotal}`, 'bankLine.amount')
     }
-    resolved.cashFundCode = catalogue.defaultAdvanceFundCode // where an INVOICE_NOT_FOUND settlement lands on ack
+    resolved.cashFundCode = fallbackFund
   }
 
   if (mapping.target === 'CASH_TX') {
