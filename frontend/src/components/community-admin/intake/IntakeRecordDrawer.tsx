@@ -37,7 +37,8 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
   // bank line: the agent's mapping, completed with what the server resolved (suggested unit, account, default advance fund)
   const initialBank = (): BankLineMapping => {
     const line = record.extracted ?? {}
-    const eff = (record.effective as any)?.mapping as BankLineMapping | null | undefined
+    // only a bank line's effective mapping is a BankLineMapping — an invoice's is an InvoiceMapping
+    const eff = record.kind === 'BANK_LINE' ? ((record.effective as any)?.mapping as BankLineMapping | null | undefined) : null
     const m: BankLineMapping = structuredClone(eff ?? { ...EMPTY_BANK_MAPPING, target: (Number(line.amount) || 0) < 0 ? 'VENDOR_SETTLEMENT' : 'OWNER_PAYMENT', payerName: line.counterpartyName ?? null })
     const res = record.resolved ?? {}
     if (!m.unitCode && (res.unitCode || res.suggestedUnitCode)) m.unitCode = res.unitCode ?? res.suggestedUnitCode
@@ -64,7 +65,7 @@ export function IntakeRecordDrawer({ record, ctx, busy, onClose, onSave, onAppro
   const setB = (patch: Partial<BankLineMapping>) => setBank((b) => ({ ...b, ...patch }))
   const line = isBank ? (record.extracted ?? {}) : null
   const lineAmount = line ? Number(line.amount) || 0 : 0
-  const fundSum = bank.funds.reduce((s, f) => s + (Number(f.amount) || 0), 0)
+  const fundSum = (bank.funds ?? []).reduce((s, f) => s + (Number(f.amount) || 0), 0)
   const unpaid = ctx?.unpaidInvoices ?? []
   const normNo = (v: string | null | undefined) => String(v ?? '').replace(/[^0-9a-z]/gi, '').toUpperCase()
   const invoiceChecked = (no: string | null) => bank.invoiceNumbers.some((n) => normNo(n) && normNo(no).endsWith(normNo(n)))
