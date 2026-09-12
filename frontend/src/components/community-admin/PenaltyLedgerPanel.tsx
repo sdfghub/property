@@ -8,6 +8,7 @@ const fmtDate = (d?: string | Date | null) => (d ? new Date(d).toLocaleDateStrin
 const DAY = 24 * 60 * 60 * 1000
 const addDays = (d: string | Date, n: number) => new Date(new Date(d).getTime() + n * DAY)
 const countDays = (from: Date, to: Date) => (from > to ? 0 : Math.floor((to.getTime() - from.getTime()) / DAY) + 1)
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 const RO_MONTHS = ['Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Noi', 'Dec']
 // "2026-07" → "Iul 2026"; falls back to the raw code (or null) for anything else.
 const monthLabel = (code?: string | null) => {
@@ -39,6 +40,11 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // Overrides the "calculate up to" date used for the age/period columns below (defaults to the
   // selected period's own afișare date). Doesn't touch what's actually posted — a what-if preview.
   const [asOfDate, setAsOfDate] = React.useState('')
+  // "Data Iertare Sold": when set, Penalizări (totale) — and the "Perioadă calcul"/"Număr zile"
+  // columns feeding it — are recalculated through THIS date instead of asOfDate/today, previewing
+  // "how much penalty would this debt have accrued if we forgive it as of this date" (e.g. for a
+  // negotiated write-off). Purely a client-side what-if, same as asOfDate — never posts anything.
+  const [forgiveDate, setForgiveDate] = React.useState('')
 
   React.useEffect(() => {
     if (!fullscreen) return
@@ -95,9 +101,24 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // The day-count anchors on the period's own afișare (posting) date, same as the accrual engine —
   // fall back to its calendar end date for periods with no afisareDate stamped. asOfDate, if set,
   // overrides this for a what-if "calculate up to" preview.
-  const selectedPeriodRow = periods.find((p) => p.code === period)
+  const periodIdx = periods.findIndex((p) => p.code === period)
+  const selectedPeriodRow = periods[periodIdx]
+  // periods is sorted newest-first (see the fetch effect above), so the PRIOR period sits right
+  // after the selected one.
+  const prevPeriodRow = periods[periodIdx + 1]
   const periodEndDate = (selectedPeriodRow?.afisareDate ?? selectedPeriodRow?.endDate) as string | undefined
   const refDate = asOfDate ? new Date(asOfDate) : periodEndDate ? new Date(periodEndDate) : null
+  // "Penalizări (totale)" normally runs through refDate; a populated "Data Iertare Sold" takes over
+  // as that end date instead, for a what-if "forgive the debt as of this date" preview.
+  const totalEndDate = forgiveDate ? new Date(forgiveDate) : refDate
+  // "Perioadă curentă" = this period's OWN accrual window, same span PenaltyLedgerService#advance
+  // uses to post this period's increment: (previous period's afișare + 1 day) through (this
+  // period's own afișare). Fixed once the periods themselves are set — unaffected by asOfDate/
+  // forgiveDate, which only preview a hypothetical "calculate through a different date" for the
+  // cumulative total, not what this specific period actually posted.
+  const prevPeriodEndDate = (prevPeriodRow?.afisareDate ?? prevPeriodRow?.endDate) as string | undefined
+  const currentPeriodStart = prevPeriodEndDate ? addDays(prevPeriodEndDate, 1) : selectedPeriodRow?.startDate ? new Date(selectedPeriodRow.startDate) : null
+  const currentPeriodEnd = periodEndDate ? new Date(periodEndDate) : null
 
   const allBuckets: any[] = detail?.buckets || []
   // A bucket whose OWN due date hasn't been reached yet isn't a restanță at all — it's the
@@ -107,10 +128,6 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // match the unit's actual current restanță (be_statement) — including it was double-counting a
   // charge that isn't due yet as if it were unpaid debt.
   const buckets = allBuckets.filter((b) => !b.dueDate || !refDate || new Date(b.dueDate) <= refDate)
-  const totals = buckets.reduce(
-    (acc, b) => ({ restanta: acc.restanta + (b.principalRemaining || 0), penalizare: acc.penalizare + (b.penaltyToDate || 0) }),
-    { restanta: 0, penalizare: 0 },
-  )
 
   // Perioada de calcul = scadență + 30 zile; o restanță "se califică" abia după ce acest prag e
   // atins. Restanțele mai proaspete (deja scadente, dar încă în termenul de grație) rămân în listă
@@ -123,14 +140,38 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
     .map((b) => {
       const calcStart = b.dueDate ? addDays(b.dueDate, 30) : null
       const qualifies = !!(calcStart && refDate && calcStart <= refDate)
-      const days = qualifies ? countDays(calcStart as Date, refDate as Date) : 0
-      return { b, calcStart, qualifies, days }
+      const rate = Number(b.ratePerDayPct) || 0
+      const principalRemaining = Number(b.principalRemaining) || 0
+      const principalOriginal = Number(b.principalOriginal) || principalRemaining
+      const days = qualifies && totalEndDate ? countDays(calcStart as Date, totalEndDate) : 0
+      // Same formula as the real engine (rată × restanță × zile), capped at the bucket's original
+      // principal exactly like advance()'s own cap — but only recomputed client-side when a
+      // forgiveness date actually changes the window; otherwise this is just the real, backend-
+      // posted penaltyToDate, unchanged.
+      const totalPenalty = forgiveDate
+        ? Math.min(round2(principalRemaining * (rate / 100) * days), principalOriginal)
+        : Number(b.penaltyToDate) || 0
+      // "Penalizări curente": rată × restanță × zilele din perioada curentă (afișarea lunii
+      // anterioare + 1 → afișarea lunii selectate) — independent of asOfDate/forgiveDate.
+      const curFrom = calcStart && currentPeriodStart ? (calcStart > currentPeriodStart ? calcStart : currentPeriodStart) : null
+      const curDays = curFrom && currentPeriodEnd ? countDays(curFrom, currentPeriodEnd) : 0
+      const curPenalty = Math.min(round2(principalRemaining * (rate / 100) * curDays), principalOriginal)
+      return { b, calcStart, qualifies, days, totalPenalty, curFrom, curDays, curPenalty }
     })
     .sort((a, b) => {
       if (a.qualifies !== b.qualifies) return a.qualifies ? -1 : 1
       if (a.qualifies) return b.days - a.days
       return (a.calcStart?.getTime() ?? Infinity) - (b.calcStart?.getTime() ?? Infinity)
     })
+
+  const totals = rows.reduce(
+    (acc, r) => ({
+      restanta: acc.restanta + (r.b.principalRemaining || 0),
+      penalizare: acc.penalizare + r.totalPenalty,
+      penalizareCurenta: acc.penalizareCurenta + r.curPenalty,
+    }),
+    { restanta: 0, penalizare: 0, penalizareCurenta: 0 },
+  )
 
   return (
     <div className="stack" style={{ gap: 12 }}>
@@ -208,6 +249,17 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                       {t('penledger.asOfReset', 'Resetează')}
                     </button>
                   ) : null}
+                  <label className="muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}
+                    title={t('penledger.forgiveDateHint', 'Dacă e completată, "Penalizări (totale)" se recalculează până la această dată, ca previzualizare pentru o eventuală iertare a soldului — nu afectează nimic postat efectiv.')}>
+                    {t('penledger.forgiveDate', 'Data Iertare Sold')}
+                    <input type="date" className="input" style={{ width: 150 }}
+                      value={forgiveDate} onChange={(e) => setForgiveDate(e.target.value)} />
+                  </label>
+                  {forgiveDate ? (
+                    <button type="button" className="btn ghost small" onClick={() => setForgiveDate('')}>
+                      {t('penledger.asOfReset', 'Resetează')}
+                    </button>
+                  ) : null}
                   {buckets.length ? (
                     <button type="button" className="btn ghost small" onClick={() => setFullscreen((v) => !v)}
                       title={fullscreen ? t('avizier.exitFullscreen', 'Ieși din ecran complet (Esc)') : t('avizier.fullscreen', 'Ecran complet')}>
@@ -231,7 +283,7 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                 <div className="empty" style={{ marginTop: 10 }}>{t('penledger.none', 'Nicio penalizare pentru această unitate.')}</div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 700 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 980 }}>
                   <thead>
                     <tr style={{ textAlign: 'right', borderBottom: '2px solid var(--border,#ccc)' }}>
                       <th style={{ textAlign: 'left', padding: '6px 8px' }}>{t('penledger.colMonth', 'Lună restantă')}</th>
@@ -240,12 +292,15 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colDebt', 'Restanță')}</th>
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colDays', 'Număr zile')}</th>
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colRate', 'Procent')}</th>
-                      <th style={{ padding: '6px 8px' }}>{t('penledger.colPenalty', 'Penalizări')}</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px' }}>{t('penledger.colCurrentPeriod', 'Perioadă curentă')}</th>
+                      <th style={{ padding: '6px 8px' }}>{t('penledger.colCurrentDays', 'Zile curente')}</th>
+                      <th style={{ padding: '6px 8px' }}>{t('penledger.colCurrentPenalty', 'Penalizări curente')}</th>
+                      <th style={{ padding: '6px 8px' }}>{t('penledger.colPenalty', 'Penalizări (totale)')}</th>
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colTotal', 'Restanțe + penalizări')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ b, calcStart, qualifies, days }, i: number) => (
+                    {rows.map(({ b, calcStart, qualifies, days, totalPenalty, curFrom, curDays, curPenalty }, i: number) => (
                       <tr key={i} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)', opacity: qualifies ? 1 : 0.7 }}>
                         <td style={{ textAlign: 'left', padding: '6px 8px' }}>
                           {monthLabel(b.originPeriodCode) ?? t('penledger.carriedOver', 'Restanță reportată')}
@@ -254,13 +309,20 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                         </td>
                         <td style={{ padding: '6px 8px' }}>{fmtDate(b.dueDate) ?? '-'}</td>
                         <td style={{ textAlign: 'left', padding: '6px 8px' }}>
-                          {qualifies ? `${fmtDate(calcStart)} – ${fmtDate(refDate)}` : calcStart ? `${t('penledger.startsOn', 'începe')} ${fmtDate(calcStart)}` : '-'}
+                          {qualifies ? `${fmtDate(calcStart)} – ${fmtDate(totalEndDate)}` : calcStart ? `${t('penledger.startsOn', 'începe')} ${fmtDate(calcStart)}` : '-'}
                         </td>
                         <td style={{ padding: '6px 8px' }}>{money(b.principalRemaining)}</td>
                         <td style={{ padding: '6px 8px' }}>{qualifies ? days : '-'}</td>
                         <td style={{ padding: '6px 8px' }}>{b.ratePerDayPct}%</td>
-                        <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(b.penaltyToDate)}</td>
-                        <td style={{ padding: '6px 8px', fontWeight: 700 }}>{money((b.principalRemaining || 0) + (b.penaltyToDate || 0))}</td>
+                        <td style={{ textAlign: 'left', padding: '6px 8px' }}>
+                          {curDays > 0 && curFrom && currentPeriodEnd
+                            ? `${fmtDate(curFrom)} – ${fmtDate(currentPeriodEnd)}`
+                            : curFrom ? `${t('penledger.startsOn', 'începe')} ${fmtDate(curFrom)}` : '-'}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{curDays > 0 ? curDays : '-'}</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(curPenalty)}</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(totalPenalty)}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 700 }}>{money((b.principalRemaining || 0) + totalPenalty)}</td>
                       </tr>
                     ))}
                     <tr style={{ textAlign: 'right', fontWeight: 700, borderTop: '2px solid var(--border,#ccc)' }}>
@@ -268,6 +330,9 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                       <td style={{ padding: '8px 8px' }}>{money(totals.restanta)}</td>
                       <td />
                       <td />
+                      <td />
+                      <td />
+                      <td style={{ padding: '8px 8px', color: 'var(--danger,#b45309)' }}>{money(totals.penalizareCurenta)}</td>
                       <td style={{ padding: '8px 8px', color: 'var(--danger,#b45309)' }}>{money(totals.penalizare)}</td>
                       <td style={{ padding: '8px 8px' }}>{money(totals.restanta + totals.penalizare)}</td>
                     </tr>
