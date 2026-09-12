@@ -515,7 +515,7 @@ export function AvizierPanel({
   // via groupRuns'/sgRuns' own borderLeft, but only on itself. A band boundary is always also a fund
   // boundary (a band is just a run of contiguous funds), so this single line covers both.
   const fundBoundaryIdx = new Set<number>()
-  { let idx = 0; for (const run of groupRuns) { if (idx > 0) fundBoundaryIdx.add(idx); idx += run.span } }
+  { let idx = 0; for (const run of groupRuns) { fundBoundaryIdx.add(idx); idx += run.span } }
   const FUND_SEPARATOR = '2px solid var(--border-strong, var(--border, #a8a8a8))'
   const colSepStyle = (i: number): React.CSSProperties => (fundBoundaryIdx.has(i) ? { borderLeft: FUND_SEPARATOR } : {})
   // Încasări always reports the prior period's collection cycle (e.g. shows 2026-05's receipts
@@ -829,7 +829,7 @@ export function AvizierPanel({
                       style={{
                         padding: '4px 10px', textAlign: 'center', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600,
                         color: isCollapsed ? 'var(--accent, #0071e3)' : 'var(--muted, #666)', cursor: collapsible ? 'pointer' : 'default',
-                        borderLeft: run.label ? FUND_SEPARATOR : 'none',
+                        borderLeft: (i === 0 || run.label) ? FUND_SEPARATOR : 'none',
                       }}>
                       {collapsible ? (isCollapsed ? '+ ' : '− ') : ''}{run.label}
                     </th>
