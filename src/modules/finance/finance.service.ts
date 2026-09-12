@@ -1693,7 +1693,9 @@ export class FinanceService {
       const accruedToDate = last?.penaltyAccrued ?? round2(b.principalOriginal && 0)
       monthTotal += postedThis
       grandTotal += accruedToDate
-      const isOpening = b.originKey === 'opening'
+      // 'opening' = the original cutover seed; 'hist:<unitId>:opening' = the per-unit historical
+      // import's own catch-all for whatever predates this system's own tracked charge history.
+      const isOpening = b.originKey === 'opening' || /:opening$/.test(b.originKey || '')
       // Migrated buckets carry no real "original principal" — they use a 1e9 sentinel to disable the
       // legal cap (the penalty was already accrued in the source system). Flag them so the UI omits the
       // meaningless "Datorie" figure and never claims the cap was reached.
