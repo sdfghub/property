@@ -6,6 +6,11 @@ Postgres). **New here? Start with [onboarding.md](./onboarding.md).**
 | Doc | What it covers |
 |-----|----------------|
 | [onboarding.md](./onboarding.md) | **Day one**: repo layout, setup, loading real data, project rules, what "green" means, git conventions. |
+| [system-overview.md](./system-overview.md) | **The map**: components (API, web, mobile, shared), backend module layout, request lifecycle (auth + scopes), feature flags, metadata registry, i18n, idempotency/provenance conventions, environments. |
+| [flows.md](./flows.md) | **End-to-end journeys** with sequence diagrams: the month lifecycle, bill → owner debt, receipt → settled charges, penalties, corrections, AI intake, migrating a live association, owner-facing, notifications. |
+| [principles.md](./principles.md) | **Why it is built this way**: declarations → derived ledger, one choke point per money movement, idempotent keys, explicit migration state, hard errors over guesses, humans approve / machines propose. |
+| [glossary.md](./glossary.md) | Romanian ⇄ English ⇄ code: what "avizier", "fond de rulment", "afișare", "sold" mean and where they live. |
+| [api-map.md](./api-map.md) | Every route grouped by module — generated from the controllers. |
 | [local-dev.md](./local-dev.md) | Running the stack: Postgres, API, frontend, `start-dev.sh`, ports, the full env-var table, gotchas. |
 | [architecture.md](./architecture.md) | The domain model: topology, periods, funds, allocation, statements/ledger, payments, penalty aging, charge overrides, corrections, meters, the avizier. |
 | [meters.md](./meters.md) | Meter → reading → measure, the `(scope, typeCode)` aggregation rule, INDEX vs CONSUMPTION, and why allocation hard-errors instead of splitting equally. |

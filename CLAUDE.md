@@ -4,7 +4,9 @@ HOA/condo expense-management app for Romanian associations. **This repo root is 
 project** (NestJS + Prisma + Postgres); the web SPA is `frontend/` (Vite + React), the Expo
 client is `mobile/`, prod deploy is `deploy/`, per-community source data is `data/<COMM>/`.
 
-Full docs in [`docs/`](./docs/README.md) — start at [`docs/onboarding.md`](./docs/onboarding.md).
+Full docs in [`docs/`](./docs/README.md) — start at [`docs/onboarding.md`](./docs/onboarding.md); the map is
+[`docs/system-overview.md`](./docs/system-overview.md), the journeys [`docs/flows.md`](./docs/flows.md), the
+reasons [`docs/principles.md`](./docs/principles.md), the vocabulary [`docs/glossary.md`](./docs/glossary.md).
 This file is only the rules that are easy to get wrong.
 
 ## Environment
