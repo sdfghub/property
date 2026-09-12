@@ -650,11 +650,20 @@ export function AvizierPanel({
         // parent actually has (the .stack becomes a real flex column with height only in
         // fullscreen mode, where inset:0 gives it one) so the table reaches all the way down to
         // the sticky signatures footer instead of shrink-wrapping to its own row count and
-        // leaving a gap above it. maxHeight keeps the old cap as a ceiling, not a fixed height,
-        // so the embedded (non-fullscreen) view — which has no bounded parent height — is
-        // unaffected: flex:1 there is a no-op since there's no extra space to distribute.
-        <div className="card" style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: '70vh', padding: 0, minWidth: 0 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        // leaving a gap above it. The 70vh cap only applies in the embedded (non-fullscreen) view,
+        // which has no bounded parent height to fill anyway (flex:1 is a no-op there) — capping it
+        // there keeps the panel from growing arbitrarily tall on a page with room to spare. In
+        // fullscreen the cap must NOT apply: 70vh is routinely smaller than the space actually
+        // available (100vh minus the toolbar/title/footer chrome), and a cap smaller than the real
+        // budget is exactly what left a visible gap above the signatures before this fix.
+        // scrollSnapType+scrollSnapAlign (on the row, further down) keep a real row boundary flush
+        // with the top of the scrollable area at rest, so scrolling never leaves a row half-cut.
+        <div className="card" style={{
+          overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0,
+          maxHeight: fullscreen ? undefined : '70vh', padding: 0, minWidth: 0,
+          ...(fullscreen ? { scrollSnapType: 'y proximity' as const } : {}),
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={leadColspan} />
@@ -666,7 +675,7 @@ export function AvizierPanel({
                       onClick={collapsible ? () => toggleBand(run.key) : undefined}
                       title={collapsible ? t('avizier.collapseBand', 'Restrânge/extinde tot grupul') : undefined}
                       style={{
-                        padding: '4px 10px', textAlign: 'center', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600,
+                        padding: '4px 10px', textAlign: 'center', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3, fontWeight: 600,
                         color: isCollapsed ? 'var(--accent, #0071e3)' : 'var(--muted, #666)', cursor: collapsible ? 'pointer' : 'default',
                         borderLeft: run.label ? '1px solid var(--border, #e5e5e5)' : 'none',
                       }}>
@@ -682,7 +691,7 @@ export function AvizierPanel({
                     onClick={run.kind === 'fund' ? () => toggleFund(run.key) : undefined}
                     title={run.kind === 'fund' ? t('avizier.collapseFund', 'Restrânge/extinde acest fond') : undefined}
                     style={{
-                      padding: '4px 10px', textAlign: 'center', fontSize: 11, fontWeight: 500,
+                      padding: '4px 10px', textAlign: 'center', fontSize: 12, fontWeight: 500,
                       color: run.kind === 'fund' && collapsedFunds.has(run.key) ? 'var(--accent, #0071e3)' : 'var(--muted, #666)',
                       cursor: run.kind === 'fund' ? 'pointer' : 'default', borderLeft: '1px solid var(--border, #e5e5e5)',
                     }}>
@@ -702,7 +711,7 @@ export function AvizierPanel({
                         setFilterOpen((v) => !v)
                       }}
                       title={t('avizier.filter', 'Filtrează')}
-                      style={{ background: 'none', border: 'none', padding: '0 0 0 4px', cursor: 'pointer', fontSize: 12, color: filterActive ? 'var(--accent, #0071e3)' : 'var(--border, #ccc)' }}>
+                      style={{ background: 'none', border: 'none', padding: '0 0 0 4px', cursor: 'pointer', fontSize: 13, color: filterActive ? 'var(--accent, #0071e3)' : 'var(--border, #ccc)' }}>
                       ▽
                     </button>
                   </span>
@@ -784,7 +793,7 @@ export function AvizierPanel({
                 const isExpanded = expandable && expandedBe.has(r.beCode)
                 return (
                 <tr key={rowKey} onMouseEnter={() => setHoverBe(rowKey)} onMouseLeave={() => setHoverBe(null)}
-                  style={{ borderTop: indent ? 'none' : '1px solid var(--border, #eee)', textAlign: 'right', background: rowBg }}>
+                  style={{ borderTop: indent ? 'none' : '1px solid var(--border, #eee)', textAlign: 'center', background: rowBg, scrollSnapAlign: 'start' }}>
                   <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', left: 0, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
                       maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
                     title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
@@ -793,7 +802,7 @@ export function AvizierPanel({
                         <input className="input" autoFocus value={editBe.value} placeholder={beLabel({ ...r, displayName: null }).primary}
                           onChange={(e) => setEditBe({ be: r.beCode, value: e.target.value })}
                           onKeyDown={(e) => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditBe(null) }}
-                          style={{ fontSize: 12, padding: '2px 4px', width: 150 }} />
+                          style={{ fontSize: 13, padding: '2px 4px', width: 150 }} />
                         <button type="button" className="btn ghost small" onClick={saveDisplayName} title={t('common.save', 'Salvează')}>✓</button>
                       </span>
                     ) : (
@@ -802,7 +811,7 @@ export function AvizierPanel({
                           {expandable ? (
                             <button type="button" onClick={() => toggleExpandedBe(r.beCode)}
                               title={isExpanded ? t('avizier.collapseUnits', 'Ascunde unitățile') : t('avizier.expandUnits', 'Arată unitățile')}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginRight: 4, fontSize: 11, color: 'var(--muted, #666)' }}>
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginRight: 4, fontSize: 12, color: 'var(--muted, #666)' }}>
                               {isExpanded ? '▾' : '▸'}
                             </button>
                           ) : null}
@@ -815,31 +824,31 @@ export function AvizierPanel({
                             </button>
                           )}
                           {indent && r.trusted === false ? (
-                            <span title={t('avizier.unitEstimateHint', 'Restanțe necunoscute la nivel de unitate pentru această perioadă — doar taxele curente sunt reale aici')} style={{ marginLeft: 6, fontSize: 11, opacity: 0.6 }}>🔗</span>
+                            <span title={t('avizier.unitEstimateHint', 'Restanțe necunoscute la nivel de unitate pentru această perioadă — doar taxele curente sunt reale aici')} style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>🔗</span>
                           ) : null}
                           {!indent && !RO && r.sharedWithUnits?.length ? (
                             <button type="button" onClick={(e) => { e.stopPropagation(); openSold(r.beCode) }}
                               title={`${t('avizier.sharedArrearsHint', 'Restanțe comune cu')} ${r.sharedWithUnits.map(shortUnit).join(', ')} — ${t('avizier.entityOwner', 'Proprietar')}`}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, fontSize: 11, opacity: 0.7 }}>
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, fontSize: 12, opacity: 0.7 }}>
                               🔗
                             </button>
                           ) : null}
                           {!indent && r.inheritedFrom ? (
                             <span title={`${t('avizier.inheritedFromHint', 'Include')} ${money(r.inheritedFrom.total)} RON ${t('avizier.inheritedFromHint2', 'restanță moștenită de la')} ${r.inheritedFrom.beName}`}
-                              style={{ marginLeft: 6, fontSize: 11, opacity: 0.7, cursor: 'help' }}>
+                              style={{ marginLeft: 6, fontSize: 12, opacity: 0.7, cursor: 'help' }}>
                               ↩
                             </span>
                           ) : null}
                           {!indent && isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.rename', 'Redenumește')}
                             onClick={(e) => { e.stopPropagation(); setEditBe({ be: r.beCode, value: r.displayName || '' }) }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 6, padding: 0 }}>✎</button> : null}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12, marginLeft: 6, padding: 0 }}>✎</button> : null}
                           {!indent && isAdmin && hov && !publicMode ? <button type="button" title={t('avizier.renameFromPeriod', 'Redenumește de la o perioadă')}
                             onClick={(e) => { e.stopPropagation(); setRenamingBe({ be: r.beCode, displayName: r.displayName || '' }); setRenameEffectiveFrom(data?.period?.code || ''); setRenameError(null) }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 4, padding: 0 }}>🕐</button> : null}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12, marginLeft: 4, padding: 0 }}>🕐</button> : null}
                         </span>
                         {/* Complementary name (unit's owner, or owner's unit code) on its own line below
                             the row's primary label — see beLabel()'s {primary, secondary} contract. */}
-                        {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 11 } : { fontSize: 11 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
+                        {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 12 } : { fontSize: 12 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
                       </span>
                     )}
                   </td>
@@ -923,7 +932,7 @@ export function AvizierPanel({
                           )) : ''}
                           {editable ? (
                             <button type="button" onClick={() => setOvrTarget({ be: r.beCode, beName: r.beName, computed: Number(v) || 0 })} title={t('avizier.override', 'Ajustează manual penalizarea')}
-                              style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 12 }}>✎</button>
+                              style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 13 }}>✎</button>
                           ) : null}
                         </td>
                       )
@@ -954,7 +963,7 @@ export function AvizierPanel({
                 )
               })}
               {totals ? (
-                <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'right', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)', position: 'sticky', bottom: 0, zIndex: 3 }}>
+                <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'center', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)', position: 'sticky', bottom: 0, zIndex: 3 }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, background: 'var(--muted-bg, #f4f4f5)' }}>{t('avizier.totalRow', 'TOTAL')}</td>
                   {infoVis.cpi && <td style={{ padding: '8px 10px' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '8px 10px' }}>{totals.residents != null ? totals.residents : ''}</td>}
