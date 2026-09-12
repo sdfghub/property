@@ -19,6 +19,7 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   const [periods, setPeriods] = React.useState<any[]>([])
   const [period, setPeriod] = React.useState('')
   const [units, setUnits] = React.useState<any[]>([])
+  const [fundName, setFundName] = React.useState<string | null>(null)
   const [unitsLoading, setUnitsLoading] = React.useState(true)
   const [search, setSearch] = React.useState('')
   const [beCode, setBeCode] = React.useState<string | null>(null)
@@ -34,13 +35,17 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
     }).catch(() => {})
   }, [api, communityId])
 
+  // Full debtor roster on the fund that actually carries a penalty rate today (backend defaults to
+  // EXPENSES = Cheltuieli Întreținere) — every unit with a balance, not just the ones already being
+  // charged a penalty this period, so you can pick any debtor and see where they stand.
   const loadUnits = React.useCallback(() => {
     if (!period) return
     setUnitsLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/penalties?period=${encodeURIComponent(period)}`)
+    api.get<any>(`/communities/${communityId}/finance/debtors-by-fund?period=${encodeURIComponent(period)}`)
       .then((d: any) => {
-        const rows = (d?.rows || []).slice().sort((a: any, b: any) => (b.computed || 0) - (a.computed || 0))
+        const rows = d?.debtors || []
         setUnits(rows)
+        setFundName(d?.fundName ?? null)
         setUnitsLoading(false)
         setBeCode((cur) => (cur && rows.some((r: any) => r.beCode === cur) ? cur : rows[0]?.beCode || null))
       }).catch(() => { setUnits([]); setUnitsLoading(false) })
@@ -73,13 +78,16 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
     <div className="stack" style={{ gap: 12 }}>
       <div className="card ops-card">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <h4 style={{ margin: 0 }}>{t('penledger.title', 'Verificare penalități')}</h4>
+          <h4 style={{ margin: 0 }}>
+            {t('penledger.title', 'Verificare penalități')}
+            {fundName ? <span className="muted" style={{ fontWeight: 400, fontSize: 13, marginLeft: 6 }}>· {fundName}</span> : null}
+          </h4>
           <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
             {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
           </select>
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          {t('penledger.intro', 'Aceeași fișă de calcul folosită la avizier — alege o unitate ca să vezi restanțele și penalizările, lună de lună.')}
+          {t('penledger.intro', 'Toate unitățile cu restanțe pe fondul care acumulează penalități azi — alege una ca să vezi calculul, lună de lună.')}
         </div>
       </div>
 
@@ -87,6 +95,9 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
         <div className="card" style={{ minWidth: 260, flex: '0 0 280px', padding: 10 }}>
           <input className="input" placeholder={t('penledger.search', 'Caută unitate…')} value={search}
             onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+          <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>
+            <strong style={{ color: 'var(--text, inherit)' }}>{filteredUnits.length}</strong> {t('penledger.unitCount', 'unități cu restanțe')}
+          </div>
           {unitsLoading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !filteredUnits.length ? (
             <div className="empty">{t('penledger.noUnits', 'Nicio unitate cu restanțe în această perioadă.')}</div>
           ) : (
@@ -105,7 +116,7 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                       {label.primary}
                       {label.secondary ? <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>{label.secondary}</span> : null}
                     </span>
-                    <strong style={{ color: (u.computed || 0) > 0 ? 'var(--danger,#b45309)' : 'var(--muted,#999)' }}>{money(u.computed)}</strong>
+                    <strong style={{ color: (u.debt || 0) > 0 ? 'var(--danger,#b45309)' : 'var(--muted,#999)' }}>{money(u.debt)}</strong>
                   </button>
                 )
               })}

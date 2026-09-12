@@ -137,6 +137,39 @@ export class FinanceService {
     }
   }
 
+  /**
+   * Full debtor roster for ONE fund (default EXPENSES = Cheltuieli Întreținere — the only fund with
+   * a real, nonzero penalty rate today; see the comment on `penaltyReview` about PENALIZARI pairing
+   * with EXPENSES only). Unlike `penaltyReview`, this lists every unit with an outstanding balance on
+   * the fund, whether or not a penalty has started accruing yet — the roster to pick a unit from
+   * before drilling into `explainPenalty`, not just the ones already being charged this period.
+   */
+  async debtorsByFund(communityId: string, periodCode: string | undefined, fundCode = 'EXPENSES') {
+    const period = await this.resolvePeriod(communityId, periodCode)
+    if (!period) return { periodCode: null, fundCode, fundName: null, debtors: [] }
+    const fund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true, name: true } })
+    if (!fund) return { periodCode: period.code, fundCode, fundName: null, debtors: [] }
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select be.code as "beCode", be.name as "beName", be.display_name as "displayName",
+              coalesce(sum(bs.due_start - bs.payments),0)::float8 as debt
+         from billing_entity be
+         left join be_statement bs
+           on bs.billing_entity_id = be.id and bs.community_id = be.community_id
+          and bs.period_id = $2 and bs.fund_id = $3
+        where be.community_id = $1
+        group by be.code, be.name, be.display_name
+       having coalesce(sum(bs.due_start - bs.payments),0) > 0.005
+        order by debt desc`,
+      communityId, period.id, fund.id,
+    )
+    return {
+      periodCode: period.code,
+      fundCode,
+      fundName: fund.name,
+      debtors: rows.map((r) => ({ ...r, debt: round2(Number(r.debt)) })),
+    }
+  }
+
   /** Vendor invoices with outstanding balance (gross − applied payments) > 0. */
   async unpaidVendorInvoices(communityId: string) {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
