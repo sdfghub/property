@@ -155,8 +155,9 @@ export class FinanceController {
     @Query('period') period: string,
     @Query('be') be: string,
     @Query('fund') fund?: string,
+    @Query('all') all?: string,
   ) {
-    return this.finance.explainPenalty(c, period, be, fund)
+    return this.finance.explainPenalty(c, period, be, fund, all === '1' || all === 'true')
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })

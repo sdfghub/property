@@ -20,11 +20,20 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   const [period, setPeriod] = React.useState('')
   const [units, setUnits] = React.useState<any[]>([])
   const [fundName, setFundName] = React.useState<string | null>(null)
+  const [fundCode, setFundCode] = React.useState<string | null>(null)
   const [unitsLoading, setUnitsLoading] = React.useState(true)
   const [search, setSearch] = React.useState('')
   const [beCode, setBeCode] = React.useState<string | null>(null)
   const [detail, setDetail] = React.useState<any>(null)
   const [detailLoading, setDetailLoading] = React.useState(false)
+  const [fullscreen, setFullscreen] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen])
 
   // Default to the newest period (the one being worked on), with the option to pick an earlier one.
   React.useEffect(() => {
@@ -46,6 +55,7 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
         const rows = d?.debtors || []
         setUnits(rows)
         setFundName(d?.fundName ?? null)
+        setFundCode(d?.fundCode ?? null)
         setUnitsLoading(false)
         setBeCode((cur) => (cur && rows.some((r: any) => r.beCode === cur) ? cur : rows[0]?.beCode || null))
       }).catch(() => { setUnits([]); setUnitsLoading(false) })
@@ -53,12 +63,15 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   React.useEffect(() => { loadUnits() }, [loadUnits])
 
   const loadDetail = React.useCallback(() => {
-    if (!period || !beCode) { setDetail(null); return }
+    // Scope to the same fund the unit list came from — without this, `all=1` would also surface
+    // every other fund's own (always-0%) buckets, since they're only hidden by default because
+    // they never accrue anything to filter on.
+    if (!period || !beCode || !fundCode) { setDetail(null); return }
     setDetailLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/avizier/explain-penalty?period=${encodeURIComponent(period)}&be=${encodeURIComponent(beCode)}`)
+    api.get<any>(`/communities/${communityId}/finance/avizier/explain-penalty?period=${encodeURIComponent(period)}&be=${encodeURIComponent(beCode)}&fund=${encodeURIComponent(fundCode)}&all=1`)
       .then((d: any) => { setDetail(d); setDetailLoading(false) })
       .catch(() => { setDetail({ error: true }); setDetailLoading(false) })
-  }, [api, communityId, period, beCode])
+  }, [api, communityId, period, beCode, fundCode])
   React.useEffect(() => { loadDetail() }, [loadDetail])
 
   const filteredUnits = React.useMemo(() => {
@@ -67,7 +80,10 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
     return units.filter((u) => (u.beName || '').toLowerCase().includes(q) || (u.beCode || '').toLowerCase().includes(q))
   }, [units, search])
 
-  const periodEndDate = periods.find((p) => p.code === period)?.endDate as string | undefined
+  // The day-count anchors on the period's own afișare (posting) date, same as the accrual engine —
+  // fall back to its calendar end date for periods with no afisareDate stamped.
+  const selectedPeriodRow = periods.find((p) => p.code === period)
+  const periodEndDate = (selectedPeriodRow?.afisareDate ?? selectedPeriodRow?.endDate) as string | undefined
   const buckets: any[] = detail?.buckets || []
   const totals = buckets.reduce(
     (acc, b) => ({ restanta: acc.restanta + (b.principalRemaining || 0), penalizare: acc.penalizare + (b.penaltyToDate || 0) }),
@@ -124,7 +140,9 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
           )}
         </div>
 
-        <div className="card" style={{ flex: 1, minWidth: 320 }}>
+        <div className="card" style={fullscreen
+          ? { position: 'fixed', inset: 0, zIndex: 800, background: 'var(--bg, #fff)', padding: 16, overflow: 'auto', borderRadius: 0 }
+          : { flex: 1, minWidth: 320 }}>
           {detailLoading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !beCode ? (
             <div className="empty">{t('penledger.pickUnit', 'Alege o unitate din listă.')}</div>
           ) : detail?.error ? (
@@ -132,8 +150,16 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
           ) : (
             <>
               <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <h4 style={{ margin: 0 }}>{detail?.beName || beCode}</h4>
-                <span className="muted" style={{ fontSize: 12 }}>{detail?.periodCode}</span>
+                <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+                  <h4 style={{ margin: 0 }}>{detail?.beName || beCode}</h4>
+                  <span className="muted" style={{ fontSize: 12 }}>{detail?.periodCode}</span>
+                </div>
+                {buckets.length ? (
+                  <button type="button" className="btn ghost small" onClick={() => setFullscreen((v) => !v)}
+                    title={fullscreen ? t('avizier.exitFullscreen', 'Ieși din ecran complet (Esc)') : t('avizier.fullscreen', 'Ecran complet')}>
+                    {fullscreen ? '🗗 ' + t('avizier.exit', 'Închide') : '⛶ ' + t('avizier.fullscreen', 'Ecran complet')}
+                  </button>
+                ) : null}
               </div>
 
               {detail?.override ? (

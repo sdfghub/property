@@ -1612,7 +1612,7 @@ export class FinanceService {
    * rate, the exact penalizable days in each period, the penalty posted that period, the cumulative
    * accrued, and the per-bucket cap. Returns both this month's total and the cumulative total.
    */
-  async explainPenalty(communityId: string, periodCode: string, beCode: string, sourceFund?: string) {
+  async explainPenalty(communityId: string, periodCode: string, beCode: string, sourceFund?: string, includeAll = false) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { buckets: [], monthTotal: 0, grandTotal: 0 }
     const p = await this.prisma.period.findUnique({ where: { id: period.id }, select: { code: true, seq: true } })
@@ -1634,7 +1634,7 @@ export class FinanceService {
     )
     const periodRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select pbp.bucket_id as "bucketId", pr.code as "periodCode", pr.seq as "seq",
-              pr.start_date as "startDate", pr.end_date as "endDate",
+              pr.start_date as "startDate", pr.end_date as "endDate", pr.afisare_date as "afisareDate",
               pbp.principal_remaining::float8 as "principalRemaining",
               pbp.penalty_accrued::float8 as "penaltyAccrued", pbp.penalty_posted::float8 as "penaltyPosted", pbp.status as status
          from penalty_bucket_period pbp
@@ -1668,13 +1668,16 @@ export class FinanceService {
       const due = b.dueDate ? new Date(b.dueDate) : null
       let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
       const hist = (periodsByBucket.get(b.bucketId) ?? []).map((pr) => {
+        // Anchor on the period's own afișare (posting/display) date, same as PenaltyLedgerService#advance's
+        // accrual window — falls back to the calendar end date for periods with no afisareDate stamped.
+        const periodEnd = pr.afisareDate ? new Date(pr.afisareDate) : new Date(pr.endDate)
         // Zile: days actually penalized in THIS period (counted from firstPenalDay, i.e. after grace).
         const lo = firstPenal > new Date(pr.startDate) ? firstPenal : new Date(pr.startDate)
-        const days = countDays(lo, new Date(pr.endDate))
+        const days = countDays(lo, periodEnd)
         penalDaysToDate += days
-        // Total zile: total AGE of the debt = days overdue since scadența through this period's end
+        // Total zile: total AGE of the debt = days overdue since scadența through this period's afișare
         // (the grace month included). Falls back to penalized-days when the bucket has no due date.
-        const daysToDate = due ? countDays(new Date(due.getTime() + DAY), new Date(pr.endDate)) : penalDaysToDate
+        const daysToDate = due ? countDays(new Date(due.getTime() + DAY), periodEnd) : penalDaysToDate
         return {
           periodCode: pr.periodCode,
           principalRemaining: round2(pr.principalRemaining),
@@ -1720,8 +1723,16 @@ export class FinanceService {
         history: hist,
       }
     })
-      // hide buckets that never accrued anything up to this period; keep creation-date order (SQL)
-      .filter((b) => b.penaltyToDate > 0.0001 || b.penaltyThisPeriod > 0.0001)
+      // Default: hide buckets that never accrued anything up to this period (the avizier drilldown's
+      // original behavior — keep it unchanged there). includeAll also keeps buckets with a real
+      // outstanding balance but no penalty yet (0% era, still in grace, etc.) — the "Verificare
+      // Penalități" ledger wants every restanță visible so its own sum matches the current total,
+      // not just the penalty-bearing subset. Fully settled buckets (nothing owed, nothing accrued)
+      // stay hidden either way — they're not a restanță any more.
+      .filter((b) => b.penaltyToDate > 0.0001 || b.penaltyThisPeriod > 0.0001 || (includeAll && b.principalRemaining > 0.0001))
+      // keep creation-date order (SQL) by default; callers that want every restanță visible care most
+      // about how old each one is, so sort those by age (totalDays) descending.
+      .sort((a, b) => (includeAll ? b.totalDays - a.totalDays : 0))
 
     // Manual correction (if any) applied to this BE's penalty for the period — shown as a banner so the
     // drilldown reconciles with the (net) avizier figure.
