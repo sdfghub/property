@@ -261,7 +261,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 2
+      "order": 5
     },
     {
       "code": "400191-C1-U9-AP 2/1",
@@ -285,7 +285,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 3
+      "order": 2
     },
     {
       "code": "400191-C1-U19-AP 2/2",
@@ -308,7 +308,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 4
+      "order": 3
     },
     {
       "code": "400191-C1-U19-AP 2/2",
@@ -344,7 +344,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 5
+      "order": 4
     },
     {
       "code": "400191-C1-U12-AP 4 (I)",
@@ -416,7 +416,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 8
+      "order": 9
     },
     {
       "code": "400191-C1-U21-AP 5 (I-B)",
@@ -440,7 +440,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 9
+      "order": 8
     },
     {
       "code": "400191-C1-U7-AP 6",
@@ -608,7 +608,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 16
+      "order": 29
     },
     {
       "code": "400191-C1-U26-AP 32",
@@ -632,7 +632,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 17
+      "order": 30
     },
     {
       "code": "400191-C1-U30-AP 4 (III)",
@@ -656,7 +656,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 18
+      "order": 22
     },
     {
       "code": "400191-C1-U31-AP 5 (III)",
@@ -680,7 +680,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 19
+      "order": 23
     },
     {
       "code": "400191-C1-U32-AP 11",
@@ -704,7 +704,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 20
+      "order": 16
     },
     {
       "code": "400191-C1-U14-AP 11A",
@@ -728,7 +728,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 21
+      "order": 17
     },
     {
       "code": "400191-C1-U33-AP 11B",
@@ -752,7 +752,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 22
+      "order": 18
     },
     {
       "code": "400191-C1-U34-AP 12 (SAD 4/A)",
@@ -776,7 +776,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 23
+      "order": 19
     },
     {
       "code": "400191-C1-U34-AP 12 (SAD 4/B)",
@@ -800,7 +800,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 24
+      "order": 20
     },
     {
       "code": "400191-C1-U34-AP 12 (SAD 4/C)",
@@ -824,7 +824,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 25
+      "order": 21
     },
     {
       "code": "400191-C1-U35-AP 14A",
@@ -848,7 +848,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 26
+      "order": 24
     },
     {
       "code": "400191-C1-U36-AP 14B",
@@ -872,7 +872,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 27
+      "order": 25
     },
     {
       "code": "400191-C1-U23-SPAȚIU COMERCIAL",
@@ -893,7 +893,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 28
+      "order": 31
     },
     {
       "code": "400191-C1-U16-SAD 2/1",
@@ -916,7 +916,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 29
+      "order": 28
     },
     {
       "code": "400191-C1-U17-SAD 2/2",
@@ -939,7 +939,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 30
+      "order": 26
     },
     {
       "code": "400191-C1-U5-SAD 1",
@@ -962,7 +962,7 @@
       ],
       "startPeriod": "2026-03",
       "endPeriod": null,
-      "order": 31
+      "order": 27
     }
   ],
   "measureTypes": [

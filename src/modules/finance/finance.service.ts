@@ -700,7 +700,7 @@ export class FinanceService {
     // expand/collapse drilldown).
     const allUnits = await this.prisma.unit.findMany({
       where: { communityId },
-      select: { id: true, code: true, name: true, type: true, floorNumber: true, staircase: true },
+      select: { id: true, code: true, name: true, type: true, floorNumber: true, staircase: true, order: true },
     })
     const unitById = new Map(allUnits.map((u) => [u.id, u]))
     const unitIdByCode = new Map(allUnits.map((u) => [u.code, u.id]))
@@ -1099,12 +1099,15 @@ export class FinanceService {
           consumption: infoByUnit.get(u.id)?.consumption ?? null,
           charges, curentTotal: curTotal, contactMismatch: false, sharedWithUnits,
           ...fin,
-          _sortFloor: u.floorNumber ?? 999, _sortName: u.name || shortUnitLabel(u.code),
+          // Same row sequence as the association's own official "Lista de plată" table —
+          // Unit.order (synced from data/Kralik/def.json's structure[].order via
+          // sync-kralik-display-order.ts), not the old floor+name heuristic, which didn't match.
+          _sortOrder: u.order || 999, _sortName: u.name || shortUnitLabel(u.code),
         }
       })
       .filter((r) => r.curentTotal !== 0 || r.cpi != null)
-      .sort((a, b) => a._sortFloor - b._sortFloor || a._sortName.localeCompare(b._sortName, 'ro', { numeric: true }))
-      .map(({ _sortFloor, _sortName, ...r }) => r)
+      .sort((a, b) => a._sortOrder - b._sortOrder || a._sortName.localeCompare(b._sortName, 'ro', { numeric: true }))
+      .map(({ _sortOrder, _sortName, ...r }) => r)
 
     const groupRowsAgg = new Map<string, { name: string; unitIds: string[] }>()
     for (const [unitId, groupId] of groupIdByUnitId) {
