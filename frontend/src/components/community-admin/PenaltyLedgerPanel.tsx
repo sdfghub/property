@@ -4,7 +4,16 @@ import { useI18n } from '../../i18n/useI18n'
 import { beLabel } from './beLabel'
 
 const money = (n?: number | null) => (n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : null)
+const fmtDate = (d?: string | Date | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : null)
+const DAY = 24 * 60 * 60 * 1000
+const addDays = (d: string | Date, n: number) => new Date(new Date(d).getTime() + n * DAY)
+const countDays = (from: Date, to: Date) => (from > to ? 0 : Math.floor((to.getTime() - from.getTime()) / DAY) + 1)
+const RO_MONTHS = ['Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Noi', 'Dec']
+// "2026-07" → "Iul 2026"; falls back to the raw code (or null) for anything else.
+const monthLabel = (code?: string | null) => {
+  const m = code ? /^(\d{4})-(\d{2})$/.exec(code) : null
+  return m ? `${RO_MONTHS[Number(m[2]) - 1]} ${m[1]}` : code ?? null
+}
 
 // "Fișă calcul penalizări" per unit, for the close wizard: pick a unit, see the same bucket-by-
 // bucket calculation the avizier's ✎ drilldown uses (finance.explainPenalty / GET .../avizier/
@@ -27,6 +36,9 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   const [detail, setDetail] = React.useState<any>(null)
   const [detailLoading, setDetailLoading] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
+  // Overrides the "calculate up to" date used for the age/period columns below (defaults to the
+  // selected period's own afișare date). Doesn't touch what's actually posted — a what-if preview.
+  const [asOfDate, setAsOfDate] = React.useState('')
 
   React.useEffect(() => {
     if (!fullscreen) return
@@ -81,14 +93,31 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   }, [units, search])
 
   // The day-count anchors on the period's own afișare (posting) date, same as the accrual engine —
-  // fall back to its calendar end date for periods with no afisareDate stamped.
+  // fall back to its calendar end date for periods with no afisareDate stamped. asOfDate, if set,
+  // overrides this for a what-if "calculate up to" preview.
   const selectedPeriodRow = periods.find((p) => p.code === period)
   const periodEndDate = (selectedPeriodRow?.afisareDate ?? selectedPeriodRow?.endDate) as string | undefined
+  const refDate = asOfDate ? new Date(asOfDate) : periodEndDate ? new Date(periodEndDate) : null
+
   const buckets: any[] = detail?.buckets || []
   const totals = buckets.reduce(
     (acc, b) => ({ restanta: acc.restanta + (b.principalRemaining || 0), penalizare: acc.penalizare + (b.penaltyToDate || 0) }),
     { restanta: 0, penalizare: 0 },
   )
+
+  // Perioada de calcul = scadență + 30 zile; o restanță "se califică" abia după ce acest prag e
+  // atins — sub el nu are încă o perioadă de calcul reală, deci nu apare în listă (dar contribuie
+  // în continuare la totalul de mai sus, ca să rămână egal cu restanța curentă a unității).
+  const rows = buckets
+    .map((b) => {
+      const calcStart = b.dueDate ? addDays(b.dueDate, 30) : null
+      const qualifies = !!(calcStart && refDate && calcStart <= refDate)
+      const days = qualifies ? countDays(calcStart as Date, refDate as Date) : 0
+      return { b, calcStart, qualifies, days }
+    })
+    .filter((r) => r.qualifies)
+    .sort((a, b) => b.days - a.days)
+  const hiddenCount = buckets.length - rows.length
 
   return (
     <div className="stack" style={{ gap: 12 }}>
@@ -154,12 +183,25 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                   <h4 style={{ margin: 0 }}>{detail?.beName || beCode}</h4>
                   <span className="muted" style={{ fontSize: 12 }}>{detail?.periodCode}</span>
                 </div>
-                {buckets.length ? (
-                  <button type="button" className="btn ghost small" onClick={() => setFullscreen((v) => !v)}
-                    title={fullscreen ? t('avizier.exitFullscreen', 'Ieși din ecran complet (Esc)') : t('avizier.fullscreen', 'Ecran complet')}>
-                    {fullscreen ? '🗗 ' + t('avizier.exit', 'Închide') : '⛶ ' + t('avizier.fullscreen', 'Ecran complet')}
-                  </button>
-                ) : null}
+                <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label className="muted" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {t('penledger.asOf', 'Calculează până la')}
+                    <input type="date" className="input" style={{ width: 150 }}
+                      value={asOfDate || (periodEndDate ? new Date(periodEndDate).toISOString().slice(0, 10) : '')}
+                      onChange={(e) => setAsOfDate(e.target.value)} />
+                  </label>
+                  {asOfDate ? (
+                    <button type="button" className="btn ghost small" onClick={() => setAsOfDate('')}>
+                      {t('penledger.asOfReset', 'Resetează')}
+                    </button>
+                  ) : null}
+                  {buckets.length ? (
+                    <button type="button" className="btn ghost small" onClick={() => setFullscreen((v) => !v)}
+                      title={fullscreen ? t('avizier.exitFullscreen', 'Ieși din ecran complet (Esc)') : t('avizier.fullscreen', 'Ecran complet')}>
+                      {fullscreen ? '🗗 ' + t('avizier.exit', 'Închide') : '⛶ ' + t('avizier.fullscreen', 'Ecran complet')}
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {detail?.override ? (
@@ -174,12 +216,17 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
 
               {!buckets.length ? (
                 <div className="empty" style={{ marginTop: 10 }}>{t('penledger.none', 'Nicio penalizare pentru această unitate.')}</div>
+              ) : !rows.length ? (
+                <div className="empty" style={{ marginTop: 10 }}>
+                  {t('penledger.noneQualify', 'Nicio restanță nu a ajuns încă în perioada de calcul (scadență + 30 zile) la data aleasă.')}
+                </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 620 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 700 }}>
                   <thead>
                     <tr style={{ textAlign: 'right', borderBottom: '2px solid var(--border,#ccc)' }}>
                       <th style={{ textAlign: 'left', padding: '6px 8px' }}>{t('penledger.colMonth', 'Lună restantă')}</th>
+                      <th style={{ padding: '6px 8px' }}>{t('penledger.colDue', 'Scadența lunii')}</th>
                       <th style={{ textAlign: 'left', padding: '6px 8px' }}>{t('penledger.colPeriod', 'Perioadă calcul')}</th>
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colDebt', 'Restanță')}</th>
                       <th style={{ padding: '6px 8px' }}>{t('penledger.colDays', 'Număr zile')}</th>
@@ -189,27 +236,23 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {buckets.map((b: any, i: number) => {
-                      const from = fmtDate(b.firstPenalDay)
-                      const to = fmtDate(periodEndDate)
-                      const started = (b.totalDays || 0) > 0
-                      return (
-                        <tr key={i} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)' }}>
-                          <td style={{ textAlign: 'left', padding: '6px 8px' }}>
-                            {b.label}
-                            {b.capReached ? <span className="badge secondary" style={{ marginLeft: 6 }} title={t('avizier.penCapHint', 'Penalizarea a atins valoarea datoriei (plafon legal)')}>{t('avizier.penCap', 'plafonat')}</span> : null}
-                          </td>
-                          <td style={{ textAlign: 'left', padding: '6px 8px' }}>{started && from ? `${from} – ${to ?? '…'}` : '-'}</td>
-                          <td style={{ padding: '6px 8px' }}>{money(b.principalRemaining)}</td>
-                          <td style={{ padding: '6px 8px' }}>{b.totalDays}</td>
-                          <td style={{ padding: '6px 8px' }}>{b.ratePerDayPct}%</td>
-                          <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(b.penaltyToDate)}</td>
-                          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{money((b.principalRemaining || 0) + (b.penaltyToDate || 0))}</td>
-                        </tr>
-                      )
-                    })}
+                    {rows.map(({ b, calcStart, days }, i: number) => (
+                      <tr key={i} style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#eee)' }}>
+                        <td style={{ textAlign: 'left', padding: '6px 8px' }}>
+                          {monthLabel(b.originPeriodCode) ?? t('penledger.carriedOver', 'Restanță reportată')}
+                          {b.capReached ? <span className="badge secondary" style={{ marginLeft: 6 }} title={t('avizier.penCapHint', 'Penalizarea a atins valoarea datoriei (plafon legal)')}>{t('avizier.penCap', 'plafonat')}</span> : null}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{fmtDate(b.dueDate) ?? '-'}</td>
+                        <td style={{ textAlign: 'left', padding: '6px 8px' }}>{calcStart && refDate ? `${fmtDate(calcStart)} – ${fmtDate(refDate)}` : '-'}</td>
+                        <td style={{ padding: '6px 8px' }}>{money(b.principalRemaining)}</td>
+                        <td style={{ padding: '6px 8px' }}>{days}</td>
+                        <td style={{ padding: '6px 8px' }}>{b.ratePerDayPct}%</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--danger,#b45309)' }}>{money(b.penaltyToDate)}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 700 }}>{money((b.principalRemaining || 0) + (b.penaltyToDate || 0))}</td>
+                      </tr>
+                    ))}
                     <tr style={{ textAlign: 'right', fontWeight: 700, borderTop: '2px solid var(--border,#ccc)' }}>
-                      <td style={{ textAlign: 'left', padding: '8px 8px' }} colSpan={2}>{t('penledger.total', 'Total')}</td>
+                      <td style={{ textAlign: 'left', padding: '8px 8px' }} colSpan={3}>{t('penledger.total', 'Total')}</td>
                       <td style={{ padding: '8px 8px' }}>{money(totals.restanta)}</td>
                       <td />
                       <td />
@@ -218,6 +261,12 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
                     </tr>
                   </tbody>
                 </table>
+                {hiddenCount > 0 ? (
+                  <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+                    <strong style={{ color: 'var(--text, inherit)' }}>{hiddenCount}</strong>{' '}
+                    {t('penledger.hiddenNote', 'restanțe încă în termenul de grație (sub scadență + 30 zile) — incluse în totalul de mai sus, dar nu au încă o perioadă de calcul.')}
+                  </div>
+                ) : null}
                 </div>
               )}
               {!isAdmin ? null : (

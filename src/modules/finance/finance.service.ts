@@ -1623,10 +1623,15 @@ export class FinanceService {
       `select pb.id as "bucketId", pb.origin_key as "originKey", pb.principal_original::float8 as "principalOriginal",
               pb.due_date as "dueDate", pb.first_penal_day as "firstPenalDay", pb.status as "bucketStatus",
               pb.rate_per_day_pct::float8 as "bucketRate",
-              sf.code as "sourceFund", sf.name as "sourceFundName", tf.code as "targetFund", sf.allocation as "srcAlloc"
+              sf.code as "sourceFund", sf.name as "sourceFundName", tf.code as "targetFund", sf.allocation as "srcAlloc",
+              -- the overdue month itself, for display: origin_key 'period:<id>' names the live-engine
+              -- period that staged the charge; 'hist:<unitId>:<periodCode>' (the historical import)
+              -- already carries its own month in the key, no join needed.
+              op.code as "originPeriodCodeJoined"
          from penalty_bucket pb
          join fund sf on sf.id = pb.fund_id
          left join fund tf on tf.id = pb.target_fund_id
+         left join period op on pb.origin_key like 'period:%' and op.id = split_part(pb.origin_key, ':', 2)
         where pb.community_id = $1 and pb.billing_entity_id = $2
           and ($3::text is null or sf.code = $3)
         order by pb.created_at asc, pb.first_penal_day asc`,
@@ -1699,6 +1704,11 @@ export class FinanceService {
       // 'opening' = the original cutover seed; 'hist:<unitId>:opening' = the per-unit historical
       // import's own catch-all for whatever predates this system's own tracked charge history.
       const isOpening = b.originKey === 'opening' || /:opening$/.test(b.originKey || '')
+      // The overdue month, for a separate display column: 'period:<id>' resolves via the join above;
+      // 'hist:<unitId>:<periodCode>' carries it as the key's own last segment; opening/cutover buckets
+      // have no single origin month.
+      const histMatch = /^hist:[^:]+:(.+)$/.exec(b.originKey || '')
+      const originPeriodCode: string | null = isOpening ? null : (b.originPeriodCodeJoined ?? (histMatch ? histMatch[1] : null))
       // Migrated buckets carry no real "original principal" — they use a 1e9 sentinel to disable the
       // legal cap (the penalty was already accrued in the source system). Flag them so the UI omits the
       // meaningless "Datorie" figure and never claims the cap was reached.
@@ -1707,6 +1717,7 @@ export class FinanceService {
         label: isOpening
           ? `Restanță reportată (${b.sourceFund})`
           : `Cotă ${b.sourceFund}${b.dueDate ? ` · scadentă ${new Date(b.dueDate).toLocaleDateString('ro-RO')}` : ''}`,
+        originPeriodCode,
         sourceFund: b.sourceFund,
         targetFund: b.targetFund,
         dueDate: b.dueDate,
