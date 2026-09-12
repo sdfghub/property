@@ -656,12 +656,9 @@ export function AvizierPanel({
         // fullscreen the cap must NOT apply: 70vh is routinely smaller than the space actually
         // available (100vh minus the toolbar/title/footer chrome), and a cap smaller than the real
         // budget is exactly what left a visible gap above the signatures before this fix.
-        // scrollSnapType+scrollSnapAlign (on the row, further down) keep a real row boundary flush
-        // with the top of the scrollable area at rest, so scrolling never leaves a row half-cut.
         <div className="card" style={{
           overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0,
           maxHeight: fullscreen ? undefined : '70vh', padding: 0, minWidth: 0,
-          ...(fullscreen ? { scrollSnapType: 'y proximity' as const } : {}),
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
@@ -793,7 +790,7 @@ export function AvizierPanel({
                 const isExpanded = expandable && expandedBe.has(r.beCode)
                 return (
                 <tr key={rowKey} onMouseEnter={() => setHoverBe(rowKey)} onMouseLeave={() => setHoverBe(null)}
-                  style={{ borderTop: indent ? 'none' : '1px solid var(--border, #eee)', textAlign: 'center', background: rowBg, scrollSnapAlign: 'start' }}>
+                  style={{ borderTop: indent ? 'none' : '1px solid var(--border, #eee)', textAlign: 'center', background: rowBg }}>
                   <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', left: 0, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
                       maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis' }}
                     title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
