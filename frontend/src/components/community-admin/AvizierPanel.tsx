@@ -13,7 +13,11 @@ const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 // the frontend no longer hardcodes any code→label knowledge and falls back to the raw code.
 
 // Numeric-column headers wrap (multi-word labels stack) so columns shrink to the small numbers below.
-const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 112 }
+// Centered + bottom-aligned so every header — one-line or two-line (see HLabel2) — shares the same
+// baseline and stays centered over its column at every zoom/collapse level (the zoom stepper only
+// changes which columns are shown/merged, never font size, so this alignment must hold regardless
+// of how many sibling columns are present).
+const TH_WRAP: React.CSSProperties = { whiteSpace: 'normal', verticalAlign: 'bottom', maxWidth: 112, textAlign: 'center' }
 
 export function AvizierPanel({
   communityId,
@@ -172,6 +176,16 @@ export function AvizierPanel({
   // Flexing them together makes their combined width the intrinsic width, so they never split.
   const HLabel = ({ children }: { children: React.ReactNode }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 4, minWidth: 0 }}>{children}</span>
+  )
+  // A two-line header (label, then its unit of measure on its own line below — always, not just
+  // when the column narrows) for CPI / Pers / Apă. Centered column layout keeps both lines lined
+  // up over the numbers beneath, and the sort icon rides with the label on the first line so it
+  // doesn't add a third line.
+  const HLabel2 = ({ label, unit, sortKey: sk }: { label: React.ReactNode; unit: React.ReactNode; sortKey: string }) => (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', minWidth: 0, lineHeight: 1.25 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', columnGap: 4 }}>{label}<SortIcon k={sk} /></span>
+      <span style={{ fontSize: '0.85em', color: 'var(--muted, #666)' }}>{unit}</span>
+    </span>
   )
   // Row filter: CPI range + an explicit hidden-unit set (checklist), both scoped to the Apartament column.
   // The popover renders as position:fixed at the end of the tree (not nested inside the sticky
@@ -632,7 +646,14 @@ export function AvizierPanel({
       ) : !displayRows.length ? (
         <div className="empty">{t('avizier.filterNone', 'Niciun apartament nu corespunde filtrului.')}</div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh', padding: 0, minWidth: 0 }}>
+        // flex:1 + minHeight:0 lets this card grow to fill whatever vertical space its flex
+        // parent actually has (the .stack becomes a real flex column with height only in
+        // fullscreen mode, where inset:0 gives it one) so the table reaches all the way down to
+        // the sticky signatures footer instead of shrink-wrapping to its own row count and
+        // leaving a gap above it. maxHeight keeps the old cap as a ceiling, not a fixed height,
+        // so the embedded (non-fullscreen) view — which has no bounded parent height — is
+        // unaffected: flex:1 there is a no-op since there's no extra space to distribute.
+        <div className="card" style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: '70vh', padding: 0, minWidth: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
@@ -686,9 +707,9 @@ export function AvizierPanel({
                     </button>
                   </span>
                 </th>
-                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel>{t('avizier.cpi', 'CPI')}<SortIcon k="cpi" /></HLabel></th>}
-                {infoVis.residents && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.persHint', 'Număr persoane')}><HLabel>{t('avizier.pers', 'Pers.')}<SortIcon k="residents" /></HLabel></th>}
-                {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel>{t('avizier.apa', 'Apă (mc)')}<SortIcon k="consumption" /></HLabel></th>}
+                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
+                {infoVis.residents && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.persHint', 'Număr persoane')}><HLabel2 label={t('avizier.persLabel', 'Pers')} unit={t('avizier.persUnit', '[#]')} sortKey="residents" /></th>}
+                {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel2 label={t('avizier.apaLabel', 'Apa')} unit={t('avizier.apaUnit', '[m3]')} sortKey="consumption" /></th>}
                 {cols.map((col, i) => {
                   if (col.kind === 'incasari') return (
                     <th key={`i${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontStyle: 'italic' }}><HLabel>{incasariLabel}<SortIcon k={colKey(col)} /></HLabel></th>
