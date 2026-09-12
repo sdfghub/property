@@ -375,6 +375,48 @@ export function AvizierPanel({
     setExpanded(nextExpanded)
   }
 
+  // Print always renders the fully-expanded Proprietar view — regardless of whatever
+  // zoom/collapse state the admin happens to be looking at on screen — since a printed notice
+  // needs every fund column spelled out, not a collapsed summary. Snapshot the current view so it
+  // can be restored once the print dialog closes (afterprint), so clicking Printează doesn't
+  // permanently change what the admin was looking at.
+  const printRestoreRef = React.useRef<null | {
+    associationView: boolean; groupBy: typeof groupBy
+    collapsedBands: Set<string>; collapsedFunds: Set<string>; expanded: Set<string>; zoomLevel: number
+  }>(null)
+  const [printPending, setPrintPending] = React.useState(false)
+  const handlePrint = () => {
+    printRestoreRef.current = {
+      associationView, groupBy,
+      collapsedBands: new Set(collapsedBands), collapsedFunds: new Set(collapsedFunds), expanded: new Set(expanded),
+      zoomLevel,
+    }
+    setAssociationView(false)
+    setGroupBy('entity')
+    applyZoom(3)
+    setCollapsedBands(new Set()) // also expand the "De plată" grand-total band — applyZoom(3) leaves it as-is
+    setPrintPending(true)
+  }
+  React.useEffect(() => {
+    if (!printPending) return
+    setPrintPending(false)
+    window.print()
+    const restore = () => {
+      const prev = printRestoreRef.current
+      if (!prev) return
+      setAssociationView(prev.associationView)
+      setGroupBy(prev.groupBy)
+      setCollapsedBands(prev.collapsedBands)
+      setCollapsedFunds(prev.collapsedFunds)
+      setExpanded(prev.expanded)
+      setZoomLevel(prev.zoomLevel)
+      printRestoreRef.current = null
+      window.removeEventListener('afterprint', restore)
+    }
+    window.addEventListener('afterprint', restore)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printPending])
+
   const cols: Col[] = []
   const emittedBands = new Set<string>()
   for (const g of groups) {
@@ -530,7 +572,7 @@ export function AvizierPanel({
         <div className="row" style={{ gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Data afișării / Scadență moved to the global PeriodSelectorBar (shared by every tab). */}
           <button type="button" className="btn small" style={{ borderRadius: 999, background: 'none', color: 'var(--text, #1d1d1f)', borderColor: 'var(--border, #e5e5e5)' }}
-            onClick={() => window.print()} title={t('avizier.print', 'Printează')}>
+            onClick={handlePrint} title={t('avizier.print', 'Printează')}>
             🖨 {t('avizier.print', 'Printează')}
           </button>
         </div>

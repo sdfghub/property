@@ -920,3 +920,22 @@ select option {
   transform: translateY(0);
   transition: opacity 200ms ease, transform 200ms ease;
 }
+
+/* Default print paper for the whole app: A3 landscape (the avizier table is wide — many fund
+   columns — and this is the only place today with a dedicated "Printează" action). @page can't
+   be scoped to a DOM subtree, so this is necessarily app-wide. */
+@page {
+  size: A3 landscape;
+  margin: 10mm;
+}
+
+/* The avizier table sits in a scrollable .card (overflow:auto, height-capped so it fits the
+   screen) — printing a scrollable element only captures whatever's currently scrolled into view,
+   silently cutting off every row above/below that. Printing must show the whole table regardless
+   of on-screen scroll position, so let it grow to its natural full height on the print page. */
+@media print {
+  .card {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
