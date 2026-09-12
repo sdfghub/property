@@ -43,15 +43,6 @@ export function AvizierPanel({
     if (!y || !m) return code
     return new Date(y, m - 1, 1).toLocaleDateString(lang === 'ro' ? 'ro-RO' : 'en-US', { month: 'long', year: 'numeric' })
   }
-  // Încasări columns always reflect the *previous* period's collection cycle — the code is one
-  // calendar month behind whatever period is currently selected.
-  const prevPeriodCode = (code?: string) => {
-    if (!code) return ''
-    const [y, m] = code.split('-').map(Number)
-    if (!y || !m) return ''
-    const d = new Date(y, m - 2, 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }
   const avizierBase = reportPath ?? `/communities/${communityId}/finance/avizier`
   const periodsBase = periodsPath ?? `/communities/${communityId}/periods`
   const associationInfoBase = associationInfoPath ?? `/communities/${communityId}/association-info`
@@ -291,9 +282,15 @@ export function AvizierPanel({
     if (!communityId) return
     api.get<any>(associationInfoBase).then((d: any) => setAssocInfo(d)).catch(() => setAssocInfo(null))
   }, [api, communityId, associationInfoBase])
+  // `role` on a board member is free text an admin typed (AssociationInfoPanel's "Funcție" field,
+  // no fixed enum) — normalize diacritics and match by substring so "Președinte", "presedinte" or
+  // "Președinte Comitet" all resolve, instead of an exact-match that silently shows "—" the moment
+  // someone's typed role doesn't byte-for-byte match "președinte"/"cenzor".
+  const normalizeRole = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
   const boardMemberByRole = (needle: string) => {
     const members: any[] = assocInfo?.boardMembers ?? []
-    const hit = members.find((m) => String(m?.role || '').toLowerCase().trim() === needle)
+    const n = normalizeRole(needle)
+    const hit = members.find((m) => normalizeRole(String(m?.role || '')).includes(n))
     return hit?.name || null
   }
   const signatories = [
@@ -441,9 +438,9 @@ export function AvizierPanel({
   }
   const sumCats = (charges: Record<string, number>, keys: string[]) => keys.reduce((s, c) => s + (Number(charges?.[c]) || 0), 0)
   const leadColspan = 1 + infoCount
-  // Încasări always reports the prior period's collection cycle, so every Încasări header carries
-  // that period code (e.g. "Încasări (2026-05)" while viewing 2026-06).
-  const incasariLabel = `${t('avizier.incasari', 'Încasări')} (${prevPeriodCode(data?.period?.code || period)})`
+  // Încasări always reports the prior period's collection cycle (e.g. shows 2026-05's receipts
+  // while viewing 2026-06) — no longer spelled out in the header itself, just the plain label.
+  const incasariLabel = t('avizier.incasari', 'Încasări')
   // The value a given column would display for a row — reused so sort can target any column,
   // including ones derived at render time (fundTotal/bandTotal/finalTotal).
   const colValue = (r: any, col: Col): number => {
@@ -547,9 +544,8 @@ export function AvizierPanel({
               <button type="button" className={!associationView && groupBy === 'unit' ? 'btn primary small' : 'btn secondary small'} onClick={() => { setAssociationView(false); setGroupBy('unit') }}>
                 {t('avizier.entityUnit', 'Unitatea')}
               </button>
-              <button type="button" className={!associationView && groupBy === 'group' ? 'btn primary small' : 'btn secondary small'} onClick={() => { setAssociationView(false); setGroupBy('group') }}>
-                {t('avizier.entityGroup', 'Grup Unități')}
-              </button>
+              {/* "Grup Unități" (groupBy === 'group') removed from the UI per request — the backend
+                  mode still exists (FinanceService.avizier), just no longer reachable from here. */}
               <button type="button" className={associationView ? 'btn primary small' : 'btn secondary small'} onClick={() => setAssociationView(true)}>
                 {t('avizier.viewAssociation', 'Asociație')}
               </button>
@@ -695,7 +691,7 @@ export function AvizierPanel({
                 {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400 }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel>{t('avizier.apa', 'Apă (mc)')}<SortIcon k="consumption" /></HLabel></th>}
                 {cols.map((col, i) => {
                   if (col.kind === 'incasari') return (
-                    <th key={`i${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)' }}><HLabel>{incasariLabel}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`i${i}`} style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontStyle: 'italic' }}><HLabel>{incasariLabel}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   if (col.kind === 'cat') return (
                     <th key={`c${i}`} style={{ ...TH_WRAP, padding: '8px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}><HLabel>{catLabel(col.cat)}<SortIcon k={colKey(col)} /></HLabel></th>
@@ -780,7 +776,8 @@ export function AvizierPanel({
                         <button type="button" className="btn ghost small" onClick={saveDisplayName} title={t('common.save', 'Salvează')}>✓</button>
                       </span>
                     ) : (
-                      <span>
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span>
                           {expandable ? (
                             <button type="button" onClick={() => toggleExpandedBe(r.beCode)}
                               title={isExpanded ? t('avizier.collapseUnits', 'Ascunde unitățile') : t('avizier.expandUnits', 'Arată unitățile')}
@@ -796,7 +793,6 @@ export function AvizierPanel({
                               {l.primary}
                             </button>
                           )}
-                          {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 11, marginLeft: 6 } : { fontSize: 11, marginLeft: 6 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
                           {indent && r.trusted === false ? (
                             <span title={t('avizier.unitEstimateHint', 'Restanțe necunoscute la nivel de unitate pentru această perioadă — doar taxele curente sunt reale aici')} style={{ marginLeft: 6, fontSize: 11, opacity: 0.6 }}>🔗</span>
                           ) : null}
@@ -820,6 +816,10 @@ export function AvizierPanel({
                             onClick={(e) => { e.stopPropagation(); setRenamingBe({ be: r.beCode, displayName: r.displayName || '' }); setRenameEffectiveFrom(data?.period?.code || ''); setRenameError(null) }}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--link, #2563eb)', fontSize: 11, marginLeft: 4, padding: 0 }}>🕐</button> : null}
                         </span>
+                        {/* Complementary name (unit's owner, or owner's unit code) on its own line below
+                            the row's primary label — see beLabel()'s {primary, secondary} contract. */}
+                        {secondary ? <span style={r.contactMismatch ? { color: 'var(--danger, #d32f2f)', fontWeight: 600, fontSize: 11 } : { fontSize: 11 }} className={r.contactMismatch ? undefined : 'muted'}>{secondary}</span> : null}
+                      </span>
                     )}
                   </td>
                   {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
@@ -830,15 +830,15 @@ export function AvizierPanel({
                       // The grand-total band's own Încasări carries the payments-journal drilldown —
                       // it's the only place that number appears now.
                       if (isDeplata(col.group)) return (
-                        <td key={`i${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{r.payments ? (RO ? money(r.payments) : (
+                        <td key={`i${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)', fontStyle: 'italic' }}>{r.payments ? (RO ? money(r.payments) : (
                           <button type="button" onClick={() => openPayments(r.beCode)} title={t('avizier.paymentsLog', 'Jurnal încasări')}
-                            style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                            style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontStyle: 'italic', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
                             {money(r.payments)}
                           </button>
                         )) : ''}</td>
                       )
                       const v = r.paymentsByFund?.[col.group.key]
-                      return <td key={`i${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{v ? money(v) : ''}</td>
+                      return <td key={`i${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)', fontStyle: 'italic' }}>{v ? money(v) : ''}</td>
                     }
                     if (col.kind === 'cat') {
                       const v = r.charges[col.cat]
@@ -940,7 +940,7 @@ export function AvizierPanel({
                   {infoVis.consumption && <td style={{ padding: '8px 10px' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>}
                   {cols.map((col, i) => {
                     if (col.kind === 'incasari') return (
-                      <td key={`i${i}`} style={{ padding: '8px 10px' }}>{money(isDeplata(col.group) ? totals.payments : totals.paymentsByFund?.[col.group.key])}</td>
+                      <td key={`i${i}`} style={{ padding: '8px 10px', fontStyle: 'italic' }}>{money(isDeplata(col.group) ? totals.payments : totals.paymentsByFund?.[col.group.key])}</td>
                     )
                     if (col.kind === 'curente') return (
                       <td key={`cu${i}`} style={{ padding: '8px 10px' }}>{money(isDeplata(col.group) ? totals.curentTotal : sumCats(totals.byCategory || {}, col.group.categories))}</td>
@@ -978,7 +978,14 @@ export function AvizierPanel({
       )}
 
       {!loading && rows.length > 0 && (
-        <div className="row" style={{ gap: 24, flexWrap: 'wrap', marginTop: 8 }}>
+        // Fixed footer, pinned to the bottom of whatever scrolls it (the fullscreen panel, or the
+        // page) via sticky+marginTop:auto, with a minHeight so the 3-signature row never collapses
+        // below the space its own border-line + label needs, regardless of how few rows are above it.
+        <div className="row" style={{
+          gap: 24, flexWrap: 'wrap', marginTop: 'auto', paddingTop: 12,
+          position: 'sticky', bottom: 0, zIndex: 4, minHeight: 96,
+          background: 'var(--bg, #fff)', borderTop: '1px solid var(--border, #e5e5e5)',
+        }}>
           {signatories.map((s, i) => (
             <div key={i} className="stack" style={{ gap: 4, flex: '1 1 200px', minWidth: 180 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>{s.role}</div>
