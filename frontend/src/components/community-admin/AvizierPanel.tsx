@@ -518,6 +518,15 @@ export function AvizierPanel({
   { let idx = 0; for (const run of groupRuns) { fundBoundaryIdx.add(idx); idx += run.span } }
   const FUND_SEPARATOR = '2px solid var(--border-strong, var(--border, #a8a8a8))'
   const colSepStyle = (i: number): React.CSSProperties => (fundBoundaryIdx.has(i) ? { borderLeft: FUND_SEPARATOR } : {})
+  // Finer, dotted divider inside the sticky lead block itself (identity vs. the CPI/Pers/Apă info
+  // columns) — a lighter touch than FUND_SEPARATOR since it's splitting one logical block, not
+  // marking a fund boundary.
+  const DOTTED_SEPARATOR = '1px dotted var(--border-strong, var(--border, #a8a8a8))'
+  // The identity column repeats at the far right too — past a wide fund section you'd otherwise
+  // lose track of which row you're even on. Sticky right:0, same width as the real one; De plată
+  // (the actual last data column) shifts its own sticky offset left by that width to sit right
+  // before it, exactly mirroring how the left-hand stack stacks identity/CPI/Pers/Apă.
+  const TRAILING_UNIT_PX = STICKY_IDENTITY_PX
   // Încasări always reports the prior period's collection cycle (e.g. shows 2026-05's receipts
   // while viewing 2026-06) — no longer spelled out in the header itself, just the plain label.
   const incasariLabel = t('avizier.incasari', 'Încasări')
@@ -835,6 +844,7 @@ export function AvizierPanel({
                     </th>
                   )
                 })}
+                <th style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
               </tr>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={leadColspan} />
@@ -850,6 +860,7 @@ export function AvizierPanel({
                     {run.kind === 'fund' ? `${collapsedFunds.has(run.key) ? '+' : '−'} ${run.label}` : ''}
                   </th>
                 ))}
+                <th style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
               </tr>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX }}>
@@ -868,7 +879,7 @@ export function AvizierPanel({
                     </button>
                   </span>
                 </th>
-                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
+                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
                 {infoVis.residents && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.persHint', 'Număr persoane')}><HLabel2 label={t('avizier.persLabel', 'Pers')} unit={t('avizier.persUnit', '[#]')} sortKey="residents" /></th>}
                 {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '8px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel2 label={t('avizier.apaLabel', 'Apa')} unit={t('avizier.apaUnit', '[m3]')} sortKey="consumption" /></th>}
                 {cols.map((col, i) => {
@@ -912,12 +923,15 @@ export function AvizierPanel({
                   return (
                     <th key={`fin${i}`} style={{
                       ...TH_WRAP, padding: '8px 10px', fontWeight: 700,
-                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   // Fund-boundary separator: cloned onto whichever element the branch above returned,
                   // rather than threading a border prop through every branch individually.
                 }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
+                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, borderLeft: DOTTED_SEPARATOR }}>
+                  {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
+                </th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
@@ -997,7 +1011,7 @@ export function AvizierPanel({
                       </span>
                     )}
                   </td>
-                  {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
+                  {infoVis.cpi && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{r.residents != null ? r.residents : ''}</td>}
                   {infoVis.consumption && <td style={{ padding: '6px 10px', color: 'var(--muted, #666)', position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg), width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{r.consumption != null ? money(r.consumption) : ''}</td>}
                   {cols.map((col, i) => {
@@ -1083,16 +1097,22 @@ export function AvizierPanel({
                     // finalTotal
                     return <td key={`fin${i}`} style={{
                       padding: '6px 10px', fontWeight: 700,
-                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: rowBg } : {}),
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: rowBg } : {}),
                     }}>{money(r.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
+                  <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', right: 0, zIndex: 1,
+                      background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
+                      width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: DOTTED_SEPARATOR }}
+                    title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
+                    <span style={{ fontWeight: indent ? 400 : 600, fontSize: indent ? 12 : undefined }}>{l.primary}</span>
+                  </td>
                 </tr>
                 )
               })}
               {totals ? (
                 <tr style={{ borderTop: '2px solid var(--border, #ccc)', textAlign: 'center', fontWeight: 700, background: 'var(--muted-bg, #f4f4f5)', position: 'sticky', bottom: 0, zIndex: 3 }}>
                   <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX }}>{t('avizier.totalRow', 'TOTAL')}</td>
-                  {infoVis.cpi && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
+                  {infoVis.cpi && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, borderLeft: DOTTED_SEPARATOR }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
                   {infoVis.residents && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{totals.residents != null ? totals.residents : ''}</td>}
                   {infoVis.consumption && <td style={{ padding: '8px 10px', position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>}
                   {cols.map((col, i) => {
@@ -1121,9 +1141,10 @@ export function AvizierPanel({
                     )
                     return <td key={`fin${i}`} style={{
                       padding: '8px 10px',
-                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
+                      ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}>{money(totals.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
+                  <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, borderLeft: DOTTED_SEPARATOR }}>{t('avizier.totalRow', 'TOTAL')}</td>
                 </tr>
               ) : null}
             </tbody>
