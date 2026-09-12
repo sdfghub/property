@@ -38,6 +38,11 @@ export function IntakePanel({ communityId }: { communityId: string }) {
   const [hintsOpen, setHintsOpen] = React.useState(false)
   const [hintsDirty, setHintsDirty] = React.useState(false)
   const [open, setOpen] = React.useState<IntakeRecordRow | null>(null)
+  // review-table filter: finished rows (applied / skipped) are hidden by default so the list shrinks as you work
+  type Filter = 'todo' | 'approved' | 'done' | 'all'
+  const [filter, setFilter] = React.useState<Filter>('todo')
+  const isDone = (r: IntakeRecordRow) => r.status === 'APPLIED' || r.status === 'SKIPPED'
+  const inFilter = (r: IntakeRecordRow) => filter === 'all' ? true : filter === 'done' ? isDone(r) : filter === 'approved' ? r.status === 'APPROVED' || r.status === 'STAGED' : !isDone(r) && r.status !== 'APPROVED' && r.status !== 'STAGED'
 
   const base = `/communities/${communityId}/intake`
   const fail = (e: any) => {
@@ -72,9 +77,10 @@ export function IntakePanel({ communityId }: { communityId: string }) {
       const d = await api.get<{ batch: IntakeBatchSummary; records: IntakeRecordRow[] }>(`${base}/batches/${id}`)
       setSelected(d)
       if (d.batch.periodCode && d.batch.periodCode !== periodCode) setPeriodCode(d.batch.periodCode)
-    } catch (e) { fail(e) }
+      return d
+    } catch (e) { fail(e); return null }
   }
-  const refreshSelected = async () => { if (selected) await selectBatch(selected.batch.id); await loadBatches() }
+  const refreshSelected = async () => { const d = selected ? await selectBatch(selected.batch.id) : null; await loadBatches(); return d }
 
   const act = async (key: string, fn: () => Promise<unknown>, done?: string) => {
     setBusy(key); setError(null); setIssues([]); setNotice(null)
@@ -112,8 +118,9 @@ export function IntakePanel({ communityId }: { communityId: string }) {
 
   // ── record / batch actions ──────────────────────────────────────────────────────────────────
   const patch = (r: IntakeRecordRow, body: any) => api.patch<IntakeRecordRow>(`${base}/batches/${selected!.batch.id}/records/${r.id}`, body)
-  const approve = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'APPROVE' }); await refreshSelected() })
-  const skip = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'SKIP' }); await refreshSelected() })
+  const recordLabel = (r: IntakeRecordRow) => `#${r.index} ${r.effective?.invoice?.vendorName ?? r.extracted?.counterpartyName ?? r.sourceFile ?? ''}`.trim()
+  const approve = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'APPROVE' }); const b = await refreshSelected(); setOpen(null); setNotice(t('intake.msg.approvedOne', { record: recordLabel(r), n: b?.records.filter((x: IntakeRecordRow) => x.status === 'APPROVED' || x.status === 'FAILED' || x.status === 'STAGED').length ?? 0 })) })
+  const skip = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'SKIP' }); await refreshSelected(); setOpen(null); setNotice(t('intake.msg.skippedOne', { record: recordLabel(r) })) })
   const reopen = (r: IntakeRecordRow) => act(r.id, async () => { await patch(r, { action: 'REOPEN' }); await refreshSelected() })
   const recheck = () => act('batch', async () => { await api.post(`${base}/batches/${selected!.batch.id}/recheck`, {}); await refreshSelected() })
   const applyBatch = () => {
@@ -280,13 +287,25 @@ export function IntakePanel({ communityId }: { communityId: string }) {
             </div>
           </div>
           <p className="muted" style={{ fontSize: 13 }}>{t('intake.records.hint', 'Open a record to correct its mapping. Approve what is right, skip the rest, then Apply — invoices and expense lines are created only then, through the normal template submission.')}</p>
+          {notice && <div className="badge positive" style={{ marginBottom: 8, display: 'block' }}>{notice}</div>}
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {([
+              ['todo', t('intake.filter.todo', 'To review'), selected.records.filter((r) => !isDone(r) && r.status !== 'APPROVED' && r.status !== 'STAGED').length],
+              ['approved', t('intake.filter.approved', 'Approved, waiting for Apply'), selected.records.filter((r) => r.status === 'APPROVED' || r.status === 'STAGED').length],
+              ['done', t('intake.filter.done', 'Applied / skipped'), selected.records.filter(isDone).length],
+              ['all', t('intake.filter.all', 'All'), selected.records.length],
+            ] as Array<[Filter, string, number]>).map(([k, label, n]) => (
+              <button key={k} type="button" className={`btn small ${filter === k ? 'primary' : 'secondary'}`} onClick={() => setFilter(k)}>{label} ({n})</button>
+            ))}
+          </div>
+          {selected.records.filter(inFilter).length === 0 && <div className="muted" style={{ fontSize: 13, padding: '8px 0' }}>{filter === 'todo' ? t('intake.filter.emptyTodo', 'Nothing left to review — approved records are waiting for Apply.') : t('intake.filter.empty', 'No records in this view.')}</div>}
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ fontSize: 12 }}>
               <thead><tr>
                 <th>#</th><th>{t('intake.col.file', 'File')}</th><th>{t('intake.col.vendor', 'Vendor')}</th><th>{t('intake.col.number', 'Number')}</th><th style={{ textAlign: 'right' }}>{t('intake.col.gross', 'Gross')}</th><th>{t('intake.col.mapping', 'Mapping')}</th><th>{t('intake.col.confidence', 'Conf.')}</th><th>{t('intake.col.status', 'Status')} · {t('intake.col.blockers', 'Checks')}</th>
               </tr></thead>
               <tbody>
-                {selected.records.map((r) => {
+                {selected.records.filter(inFilter).map((r) => {
                   const inv = r.effective?.invoice
                   const actionable = r.kind === 'INVOICE' || r.kind === 'BANK_LINE'
                   const canApprove = actionable && r.status !== 'APPLIED' && r.status !== 'APPROVED' && r.remaining.length === 0 && (r.kind !== 'BANK_LINE' || (!!r.effective?.mapping && !(r.status === 'SKIPPED' && (r.effective.mapping as any).target === 'IGNORE')))
@@ -335,7 +354,7 @@ export function IntakePanel({ communityId }: { communityId: string }) {
           busy={busy === open.id}
           onClose={() => setOpen(null)}
           onSave={async (body) => { await act(open.id, async () => { const r = await patch(open, body); setOpen(r); await refreshSelected() }) }}
-          onApprove={async (body) => { await act(open.id, async () => { const r = await patch(open, { ...body, action: 'APPROVE' }); setOpen(r); await refreshSelected() }) }}
+          onApprove={async (body) => { await act(open.id, async () => { const r = await patch(open, { ...body, action: 'APPROVE' }); const b = await refreshSelected(); setOpen(null); setNotice(t('intake.msg.approvedOne', { record: recordLabel(r), n: b?.records.filter((x: IntakeRecordRow) => x.status === 'APPROVED' || x.status === 'FAILED' || x.status === 'STAGED').length ?? 0 })) }) }}
         />
       )}
     </div>
