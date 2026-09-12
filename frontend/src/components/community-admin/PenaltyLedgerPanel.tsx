@@ -129,8 +129,8 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // charge that isn't due yet as if it were unpaid debt.
   const buckets = allBuckets.filter((b) => !b.dueDate || !refDate || new Date(b.dueDate) <= refDate)
 
-  // Perioada de calcul = scadență + 30 zile; o restanță "se califică" abia după ce acest prag e
-  // atins. Restanțele mai proaspete (deja scadente, dar încă în termenul de grație) rămân în listă
+  // Perioada de calcul = firstPenalDay (scadență + grație); o restanță "se califică" abia după ce
+  // acest prag e atins. Restanțele mai proaspete (deja scadente, dar încă în termenul de grație) rămân în listă
   // — doar fără zile/penalizare — ca luna deschisă să-și arate mereu toate restanțele reale (ex.
   // iunie, cât timp iulie e deschisă), nu doar cele care acumulează deja penalizări; altfel totalul
   // de mai jos (care le include mereu, ca să rămână egal cu restanța curentă a unității) nu s-ar
@@ -138,7 +138,12 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // zile mai multe, mai sus), apoi restul, cele mai aproape de a intra la calcul primele.
   const rows = buckets
     .map((b) => {
-      const calcStart = b.dueDate ? addDays(b.dueDate, 30) : null
+      // The backend's own firstPenalDay (dueDate + this community's actual grace-day setting + 1)
+      // — not a client-side "+30" guess, which silently drifted a day off backend's real "+31"
+      // (grace days is a per-community setting; this way there's no formula to keep in sync at
+      // all). Previously this 1-day gap made "Zile curente" (which clamps to the accrual window's
+      // real start) and "Număr zile" (which didn't) disagree for a bucket's very first period.
+      const calcStart = b.firstPenalDay ? new Date(b.firstPenalDay) : null
       const qualifies = !!(calcStart && refDate && calcStart <= refDate)
       const rate = Number(b.ratePerDayPct) || 0
       const principalRemaining = Number(b.principalRemaining) || 0

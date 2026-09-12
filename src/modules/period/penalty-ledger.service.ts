@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import type { Prisma, PrismaClient } from '@prisma/client'
-import { rateForDate } from './penalty-rate'
+import { rateForDate, originAnchorDate } from './penalty-rate'
 
 type TxOrClient = PrismaClient | Prisma.TransactionClient
 const DAY = 24 * 60 * 60 * 1000
@@ -81,7 +81,7 @@ export class PenaltyLedgerService {
    * bear penalties. Idempotent on originKey='period:<periodId>' — safe to re-run on re-prepare.
    */
   async ensureBuckets(tx: TxOrClient, communityId: string, periodId: string) {
-    const period = await tx.period.findUnique({ where: { id: periodId }, select: { dueDate: true } })
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { dueDate: true, startDate: true } })
     const community = await tx.community.findUnique({ where: { id: communityId }, select: { penaltyGraceDays: true } })
     const graceDays = Number((community as any)?.penaltyGraceDays ?? 30)
     const funds = await this.penalFunds(tx, communityId)
@@ -89,6 +89,9 @@ export class PenaltyLedgerService {
     const firstPenalDay = period?.dueDate
       ? new Date(new Date(period.dueDate).getTime() + (graceDays + 1) * DAY)
       : new Date(0)
+    // The origin of every bucket created here IS periodId itself — its own calendar startDate is
+    // the anchor originAnchorDate would derive anyway, just without needing a later DB round-trip.
+    const originDate = originAnchorDate(`period:${periodId}`, period?.dueDate ?? null, period?.startDate ?? null)
 
     for (const f of funds) {
       // this period's NEW principal contribution per BE (staged charge, refType CLOSE_PREP), fund f
@@ -115,9 +118,9 @@ export class PenaltyLedgerService {
             originKey: `period:${periodId}`, dueDate: period?.dueDate ?? null, firstPenalDay,
             principalOriginal: principal, status: 'OPEN',
             // Informational snapshot only — `advance()` re-derives the live rate from the fund's
-            // schedule (if configured) using this debt's own firstPenalDay, so a later rate change
+            // schedule (if configured) using this debt's own origin anchor, so a later rate change
             // never permanently freezes an older bucket at whatever the flat rate happened to be here.
-            ratePerDayPct: rateForDate(f.alloc, firstPenalDay, f.rate * 100),
+            ratePerDayPct: rateForDate(f.alloc, originDate, f.rate * 100),
           } as any,
         })
       }
@@ -155,6 +158,22 @@ export class PenaltyLedgerService {
       include: { periods: { where: { status: 'COMMITTED', periodSeq: { lt: period.seq } }, orderBy: { periodSeq: 'desc' }, take: 1 } },
     })
 
+    // Batch-resolve the origin period's own calendar startDate for every 'period:<id>' bucket in
+    // this pass — one query, not one per bucket — for originAnchorDate() below (rate resolution).
+    const periodOriginIds = new Set<string>()
+    for (const b of buckets) {
+      const m = /^period:(.+)$/.exec(b.originKey)
+      if (m) periodOriginIds.add(m[1])
+    }
+    const originPeriods = periodOriginIds.size
+      ? await tx.period.findMany({ where: { id: { in: Array.from(periodOriginIds) } }, select: { id: true, startDate: true } })
+      : []
+    const periodStartById = new Map(originPeriods.map((p) => [p.id, p.startDate]))
+    const originDateOf = (b: { originKey: string; dueDate: Date | null }) => {
+      const m = /^period:(.+)$/.exec(b.originKey)
+      return originAnchorDate(b.originKey, b.dueDate, m ? periodStartById.get(m[1]) ?? null : null)
+    }
+
     // group buckets by (BE, source fund) so a period's payment settles that group's buckets FIFO
     const groups = new Map<string, { beId: string; fundId: string; f: PenalFund; buckets: typeof buckets }>()
     for (const b of buckets) {
@@ -187,12 +206,14 @@ export class PenaltyLedgerService {
         // exact, due-date-anchored penalizable days within this period
         const lo = new Date(b.firstPenalDay) > pStart ? new Date(b.firstPenalDay) : pStart
         const days = this.countDays(lo, pEnd)
-        // Each bucket accrues at the rate in force when IT originated (firstPenalDay), resolved live
-        // from the fund's penaltyRateHistory schedule if one is configured — not the rate frozen on
-        // the bucket at creation time, which would otherwise stay stale forever once the association
-        // changes its rate. Funds without a schedule fall back to the stamped/current rate, unchanged.
+        // Each bucket accrues at the rate in force when its CHARGE actually originated (the debt's
+        // own calendar month — see originAnchorDate's doc for why that's firstPenalDay/dueDate, NOT
+        // this), resolved live from the fund's penaltyRateHistory schedule if one is configured —
+        // not the rate frozen on the bucket at creation time, which would otherwise stay stale
+        // forever once the association changes its rate. Funds without a schedule fall back to the
+        // stamped/current rate, unchanged.
         const stampedFallbackPct = (b as any).ratePerDayPct != null ? Number((b as any).ratePerDayPct) : g.f.rate * 100
-        const bucketRate = rateForDate(g.f.alloc, new Date(b.firstPenalDay), stampedFallbackPct) / 100
+        const bucketRate = rateForDate(g.f.alloc, originDateOf(b), stampedFallbackPct) / 100
         const penaltyN = principalRemaining * bucketRate * days
         const accrued = Math.min(penaltyAccrued + penaltyN, Number(b.principalOriginal)) // per-bucket cap
         const posted = Math.max(0, accrued - penaltyAccrued)

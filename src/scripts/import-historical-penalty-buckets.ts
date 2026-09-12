@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { rateForDate } from '../modules/period/penalty-rate'
+import { rateForDate, originAnchorDate } from '../modules/period/penalty-rate'
 
 /**
  * Backfills per-UNIT historical penalty buckets on one fund (default EXPENSES = Cheltuieli
@@ -182,10 +182,14 @@ async function main() {
         createdForUnit.push({ originKey: `hist:${u.id}:opening`, dueDate: PRE_TRACKING_DUE_DATE, firstPenalDay, principal: remaining })
         remaining = 0
       }
-      // Seed each bucket's own accrual up through seedThroughDate at the rate in force on its
-      // origin day, capped at its principal — the catch-up advance() itself never gets to run.
+      // Seed each bucket's own accrual up through seedThroughDate at the rate in force when its
+      // charge actually originated (originAnchorDate — the debt's own calendar month, embedded in
+      // its originKey — NOT firstPenalDay, which is 2-4 months later once this association's
+      // billing lag + grace period are added on top and can push a charge into a later rate era
+      // than the one genuinely in force when it was billed), capped at its principal — the
+      // catch-up advance() itself never gets to run.
       for (const c of createdForUnit) {
-        const ratePct = rateForDate(fundAlloc, c.firstPenalDay, fallbackRatePct)
+        const ratePct = rateForDate(fundAlloc, originAnchorDate(c.originKey, c.dueDate), fallbackRatePct)
         const days = countDays(c.firstPenalDay, seedThroughDate)
         c.seedPenaltyAccrued = round2(Math.min(c.principal * (ratePct / 100) * days, c.principal))
       }

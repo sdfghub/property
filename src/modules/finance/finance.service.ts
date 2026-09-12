@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
 import { resolveBeName as resolveBeNameShared } from '../../common/billing-entity-name.util'
-import { rateForDate } from '../period/penalty-rate'
+import { rateForDate, originAnchorDate } from '../period/penalty-rate'
 
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
@@ -1626,8 +1626,9 @@ export class FinanceService {
               sf.code as "sourceFund", sf.name as "sourceFundName", tf.code as "targetFund", sf.allocation as "srcAlloc",
               -- the overdue month itself, for display: origin_key 'period:<id>' names the live-engine
               -- period that staged the charge; 'hist:<unitId>:<periodCode>' (the historical import)
-              -- already carries its own month in the key, no join needed.
-              op.code as "originPeriodCodeJoined"
+              -- already carries its own month in the key, no join needed. start_date feeds
+              -- originAnchorDate() (rate resolution) for 'period:<id>' buckets.
+              op.code as "originPeriodCodeJoined", op.start_date as "originPeriodStart"
          from penalty_bucket pb
          join fund sf on sf.id = pb.fund_id
          left join fund tf on tf.id = pb.target_fund_id
@@ -1663,12 +1664,17 @@ export class FinanceService {
     let grandTotal = 0
     const buckets = bucketRows.map((b) => {
       const firstPenal = new Date(b.firstPenalDay)
-      // Resolve the rate live from the source fund's penaltyRateHistory schedule (if configured), using
-      // this debt's own origin day — the same lookup PenaltyLedgerService#advance uses to accrue it, so
-      // the displayed rate always matches the posted amount. The bucket's stamped rate (falling back to
-      // the fund's current flat rate for legacy buckets) is the fallback for funds with no schedule.
+      // Resolve the rate live from the source fund's penaltyRateHistory schedule (if configured),
+      // using this debt's own origin ANCHOR date (the calendar month the charge was actually
+      // incurred — see originAnchorDate's doc; NOT firstPenal, which is 2-4 months later once this
+      // association's billing lag + grace period are added on top and can push a charge into a
+      // later rate era than the one genuinely in force when it was billed) — the same lookup
+      // PenaltyLedgerService#advance uses to accrue it, so the displayed rate always matches the
+      // posted amount. The bucket's stamped rate (falling back to the fund's current flat rate for
+      // legacy buckets) is the fallback for funds with no schedule.
       const stampedFallbackPct = b.bucketRate != null ? Number(b.bucketRate) : Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
-      const ratePerDayPct = rateForDate(b.srcAlloc, firstPenal, stampedFallbackPct)
+      const originDate = originAnchorDate(b.originKey, b.dueDate, b.originPeriodStart)
+      const ratePerDayPct = rateForDate(b.srcAlloc, originDate, stampedFallbackPct)
       const rate = ratePerDayPct / 100
       const due = b.dueDate ? new Date(b.dueDate) : null
       let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
