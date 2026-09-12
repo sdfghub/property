@@ -1,8 +1,9 @@
 // Fix: FT26225F9HN1 (13.08.2026, 9,603.00 lei, Fond Reabilitare 3) was recorded as a single lump
-// under SAD 2/2 alone. Confirmed by Adriana Dascal: it's actually for BOTH of Brînzeu Adina's
-// units — SAD 1: 4,284.03, SAD 2/2: 5,318.87. The generic cash-import format has no way to split
-// one transaction across two units of the same billing entity, so this sets the correct
-// two-unit allocationSpec directly (see cash-2026-06.json's own _correctedSplit note on tx n=107).
+// under SAD 2/2 alone. Confirmed by Adriana Dascal (corrected once — the first confirmation had
+// the two units swapped): it's actually for BOTH of Brînzeu Adina's units — SAD 2/2: 4,284.03,
+// SAD 1: 5,318.87. The generic cash-import format has no way to split one transaction across two
+// units of the same billing entity, so this sets the correct two-unit allocationSpec directly
+// (see cash-2026-06.json's own _correctedSplit note on tx n=107).
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
 import { BillingModule } from '../modules/billing/billing.module'
@@ -15,14 +16,14 @@ class ScriptModule {}
 
 const COMM = 'Kralik'
 const REF = 'FT26225F9HN1'
-const SAD1_AMOUNT = 4284.03
+const SAD22_AMOUNT = 4284.03
 // 4284.03 + 5318.87 = 9602.90, 0.10 short of the payment's real 9603.00. A fixed line's leftover
 // (the normal case here — REABILITARE_3 rarely has a discrete open charge to match) stays tagged
 // with that line's own unitId, but any amount OUTSIDE the fixed lines entirely falls into the
 // payment-level advance, which carries no unitId — so a 0.10 gap here left one unit's arrears
 // short by that dime, breaking BeUnitStatement's per-unit-sum-must-equal-BE-total trust check
-// (tolerance 0.015). Absorbed into SAD 2/2 so both lines sum to exactly 9603.00.
-const SAD22_AMOUNT = 5318.97
+// (tolerance 0.015). Absorbed into SAD 1 so both lines sum to exactly 9603.00.
+const SAD1_AMOUNT = 5318.97
 
 async function main() {
   const app = await NestFactory.createApplicationContext(ScriptModule, { logger: ['error'] })
@@ -41,7 +42,7 @@ async function main() {
   const allocationSpec = [
     { fundId: fund.id, unitId: sad1.id, amount: SAD1_AMOUNT },
     { fundId: fund.id, unitId: sad22.id, amount: SAD22_AMOUNT },
-    { advance: true, fundId: fund.id, unitId: sad22.id },
+    { advance: true, fundId: fund.id, unitId: sad1.id },
   ]
   await prisma.payment.update({
     where: { id: payment.id },
