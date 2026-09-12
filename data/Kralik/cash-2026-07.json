@@ -6,8 +6,9 @@
     { "n": 1, "acct": "BANK", "date": "2026-08-21", "ref": "FT26233Q16SX", "dir": "IN", "kind": "PAYMENT", "unit": "14A", "amount": 45.00,
       "funds": { "EXPENSES": 2.08, "RULMENT": 14.52, "REPARATII": 28.40 }, "memo": "Jarda Cristian — partial Mai 2026" },
 
-    { "n": 2, "acct": "BANK", "date": "2026-08-26", "ref": "FT262387FF8G", "dir": "IN", "kind": "PAYMENT", "unit": "31", "amount": 6825.00,
-      "funds": { "RULMENT": 14.52, "REABILITARE_3": 6810.48 }, "memo": "Fikl Emil — fondul de reabilitare" },
+    { "n": 2, "acct": "BANK", "date": "2026-08-26", "ref": "FT262387FF8G", "dir": "IN", "kind": "PAYMENT", "unit": "32", "amount": 6825.00,
+      "funds": { "REABILITARE_3": 6825.00 },
+      "memo": "Gheorghe Fikl — Fond Reabilitare 3 pentru Ap 32 (Dascal Adriana), nu Ap 31. Corectare la cererea Adrianei Dascal: administratorul a atribuit greșit tranzacția (unitate + fond) la import; suma reală e 100% Reabilitare 3, nu 14.52 Rulment + 6810.48 Reabilitare 3." },
 
     { "n": 3, "acct": "BANK", "date": "2026-08-26", "ref": "FT262383WFK4", "dir": "IN", "kind": "PAYMENT", "unit": "32", "amount": 123.00,
       "funds": { "EXPENSES": 123.00 }, "memo": "Dascal Adriana — Iun 2026 + avans" },
