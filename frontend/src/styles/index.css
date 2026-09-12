@@ -929,13 +929,27 @@ select option {
   margin: 10mm;
 }
 
-/* The avizier table sits in a scrollable .card (overflow:auto, height-capped so it fits the
-   screen) — printing a scrollable element only captures whatever's currently scrolled into view,
-   silently cutting off every row above/below that. Printing must show the whole table regardless
-   of on-screen scroll position, so let it grow to its natural full height on the print page. */
+/* AvizierPanel renders a hidden `.avizier-print-root` containing 4 fully static pages (one per
+   zoom level) purpose-built for paper — see AvizierPanel.tsx's `printPages`. Printing must show
+   ONLY that content, not the app chrome around it (sidebar/header/toolbar) or the on-screen
+   interactive table, regardless of what page/component happens to host the panel — so this hides
+   literally everything in the document except that one subtree, then pulls it out of normal flow
+   (its real ancestors — chrome we just hid, but whose layout boxes still take up space since
+   visibility:hidden doesn't collapse them like display:none would) so it starts at the top of the
+   page instead of wherever it naturally sits once those hidden ancestors are edited out visually. */
 @media print {
-  .card {
-    overflow: visible !important;
-    max-height: none !important;
+  body * {
+    visibility: hidden;
+  }
+  .avizier-print-root,
+  .avizier-print-root * {
+    visibility: visible;
+  }
+  .avizier-print-root {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
   }
 }

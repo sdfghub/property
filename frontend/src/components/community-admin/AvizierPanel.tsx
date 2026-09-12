@@ -375,26 +375,19 @@ export function AvizierPanel({
     setExpanded(nextExpanded)
   }
 
-  // Print always renders the fully-expanded Proprietar view — regardless of whatever
-  // zoom/collapse state the admin happens to be looking at on screen — since a printed notice
-  // needs every fund column spelled out, not a collapsed summary. Snapshot the current view so it
-  // can be restored once the print dialog closes (afterprint), so clicking Printează doesn't
-  // permanently change what the admin was looking at.
-  const printRestoreRef = React.useRef<null | {
-    associationView: boolean; groupBy: typeof groupBy
-    collapsedBands: Set<string>; collapsedFunds: Set<string>; expanded: Set<string>; zoomLevel: number
-  }>(null)
+  // Print always renders the fully-expanded Proprietar view — regardless of whatever view the
+  // admin happens to be looking at on screen — since a printed notice needs every unit's full
+  // detail, not a collapsed summary or a Unitatea/Asociație breakdown. The 4 printed pages (see
+  // printPages below) compute their own column layout per zoom level independently of the live
+  // zoom/collapse state, so only groupBy/associationView (which decide what `rows` even IS) need
+  // forcing here. Snapshot them so they can be restored once the print dialog closes (afterprint),
+  // so clicking Printează doesn't permanently change what the admin was looking at.
+  const printRestoreRef = React.useRef<null | { associationView: boolean; groupBy: typeof groupBy }>(null)
   const [printPending, setPrintPending] = React.useState(false)
   const handlePrint = () => {
-    printRestoreRef.current = {
-      associationView, groupBy,
-      collapsedBands: new Set(collapsedBands), collapsedFunds: new Set(collapsedFunds), expanded: new Set(expanded),
-      zoomLevel,
-    }
+    printRestoreRef.current = { associationView, groupBy }
     setAssociationView(false)
     setGroupBy('entity')
-    applyZoom(3)
-    setCollapsedBands(new Set()) // also expand the "De plată" grand-total band — applyZoom(3) leaves it as-is
     setPrintPending(true)
   }
   React.useEffect(() => {
@@ -406,10 +399,6 @@ export function AvizierPanel({
       if (!prev) return
       setAssociationView(prev.associationView)
       setGroupBy(prev.groupBy)
-      setCollapsedBands(prev.collapsedBands)
-      setCollapsedFunds(prev.collapsedFunds)
-      setExpanded(prev.expanded)
-      setZoomLevel(prev.zoomLevel)
       printRestoreRef.current = null
       window.removeEventListener('afterprint', restore)
     }
@@ -417,69 +406,95 @@ export function AvizierPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printPending])
 
-  const cols: Col[] = []
-  const emittedBands = new Set<string>()
-  for (const g of groups) {
-    const sg = g.superGroup
-    // A collapsed super-band folds every one of its funds into a single combined column.
-    if (sg && collapsedBands.has(sg.key)) {
-      if (emittedBands.has(sg.key)) continue
-      emittedBands.add(sg.key)
-      const bandGroups = groups.filter((x) => x.superGroup?.key === sg.key)
-      cols.push({ kind: 'bandTotal', sg, bandGroups })
-      continue
-    }
-    // A collapsed fund folds just its own Curente+Restanțe into one combined column.
-    if (collapsedFunds.has(g.key)) {
-      cols.push({ kind: 'fundTotal', group: g, sg })
-      continue
-    }
-    if (showIncasari) cols.push({ kind: 'incasari', group: g, sg })
-    if (g.categories.length > 1 && expanded.has(g.key)) {
-      g.categories.forEach((c) => cols.push({ kind: 'cat', cat: c, group: g, sg }))
-    }
-    cols.push({ kind: 'curente', group: g, sg })
-    cols.push({ kind: 'restante', group: g, sg })
-    // a fund's penalties (this month + cumulative) sit immediately to the right of the fund's column
-    if (penaltyFunds.includes(g.key)) {
-      cols.push({ kind: 'pen', scope: 'month', group: g, sg })
-      cols.push({ kind: 'pen', scope: 'total', group: g, sg })
-    }
-  }
-  // The grand-total band — always present, defaults collapsed (see collapsedBands init) to a single
-  // "Total" column, exactly like the reference report's "De plată" band.
-  if (collapsedBands.has(DEPLATA_SG.key)) {
-    cols.push({ kind: 'finalTotal', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-  } else {
-    if (showIncasari) cols.push({ kind: 'incasari', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-    cols.push({ kind: 'curente', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-    cols.push({ kind: 'restante', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-    if (hasAdj) cols.push({ kind: 'adjustments', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-    cols.push({ kind: 'finalTotal', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-  }
-
-  // Row 1: contiguous runs of columns sharing a super-group, for the spanning band header row.
-  const sgRuns: { key: string; label: string; span: number }[] = []
-  for (const col of cols) {
-    const key = col.sg?.key ?? '_'
-    const label = col.sg?.label ?? ''
-    const last = sgRuns[sgRuns.length - 1]
-    if (last && last.key === key) last.span++
-    else sgRuns.push({ key, label, span: 1 })
-  }
-  // Row 2: contiguous runs of columns sharing an owning fund (or the grand-total band), for the
-  // spanning fund header row. A collapsed super-band's single combined column has no one fund to
-  // name (its row-1 label already says so), same for the grand-total band.
+  // Row 2 (below) groups columns by owning fund (or the grand-total band); a collapsed super-band's
+  // single combined column has no one fund to name (its row-1 label already says so), same for the
+  // grand-total band.
   const groupOf = (col: Col): { key: string; label: string; kind: 'band' | 'deplata' | 'fund' } =>
     col.kind === 'bandTotal' ? { key: `b:${col.sg.key}`, label: '', kind: 'band' }
       : isDeplata(col.group) ? { key: 'deplata', label: '', kind: 'deplata' }
         : { key: col.group.key, label: col.group.label, kind: 'fund' }
-  const groupRuns: { key: string; label: string; span: number; kind: 'band' | 'deplata' | 'fund' }[] = []
-  for (const col of cols) {
-    const g = groupOf(col)
-    const last = groupRuns[groupRuns.length - 1]
-    if (last && last.key === g.key) last.span++
-    else groupRuns.push({ ...g, span: 1 })
+  // Pure column-list builder, parameterized by collapse/expand state instead of reading it from
+  // component state directly — used once below for the live interactive table (fed the live
+  // collapsedBands/collapsedFunds/expanded state) and, unchanged, 4 more times for the fully-static
+  // print pages (fed a synthetic per-zoom-level state), so print can never drift from what the
+  // screen itself would show for that same collapse state.
+  const buildCols = (collapsedBandsSet: Set<string>, collapsedFundsSet: Set<string>, expandedSet: Set<string>) => {
+    const cols2: Col[] = []
+    const emittedBands2 = new Set<string>()
+    for (const g of groups) {
+      const sg = g.superGroup
+      // A collapsed super-band folds every one of its funds into a single combined column.
+      if (sg && collapsedBandsSet.has(sg.key)) {
+        if (emittedBands2.has(sg.key)) continue
+        emittedBands2.add(sg.key)
+        const bandGroups = groups.filter((x) => x.superGroup?.key === sg.key)
+        cols2.push({ kind: 'bandTotal', sg, bandGroups })
+        continue
+      }
+      // A collapsed fund folds just its own Curente+Restanțe into one combined column.
+      if (collapsedFundsSet.has(g.key)) {
+        cols2.push({ kind: 'fundTotal', group: g, sg })
+        continue
+      }
+      if (showIncasari) cols2.push({ kind: 'incasari', group: g, sg })
+      if (g.categories.length > 1 && expandedSet.has(g.key)) {
+        g.categories.forEach((c) => cols2.push({ kind: 'cat', cat: c, group: g, sg }))
+      }
+      cols2.push({ kind: 'curente', group: g, sg })
+      cols2.push({ kind: 'restante', group: g, sg })
+      // a fund's penalties (this month + cumulative) sit immediately to the right of the fund's column
+      if (penaltyFunds.includes(g.key)) {
+        cols2.push({ kind: 'pen', scope: 'month', group: g, sg })
+        cols2.push({ kind: 'pen', scope: 'total', group: g, sg })
+      }
+    }
+    // The grand-total band — always present, defaults collapsed (see collapsedBands init) to a
+    // single "Total" column, exactly like the reference report's "De plată" band.
+    if (collapsedBandsSet.has(DEPLATA_SG.key)) {
+      cols2.push({ kind: 'finalTotal', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+    } else {
+      if (showIncasari) cols2.push({ kind: 'incasari', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+      cols2.push({ kind: 'curente', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+      cols2.push({ kind: 'restante', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+      if (hasAdj) cols2.push({ kind: 'adjustments', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+      cols2.push({ kind: 'finalTotal', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+    }
+    // Row 1: contiguous runs of columns sharing a super-group, for the spanning band header row.
+    const sgRuns2: { key: string; label: string; span: number }[] = []
+    for (const col of cols2) {
+      const key = col.sg?.key ?? '_'
+      const label = col.sg?.label ?? ''
+      const last = sgRuns2[sgRuns2.length - 1]
+      if (last && last.key === key) last.span++
+      else sgRuns2.push({ key, label, span: 1 })
+    }
+    const groupRuns2: { key: string; label: string; span: number; kind: 'band' | 'deplata' | 'fund' }[] = []
+    for (const col of cols2) {
+      const g = groupOf(col)
+      const last = groupRuns2[groupRuns2.length - 1]
+      if (last && last.key === g.key) last.span++
+      else groupRuns2.push({ ...g, span: 1 })
+    }
+    return { cols: cols2, sgRuns: sgRuns2, groupRuns: groupRuns2 }
+  }
+  const { cols, sgRuns, groupRuns } = buildCols(collapsedBands, collapsedFunds, expanded)
+  // Mirrors applyZoom's own set-computation (kept separate, rather than calling applyZoom itself,
+  // so print never touches interactive state) — the "De plată" band is always forced open here
+  // (print always wants the grand total fully spelled out, on every page), unlike applyZoom which
+  // preserves whatever collapse state that band already had.
+  const zoomSetsForLevel = (level: number) => {
+    const clamped = Math.max(0, Math.min(3, level))
+    const nextBands = new Set<string>()
+    const nextFunds = new Set<string>()
+    const nextExpanded = new Set<string>()
+    if (clamped === 0) {
+      for (const g of groups) if (g.superGroup) nextBands.add(g.superGroup.key)
+    } else if (clamped === 1) {
+      for (const g of groups) nextFunds.add(g.key)
+    } else if (clamped === 3) {
+      for (const g of groups) if (g.categories.length > 1) nextExpanded.add(g.key)
+    }
+    return { collapsedBands: nextBands, collapsedFunds: nextFunds, expanded: nextExpanded }
   }
   // #8 configurator: which INFO columns the community enabled, and how many are visible now.
   const infoCfg = (data?.config?.info ?? { cpi: true, residents: true, consumption: true }) as { cpi: boolean; residents: boolean; consumption: boolean }
@@ -549,6 +564,68 @@ export function AvizierPanel({
       for (const ur of r.unitBreakdown) renderRows.push({ row: ur, indent: true })
     }
   }
+
+  // Print renders 4 fully static pages (one per zoom level) independently of whatever the
+  // interactive table is currently showing on screen — "the whole table, with every unit",
+  // regardless of any active filter or per-row collapse, so it always uses every row from the
+  // (already print-forced, see handlePrint) entity-view data, every multi-unit BE force-expanded.
+  const printRenderRows: Array<{ row: any; indent: boolean }> = []
+  for (const r of rows) {
+    printRenderRows.push({ row: r, indent: false })
+    if (r.unitBreakdown?.length) {
+      for (const ur of r.unitBreakdown) printRenderRows.push({ row: ur, indent: true })
+    }
+  }
+  // Mirrors the live header switch's label text (not its interactive affordances — sort/collapse/
+  // expand icons/click handlers make no sense on paper) so print can never say something different
+  // from what the same column would be labeled on screen.
+  const colHeaderLabel = (col: Col, expandedSet: Set<string>): string => {
+    switch (col.kind) {
+      case 'incasari': return incasariLabel
+      case 'cat': return catLabel(col.cat)
+      case 'curente': {
+        const expandable = !isDeplata(col.group) && col.group.categories.length > 1
+        const isExpandedTail = expandable && expandedSet.has(col.group.key)
+        return isExpandedTail ? t('avizier.total', 'Total') : t('avizier.curente', 'Curente')
+      }
+      case 'restante': return t('avizier.soldPrec', 'Restanțe')
+      case 'pen': return col.scope === 'total' ? t('avizier.penTotalShort', 'Penaliz. restante') : t('avizier.penMonthShort', 'Penaliz. curente')
+      case 'adjustments': return t('avizier.adjustments', 'Ajustări')
+      default: return t('avizier.total', 'Total') // fundTotal | bandTotal | finalTotal
+    }
+  }
+  // One page per zoom level (0 = most collapsed .. 3 = fully expanded), each sized to fit the
+  // entire table on a single A3-landscape sheet: the font shrinks as the column count (and so the
+  // table's natural width) grows. Tuned against A3 landscape's ~400mm usable width.
+  // Font size per page: A3 landscape's usable area (~400×277mm ≈ 1512×1047px at 96dpi) constrains
+  // BOTH dimensions, and — since the table cells use nowrap and the table itself scales with
+  // `width:100%` — height (driven by row count, same on every page) is usually the binding
+  // constraint, while width (driven by column count, which grows sharply with zoom level) only
+  // binds on the most-expanded pages. The coefficients below were fit against this table's real
+  // rendered metrics (see the fix-avizier-print-multipage session notes) and use two different,
+  // deliberately-not-interchangeable conventions: the height ones are absolute px measured AT an
+  // 11px reference font (so they need `* REF_FONT` to convert back to "required font size"), while
+  // the width ones are already normalized to px-per-1px-of-font (fit directly from
+  // naturalWidth/fontSizeUsed across the 4 zoom levels, so they need no such conversion). Each page
+  // then gets the smaller of the two required sizes, so a page that's both tall (many units) AND
+  // wide (many expanded fund columns) is capped by whichever actually wouldn't fit.
+  const usableWidthPx = 1512 * 0.96 // ~4% safety margin under A3 landscape's ~400mm usable width
+  const usableHeightPx = 1047 * 0.94 // ~6% safety margin under A3 landscape's ~277mm usable height
+  const REF_FONT = 11
+  const pxOverheadAtRef11 = 261 // title + 3 header rows + totals row + signatures, at an 11px font
+  const pxPerDataRowAtRef11 = 34.4 // one printRenderRows row, at an 11px font (most rows are 2 lines: name + secondary)
+  const widthBasePerFontPx = 26 // fixed per-page width (identity column etc.), per 1px of font size
+  const widthPerColPerFontPx = 5.8 // marginal width per extra data column, per 1px of font size
+  const dataRows = printRenderRows.length
+  const heightDrivenFont = (usableHeightPx * REF_FONT) / (pxOverheadAtRef11 + pxPerDataRowAtRef11 * dataRows)
+  const printPages = [0, 1, 2, 3].map((level) => {
+    const sets = zoomSetsForLevel(level)
+    const { cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns } = buildCols(sets.collapsedBands, sets.collapsedFunds, sets.expanded)
+    const totalCols = leadColspan + pCols.length
+    const widthDrivenFont = usableWidthPx / (widthBasePerFontPx + widthPerColPerFontPx * totalCols)
+    const fontSize = Math.max(6, Math.min(13, Math.min(heightDrivenFont, widthDrivenFont)))
+    return { level, cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns, expanded: sets.expanded, collapsedFunds: sets.collapsedFunds, fontSize }
+  })
 
   return (
     <div
@@ -1066,6 +1143,152 @@ export function AvizierPanel({
           ))}
         </div>
       )}
+
+      {/* Hidden on screen (display:none below), shown ONLY for print — see the
+          `.avizier-print-root` rule in styles/index.css, which also hides everything else in the
+          document (app chrome included) so print shows literally just this. Fully static: no
+          click handlers, no sort/collapse/expand affordances — none of that means anything on
+          paper, and it always shows every row (see printRenderRows above), regardless of any
+          on-screen filter or per-BE collapse state. */}
+      <div className="avizier-print-root" style={{ display: 'none' }}>
+        {printPages.map((page, pageIdx) => (
+          <div key={page.level} style={{
+            pageBreakAfter: pageIdx < printPages.length - 1 ? 'always' : 'auto',
+            fontSize: page.fontSize, fontFamily: 'inherit', color: '#000', padding: '4mm 6mm',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2mm' }}>
+              <div>
+                <div style={{ fontSize: '1.8em', fontWeight: 700 }}>{t('avizier.title', 'Avizier')}</div>
+                <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.list', 'Listă de întreținere')} · {periodLabel(data?.period?.code || period)}</div>
+              </div>
+              <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.zoom', 'Zoom')} {page.level + 1}/{printPages.length}</div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'inherit', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              <thead>
+                <tr>
+                  <th colSpan={leadColspan} />
+                  {page.sgRuns.map((run, i) => (
+                    <th key={`bd${i}`} colSpan={run.span} style={{
+                      padding: '0.2em 0.3em', textAlign: 'center', fontSize: '0.85em', textTransform: 'uppercase',
+                      letterSpacing: 0.2, fontWeight: 600, color: '#555', borderLeft: run.label ? '1px solid #ccc' : 'none',
+                    }}>
+                      {run.label}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  <th colSpan={leadColspan} />
+                  {page.groupRuns.map((run, i) => (
+                    <th key={`gr${i}`} colSpan={run.span} style={{
+                      padding: '0.2em 0.3em', textAlign: 'center', fontSize: '0.85em', fontWeight: 500,
+                      color: '#555', borderLeft: '1px solid #ccc',
+                    }}>
+                      {run.kind === 'fund' ? run.label : ''}
+                    </th>
+                  ))}
+                </tr>
+                <tr style={{ borderBottom: '1px solid #999' }}>
+                  <th style={{ textAlign: 'left', padding: '0.25em 0.3em' }}>
+                    {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
+                  </th>
+                  {infoVis.cpi && (
+                    <th style={{ padding: '0.25em 0.3em', textAlign: 'center', fontWeight: 400 }}>
+                      {t('avizier.cpiLabel', 'CPI')}<br /><span style={{ fontSize: '0.85em' }}>{t('avizier.cpiUnit', '[%]')}</span>
+                    </th>
+                  )}
+                  {infoVis.residents && (
+                    <th style={{ padding: '0.25em 0.3em', textAlign: 'center', fontWeight: 400 }}>
+                      {t('avizier.persLabel', 'Pers')}<br /><span style={{ fontSize: '0.85em' }}>{t('avizier.persUnit', '[#]')}</span>
+                    </th>
+                  )}
+                  {infoVis.consumption && (
+                    <th style={{ padding: '0.25em 0.3em', textAlign: 'center', fontWeight: 400 }}>
+                      {t('avizier.apaLabel', 'Apa')}<br /><span style={{ fontSize: '0.85em' }}>{t('avizier.apaUnit', '[m3]')}</span>
+                    </th>
+                  )}
+                  {page.cols.map((col, i) => (
+                    <th key={i} style={{
+                      padding: '0.25em 0.3em', textAlign: 'center',
+                      fontWeight: (col.kind === 'fundTotal' || col.kind === 'bandTotal' || col.kind === 'finalTotal') ? 700 : 400,
+                      fontStyle: col.kind === 'incasari' ? 'italic' : 'normal',
+                      color: col.kind === 'pen' ? '#b45309' : undefined,
+                    }}>
+                      {colHeaderLabel(col, page.expanded)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {printRenderRows.map(({ row: r, indent }, rowIdx) => {
+                  const l = beLabel(r, { publicMode })
+                  const secondary = publicMode ? undefined : l.secondary
+                  return (
+                    <tr key={`${r.rowKey ?? r.beCode}-${rowIdx}`} style={{ borderTop: indent ? 'none' : '1px solid #ddd' }}>
+                      <td style={{ textAlign: 'left', padding: indent ? '0.15em 0.3em 0.15em 1em' : '0.15em 0.3em' }}>
+                        <div style={{ fontWeight: indent ? 400 : 600 }}>{l.primary}</div>
+                        {secondary ? <div style={{ fontSize: '0.85em', color: '#666' }}>{secondary}</div> : null}
+                      </td>
+                      {infoVis.cpi && <td style={{ textAlign: 'center', padding: '0.15em 0.3em', color: '#666' }}>{r.cpi != null ? money(r.cpi) : ''}</td>}
+                      {infoVis.residents && <td style={{ textAlign: 'center', padding: '0.15em 0.3em', color: '#666' }}>{r.residents != null ? r.residents : ''}</td>}
+                      {infoVis.consumption && <td style={{ textAlign: 'center', padding: '0.15em 0.3em', color: '#666' }}>{r.consumption != null ? money(r.consumption) : ''}</td>}
+                      {page.cols.map((col, i) => {
+                        const v = colValue(r, col)
+                        const isBold = col.kind === 'fundTotal' || col.kind === 'bandTotal' || col.kind === 'finalTotal'
+                        return (
+                          <td key={i} style={{
+                            textAlign: 'center', padding: '0.15em 0.3em', fontWeight: isBold ? 700 : 400,
+                            fontStyle: col.kind === 'incasari' ? 'italic' : 'normal',
+                            color: col.kind === 'pen' ? '#b45309' : undefined,
+                          }}>
+                            {v ? money(v) : ''}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+                {totals ? (
+                  <tr style={{ borderTop: '2px solid #999', fontWeight: 700 }}>
+                    <td style={{ textAlign: 'left', padding: '0.25em 0.3em' }}>{t('avizier.totalRow', 'TOTAL')}</td>
+                    {infoVis.cpi && <td style={{ textAlign: 'center', padding: '0.25em 0.3em' }}>{totals.cpi != null ? money(totals.cpi) : ''}</td>}
+                    {infoVis.residents && <td style={{ textAlign: 'center', padding: '0.25em 0.3em' }}>{totals.residents != null ? totals.residents : ''}</td>}
+                    {infoVis.consumption && <td style={{ textAlign: 'center', padding: '0.25em 0.3em' }}>{totals.consumption != null ? money(totals.consumption) : ''}</td>}
+                    {page.cols.map((col, i) => {
+                      // Mirrors the live table's own totals row (below) — `totals` shapes its
+                      // fields differently from a row (byCategory instead of charges), so it can't
+                      // reuse colValue() as-is.
+                      let v: number | undefined
+                      switch (col.kind) {
+                        case 'incasari': v = isDeplata(col.group) ? totals.payments : totals.paymentsByFund?.[col.group.key]; break
+                        case 'curente': v = isDeplata(col.group) ? totals.curentTotal : sumCats(totals.byCategory || {}, col.group.categories); break
+                        case 'restante': v = isDeplata(col.group) ? round2((Number(totals.soldPrecedent) || 0) - (Number(totals.payments) || 0)) : totals.soldByFund?.[col.group.key]; break
+                        case 'cat': v = totals.byCategory?.[col.cat]; break
+                        case 'pen': v = totals.penaltyByFund?.[col.group.key]?.[col.scope]; break
+                        case 'fundTotal': v = round2(sumCats(totals.byCategory || {}, col.group.categories) + (Number(totals.soldByFund?.[col.group.key]) || 0)); break
+                        case 'bandTotal': v = round2(col.bandGroups.reduce((s, g) => s + sumCats(totals.byCategory || {}, g.categories) + (Number(totals.soldByFund?.[g.key]) || 0), 0)); break
+                        case 'adjustments': v = totals.adjustments; break
+                        default: v = totals.totalDue
+                      }
+                      return <td key={i} style={{ textAlign: 'center', padding: '0.25em 0.3em' }}>{money(v)}</td>
+                    })}
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', gap: '8mm', flexWrap: 'wrap', marginTop: '4mm', paddingTop: '2mm', borderTop: '1px solid #999' }}>
+              {signatories.map((s, i) => (
+                <div key={i} style={{ flex: '1 1 45mm', minWidth: '40mm' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9em' }}>{s.role}</div>
+                  <div style={{ fontSize: '0.8em', color: '#666' }}>{s.name || '—'}</div>
+                  <div style={{ borderTop: '1px solid #ccc', marginTop: '5mm', paddingTop: '1mm' }}>
+                    <span style={{ fontSize: '0.75em', color: '#666' }}>{t('avizier.signature', 'Semnătură')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {filterOpen && filterAnchor && (
         <>
