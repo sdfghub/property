@@ -1231,7 +1231,22 @@ export class FinanceService {
     const groupOrder = new Map(groups.map((g, i) => [g.key, i]))
     const penaltyFunds = [...penaltyFundSet].sort((a, b) => (groupOrder.get(a) ?? 99) - (groupOrder.get(b) ?? 99))
 
-    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, groupBy: mode, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, rows, totals }
+    // penaltyRates: the %/day (and its %/month equivalent, ×30) currently in force per penalized
+    // fund — resolved the same way live accrual resolves it (rateForDate), anchored on this
+    // notice's own issue date so a printed avizier always states the rate that was actually in
+    // force when it was posted (falls back to now for an OPEN period with no afisareDate stamped
+    // yet). Purely informational for the "Penalizări" header on the posted notice — never fed back
+    // into any charge computed above.
+    const fundByCode = new Map(funds.map((f) => [f.code, f]))
+    const penaltyRateRefDate = p?.afisareDate ?? new Date()
+    const penaltyRates = penaltyFunds.reduce((acc, code) => {
+      const alloc: any = fundByCode.get(code)?.allocation ?? {}
+      const perDayPct = rateForDate(alloc, penaltyRateRefDate, Number(alloc.penaltyPerDayPct) || 0)
+      acc[code] = { perDayPct, perMonthPct: round2(perDayPct * 30) }
+      return acc
+    }, {} as Record<string, { perDayPct: number; perMonthPct: number }>)
+
+    return { period: { code: p?.code, status: p?.status, dueDate: p?.dueDate, afisareDate: p?.afisareDate }, groupBy: mode, categories, categoryLabels, groups, fundGroups: AVIZIER_FUND_GROUP_META, config: cfg, penaltyFunds, penaltyRates, rows, totals }
   }
 
   /**
@@ -1529,11 +1544,16 @@ export class FinanceService {
    * line at allocation time — no recomputation. Returns per underlying charge (invoice / fund
    * contribution / penalty) the total, method, and a per-unit formula (basis, share, amount).
    */
+  // `category` accepts a comma-separated list — a folded "Curente" cell showing more than one
+  // category's combined total (the common case at the default zoom, before an admin expands that
+  // fund's own sub-categories) explains every one of its categories in one call, rather than the
+  // frontend picking just the first and silently ignoring the rest.
   async explainCell(communityId: string, periodCode: string, beCode: string, category: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { parts: [], total: 0 }
     const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: beCode }, select: { id: true, name: true } })
     if (!be) return { parts: [], total: 0 }
+    const categoryList = category.split(',').map((c) => c.trim()).filter(Boolean)
 
     // this BE's charge lines for the period, with their charge category + persisted allocation meta
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
@@ -1549,7 +1569,7 @@ export class FinanceService {
         where ccl.community_id = $1 and ccl.period_id = $2 and ccl.billing_entity_id = $3`,
       communityId, period.id, be.id,
     )
-    const mine = rows.filter((r) => r.label === category && Math.abs(r.amt) > 0.0001)
+    const mine = rows.filter((r) => categoryList.includes(r.label) && Math.abs(r.amt) > 0.0001)
 
     const fmt = (n: any) => (n == null ? '?' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
     // round measures/percentages to 2 digits and drop trailing zeros (avoids float noise like 99.99999997)
@@ -1593,8 +1613,8 @@ export class FinanceService {
         return { unit: l.unit, amount: round2(l.amt), method, formula }
       })
       return {
-        source: category === 'PENALIZARI' ? 'penalty' : c0.skey?.startsWith('offset:') ? 'fund' : 'service',
-        label: category === 'PENALIZARI' ? `Penalizări (${c0.meta?.sourceFund || ''})` : category,
+        source: c0.label === 'PENALIZARI' ? 'penalty' : c0.skey?.startsWith('offset:') ? 'fund' : 'service',
+        label: c0.label === 'PENALIZARI' ? `Penalizări (${c0.meta?.sourceFund || ''})` : c0.label,
         chargeTotal: round2(c0.meta?.allocation?.base ?? c0.chargeTotal),
         method,
         methodLabel: methodLabel(method),
