@@ -171,8 +171,12 @@ export function AvizierPanel({
     if (sortKey !== k) { setSortKey(k); setSortDir('desc') }
     else setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
   }
+  // Its own header `<th>` is clickable for sort too now (a bigger target than this icon alone,
+  // see the header cells below) — stopPropagation here so one click doesn't fire toggleSort twice
+  // (once from this button, once from the bubbled event reaching the `<th>`), which would cancel
+  // itself out into a no-op-looking direction flip.
   const SortIcon = ({ k }: { k: string }) => (
-    <button type="button" onClick={() => toggleSort(k)} title={t('avizier.sort', 'Sortează')}
+    <button type="button" onClick={(e) => { e.stopPropagation(); toggleSort(k) }} title={t('avizier.sort', 'Sortează')}
       style={{ background: 'none', border: 'none', padding: '0 0 0 3px', cursor: 'pointer', color: sortKey === k ? 'var(--accent, #0071e3)' : 'var(--border, #ccc)', fontSize: 10, verticalAlign: 'middle', flex: '0 0 auto' }}>
       {sortKey === k ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
     </button>
@@ -945,12 +949,13 @@ export function AvizierPanel({
                 <th style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
               </tr>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
-                <th style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX }}>
+                <th onClick={() => toggleSort('name')} style={{ textAlign: 'left', padding: '6px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX, cursor: 'pointer' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                     {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
                     <SortIcon k="name" />
                     <button type="button"
                       onClick={(e) => {
+                        e.stopPropagation()
                         const r = e.currentTarget.getBoundingClientRect()
                         setFilterAnchor({ top: r.bottom + 6, left: r.left })
                         setFilterOpen((v) => !v)
@@ -961,24 +966,24 @@ export function AvizierPanel({
                     </button>
                   </span>
                 </th>
-                {infoVis.cpi && <th style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, ...DOTTED_SEPARATOR }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
-                {infoVis.residents && <th style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.persHint', 'Număr persoane')}><HLabel2 label={t('avizier.persLabel', 'Pers')} unit={t('avizier.persUnit', '[#]')} sortKey="residents" /></th>}
-                {infoVis.consumption && <th style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel2 label={t('avizier.apaLabel', 'Apa')} unit={t('avizier.apaUnit', '[m3]')} sortKey="consumption" /></th>}
+                {infoVis.cpi && <th onClick={() => toggleSort('cpi')} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftCpi, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, cursor: 'pointer', ...DOTTED_SEPARATOR }} title={t('avizier.cpiHint', 'Cotă-parte indiviză')}><HLabel2 label={t('avizier.cpiLabel', 'CPI')} unit={t('avizier.cpiUnit', '[%]')} sortKey="cpi" /></th>}
+                {infoVis.residents && <th onClick={() => toggleSort('residents')} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftResidents, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, cursor: 'pointer' }} title={t('avizier.persHint', 'Număr persoane')}><HLabel2 label={t('avizier.persLabel', 'Pers')} unit={t('avizier.persUnit', '[#]')} sortKey="residents" /></th>}
+                {infoVis.consumption && <th onClick={() => toggleSort('consumption')} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontWeight: 400, position: 'sticky', left: stickyLeftConsumption, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_INFO_PX, maxWidth: STICKY_INFO_PX, cursor: 'pointer' }} title={t('avizier.apaHint', 'Consum apă (mc)')}><HLabel2 label={t('avizier.apaLabel', 'Apa')} unit={t('avizier.apaUnit', '[m3]')} sortKey="consumption" /></th>}
                 {cols.map((col, i) => {
                   if (col.kind === 'incasari') return (
-                    <th key={`i${i}`} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontStyle: 'italic' }}><HLabel>{incasariLabel}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`i${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', fontStyle: 'italic', cursor: 'pointer' }}><HLabel>{incasariLabel}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   if (col.kind === 'cat') return (
-                    <th key={`c${i}`} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 400, color: 'var(--muted, #666)' }}><HLabel>{catLabel(col.cat)}{penaltyRateSuffix(col.cat)}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`c${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 400, color: 'var(--muted, #666)', cursor: 'pointer' }}><HLabel>{catLabel(col.cat)}{penaltyRateSuffix(col.cat)}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   if (col.kind === 'curente') {
                     const expandable = !isDeplata(col.group) && col.group.categories.length > 1
                     const isExpandedTail = expandable && expanded.has(col.group.key)
                     return (
-                      <th key={`cu${i}`} style={{ ...TH_WRAP, padding: '6px 10px' }}>
+                      <th key={`cu${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', cursor: 'pointer' }}>
                         <HLabel>
                           {expandable ? (
-                            <button type="button" onClick={() => toggleGroup(col.group.key)} title={t('avizier.expand', 'Detaliază')}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); toggleGroup(col.group.key) }} title={t('avizier.expand', 'Detaliază')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit', fontWeight: isExpandedTail ? 700 : 400 }}>
                               {isExpandedTail ? '− ' : '+ '}{isExpandedTail ? t('avizier.total', 'Total') : t('avizier.curente', 'Curente')}
                             </button>
@@ -989,22 +994,22 @@ export function AvizierPanel({
                     )
                   }
                   if (col.kind === 'restante') return (
-                    <th key={`r${i}`} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)' }}><HLabel>{t('avizier.soldPrec', 'Restanțe')}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`r${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', color: 'var(--muted, #666)', cursor: 'pointer' }}><HLabel>{t('avizier.soldPrec', 'Restanțe')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   if (col.kind === 'fundTotal') return (
-                    <th key={`ft${i}`} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 700 }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`ft${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   if (col.kind === 'bandTotal') return (
-                    <th key={`bt${i}`} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 700 }} title={t('avizier.bandCollapsedHint', 'Grup restrâns — sumă pe toate fondurile din grup')}>
+                    <th key={`bt${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }} title={t('avizier.bandCollapsedHint', 'Grup restrâns — sumă pe toate fondurile din grup')}>
                       <HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel>
                     </th>
                   )
                   if (col.kind === 'adjustments') return (
-                    <th key={`a${i}`} style={{ ...TH_WRAP, padding: '6px 10px' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}><HLabel>{t('avizier.adjustments', 'Ajustări')}<SortIcon k={colKey(col)} /></HLabel></th>
+                    <th key={`a${i}`} onClick={() => toggleSort(colKey(col))} style={{ ...TH_WRAP, padding: '6px 10px', cursor: 'pointer' }} title={t('avizier.adjustmentsHint', 'Corecții fără numerar (ex. scutire penalizări)')}><HLabel>{t('avizier.adjustments', 'Ajustări')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
                   return (
-                    <th key={`fin${i}`} style={{
-                      ...TH_WRAP, padding: '6px 10px', fontWeight: 700,
+                    <th key={`fin${i}`} onClick={() => toggleSort(colKey(col))} style={{
+                      ...TH_WRAP, padding: '6px 10px', fontWeight: 700, cursor: 'pointer',
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}><HLabel>{t('avizier.total', 'Total')}<SortIcon k={colKey(col)} /></HLabel></th>
                   )
