@@ -1,0 +1,18 @@
+{
+  "periodCode": "2026-05",
+  "_note": "Real May 2026 PENALIZARI residuals for two units, sourced from the association's own paper record (Homefile — Tabel cheltuieli 2026-05). Kralik's automatic penalty engine has been at a 0% rate since mid-2023 (see def.json/funds.json penaltyPerDayPct), so these two amounts can't be reproduced by the live PenaltyBucket engine — they're posted by hand via src/scripts/fix-kralik-penalizari-mai.ts, which reads this file instead of hardcoding the targets inline. Chains forward automatically from June onward via the normal be_statement dueStart/dueEnd carry.",
+  "targets": [
+    {
+      "beName": "Matei Viorel",
+      "unitCode": "400191-C1-U28-AP 1/B",
+      "amount": 9.42,
+      "note": "Homefile Mai 2026 — Matei Viorel (1B)"
+    },
+    {
+      "beName": "Macri Nicodemo",
+      "unitCode": "400191-C1-U32-AP 11",
+      "amount": 3.7,
+      "note": "Homefile Mai 2026 — Macri (11)"
+    }
+  ]
+}

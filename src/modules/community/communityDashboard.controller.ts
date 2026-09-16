@@ -33,10 +33,16 @@ export class CommunityDashboardController {
       .filter((ticket: any) => ticket.type === 'TASK' && activeStatuses.has(ticket.status))
       .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       .slice(0, 4)
-    const incidents = (ticketList || [])
+    const activeIncidents = (ticketList || [])
       .filter((ticket: any) => ticket.type === 'INCIDENT' && activeStatuses.has(ticket.status))
-      .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-      .slice(0, 4)
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const incidents = activeIncidents.slice(0, 4)
+    const incidentsTotal = activeIncidents.length
+    const activeRequests = (ticketList || [])
+      .filter((ticket: any) => ticket.type === 'REQUEST' && activeStatuses.has(ticket.status))
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const requests = activeRequests.slice(0, 4)
+    const requestsTotal = activeRequests.length
 
     const now = Date.now()
     const upcomingEvents = (events || [])
@@ -57,6 +63,9 @@ export class CommunityDashboardController {
       lastClosedPeriod: Array.isArray(closed) && closed.length ? closed[0] : null,
       tasks,
       incidents,
+      incidentsTotal,
+      requests,
+      requestsTotal,
       upcomingEvents,
       ongoingPolls,
     }

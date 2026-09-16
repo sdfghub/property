@@ -35,6 +35,7 @@ enum DocSource {
   OCR
   IMPORT
   API
+  OPENING // payable from before the migration cutover: no accrual, no charges (docs/cutover.md)
 }
 
 enum SplitMethod {
@@ -114,6 +115,26 @@ enum PollStatus {
 enum TicketType {
   INCIDENT
   TASK
+  REQUEST
+}
+
+/// Classification for REQUEST tickets — who/what the request concerns.
+enum TicketImpact {
+  NUMAR_PERSOANE
+  PROPRIETAR
+  CHIRIAS
+  SERVICII
+  INFORMATII
+  ADEVERINTA
+  LUCRARI_TEHNICE
+}
+
+/// Classification for REQUEST tickets — the kind of request.
+enum TicketRequestKind {
+  SCHIMBARE
+  DEFECTIUNE
+  ACORD
+  ALTELE
 }
 
 enum TicketStatus {
@@ -204,6 +225,7 @@ model Community {
   features Json? @map("features") // per-community feature flags (see FeaturesService defaults)
   paymentAllocation Json? @map("payment_allocation") // per-community payment→charge allocation strategy (see PaymentAllocationService; default FIFO)
   measureModes Json? @map("measure_modes") // per-type meter reading mode { "<typeCode>": "INDEX" | "CONSUMPTION" }; default CONSUMPTION
+  intakeHints  Json? @map("intake_hints")  // string[]: association-specific guidance appended to the AI intake prompt pack (docs/intake.md)
 
   periods                    Period[]
   units                      Unit[]
@@ -237,6 +259,7 @@ model Community {
   CashAccount                CashAccount[]
   CashTx                     CashTx[]
   corrections                Correction[]
+  intakeBatches              IntakeBatch[]
 
   @@map("community")
 }
@@ -276,6 +299,7 @@ model Period {
   @@unique([communityId, code])
   @@unique([communityId, seq])
   @@index([communityId, startDate, endDate])
+  intakeBatches              IntakeBatch[]
   @@map("period")
 }
 
@@ -285,12 +309,34 @@ model Unit {
   code        String @map("code")
   order       Int    @default(0) @map("order")
 
+  // Real registry attributes, from the association's own "Unit Definitions" spreadsheet — not
+  // derived/guessed from the code string. `name` is that registry's own display label ("AP 4 (I)",
+  // "Intrare Uscata") — most units' label happens to also be embeddable in their own code, but a
+  // building common-space unit's isn't, so this is authoritative where the code-derived guess
+  // (see unitLabel()) would otherwise fall back to the raw code. `type` is that same registry's
+  // taxonomy (Apartament, SAD, Boxa, Cale Evacuare, Cale Acces, Estetice si structurale, Tehnice,
+  // Depozitare, Functionale), richer than a simple resident/storage split.
+  name        String?  @map("name")
+  type        String?  @map("type")
+  floorNumber Int?     @map("floor_number")
+  floorName   String?  @map("floor_name")
+  staircase   String?  @map("staircase")
+  location    String?  @map("location")
+  surfaceMp   Decimal? @map("surface_mp") @db.Decimal(10, 2)
+  cfCode      String?  @map("cf_code")
+  // A unit has at most one facility/property-management contact at a time — plain columns, no
+  // history needed (every real case so far is a single, currently-active contact).
+  propertyManagerName  String? @map("property_manager_name")
+  propertyManagerPhone String? @map("property_manager_phone")
+  propertyManagerEmail String? @map("property_manager_email")
+
   community           Community             @relation(fields: [communityId], references: [id])
   UnitGroupMember     UnitGroupMember[]
   BillingEntityMember BillingEntityMember[]
   BeLedgerEntryDetail BeLedgerEntryDetail[]
   CommunityChargeLine CommunityChargeLine[]
   BeOpeningBalance     BeOpeningBalance[]
+  tenants             UnitTenant[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -336,6 +382,10 @@ model BillingEntity {
   order       Int    @default(0) @map("order")
   name        String @map("name")
   displayName String? @map("display_name") // admin-set label; falls back to computed (short unit + owner)
+  // Which comma-segment of `name` is the default point of contact, when `name` bundles several
+  // owners (e.g. "Matei Corina, Matei Nelu, Matei Vasile") — null means "the first one". Read at
+  // the CURRENT period only; for a specific period's report use nameHistory instead (see below).
+  primaryOwnerName String? @map("primary_owner_name")
 
   community Community               @relation(fields: [communityId], references: [id])
   members   BillingEntityMember[]
@@ -343,10 +393,55 @@ model BillingEntity {
   bills     Bill[]
   Payment   Payment[]
   CommunityChargeLine CommunityChargeLine[]
+  nameHistory BillingEntityNameHistory[]
 
   @@unique([code, communityId])
   @@index([communityId])
   @@map("billing_entity")
+}
+
+// A genuine identity change (not a typo fix — see `display-name` PATCH, which stays a plain,
+// retroactive edit) to a billing entity's name/displayName, effective from a specific period
+// onward. No rows exist for a BE that has never had one of these — resolve by falling back to the
+// entity's own current name/displayName when no history row covers the period in question.
+model BillingEntityNameHistory {
+  id              String   @id @default(cuid()) @map("id")
+  billingEntityId String   @map("billing_entity_id")
+  name            String   @map("name")
+  displayName     String?  @map("display_name")
+  startPeriodId   String   @map("start_period_id")
+  endPeriodId     String?  @map("end_period_id")
+  startSeq        Int      @map("start_seq")
+  endSeq          Int?     @map("end_seq")
+
+  billingEntity BillingEntity @relation(fields: [billingEntityId], references: [id])
+
+  @@index([billingEntityId, startSeq, endSeq])
+  @@map("billing_entity_name_history")
+}
+
+// #21 "Persoane" (Informații asociație) — a real, unconfirmed-until-reviewed tenant candidate for
+// one specific unit. There is no formal lease record in this system, so a tenant is *inferred*: a
+// payer name from the cash/bank register that keeps paying for a unit but doesn't match its
+// owner's name — `source` records whether this row is that inference or a manual entry,
+// `confirmed` lets an admin promote an inferred tenant to a normal, no-longer-flagged entry.
+// (Owner comes straight from BillingEntity.name/primaryOwnerName; property manager is plain
+// columns on Unit — neither needs its own table, only tenancy does, since a unit can have several
+// tenant candidates at once awaiting review.)
+model UnitTenant {
+  id        String   @id @default(cuid()) @map("id")
+  unitId    String   @map("unit_id")
+  name      String   @map("name")
+  phone     String?  @map("phone")
+  email     String?  @map("email")
+  source    String   @default("MANUAL") @map("source") // MANUAL | INFERRED
+  confirmed Boolean  @default(false) @map("confirmed")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@index([unitId])
+  @@map("unit_tenant")
 }
 
 model BillingEntityMember {
@@ -858,6 +953,7 @@ model Vendor {
   name        String  @map("name")
   taxId       String? @map("tax_id")
   iban        String? @map("iban")
+  contract    String? @map("contract")
 
   community     Community       @relation(fields: [communityId], references: [id])
   VendorInvoice VendorInvoice[]
@@ -956,6 +1052,89 @@ model VendorInvoiceDoc {
   invoice VendorInvoice @relation(fields: [invoiceId], references: [id])
 
   @@map("vendor_invoice_doc")
+}
+
+/// AI intake: a batch is one agent-produced `intake-import/v1` JSON payload, imported by an admin for
+/// one period. Records are the agent's proposals; nothing becomes a VendorInvoice / charge until an
+/// admin approves and the batch is applied — and apply only ever goes through TemplateService /
+/// VendorInvoiceService (never ledger rows). See docs/intake.md.
+enum IntakeBatchStatus {
+  REVIEW
+  APPLYING
+  APPLIED
+  FAILED
+}
+
+enum IntakeRecordKind {
+  INVOICE
+  BANK_LINE
+  OTHER
+}
+
+enum IntakeRecordStatus {
+  PROPOSED
+  NEEDS_REVIEW
+  APPROVED
+  STAGED
+  APPLIED
+  SKIPPED
+  FAILED
+}
+
+model IntakeBatch {
+  id              String            @id @default(cuid()) @map("id")
+  communityId     String            @map("community_id")
+  periodId        String            @map("period_id")
+  status          IntakeBatchStatus @default(REVIEW) @map("status")
+  contractVersion String            @map("contract_version")
+  promptVersion   String?           @map("prompt_version")
+  agentLabel      String?           @map("agent_label")
+  sourceFileName  String?           @map("source_file_name")
+  raw             Json              @map("raw")          // the agent payload verbatim (audit)
+  stats           Json?             @map("stats")        // { records, byStatus, byKind }
+  createdBy       String?           @map("created_by")
+  error           String?           @map("error")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  community Community      @relation(fields: [communityId], references: [id])
+  period    Period         @relation(fields: [periodId], references: [id])
+  records   IntakeRecord[]
+
+  @@index([communityId, createdAt])
+  @@map("intake_batch")
+}
+
+model IntakeRecord {
+  id                   String             @id @default(cuid()) @map("id")
+  batchId              String             @map("batch_id")
+  communityId          String             @map("community_id")
+  index                Int                @map("index")            // position in the agent's records[]
+  kind                 IntakeRecordKind   @map("kind")
+  status               IntakeRecordStatus @default(PROPOSED) @map("status")
+  sourceFile           String?            @map("source_file")
+  sourceSha256         String?            @map("source_sha256")
+  confidence           Float?             @map("confidence")
+  rationale            String?            @map("rationale")
+  extracted            Json               @map("extracted")        // invoice / bankLine block, verbatim
+  proposal             Json               @map("proposal")         // mapping block, verbatim (immutable)
+  review               Json?              @map("review")           // admin-edited mapping; effective = review ?? proposal
+  resolved             Json?              @map("resolved")         // server-side resolution (ids, duplicate hints)
+  blockers             Json?              @map("blockers")         // [{ code, message, path?, overridable }]
+  duplicateOfInvoiceId String?            @map("duplicate_of_invoice_id")
+  duplicateOfRecordId  String?            @map("duplicate_of_record_id")
+  appliedRefs          Json?              @map("applied_refs")
+  appliedAt            DateTime?          @map("applied_at")
+  error                String?            @map("error")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  batch IntakeBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, index])
+  @@index([communityId, sourceSha256])
+  @@index([batchId, status])
+  @@map("intake_record")
 }
 
 model InvoiceSplit {
@@ -1353,6 +1532,30 @@ model BeStatement {
   @@map("be_statement")
 }
 
+// Per-unit statement, parallel to BeStatement but unit-keyed — populated only where real
+// per-unit data exists (charges: always, from community_charge_line; payments/adjustments:
+// only when a ledger detail row carries a unitId; dueStart: chained from the prior period's
+// own dueEnd, anchored at April 2026-04's real per-unit closing for Kralik). A billing entity
+// with more than one unit has no per-unit split for the portion of its payments/adjustments
+// that was never unit-tagged — that portion simply doesn't appear here, it isn't fabricated.
+model BeUnitStatement {
+  id              String  @id @default(cuid()) @map("id")
+  communityId     String  @map("community_id")
+  periodId        String  @map("period_id")
+  unitId          String  @map("unit_id")
+  billingEntityId String  @map("billing_entity_id")
+  fundId          String  @map("fund_id")
+  currency        String  @default("RON") @map("currency")
+  dueStart        Decimal @default(0) @map("due_start")
+  charges         Decimal @default(0) @map("charges")
+  payments        Decimal @default(0) @map("payments")
+  adjustments     Decimal @default(0) @map("adjustments")
+  dueEnd          Decimal @default(0) @map("due_end")
+
+  @@unique([communityId, periodId, unitId, fundId])
+  @@map("be_unit_statement")
+}
+
 // ---------- Opening balance per community & period ----------
 model CommunityOpeningBalance {
   id          String   @id @default(cuid()) @map("id")
@@ -1595,11 +1798,14 @@ model CommitteeVote {
 /// entries are DERIVED from it (refType='CORRECTION', refId=id) by PeriodService.applyCorrections, and
 /// summed into be_statement like any other ledger legs. Targets the current non-CLOSED period.
 enum CorrectionType {
-  RESHUFFLE         // reponderare-cote → CHARGE per BE (payload.perUnit)
-  CREDIT_TRANSFER   // reatribuire-plata → negative PAYMENT on (be, fund)
-  PAYMENT_REATTRIB  // reatribuire-plata → negative PAYMENT on payload.fromFund
-  PENALTY_WRITEOFF  // scutire-penalizari → negative ADJUSTMENT on PENALIZARI
-  MANUAL_ADJUSTMENT // ajustare-manuala → ADJUSTMENT (±) on (be, fund)
+  RESHUFFLE          // reponderare-cote → CHARGE per BE (payload.perUnit)
+  CREDIT_TRANSFER    // reatribuire-plata → negative PAYMENT on (be, fund)
+  PAYMENT_REATTRIB   // reatribuire-plata → negative PAYMENT on payload.fromFund
+  PENALTY_WRITEOFF   // scutire-penalizari → negative ADJUSTMENT on PENALIZARI
+  MANUAL_ADJUSTMENT  // ajustare-manuala → ADJUSTMENT (±) on (be, fund)
+  OWNERSHIP_TRANSFER // transfer-proprietate → two-leg PAYMENT per fund, moving an outstanding
+                      // balance from one billing entity to another (payload.toBillingEntityId,
+                      // payload.perFund) — e.g. a unit's old-owner restanță carried to the new owner
 }
 
 enum CorrectionStatus {
@@ -1715,6 +1921,8 @@ model Ticket {
   priority              TicketPriority @default(MEDIUM)
   title                 String
   description           String?
+  impact                TicketImpact?
+  requestKind           TicketRequestKind? @map("request_kind")
   createdById           String         @map("created_by_id")
   assigneeId            String?        @map("assignee_id")
   sourceInventoryRuleId String?        @map("source_inventory_rule_id")

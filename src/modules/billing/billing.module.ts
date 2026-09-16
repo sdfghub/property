@@ -13,7 +13,7 @@ import { ExpenseTypeController } from './expense-type.controller';
 import { ExpenseTypeService } from './expense-type.service';
 import { CommunityBillingEntityController } from './community-be.controller';
 import { VendorInvoiceService } from './vendor-invoice.service';
-import { VendorInvoiceController } from './vendor-invoice.controller';
+import { VendorInvoiceController, VendorController } from './vendor-invoice.controller';
 import { CashService } from './cash.service';
 import { CashController } from './cash.controller';
 import { PaymentService } from './payment.service';
@@ -41,6 +41,7 @@ import { ReportsModule } from '../reports/reports.module';
     TemplateController,
     ExpenseTypeController,
     VendorInvoiceController,
+    VendorController,
     PaymentController,
     PaymentAllocationController,
     MeasureModeController,
@@ -67,6 +68,6 @@ import { ReportsModule } from '../reports/reports.module';
     CashService,
     PrismaService,
   ],
-  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, MemberAccessService],
+  exports: [TemplateService, BillingPeriodLookupService, AllocationService, BeQueryService, MemberAccessService, VendorInvoiceService, PaymentService, CashService],
 })
 export class BillingModule {}

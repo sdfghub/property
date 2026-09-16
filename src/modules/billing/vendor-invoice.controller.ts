@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
@@ -13,6 +13,14 @@ export class VendorInvoiceController {
   @Get()
   list(@Param('communityId') communityId: string) {
     return this.svc.listInvoices(communityId)
+  }
+
+  // Dashboard read — broader than the class-level admin-only scope so censor/committee viewers
+  // (who already see other finance widgets there) can see the payables summary too.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('summary')
+  summary(@Param('communityId') communityId: string, @Query('period') period?: string) {
+    return this.svc.invoiceSummaryForPeriod(communityId, period)
   }
 
   @Get(':id')
@@ -55,5 +63,63 @@ export class VendorInvoiceController {
     @Body() body: any,
   ) {
     return this.svc.createVendorPayment(communityId, invoiceId, body)
+  }
+
+  /** Migration cutover: the invoice was paid before the books started — close it without cash. */
+  @Post(':id/settle-at-cutover')
+  settleAtCutover(@Param('communityId') communityId: string, @Param('id') invoiceId: string, @Body() body: any) {
+    return this.svc.settleAtCutover(communityId, invoiceId, body ?? {})
+  }
+
+  /** Migration cutover: a payment for an invoice from before the books — creates the virtual OPENING
+   *  invoice (amount = the payment) and settles it in one go. */
+  @Post('opening-payments')
+  payOpening(@Param('communityId') communityId: string, @Body() body: any) {
+    return this.svc.payOpening(communityId, body ?? {})
+  }
+
+  @Patch(':id/payments/:paymentId')
+  updatePayment(
+    @Param('communityId') communityId: string,
+    @Param('paymentId') paymentId: string,
+    @Body() body: any,
+  ) {
+    return this.svc.updateVendorPayment(communityId, paymentId, body)
+  }
+
+  @Delete(':id/payments/:paymentId')
+  deletePayment(
+    @Param('communityId') communityId: string,
+    @Param('paymentId') paymentId: string,
+  ) {
+    return this.svc.deleteVendorPayment(communityId, paymentId)
+  }
+}
+
+// #18 "Configurare furnizori" — separate route prefix from the invoices controller above, same
+// underlying service (VendorInvoiceService already owns Vendor resolution via resolveVendor).
+@Controller('communities/:communityId/vendors')
+@UseGuards(JwtAuthGuard, ScopesGuard)
+@Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+export class VendorController {
+  constructor(private readonly svc: VendorInvoiceService) {}
+
+  @Get()
+  list(@Param('communityId') communityId: string) {
+    return this.svc.listVendors(communityId)
+  }
+
+  @Post()
+  create(@Param('communityId') communityId: string, @Body() body: any) {
+    return this.svc.createVendor(communityId, body)
+  }
+
+  @Patch(':vendorId')
+  update(
+    @Param('communityId') communityId: string,
+    @Param('vendorId') vendorId: string,
+    @Body() body: any,
+  ) {
+    return this.svc.updateVendor(communityId, vendorId, body)
   }
 }

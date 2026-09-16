@@ -107,6 +107,7 @@ export function BillingEntityResponsibleDashboard({
           readOnly
           reportPath={`/me/communities/${communityId}/avizier`}
           periodsPath={closedPeriodsPath}
+          associationInfoPath={`/me/communities/${communityId}/association-info`}
         />
       )}
       {tab === 'invoices' && communityId && <BeDueInvoicesPanel communityId={communityId} />}

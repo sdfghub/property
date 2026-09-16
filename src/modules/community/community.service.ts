@@ -822,4 +822,97 @@ export class CommunityService {
     await this.prisma.community.update({ where: { id: community.id }, data })
     return this.getSettings(community.id)
   }
+
+  /** #12 "Informații Asociație" — legal identity, bank accounts, governance (AGA/CEX), and
+   *  administrator info. Persisted under Community.features.associationInfo, the same JSON-blob
+   *  convention finance.service.ts uses for avizierConfig — no schema migration needed, and it's a
+   *  merge-patch (unset keys survive an update) since this is documentation data, not money. */
+  private static readonly ASSOCIATION_INFO_KEYS = [
+    'address', 'legalName', 'statutStatus', 'foundingDate', 'actConstitutivNr',
+    'acordAsociereNr', 'acordAsociereDate', 'cif', 'bankAccounts', 'legalRep',
+    'aga', 'boardMembers', 'administrator', 'roiPolicy', 'serviceConfig', 'fundConfig', 'vendorConfig',
+  ] as const
+
+  private static readonly DEFAULT_ROI_TIERS = [
+    { key: 'none', label: 'Fără risc', tone: 'positive', rangeLabel: '≤ 30 zile', actionTitle: 'Nicio acțiune', actionDesc: 'Situație în termen legal, nu se aplică măsuri.' },
+    { key: 'low', label: 'Risc scăzut', tone: 'warning', rangeLabel: '30–60 zile', actionTitle: 'Penalități', actionDesc: 'Se aplică penalități de întârziere conform hotărârii AGA.' },
+    { key: 'medium', label: 'Risc mediu', tone: 'orange', rangeLabel: '60–120 zile', actionTitle: 'Înscriere sarcină în CF', actionDesc: 'Se înscrie sarcina în Cartea Funciară a proprietății debitoare.' },
+    { key: 'high', label: 'Risc ridicat', tone: 'negative', rangeLabel: '≥ 120 zile', actionTitle: 'Acțiune în instanță', actionDesc: 'Se demarează procedura judiciară de recuperare a creanței.' },
+  ]
+
+  async getAssociationInfo(communityId: string) {
+    const c = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { name: true, features: true },
+    })
+    if (!c) throw new NotFoundException('Community not found')
+    const info: any = ((c.features as any) || {}).associationInfo || {}
+    return {
+      name: c.name,
+      address: info.address ?? null,
+      legalName: info.legalName ?? null,
+      statutStatus: info.statutStatus ?? null,
+      foundingDate: info.foundingDate ?? null,
+      actConstitutivNr: info.actConstitutivNr ?? null,
+      acordAsociereNr: info.acordAsociereNr ?? null,
+      acordAsociereDate: info.acordAsociereDate ?? null,
+      cif: info.cif ?? null,
+      bankAccounts: Array.isArray(info.bankAccounts) ? info.bankAccounts : [],
+      legalRep: info.legalRep ?? null,
+      aga: info.aga ?? { lastMeeting: null, nextMeeting: null },
+      boardMembers: Array.isArray(info.boardMembers) ? info.boardMembers : [],
+      administrator: info.administrator ?? null,
+      roiPolicy: {
+        description: info.roiPolicy?.description ?? null,
+        tiers: Array.isArray(info.roiPolicy?.tiers) && info.roiPolicy.tiers.length ? info.roiPolicy.tiers : CommunityService.DEFAULT_ROI_TIERS,
+      },
+      serviceConfig: CommunityService.normalizeServiceConfig(info.serviceConfig),
+      fundConfig: CommunityService.normalizeFundConfig(info.fundConfig),
+      vendorConfig: CommunityService.normalizeFundConfig(info.vendorConfig),
+    }
+  }
+
+  /** The admin's chosen display order for the "Fonduri"/"Furnizori" sections — real Fund.code (or
+   *  Vendor.id) values, same "declared order, not stored per-entity" convention as
+   *  normalizeServiceConfig's serviceCodes. Shared shape, so one normalizer covers both. */
+  private static normalizeFundConfig(raw: any): { order: string[] } {
+    const order = Array.isArray(raw?.order) ? raw.order.filter((c: any) => typeof c === 'string') : []
+    return { order }
+  }
+
+  /**
+   * serviceCodes holds real ExpenseType.code values in the exact order the admin chose — that
+   * order is what avizier() uses for its expense-type columns (see finance.service.ts). Falls
+   * back to the pre-ordering `expenseTypeDomain: Record<code, domainKey>` shape (no order info)
+   * for data saved before this field existed, so a stale record still renders sensibly.
+   */
+  private static normalizeServiceConfig(raw: any): { domains: { key: string; name: string; serviceCodes: string[] }[] } {
+    const rawDomains = Array.isArray(raw?.domains) ? raw.domains : []
+    const legacyMap =
+      raw?.expenseTypeDomain && typeof raw.expenseTypeDomain === 'object' && !Array.isArray(raw.expenseTypeDomain)
+        ? raw.expenseTypeDomain
+        : null
+    return {
+      domains: rawDomains.map((d: any, i: number) => {
+        const key = typeof d?.key === 'string' && d.key ? d.key : `domain-${i}`
+        let serviceCodes: string[] = Array.isArray(d?.serviceCodes) ? d.serviceCodes.filter((c: any) => typeof c === 'string') : []
+        if (!serviceCodes.length && legacyMap) serviceCodes = Object.entries(legacyMap).filter(([, v]) => v === key).map(([c]) => c)
+        return { key, name: String(d?.name ?? ''), serviceCodes }
+      }),
+    }
+  }
+
+  async updateAssociationInfo(communityId: string, body: any) {
+    const community = await this.prisma.community.findFirst({
+      where: { OR: [{ id: communityId }, { code: communityId }] },
+      select: { id: true, features: true },
+    })
+    if (!community) throw new NotFoundException('Community not found')
+    const features = ((community.features as any) || {})
+    const current = features.associationInfo || {}
+    const next = { ...current }
+    for (const k of CommunityService.ASSOCIATION_INFO_KEYS) if (body?.[k] !== undefined) next[k] = body[k]
+    await this.prisma.community.update({ where: { id: community.id }, data: { features: { ...features, associationInfo: next } } })
+    return this.getAssociationInfo(community.id)
+  }
 }

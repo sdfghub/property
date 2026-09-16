@@ -70,164 +70,156 @@
     {
       "code": "BE_GUTULEAC_ALEXANDRU_GUTULEAC_ALINA",
       "name": "Guțuleac Alexandru, Guțuleac Alina",
-      "order": 1,
-      "displayName": "Ap 1 · Guțuleac Alexandru, Guțuleac Alina"
+      "order": 1
     },
     {
       "code": "BE_MATEI_VIOREL",
       "name": "Matei Viorel",
-      "order": 2,
-      "displayName": "Ap 1/B · Matei Viorel"
+      "order": 2
     },
     {
       "code": "BE_GEORGE_RADU_GABRIEL",
       "name": "George Radu Gabriel",
-      "order": 3,
-      "displayName": "Ap 2/1 · George Radu Gabriel"
+      "order": 3
     },
     {
       "code": "BE_GAMPE_FRANCISC",
       "name": "Gampe Francisc",
       "order": 4,
-      "displayName": "Ap 2/2 · Gampe Francisc"
+      "displayNames": [
+        {
+          "displayName": "Ap 2/2 · Gampe Francisc",
+          "startPeriod": "2026-03",
+          "endPeriod": "2026-05"
+        }
+      ]
     },
     {
       "code": "BE_CODREA_RUXANDRA_GEORGETA",
       "name": "Codrea Ruxandra-Georgeta",
-      "order": 5,
-      "displayName": "Ap 3 · Codrea Ruxandra-Georgeta"
+      "order": 5
     },
     {
       "code": "BE_PETREAN_DELIA",
       "name": "Petrean Delia",
-      "order": 6,
-      "displayName": "Ap 4 (I) · Petrean Delia"
+      "order": 6
     },
     {
       "code": "BE_CATARGIU_CONSTANTIN",
       "name": "Catargiu Constantin",
-      "order": 7,
-      "displayName": "Ap 4A · Catargiu Constantin"
+      "order": 7
     },
     {
       "code": "BE_OLARU_POSIAR_LUCIAN",
       "name": "Olaru-Posiar Lucian",
-      "order": 8,
-      "displayName": "Ap 5 (I-A) · Olaru-Posiar Lucian"
+      "order": 8
     },
     {
       "code": "BE_KARACS_BEBE",
       "name": "Karacs Bebe",
-      "order": 9,
-      "displayName": "Ap 5 (I-B) · Karacs Bebe"
+      "order": 9
     },
     {
       "code": "BE_FLOREA_LUCIAN",
       "name": "Florea Lucian",
-      "order": 10,
-      "displayName": "Ap 6 · Florea Lucian"
+      "order": 10
     },
     {
       "code": "BE_GAMPE_DORINA_SVETLANA",
       "name": "Gampe Dorina Svetlana",
-      "order": 11,
-      "displayName": "Ap 6A · Gampe Dorina Svetlana"
+      "order": 11
     },
     {
       "code": "BE_RADOI_ANA_MARIA",
       "name": "Rădoi Ana-Maria",
-      "order": 12,
-      "displayName": "Ap 8 · Rădoi Ana-Maria"
+      "order": 12
     },
     {
       "code": "BE_MARES_MARIAN_MIHAI",
       "name": "Mareș Marian-Mihai ",
-      "order": 13,
-      "displayName": "Ap 9 · Mareș Marian-Mihai "
+      "order": 13
     },
     {
       "code": "BE_BOITI_ZOLTAN_EMANUEL",
       "name": "Boiti Zoltán-Emanuel",
-      "order": 14,
-      "displayName": "Ap 10A · Boiti Zoltán-Emanuel"
+      "order": 14
     },
     {
       "code": "BE_CABINET_AV_COLCEA_MIHAI_MIHNEA_RADU",
       "name": "Cabinet Av.Colcea Mihai, Mihnea Radu",
-      "order": 15,
-      "displayName": "Ap 10B · Cabinet Av.Colcea Mihai, Mihnea Radu"
+      "order": 15
     },
     {
       "code": "BE_FIKL_EMIL",
       "name": "Fikl Emil",
-      "order": 16,
-      "displayName": "Ap 31 · Fikl Emil"
+      "order": 16
     },
     {
       "code": "BE_DASCAL_ADRIANA",
       "name": "Dascāl Adriana",
-      "order": 17,
-      "displayName": "Ap 32 · Dascāl Adriana"
+      "order": 17
     },
     {
       "code": "BE_GROSU_ALEXANDRU_PRICOP_ALEXANDRA",
       "name": "Grosu Alexandru, Pricop Alexandra",
-      "order": 18,
-      "displayName": "Ap 4 (III) · Grosu Alexandru, Pricop Alexandra"
+      "order": 18
     },
     {
       "code": "BE_JARDA_GHEORGHE",
       "name": "Jarda Gheorghe",
-      "order": 19,
-      "displayName": "Ap 5 (III) · Jarda Gheorghe"
+      "order": 19
     },
     {
       "code": "BE_MACRI_NICODEMO_MACRI_FRANCESCO_MACRI_ANTONIO",
       "name": "Macri Nicodemo, Macri Francesco, Macri Antonio",
-      "order": 20,
-      "displayName": "Ap 11, Ap 11A · Macri Nicodemo, Macri Francesco, Macri Antonio"
+      "order": 20
     },
     {
       "code": "BE_SOAMES_MARIANA",
       "name": "Soames Mariana",
-      "order": 21,
-      "displayName": "Ap 11B · Soames Mariana"
+      "order": 21
     },
     {
       "code": "BE_PRIMARIE_TM_UAT",
       "name": "Primārie TM UAT",
-      "order": 22,
-      "displayName": "Ap 12 (SAD 4/A), Ap 12 (SAD 4/B), Ap 12 (SAD 4/C) · Primārie TM UAT"
+      "order": 22
     },
     {
       "code": "BE_JARDA_CRISTIAN",
       "name": "Jarda Cristian",
-      "order": 23,
-      "displayName": "Ap 14A · Jarda Cristian"
+      "order": 23
     },
     {
       "code": "BE_DAVID_MARIUS",
       "name": "David Marius",
-      "order": 24,
-      "displayName": "Ap 14B · David Marius"
+      "order": 24
     },
     {
       "code": "BE_SC_MINI_MARKET_MELTES_SRL",
       "name": "Sc Mini Market Meltes Srl",
-      "order": 25,
-      "displayName": "SPAȚIU COMERCIAL · Sc Mini Market Meltes Srl"
+      "order": 25
     },
     {
       "code": "BE_SEMENESCU_MARIA_DANIELA",
       "name": "Semenescu Maria-Daniela",
-      "order": 26,
-      "displayName": "SAD 2/1 · Semenescu Maria-Daniela"
+      "order": 26
     },
     {
       "code": "BE_BRINZEU_ADINA",
       "name": "Brînzeu Adina",
-      "order": 27,
-      "displayName": "SAD 2/2, SAD 1 · Brînzeu Adina"
+      "order": 27
+    },
+    {
+      "code": "BE_VALEAN_MIRELA",
+      "name": "Valean Mirela",
+      "order": 4,
+      "displayNames": [
+        {
+          "displayName": "Ap 2/2 · Valean Mirela",
+          "startPeriod": "2026-06",
+          "endPeriod": null
+        }
+      ]
     }
   ],
   "structure": [
@@ -309,7 +301,6 @@
       "residents": 0,
       "sqm": null,
       "cpi": 1.99,
-      "billingEntity": "BE_GAMPE_FRANCISC",
       "groupCodes": [
         "ALL_BILLABLE",
         "RESIDENTIAL",
@@ -326,6 +317,18 @@
       "startPeriod": "2026-03",
       "endPeriod": null,
       "order": 4
+    },
+    {
+      "code": "400191-C1-U19-AP 2/2",
+      "billingEntity": "BE_GAMPE_FRANCISC",
+      "startPeriod": "2026-03",
+      "endPeriod": "2026-05"
+    },
+    {
+      "code": "400191-C1-U19-AP 2/2",
+      "billingEntity": "BE_VALEAN_MIRELA",
+      "startPeriod": "2026-06",
+      "endPeriod": null
     },
     {
       "code": "400191-C1-U8-AP 3",
@@ -1374,6 +1377,7 @@
     {
       "id": "SPLIT_APA_RECE",
       "expenseTypeCode": "APA_RECE",
+      "fundCode": "EXPENSES",
       "name": "Apa Rece",
       "splits": [
         {
@@ -1431,6 +1435,8 @@
     {
       "id": "SPLIT_CANAL",
       "expenseTypeCode": "CANALIZARE",
+      "fundCode": "EXPENSES",
+      "service": "APA_RECE",
       "name": "Canalizare",
       "splits": [
         {
@@ -1486,8 +1492,68 @@
       ]
     },
     {
+      "id": "SPLIT_RESTANTE_APA",
+      "expenseTypeCode": "RESTANTE_APA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe apă rece",
+      "splits": [
+        {
+          "id": "RESTANTE_PROPORTIONAL",
+          "name": "Restanțe apă (proporțional cu consumul)",
+          "mode": "PROPORTIONAL",
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "ruleCode": "BY_WATER_COLD",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "RESTANTE_CONTORIZATA",
+          "name": "Restanțe apă contorizată",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_COLD_CALC"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        },
+        {
+          "id": "RESTANTE_DIFERENTA",
+          "name": "Diferență restanțe apă",
+          "mode": "APA_DIF",
+          "derivedShare": {
+            "meterType": "WATER",
+            "totalMeterId": "COMMUNITY_WATER_COLD",
+            "partMeterId": "COMMUNITY_WATER_RESIDUAL"
+          },
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_APA_RECE"
+            },
+            "method": "BY_CONSUMPTION",
+            "weightSource": "WATER_COLD"
+          }
+        }
+      ]
+    },
+    {
       "id": "SPLIT_PENALITATI_APA",
       "expenseTypeCode": "PENALITATI_APA",
+      "fundCode": "EXPENSES",
+      "service": "APA_RECE",
       "name": "Penalități apă rece",
       "splits": [
         {
@@ -1545,6 +1611,7 @@
     {
       "id": "SPLIT_APA_METEO",
       "expenseTypeCode": "APA_METEO",
+      "fundCode": "EXPENSES",
       "name": "Apa Meteo",
       "splits": [
         {
@@ -1562,7 +1629,44 @@
     {
       "id": "SPLIT_CURENT_SCARA",
       "expenseTypeCode": "CURENT_SCARA",
+      "fundCode": "EXPENSES",
       "name": "Curent Scara",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURENT_SCARA"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_CURENT_SCARA",
+      "expenseTypeCode": "RESTANTE_CURENT_SCARA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Curent Scara",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURENT_SCARA"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_CURENT_SCARA",
+      "expenseTypeCode": "PENALITATI_CURENT_SCARA",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Curent Scara",
       "splits": [
         {
           "share": 1,
@@ -1579,7 +1683,44 @@
     {
       "id": "SPLIT_SALUBRITATE",
       "expenseTypeCode": "SALUBRITATE",
+      "fundCode": "EXPENSES",
       "name": "Salubritate",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_SALUBRITATE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_SALUBRITATE",
+      "expenseTypeCode": "RESTANTE_SALUBRITATE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Salubritate",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_SALUBRITATE"
+            },
+            "ruleCode": "BY_RESIDENTS"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_SALUBRITATE",
+      "expenseTypeCode": "PENALITATI_SALUBRITATE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Salubritate",
       "splits": [
         {
           "share": 1,
@@ -1596,7 +1737,44 @@
     {
       "id": "SPLIT_CURATENIE",
       "expenseTypeCode": "CURATENIE",
+      "fundCode": "EXPENSES",
       "name": "Curatenie",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURATENIE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_CURATENIE",
+      "expenseTypeCode": "RESTANTE_CURATENIE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Curatenie",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_CURATENIE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_CURATENIE",
+      "expenseTypeCode": "PENALITATI_CURATENIE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Curatenie",
       "splits": [
         {
           "share": 1,
@@ -1613,7 +1791,44 @@
     {
       "id": "SPLIT_ADMINISTRARE",
       "expenseTypeCode": "ADMINISTRARE",
+      "fundCode": "EXPENSES",
       "name": "Administrare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_ADMINISTRARE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_ADMINISTRARE",
+      "expenseTypeCode": "RESTANTE_ADMINISTRARE",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Administrare",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_ADMINISTRARE"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_ADMINISTRARE",
+      "expenseTypeCode": "PENALITATI_ADMINISTRARE",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Administrare",
       "splits": [
         {
           "share": 1,
@@ -1630,7 +1845,44 @@
     {
       "id": "SPLIT_COMISION_BANCA",
       "expenseTypeCode": "COMISION_BANCA",
+      "fundCode": "EXPENSES",
       "name": "Comision Banca",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_COMISION_BANCA"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_COMISION_BANCA",
+      "expenseTypeCode": "RESTANTE_COMISION_BANCA",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Comision Banca",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_COMISION_BANCA"
+            },
+            "ruleCode": "BY_CPI"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_COMISION_BANCA",
+      "expenseTypeCode": "PENALITATI_COMISION_BANCA",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Comision Banca",
       "splits": [
         {
           "share": 1,
@@ -1647,7 +1899,44 @@
     {
       "id": "SPLIT_INTERFON",
       "expenseTypeCode": "INTERFON",
+      "fundCode": "EXPENSES",
       "name": "Interfon",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_INTERFON"
+            },
+            "ruleCode": "EQUAL"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_RESTANTE_INTERFON",
+      "expenseTypeCode": "RESTANTE_INTERFON",
+      "fundCode": "EXPENSES",
+      "name": "Restanțe Interfon",
+      "splits": [
+        {
+          "share": 1,
+          "allocation": {
+            "basis": {
+              "type": "GROUP",
+              "code": "SVC_INTERFON"
+            },
+            "ruleCode": "EQUAL"
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPLIT_PENALITATI_INTERFON",
+      "expenseTypeCode": "PENALITATI_INTERFON",
+      "fundCode": "EXPENSES",
+      "name": "Penalități Interfon",
       "splits": [
         {
           "share": 1,
@@ -1678,6 +1967,42 @@
       "type": "PETTY",
       "currency": "RON",
       "defaultFundCode": "EXPENSES"
+    },
+    {
+      "code": "BANK_LIBRA_EUR",
+      "name": "Libra - EUR",
+      "type": "BANK",
+      "currency": "EUR",
+      "defaultFundCode": "EXPENSES",
+      "bank": "Libra"
     }
+  ],
+  "intakeHints": [
+    "Archive `Facturi - YYYY.MM.zip` names the TARGET period. The invoices inside are normally issued in the following month (the June set was issued 30.06–03.08) — book them under the archive's period, not the issue month.",
+    "Aquatim `Perioada de facturare` runs from the 22nd to the 21st; the invoice belongs to the period of the END month (22.05–21.06 → 2026-06). Set servicePeriodStart/End to the two months it spans.",
+    "Aquatim: one invoice always spans two templates — `APA POTABILA` + `CANAL` + `Penalitati` → BILL_APA_RECE (apa_rece, canal, penalitati); `CANAL APA METEORICA` → BILL_APA_METEO (apa_meteo).",
+    "Aquatim: penalties carry no VAT, so net + VAT + penalties = gross. Report net/VAT as printed; the AMOUNT_MISMATCH warning by exactly the penalty amount is expected.",
+    "Aquatim: after a tariff change the invoice shows `cu pret vechi` / `cu pret nou` lines per service — sum them per service (with their VAT) into one allocation each.",
+    "Aquatim: `Totalul facturilor neachitate` / `Cod bare sold total` is prior debt and never part of the invoice; gross is `Total factura curenta`. Books hold the number as `TMA10/1015558474` (the PDF prints `TMA10 / 1015558474`).",
+    "PPC: gross is line 5 `Total de plata factura curenta`. Line 6 `Sold la data emiterii` is prior balance and line 7 `Total de plată` includes it — ignore both. Service period = the `Perioadă facturare` month.",
+    "PPC: line 1 `Valoare facturată fără TVA` can exceed line 2 `Total bază de impozitare` by a small amount — that is `Total dobânzi penalizatoare` (late-payment interest, no VAT), not rounding. Report net = line 1; net + VAT = gross still holds.",
+    "PPC: the contract is in a person's name (client printed as KORB ADRIAN, POD RO005E511102723, Str. Lazăr Gheorghe 4) — expected for the association's stairwell meter, not a wrong document.",
+    "Retim: gross is `Total factura`; `Sold precedent` / `Total de plata` include prior debt — ignore. Billing is per person (21 persons × monthly tariff) — the person count is a sanity check.",
+    "Rich Clean: the catalogue vendor is spelled `RICH CLLEAN` — it IS `RICH CLEAN SRL`, CIF 51704507. Match by vendorId/CUI, never propose it as new.",
+    "Rich Clean: the invoice names the NEXT month (June archive → \"iulie 2026\", July archive → \"august 2026\") and is issued on its due date. Book it under the archive's period; the printed month is expected, not a mismatch. Non-VAT payer: net = gross.",
+    "Administrator: catalogue vendor `RUSAVIT` = SC RUSADMINISTRA COMPANY SRL, CIF 31488140, IBAN RO23INGB0000999912925068 (same administrator). Map to RUSAVIT with match EXISTING — never a new vendor.",
+    "Administrator invoice: a scan/photo (often upside-down), 800.00 flat, no VAT, `lista <luna>` gives the service month, issued the month after. Number `TM 1830` is booked as `TM-1830`.",
+    "BILL_COMISION_BANCA has no supplier invoice: its amount is the SUM of `Comision tranzactie` debits on the Libra RON statement for the period (June 2026: 136.00). Emit it as an INVOICE record with vendor Libra, number = the statement window (e.g. `2026.07.01-08.19`), sourceFile = the statement, allocation comision_banca — AND map each `Comision tranzactie` line as VENDOR_SETTLEMENT of that same number (`invoiceNumbers: [\"2026.07.01-08.19\"]`, vendorName Libra), so the invoice ends up paid by its own lines. A commission line shares the reference of the transfer it belongs to — that is expected, not a duplicate.",
+    "Libra statement: the archive's statement covers a wider window than the month and may not overlap it at all (the July archive carried 10.08–10.09) — still emit EVERY line as a BANK_LINE and derive BILL_COMISION_BANCA from it; the administrator confirms the window. Check it reconciles (SOLD INITIAL + credits − debits = SOLD FINAL) before trusting your parse.",
+    "Libra owner receipts (credits) → OWNER_PAYMENT. The unit is in `Detalii` (\"ap 3\", \"AP 32\", \"ap.4(III)\", \"ap5\", \"apt 10 B\") — echo the matching catalogue `units[].code` (AP 4 (I) / AP 4A / AP 4B and AP 5 (I-A) / AP 5 (I-B) are different units; \"ap.4(III)\" is AP 4 (III)). No apartment in the text → `unitCode: null`, `payerName` as printed, add a warning; the app suggests the owner by name and the administrator confirms.",
+    "Fund words in a receipt → `mapping.funds` with the amount written next to them, nothing else: \"fond rulment\"/\"rulment\" → RULMENT, \"fond reparatii\"/\"reparatii\" → REPARATII, \"reabilitare 1/2/3\"/\"reab. 3\" → REABILITARE_1/2/3, \"penalizari\"/\"penalitati\" → PENALIZARI. \"intretinere\", \"lista\", \"tabel\", \"cota\" name NO fund — leave `funds: []` and the app spreads the amount over the owner's open charges. Never split an amount that the text does not split.",
+    "A month in a receipt (\"tabel aprilie\", \"lista mai 2026\", \"iunie\") is the list the owner is paying → `cycleCode` = that month (\"aprilie\" in a July statement = 2026-04). No month → `cycleCode: null` (= the archive's period).",
+    "Libra vendor payments (debits with `fct …`) → VENDOR_SETTLEMENT with every quoted number in `invoiceNumbers` exactly as printed (`fct 1015433016/04.03.2026` → \"1015433016\"; the app matches the number's tail against the unpaid list) and `vendorName`. They usually settle OLDER invoices from the unpaid list, not this month's; a number the unpaid list does not have is fine — keep it, the app flags INVOICE_NOT_FOUND for the administrator.",
+    "The EUR account (BANK_LIBRA_EUR) statement is usually empty — emit one OTHER record for the file, do not skip it silently.",
+    "Interfon (Schmidt) is not billed monthly — if there is no Schmidt invoice in the archive, emit nothing for BILL_INTERFON. Never invent a record for a template without a document.",
+    "A `facturi-YYYY-MM-upload.csv` in the archive is a human-made summary, not a source document — emit it as OTHER and use its `total_checksum` column only to cross-check your extraction.",
+    "Debits that are neither an invoice nor a commission (transfer to the association's own EUR/deposit account, a refund to an owner, a cash withdrawal to `CASH_RON`) → CASH_TX on EXPENSES with `kind` TRANSFER/ADJUSTMENT, or IGNORE with a `reason` when the line is the mirror of a transfer already booked from the other account.",
+    "`Incasare numerar … FOND REABILITARE NUME: <administrator>` (a large credit at the counter) is the administrator depositing cash-register collections into the bank → CASH_TX, `kind: TRANSFER`, `fundCode: REABILITARE_3` (the rehabilitation campaign currently charged), `accountCode: null` (it lands on the bank account, not on CASH_RON).",
+    "Large debits to construction contractors (PROFI VENT SRL, SM LARISUK, ADAMS CONSTRUCT, …) are rehabilitation works: VENDOR_SETTLEMENT with any quoted number and `fundCode: REABILITARE_3`, so a payment with no invoice in the books lands on the rehabilitation fund when acknowledged — never on EXPENSES."
   ]
 }

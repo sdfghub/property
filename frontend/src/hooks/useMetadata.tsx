@@ -13,12 +13,20 @@ export type CommunityMetadata = {
   correctionTypes: EnumMeta[]
   correctionStatuses: EnumMeta[]
   impactTags: EnumMeta[]
+  requestImpacts?: EnumMeta[]
+  requestKinds?: EnumMeta[]
   audienceTypes: EnumMeta[]
   meterModes: EnumMeta[]
   waterMethods: EnumMeta[]
+  allocationMethods?: EnumMeta[]
   fundDomains: (EnumMeta & { sortOrder: number })[]
   avizierFundGroups?: (EnumMeta & { sortOrder: number })[]
   riskTiers?: (EnumMeta & { sortOrder: number; maxDays: number | null; action: string })[]
+  intakeBatchStatuses?: EnumMeta[]
+  intakeRecordKinds?: EnumMeta[]
+  intakeRecordStatuses?: EnumMeta[]
+  intakeBlockers?: (EnumMeta & { overridable: boolean })[]
+  intakeBankTargets?: EnumMeta[]
 }
 
 export const labelOf = (list: EnumMeta[] | undefined, key: string): string =>

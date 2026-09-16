@@ -1,5 +1,5 @@
 import { Feature } from '../../common/decorators/feature.decorator'
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { TicketingService } from './ticketing.service'
@@ -11,9 +11,9 @@ export class TicketingController {
   constructor(private readonly svc: TicketingService) {}
 
   @Get()
-  list(@Param('communityId') communityId: string, @Req() req: any) {
+  list(@Param('communityId') communityId: string, @Query('type') type: string | undefined, @Req() req: any) {
     const userId: string = req.user?.id ?? req.user?.sub
-    return this.svc.listTickets(communityId, userId, req.user?.roles ?? [])
+    return this.svc.listTickets(communityId, userId, req.user?.roles ?? [], { type })
   }
 
   @Get(':ticketId')

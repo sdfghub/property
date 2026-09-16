@@ -40,7 +40,8 @@
     "prepare:period": "ts-node --transpile-only src/scripts/prepare-period.ts",
     "backfill:corrections": "ts-node --transpile-only src/scripts/backfill-corrections.ts",
     "backfill:meter-readings": "ts-node --transpile-only src/scripts/backfill-meter-readings.ts",
-    "prune:meters": "ts-node --transpile-only src/scripts/prune-stale-meters.ts"
+    "prune:meters": "ts-node --transpile-only src/scripts/prune-stale-meters.ts",
+    "intake:validate": "ts-node --transpile-only src/scripts/intake-validate.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
@@ -59,7 +60,8 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "resend": "^3.3.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

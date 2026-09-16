@@ -4,7 +4,9 @@ HOA/condo expense-management app for Romanian associations. **This repo root is 
 project** (NestJS + Prisma + Postgres); the web SPA is `frontend/` (Vite + React), the Expo
 client is `mobile/`, prod deploy is `deploy/`, per-community source data is `data/<COMM>/`.
 
-Full docs in [`docs/`](./docs/README.md) — start at [`docs/onboarding.md`](./docs/onboarding.md).
+Full docs in [`docs/`](./docs/README.md) — start at [`docs/onboarding.md`](./docs/onboarding.md); the map is
+[`docs/system-overview.md`](./docs/system-overview.md), the journeys [`docs/flows.md`](./docs/flows.md), the
+reasons [`docs/principles.md`](./docs/principles.md), the vocabulary [`docs/glossary.md`](./docs/glossary.md).
 This file is only the rules that are easy to get wrong.
 
 ## Environment
@@ -45,6 +47,18 @@ This file is only the rules that are easy to get wrong.
    conclusions — see `docs/architecture.md#auditing-charges`.
 10. **Money is `Decimal(18,4)`**; round only at the presentation edge and keep
     `dueEnd = dueStart + charges − payments + adjustments` intact.
+11. **Intake never writes charges, invoices or ledger rows itself.** `src/modules/intake/` applies
+    approved records only through `TemplateService.saveBillTemplateState({state:'SUBMITTED'})` /
+    `VendorInvoiceService.createInvoice` (invoices) and `PaymentService.createOrApply` /
+    `VendorInvoiceService.createVendorPayment` / `CashService.createTx` (bank lines, idempotent on the
+    bank reference), only into OPEN periods, and never closes templates. The agent never picks charges —
+    the community's allocation strategy does. The app does not call an LLM: it exports a prompt pack and
+    imports the agent's JSON (`docs/intake.md`).
+12. **Pre-cutover state is explicit, never guessed.** A payment for an invoice the app never saw creates a
+    virtual `source: 'OPENING'` invoice (no accrual, no charges) and settles it; seeded invoices paid
+    before the cutover close with a `method: 'OPENING'` payment (no cash); cash accounts get one
+    `OPENING_BALANCE` row per fund. Never book such things as plain cash transactions or fake expenses
+    (`docs/cutover.md`).
 
 ## Data & prod
 

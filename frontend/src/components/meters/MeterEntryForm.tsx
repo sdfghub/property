@@ -33,10 +33,15 @@ export function MeterEntryForm({
   // INDEX vs CONSUMPTION per measure type, previous reading per meter, and reading history.
   const [modeByType, setModeByType] = React.useState<Record<string, string>>({})
   const [prevByMeter, setPrevByMeter] = React.useState<Record<string, number | null>>({})
+  // Last month's raw consumption per meter (CONSUMPTION mode only) — used to default a fresh field.
+  const [prevValueByMeter, setPrevValueByMeter] = React.useState<Record<string, number | null>>({})
   // Self-reported (non-admin) marker per meter, for admin highlight.
   const [flagByMeter, setFlagByMeter] = React.useState<Record<string, { selfReported?: boolean; enteredByName?: string | null }>>({})
   const [historyByMeter, setHistoryByMeter] = React.useState<Record<string, any[]>>({})
   const [openHistory, setOpenHistory] = React.useState<Set<string>>(new Set())
+  // "Unități (Calculat)" section — collapsed by default, showing just the grand total; expands
+  // to the existing full per-unit breakdown.
+  const [unitsExpanded, setUnitsExpanded] = React.useState(false)
 
   const modeOf = (typeCode?: string) => (typeCode && modeByType[typeCode] === 'INDEX' ? 'INDEX' : 'CONSUMPTION')
 
@@ -131,6 +136,21 @@ export function MeterEntryForm({
     if (Object.keys(seeds).length) setValues((prev) => ({ ...seeds, ...prev }))
   }, [items, values])
 
+  // Default a still-empty CONSUMPTION-mode field to last month's own consumption for that same
+  // meter, once it arrives — a genuine "0" or admin-cleared field is left alone (only fires while
+  // the key has never been touched at all, i.e. still undefined).
+  React.useEffect(() => {
+    const seeds: Record<string, string> = {}
+    items.forEach((it: any) => {
+      const mid = it.meterId as string | undefined
+      if (it.kind !== 'meter' || !mid || modeOf(it.typeCode) !== 'CONSUMPTION') return
+      if (values[it.key] !== undefined) return
+      const prev = prevValueByMeter[mid]
+      if (prev != null) seeds[it.key] = String(prev)
+    })
+    if (Object.keys(seeds).length) setValues((prev) => ({ ...seeds, ...prev }))
+  }, [items, values, prevValueByMeter, modeByType])
+
   // Previous reading per meter (for INDEX consumption preview).
   React.useEffect(() => {
     if (!communityId || !periodCode) return
@@ -141,6 +161,7 @@ export function MeterEntryForm({
         api.get<any>(`/communities/${communityId}/periods/${periodCode}/meters/${mid}`)
           .then((r: any) => {
             setPrevByMeter((p) => ({ ...p, [mid]: r?.previousReading ?? null }))
+            setPrevValueByMeter((p) => ({ ...p, [mid]: r?.previousConsumption ?? null }))
             setFlagByMeter((f) => ({ ...f, [mid]: { selfReported: !!r?.selfReported, enteredByName: r?.enteredByName ?? null } }))
           })
           .catch(() => {})
@@ -153,6 +174,17 @@ export function MeterEntryForm({
   const prettyUnit = (code?: string | null) => (code ? code.replace(/^\d+-C\d+-/, '') : '')
   // Drop the redundant "Contor - " prefix (e.g. "Contor - Apa Rece 1" → "Apa Rece 1"); the unit is in the header.
   const shortMeterLabel = (label?: string) => (label || '').replace(/^\s*contor\s*[-–:]\s*/i, '')
+  // ↑ increased / ↓ decreased / = unchanged vs. last month's own consumption for this meter
+  // (CONSUMPTION mode only — that's the only mode with a previous *consumption* to compare against;
+  // INDEX mode's own previous *reading* is a different figure, already shown on its own line).
+  const trend = (current: string, prev: number | null): { symbol: string; color: string } | null => {
+    if (prev == null) return null
+    const n = Number(current)
+    if (!Number.isFinite(n)) return null
+    const diff = n - prev
+    if (Math.abs(diff) < 0.0005) return { symbol: '=', color: 'var(--muted, #888)' }
+    return diff > 0 ? { symbol: '↑', color: 'var(--accent, #2e7d32)' } : { symbol: '↓', color: 'var(--negative, #c62828)' }
+  }
   // A meter's contribution to its unit total: consumption (INDEX: entered − previous) or the raw value.
   const effectiveValue = (item: any) => {
     const entered = Number(values[item.key])
@@ -173,6 +205,112 @@ export function MeterEntryForm({
     }
     return Array.from(map.entries())
   }, [items])
+  const communityGroups = groupedItems.filter(([code]) => !code)
+  const unitGroups = groupedItems.filter(([code]) => !!code)
+  const grandTotal = unitGroups.reduce(
+    (sum, [, groupItems]) => sum + groupItems.filter((i) => i.kind === 'meter').reduce((s, i) => s + effectiveValue(i), 0),
+    0,
+  )
+
+  // One unit/community section — reused for the plain community rows and (nested, collapsible)
+  // for the per-unit ones under "Unități (Calculat)".
+  const renderGroup = ([unitCode, groupItems]: [string, MeterItem[]]) => (
+    <div key={unitCode || '__community'} className="stack" style={{ gap: 4, borderTop: '2px solid var(--border,#e5e5e5)', paddingTop: 8 }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <strong style={{ fontSize: 13 }}>{unitCode ? `${t('meter.unit', 'Unitate')} ${prettyUnit(unitCode)}` : t('meter.community', 'Contoare comunitate')}</strong>
+        {groupItems.filter((i) => i.kind === 'meter').length > 1 && (
+          <span className="muted" style={{ fontSize: 12 }}>{t('meter.unitTotal', 'total unitate')}: <strong>{Number(groupItems.filter((i) => i.kind === 'meter').reduce((s, i) => s + effectiveValue(i), 0).toFixed(3))}</strong></span>
+        )}
+      </div>
+      {groupItems.map((item) => {
+        const mid = (item as any).meterId as string | undefined
+        const mode = modeOf((item as any).typeCode)
+        const prev = mid ? prevByMeter[mid] ?? null : null
+        const entered = Number(values[item.key])
+        const consumption = mode === 'INDEX' && !Number.isNaN(entered)
+          ? (prev != null ? Math.max(0, entered - prev) : entered)
+          : null
+        return (
+        <div key={item.key} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border,#eee)', paddingTop: 6 }}>
+          <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <label className="label" style={{ minWidth: 150 }} title={mid || undefined}>
+              {shortMeterLabel(item.label)}
+              <span className="muted" style={{ marginLeft: 6 }}>· {mode === 'INDEX' ? 'index' : 'consum'}</span>
+            </label>
+            <input
+              className="input"
+              type="number"
+              step="0.000001"
+              value={values[item.key] ?? ''}
+              onChange={(e) => onChange(item.key, e.target.value)}
+              placeholder={mode === 'INDEX' ? 'citire contor' : '0.00'}
+              style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
+              disabled={!canEdit}
+            />
+            {(() => {
+              if (mode !== 'CONSUMPTION' || !mid) return null
+              const tr = trend(values[item.key] ?? '', prevValueByMeter[mid] ?? null)
+              if (!tr) return null
+              return <span title={tr.symbol === '=' ? t('unitAttr.same', 'la fel ca luna trecută') : tr.symbol === '↑' ? t('unitAttr.increased', 'crescut față de luna trecută') : t('unitAttr.decreased', 'scăzut față de luna trecută')} style={{ color: tr.color, fontWeight: 700 }}>{tr.symbol}</span>
+            })()}
+            {mid && flagByMeter[mid]?.selfReported && (
+              <span className="badge warn" title={t('meter.selfReportedTitle', 'Valoare introdusă de proprietar, nu de administrator')}>
+                {t('meter.readByOwner', '⚠ citit de proprietar')}{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
+              </span>
+            )}
+            {mid && (
+              <button type="button" className="btn ghost small" onClick={() => toggleHistory(mid)}>
+                {openHistory.has(mid) ? 'ascunde istoric' : 'istoric'}
+              </button>
+            )}
+          </div>
+          {mode === 'INDEX' && (
+            <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
+              {prev != null ? `${t('meter.previousReading', 'citire anterioară')}: ${prev} → ` : `${t('meter.firstReading', 'prima citire')} → `}
+              consum: <strong>{consumption != null ? Number(consumption.toFixed(3)) : '—'}</strong>
+            </div>
+          )}
+          {mode === 'CONSUMPTION' && mid && prevValueByMeter[mid] != null && (
+            <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
+              {t('meter.previousConsumption', 'consum luna trecută')}: {prevValueByMeter[mid]}
+            </div>
+          )}
+          {mid && (
+            <div className="muted" style={{ fontSize: 11, paddingLeft: 4 }}>
+              {t('meter.meterId', 'MeterID')}: {mid}
+            </div>
+          )}
+          {mid && openHistory.has(mid) && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, margin: '4px 0 6px' }}>
+              <thead>
+                <tr style={{ textAlign: 'right', color: 'var(--muted,#666)' }}>
+                  <th style={{ textAlign: 'left', padding: '2px 6px' }}>{t('meter.period', 'Perioadă')}</th>
+                  <th style={{ padding: '2px 6px' }}>{t('meter.index', 'Index')}</th>
+                  <th style={{ padding: '2px 6px' }}>{t('meter.consumption', 'Consum')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(historyByMeter[mid] || []).map((h: any, j: number) => (
+                  <tr key={j} style={{ textAlign: 'right', borderTop: '1px solid var(--border,#eee)' }}>
+                    <td style={{ textAlign: 'left', padding: '2px 6px' }}>
+                      {h.periodCode}
+                      {h.selfReported ? <span title={`citit de proprietar${h.enteredByName ? ` (${h.enteredByName})` : ''}`} style={{ color: 'var(--warn, #b45309)', marginLeft: 4 }}>⚠</span> : null}
+                    </td>
+                    <td style={{ padding: '2px 6px' }}>{h.reading ?? '—'}</td>
+                    <td style={{ padding: '2px 6px' }}>{h.consumption ?? '—'}</td>
+                  </tr>
+                ))}
+                {!(historyByMeter[mid] || []).length && (
+                  <tr><td colSpan={3} className="muted" style={{ padding: '2px 6px' }}>{t('meter.noPreviousReadings', 'fără citiri anterioare')}</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+        )
+      })}
+    </div>
+  )
 
   const save = async () => {
     setLoading(true)
@@ -264,87 +402,23 @@ export function MeterEntryForm({
       ) : (
         <>
           <div className="stack" style={{ gap: 12 }}>
-            {groupedItems.map(([unitCode, groupItems]) => (
-              <div key={unitCode || '__community'} className="stack" style={{ gap: 4, borderTop: '2px solid var(--border,#e5e5e5)', paddingTop: 8 }}>
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                  <strong style={{ fontSize: 13 }}>{unitCode ? `${t('meter.unit', 'Unitate')} ${prettyUnit(unitCode)}` : t('meter.community', 'Contoare comunitate')}</strong>
-                  {groupItems.filter((i) => i.kind === 'meter').length > 1 && (
-                    <span className="muted" style={{ fontSize: 12 }}>{t('meter.unitTotal', 'total unitate')}: <strong>{Number(groupItems.filter((i) => i.kind === 'meter').reduce((s, i) => s + effectiveValue(i), 0).toFixed(3))}</strong></span>
-                  )}
-                </div>
-                {groupItems.map((item) => {
-              const mid = (item as any).meterId as string | undefined
-              const mode = modeOf((item as any).typeCode)
-              const prev = mid ? prevByMeter[mid] ?? null : null
-              const entered = Number(values[item.key])
-              const consumption = mode === 'INDEX' && !Number.isNaN(entered)
-                ? (prev != null ? Math.max(0, entered - prev) : entered)
-                : null
-              return (
-              <div key={item.key} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border,#eee)', paddingTop: 6 }}>
-                <div className="row" style={{ alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <label className="label" style={{ minWidth: 150 }} title={mid || undefined}>
-                    {shortMeterLabel(item.label)}
-                    <span className="muted" style={{ marginLeft: 6 }}>· {mode === 'INDEX' ? 'index' : 'consum'}</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.000001"
-                    value={values[item.key] ?? ''}
-                    onChange={(e) => onChange(item.key, e.target.value)}
-                    placeholder={mode === 'INDEX' ? 'citire contor' : '0.00'}
-                    style={{ maxWidth: 160, height: 30, padding: '4px 8px' }}
-                    disabled={!canEdit}
-                  />
-                  {mid && flagByMeter[mid]?.selfReported && (
-                    <span className="badge warn" title={t('meter.selfReportedTitle', 'Valoare introdusă de proprietar, nu de administrator')}>
-                      {t('meter.readByOwner', '⚠ citit de proprietar')}{flagByMeter[mid]?.enteredByName ? ` (${flagByMeter[mid]?.enteredByName})` : ''}
-                    </span>
-                  )}
-                  {mid && (
-                    <button type="button" className="btn ghost small" onClick={() => toggleHistory(mid)}>
-                      {openHistory.has(mid) ? 'ascunde istoric' : 'istoric'}
-                    </button>
-                  )}
-                </div>
-                {mode === 'INDEX' && (
-                  <div className="muted" style={{ fontSize: 12, paddingLeft: 4 }}>
-                    {prev != null ? `${t('meter.previousReading', 'citire anterioară')}: ${prev} → ` : `${t('meter.firstReading', 'prima citire')} → `}
-                    consum: <strong>{consumption != null ? Number(consumption.toFixed(3)) : '—'}</strong>
+            {communityGroups.map(renderGroup)}
+            {unitGroups.length > 0 && (
+              <div className="stack" style={{ gap: 8, borderTop: '2px solid var(--border,#e5e5e5)', paddingTop: 8 }}>
+                <button type="button" onClick={() => setUnitsExpanded((v) => !v)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <strong style={{ fontSize: 13 }}>{unitsExpanded ? '▾' : '▸'} {t('meter.calculatedUnits', 'Unități (Calculat)')}</strong>
+                    <span className="muted" style={{ fontSize: 12 }}>{t('meter.unitTotal', 'total unitate')}: <strong>{Number(grandTotal.toFixed(3))}</strong></span>
+                  </div>
+                </button>
+                {unitsExpanded && (
+                  <div className="stack" style={{ gap: 12 }}>
+                    {unitGroups.map(renderGroup)}
                   </div>
                 )}
-                {mid && openHistory.has(mid) && (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, margin: '4px 0 6px' }}>
-                    <thead>
-                      <tr style={{ textAlign: 'right', color: 'var(--muted,#666)' }}>
-                        <th style={{ textAlign: 'left', padding: '2px 6px' }}>{t('meter.period', 'Perioadă')}</th>
-                        <th style={{ padding: '2px 6px' }}>{t('meter.index', 'Index')}</th>
-                        <th style={{ padding: '2px 6px' }}>{t('meter.consumption', 'Consum')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(historyByMeter[mid] || []).map((h: any, j: number) => (
-                        <tr key={j} style={{ textAlign: 'right', borderTop: '1px solid var(--border,#eee)' }}>
-                          <td style={{ textAlign: 'left', padding: '2px 6px' }}>
-                            {h.periodCode}
-                            {h.selfReported ? <span title={`citit de proprietar${h.enteredByName ? ` (${h.enteredByName})` : ''}`} style={{ color: 'var(--warn, #b45309)', marginLeft: 4 }}>⚠</span> : null}
-                          </td>
-                          <td style={{ padding: '2px 6px' }}>{h.reading ?? '—'}</td>
-                          <td style={{ padding: '2px 6px' }}>{h.consumption ?? '—'}</td>
-                        </tr>
-                      ))}
-                      {!(historyByMeter[mid] || []).length && (
-                        <tr><td colSpan={3} className="muted" style={{ padding: '2px 6px' }}>{t('meter.noPreviousReadings', 'fără citiri anterioare')}</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
               </div>
-              )
-            })}
-              </div>
-            ))}
+            )}
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={save} disabled={loading}>

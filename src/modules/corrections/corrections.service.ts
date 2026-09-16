@@ -12,6 +12,7 @@ const REASON_BY_TYPE: Record<string, string> = {
   PAYMENT_REATTRIB: 'reatribuire-plata',
   PENALTY_WRITEOFF: 'scutire-penalizari',
   MANUAL_ADJUSTMENT: 'ajustare-manuala',
+  OWNERSHIP_TRANSFER: 'transfer-proprietate',
 }
 
 @Injectable()
@@ -215,6 +216,18 @@ export class CorrectionsService {
       if (!f) throw new BadRequestException(`Fund "${code}" not found`)
       return f.code
     }
+    // Optional: which unit within a (possibly multi-unit) billing entity this correction is
+    // known to belong to — feeds BeUnitStatement so a real per-unit split shows in Avizier's
+    // Unitate/Grup Unități modes instead of the 0+badge fallback. Must be one of that BE's own
+    // current units (checked via BillingEntityMember, not just "exists in the community") so a
+    // correction can never claim a unit it doesn't actually own.
+    const requireUnitOfBe = async (id: any, beId: string) => {
+      const unit = await this.prisma.unit.findFirst({ where: { communityId, id: String(id || '') }, select: { id: true } })
+      if (!unit) throw new BadRequestException('Unit not found in this community')
+      const member = await this.prisma.billingEntityMember.findFirst({ where: { billingEntityId: beId, unitId: unit.id } })
+      if (!member) throw new BadRequestException('Unit does not belong to this billing entity')
+      return unit.id
+    }
     // Optional: which service/expense this correction ties to (e.g. COMISION_BANCA) — purely descriptive,
     // doesn't change derivation, but lets the panel call out "this is about Comision Bancă" instead of
     // just the fund it landed on.
@@ -237,11 +250,13 @@ export class CorrectionsService {
         billingEntityId = await requireBe(body.billingEntityId)
         fundCode = await requireFund('PENALIZARI')
         break
-      case 'PAYMENT_REATTRIB':
+      case 'PAYMENT_REATTRIB': {
         if (amount == null || amount === 0) throw new BadRequestException('Amount is required')
         billingEntityId = await requireBe(body.billingEntityId)
-        payload = { fromFund: await requireFund(body.fromFund), toFund: await requireFund(body.toFund) }
+        const unitId = body.unitId ? await requireUnitOfBe(body.unitId, billingEntityId) : null
+        payload = { fromFund: await requireFund(body.fromFund), toFund: await requireFund(body.toFund), unitId }
         break
+      }
       case 'RESHUFFLE': {
         fundCode = await requireFund(body.fundCode)
         const perBeIn = body?.perBe && typeof body.perBe === 'object' ? body.perBe : {}
@@ -253,6 +268,24 @@ export class CorrectionsService {
         }
         if (!Object.keys(perBe).length) throw new BadRequestException('Provide at least one per-entity amount')
         payload = { perBe }
+        break
+      }
+      case 'OWNERSHIP_TRANSFER': {
+        // Moves a unit's outstanding balance (per fund) from `billingEntityId` (the old owner)
+        // to `body.toBillingEntityId` (the new owner) — e.g. when def.json splits a unit's
+        // structure[] row across two billing entities at an ownership change.
+        billingEntityId = await requireBe(body.billingEntityId)
+        const toBillingEntityId = await requireBe(body.toBillingEntityId)
+        if (toBillingEntityId === billingEntityId) throw new BadRequestException('toBillingEntityId must differ from billingEntityId')
+        const perFundIn = body?.perFund && typeof body.perFund === 'object' ? body.perFund : {}
+        const perFund: Record<string, number> = {}
+        for (const [code, a] of Object.entries(perFundIn)) {
+          const v = Number(a)
+          if (!Number.isFinite(v) || Math.abs(v) < 0.005) continue
+          perFund[await requireFund(code)] = v
+        }
+        if (!Object.keys(perFund).length) throw new BadRequestException('Provide at least one per-fund amount')
+        payload = { toBillingEntityId, perFund }
         break
       }
     }

@@ -52,12 +52,29 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   }
   const beOrders: Record<string, number> = {}
   const billingEntityMeta: Record<string, { name?: string; displayName?: string }> = {}
+  const billingEntityNameHistory: CommunityImportPlan['billingEntityNameHistory'] = []
   if ((def as any).billingEntities && Array.isArray((def as any).billingEntities)) {
     ;(def as any).billingEntities.forEach((be: any) => {
       const code = be.code || be.name
       if (!code) return
       if (typeof be.order === 'number') beOrders[String(code)] = be.order
-      billingEntityMeta[String(code)] = { name: be.name, displayName: be.displayName }
+
+      // displayNames[] is the versioned source of truth; a legacy flat `displayName`
+      // (older def.json shape) is tolerated as a single unbounded entry.
+      const rows: Array<{ displayName: string; startPeriod?: string; endPeriod?: string }> =
+        Array.isArray(be.displayNames) && be.displayNames.length
+          ? be.displayNames
+          : be.displayName
+          ? [{ displayName: be.displayName }]
+          : []
+      rows.forEach((r) => {
+        if (!r?.displayName) return
+        billingEntityNameHistory!.push({ code: String(code), displayName: r.displayName, startPeriod: r.startPeriod, endPeriod: r.endPeriod })
+      })
+      // "Current" = the open (endPeriod-less) entry, else the one with the latest startPeriod —
+      // mirrors resolveBeName treating the live BillingEntity fields as "current, unbounded".
+      const current = rows.find((r) => !r.endPeriod) ?? [...rows].sort((a, b) => (a.startPeriod ?? '').localeCompare(b.startPeriod ?? '')).pop()
+      billingEntityMeta[String(code)] = { name: be.name, displayName: current?.displayName }
     })
   }
   if ((def as any).billingEntityOrder && typeof (def as any).billingEntityOrder === 'object') {
@@ -108,7 +125,16 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
         const alloc = firstLeaf?.allocation ?? {}
         const ruleCode = alloc.ruleCode || alloc.method || 'BY_RESIDENTS'
         const name = s.name ? String(s.name) : String(s.expenseTypeCode)
-        return { code: String(s.expenseTypeCode), name, ruleCode, currency: s.currency ?? 'RON', splitTemplate: s.splits ?? s }
+        // fundCode lives on the expenseSplit (mirroring the same field on each bill template's
+        // own output.fundCode) — AllocationService.createExpense's own fund resolution reads it
+        // from the ExpenseType's params, so it must be carried through here, not just on the bill.
+        // `service` (optional) names the real ExpenseType.code this one is actually the same
+        // physical service as (e.g. CANALIZARE's service is APA_RECE) — finance.service.ts's
+        // serviceMergeMap reads it to fold multi-line invoices back into one avizier column.
+        const params: any = {}
+        if (s.fundCode) params.fundCode = s.fundCode
+        if (s.service) params.service = s.service
+        return { code: String(s.expenseTypeCode), name, ruleCode, currency: s.currency ?? 'RON', params: Object.keys(params).length ? params : undefined, splitTemplate: s.splits ?? s }
       })
   }
 
@@ -124,7 +150,9 @@ export function parseCommunityDef(def: CommunityDefJson): CommunityImportPlan {
   return {
     communityId: def.id,
     communityName: def.name,
+    intakeHints: Array.isArray((def as any).intakeHints) ? (def as any).intakeHints.map(String) : undefined,
     billingEntityMeta,
+    billingEntityNameHistory,
     periodCode: def.period.code,
     periodStart: def.period.start,
     periodEnd: def.period.end,

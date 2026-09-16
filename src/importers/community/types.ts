@@ -1,9 +1,22 @@
 export type GroupDef = { code: string; name?: string }
 
+export type BillingEntityDisplayNameRow = { displayName: string; startPeriod?: string; endPeriod?: string }
+
+export type BillingEntityDef = {
+  code: string
+  name?: string
+  order?: number
+  // Versioned, for traceability across owner/name changes — e.g. a unit's owner
+  // changes and the new owner gets a new open (endPeriod: null) entry while the old
+  // one is closed. Mirrors BillingEntityNameHistory (startSeq/endSeq) on import.
+  displayNames?: BillingEntityDisplayNameRow[]
+}
+
 export type CommunityDefJson = {
   id: string
   name: string
   period: { code: string; start?: string; end?: string }
+  billingEntities?: BillingEntityDef[]
   groups?: GroupDef[]
   buckets?: Array<{ code: string; name?: string; fundCode?: string; expenseTypeCodes?: string[]; splitGroupCodes?: string[]; splitNodeIds?: string[]; priority?: number }>
   splitGroups?: Array<{ code: string; name?: string; splitIds: string[]; order?: number }>
@@ -62,7 +75,11 @@ export type StructureRow = {
 export type CommunityImportPlan = {
   communityId: string
   communityName: string
+  /** optional def.json `intakeHints`: association-specific guidance for the AI intake prompt */
+  intakeHints?: string[]
   billingEntityMeta?: Record<string, { name?: string; displayName?: string }>
+  // Flattened from billingEntities[].displayNames[] — one row per version, across all BEs.
+  billingEntityNameHistory?: Array<{ code: string; displayName: string; startPeriod?: string; endPeriod?: string }>
   periodCode: string
   periodStart?: string
   periodEnd?: string

@@ -30,8 +30,15 @@ export class FinanceController {
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('avizier')
-  avizier(@Param('communityId') c: string, @Query('period') period?: string) {
-    return this.finance.avizier(c, period)
+  avizier(@Param('communityId') c: string, @Query('period') period?: string, @Query('groupBy') groupBy?: string) {
+    return this.finance.avizier(c, period, groupBy as any)
+  }
+
+  // #22 Avizier "Asociație" view — one row per vendor-service line (Furnizor → Asociație audit trail).
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('avizier/expenses')
+  avizierExpenses(@Param('communityId') c: string, @Query('period') period?: string) {
+    return this.finance.avizierExpenses(c, period)
   }
 
   // #8 Avizier configurator — per-community display config (INFO columns, default view, fund-group
@@ -52,6 +59,13 @@ export class FinanceController {
   @Get('avizier-config/context')
   avizierConfigContext(@Param('communityId') c: string) {
     return this.finance.avizierConfigContext(c)
+  }
+
+  // Real ExpenseType catalog — backs the "Configurare Servicii" admin UI (association-info).
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('expense-catalog')
+  expenseCatalog(@Param('communityId') c: string) {
+    return this.finance.expenseCatalog(c)
   }
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })

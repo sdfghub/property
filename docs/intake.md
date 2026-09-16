@@ -1,0 +1,274 @@
+# AI intake — invoices and bank statements in, expenses and payments out (manual loop)
+
+Every month the admin receives a zip of supplier invoices (PDF, scanned or e-Factura XML) and bank
+statements. Instead of keying them into bill templates by hand, the app hands out a **prompt pack**, an
+external agent (Claude Code, claude.ai, …) reads the zip with it and produces a JSON file, the app
+**imports** that JSON as proposals, the admin **reviews** each one, and **apply** creates the invoices
+and expense lines — through exactly the same code path the month-close uses. Bank statement lines go
+the same way (v2): the agent says *who paid / which invoice / which fund*, the app resolves and checks,
+and apply books them through the same payment, settlement and cash services the *Plăți* screens use.
+
+```
+GET  /intake/prompt ──▶ prompt pack (instructions + this community's catalogue + JSON contract)
+        │   admin gives it to an agent that has the zip
+        ▼
+agent ──▶ intake-import/v2 JSON ──▶ POST /intake/batches   (validate · dedupe · blockers)
+        ▼
+Intake tab: review / correct / approve each record ──▶ POST /intake/batches/:id/apply
+        ▼
+INVOICE    TemplateService.saveBillTemplateState({ state: 'SUBMITTED' })  →  VendorInvoice + CommunityCharge
+           VendorInvoiceService.createInvoice (no-template fallback)       →  VendorInvoice only
+BANK_LINE  OWNER_PAYMENT      PaymentService.createOrApply                 →  Payment + PaymentApplications + CashTx IN
+           VENDOR_SETTLEMENT  VendorInvoiceService.createVendorPayment     →  VendorPayment + ledger legs + CashTx OUT
+           CASH_TX            CashService.createTx                         →  CashTx
+           IGNORE             nothing (record SKIPPED)
+```
+
+The app never calls an LLM itself. There is no API key, no async job and no file storage:
+the originals stay in the admin's zip; the app stores the agent's JSON verbatim (`intake_batch.raw`)
+and links each created invoice back to it (`vendor_invoice.provenance`, `vendor_invoice_doc.url`).
+
+**Where:** backend `src/modules/intake/`, UI `frontend/src/components/community-admin/intake/`,
+tab **AI intake** in the "Închiderea lunii" group, admin-only, behind the per-community feature flag
+`aiIntake` (off by default — enable it in Feature toggles).
+
+## 1. Prompt pack
+
+`GET /communities/:id/intake/prompt?periodCode=YYYY-MM` returns markdown (`&format=json` returns
+`{promptVersion, contractVersion, prompt, schema, example, catalogue}` for programmatic use).
+Rendered by `intake-prompts.ts` from `IntakePromptService.buildCatalogue()`:
+
+| Section | Content |
+|---|---|
+| 1 Task | one JSON document, one record per invoice / per statement line, never invent codes, doubts → `warnings` |
+| 2 Glossary | Romanian invoice/statement vocabulary (CUI, seria/nr, termen de plată, perioada de facturare, TVA, penalități, e-Factura UBL tags, debit/credit sign) |
+| 3 Catalogue | bill templates + items (with expense type), expense types (flagging any without a fund), vendors with ids/CUI/IBAN, unpaid invoices, last-12-months invoices (dedupe), units with their owner as of the period, cash accounts, default advance fund, plus the same as fenced JSON |
+| 4 Guidelines | gross RON amounts; one invoice may span templates (Aquatim → `BILL_APA_RECE` + `BILL_APA_METEO`); Σ allocations = gross; template by vendor first; `fallback` when nothing fits; `duplicateOf`; service period `YYYY-MM`; bank lines: credit → `OWNER_PAYMENT` (unit code from the catalogue, funds only when named, month → `cycleCode`), debit quoting `fct …` → `VENDOR_SETTLEMENT`, commissions → `CASH_TX`, own-account transfers → `IGNORE` |
+| 5 Contract | the JSON Schema (generated from the zod schemas with `z.toJSONSchema`) + a worked example built from this community's own templates |
+| 6 Deliver | file name + "upload in the Intake tab" |
+
+`PROMPT_VERSION` (`intake-contract.ts`) is stamped on every batch — bump it when the guidelines change.
+Kralik's pack is ~44 KB.
+
+### Association-specific hints
+
+What an agent cannot guess about *this* association — vendor aliases ("RUSAVIT" = SC RUSADMINISTRA
+COMPANY SRL), which template a supplier's lines go to, how prior balances appear on each supplier's
+invoice, monthly quirks (Rich Clean names the next month, the bank commission is derived from the
+statement) — lives on the community as `Community.intakeHints` (string[]). It is rendered into section
+4 of the pack as "Association-specific hints — follow these first". Edit it in the Intake tab (prompt
+card → *Association hints*), or via `GET/POST /communities/:id/intake/hints`; `def.json` may carry an
+`intakeHints` array that the community import applies (Kralik's 20 hints from the first real dry run
+are there). Add a hint every time a review needed a correction the agent could have known about.
+
+## 2. The contract `intake-import/v2` (`intake-contract.ts`)
+
+```jsonc
+{
+  "contractVersion": "intake-import/v2", "promptVersion": "2026-09-12.1",
+  "community": "Kralik", "periodCode": "2026-07",
+  "meta": { "agent": "claude-code / claude-opus-5", "generatedAt": null, "sourceArchive": "documente-2026-07.zip", "notes": null },
+  "records": [
+    { "kind": "INVOICE", "sourceFile": "aquatim.pdf", "sourceSha256": null, "confidence": 0.93, "rationale": "…", "warnings": [],
+      "invoice": { "vendorName": "AQUATIM S.A.", "vendorTaxId": "3041480", "vendorIban": null, "number": "TM 26070001",
+                   "issueDate": "2026-07-04", "dueDate": "2026-07-25", "servicePeriodStart": "2026-06", "servicePeriodEnd": "2026-06",
+                   "currency": "RON", "net": 496.33, "vat": 44.67, "gross": 541.00, "lines": [ … ] },
+      "mapping": { "vendor": { "match": "EXISTING", "vendorId": null, "name": "Aquatim", "taxId": "3041480", "iban": null },
+                   "allocations": [ { "templateCode": "BILL_APA_RECE", "itemKey": "apa_rece", "amount": 412.30, "reason": "…" },
+                                    { "templateCode": "BILL_APA_RECE", "itemKey": "canal",    "amount": 98.10,  "reason": "…" },
+                                    { "templateCode": "BILL_APA_METEO", "itemKey": "apa_meteo", "amount": 30.60, "reason": "…" } ],
+                   "fallback": null, "duplicateOf": null } },
+    { "kind": "BANK_LINE", …, "bankLine": { "account": { "iban": "…", "bankName": "…" }, "date": "2026-07-03", "amount": 350, "counterpartyName": "POPESCU ION", "description": "Intretinere ap 9 iunie", "reference": "FT26…", … },
+      "mapping": { "target": "OWNER_PAYMENT", "unitCode": "400191-C1-U29-AP 9", "payerName": "POPESCU ION", "funds": [], "advanceFundCode": null, "cycleCode": "2026-06",
+                   "invoiceNumbers": [], "vendorName": null, "fundCode": null, "expenseTypeCode": null, "kind": null, "reason": null, "accountCode": null } },
+    { "kind": "BANK_LINE", …, "bankLine": { "amount": -686.32, "description": "fct TM 19690906 Retim", … }, "mapping": { "target": "VENDOR_SETTLEMENT", "invoiceNumbers": ["TM 19690906"], "vendorName": "Retim", … } },
+    { "kind": "BANK_LINE", …, "bankLine": { "amount": -3, "description": "Comision tranzactie", … }, "mapping": { "target": "CASH_TX", "fundCode": "EXPENSES", "kind": "OTHER", … } },
+    { "kind": "OTHER", …, "note": "Proces-verbal" }
+  ]
+}
+```
+
+The zod schemas are pure (they render into the pack). Before validation, `normalizePayload` forgives
+the near-misses agents produce: numbers as strings (`"1.234,56"`), `01.07.2026` dates, `2026-07-01`
+where `2026-07` is expected, missing optional keys. Validation errors point at the record:
+`records[3].mapping.allocations[0].amount — expected number`.
+
+`BankLineMapping` has one `target` and the fields of all four shapes (unused ones null / `[]`):
+`OWNER_PAYMENT` → `unitCode` (a `units[].code` from the catalogue — never invented; the admin picks
+when the agent leaves it null), `payerName`, `funds[{fundCode, amount}]` **only** when the description
+names a fund, `advanceFundCode` (surplus target; default `EXPENSES`), `cycleCode` when a month is
+named ("Tabel aprilie" → `2026-04`); `VENDOR_SETTLEMENT` → `invoiceNumbers` quoted on the line,
+`vendorName`, `fundCode` for the no-invoice fallback; `CASH_TX` → `fundCode` | `expenseTypeCode`, `kind`;
+`IGNORE` → `reason`. `accountCode` is optional — the statement's currency picks the single BANK account.
+`intake-import/v1` files (bank lines with `mapping: null`) still import; each such line lands as
+`NEEDS_REVIEW` with `NO_PROPOSAL` and the admin fills the drawer.
+
+The agent **never picks charges**: the engine's per-community strategy (FIFO for Kralik) spreads an
+owner receipt over open charges exactly as for a hand-recorded one.
+
+Full worked example for any community: `data/Kralik/intake-sample-2026-07.json` (synthetic).
+
+## 3. Import, checks, blockers (`intake-import.service.ts`, `intake-blockers.ts`)
+
+`POST /communities/:id/intake/batches` (multipart `file` or JSON `{ periodCode?, payload }`) creates an
+`IntakeBatch` + one `IntakeRecord` per element and runs the **deterministic checks** against the live
+catalogue. The same checks run on every review save, on `POST …/recheck`, in `npm run intake:validate`,
+and once more right before apply. They never call an LLM.
+
+| Blocker | Hard? | Meaning |
+|---|---|---|
+| `NO_ALLOCATION` | hard | invoice with no template lines and no fallback |
+| `UNKNOWN_TEMPLATE` / `UNKNOWN_ITEM` | hard | code not in this community |
+| `EXPENSE_TYPE_NO_FUND` | hard | item's expense type has no `params.fundCode` (allocation would throw) |
+| `UNKNOWN_FUND` / `UNKNOWN_EXPENSE_TYPE` | hard | fallback target does not exist |
+| `PERIOD_NOT_OPEN` | hard | intake only applies into OPEN periods (see §4) |
+| `TEMPLATE_ALREADY_SUBMITTED` | hard | another submission exists for that template this period |
+| `PHASE2_UNSUPPORTED` | hard | `OTHER` — stored, can only be skipped |
+| `NO_PROPOSAL` | hard | bank line with no `mapping.target` (v1 file, or the agent gave up) — pick in the drawer |
+| `ACCOUNT_UNKNOWN` | hard | no (or several) BANK cash accounts in the statement's currency and no `accountCode` |
+| `UNIT_UNKNOWN` / `OWNER_UNKNOWN` | hard | `unitCode` not in the catalogue / unit has no billing entity as of the period |
+| `UNIT_UNSPECIFIED` | hard | no unit and the payer name matches no owner (or several) — pick in the drawer |
+| `FUND_UNKNOWN` / `FUNDS_EXCEED_AMOUNT` | hard | named fund missing / Σ named funds > line amount |
+| `AMOUNT_SIGN` | hard | `OWNER_PAYMENT` on a debit line, `VENDOR_SETTLEMENT` on a credit line |
+| `INVOICE_AMBIGUOUS` | hard | the quoted number matches unpaid invoices of several vendors |
+| `DUPLICATE_PAYMENT` / `DUPLICATE_SETTLEMENT` / `DUPLICATE_CASH_TX` | hard | the line key (reference/amount, see §4) is already booked (`payment.provider_ref`+amount or `ref_id bank:<key>`, `vendor_payment.ref_id`, `cash_tx(BANK_STATEMENT, key)`) — e.g. the month was register-imported |
+| `DUPLICATE_IN_BATCH` | ack | the same reference **and** amount appears twice in the import |
+| `UNIT_SUGGESTED` | ack | no unit on the line; the payer name matches exactly one owner → `resolved.suggestedUnitCode`, drawer preselects it |
+| `CYCLE_MISMATCH` | ack | `cycleCode` is not the batch period or one of the two before |
+| `INVOICE_NOT_FOUND` | ack | no unpaid invoice matches the quoted numbers — acknowledged, the outflow is booked as a `CashTx OUT` on `fundCode` |
+| `SETTLEMENT_EXCEEDS_OUTSTANDING` | ack | amount > outstanding of the matched invoices (the last one absorbs the surplus) |
+| `VENDOR_UNKNOWN` | ack | no vendor matched by id / CUI / normalised name; fallback path creates it |
+| `VENDOR_MISMATCH` | ack | template is configured for a different vendor (template vendor wins) |
+| `AMOUNT_MISMATCH` | ack | net + VAT ≠ gross |
+| `ALLOCATION_SUM_MISMATCH` | ack | Σ allocations ≠ gross |
+| `PERIOD_MISMATCH` | ack | service period is not the target month or the one before |
+| `VALUE_CONFLICT` | ack | the template instance already holds a different hand-entered amount for that item |
+| `DUPLICATE_IN_BATCH` / `DUPLICATE_INVOICE` | ack | same number + vendor (or sha256) already present |
+| `LOW_CONFIDENCE` | ack | agent confidence < 0.6, or the agent left a warning |
+
+Hard blockers must be fixed — in the record's mapping (drawer) or in the community setup (e.g. give
+the expense type a fund, then **Re-check**). Acknowledgeable ones are ticked on approve and stored in
+`review.overrides`. Statuses: `PROPOSED` (clean) → `NEEDS_REVIEW` (has checks) → `APPROVED` → `APPLIED`;
+`STAGED` (values on the template, waiting for meter readings — see §4); `SKIPPED`; `FAILED` (apply
+threw — retryable, see §4).
+
+Vendor matching order: `vendorId` → CUI (digits, `RO` stripped) → normalised name ("AQUATIM S.A." ≡
+"Aquatim"; SC/SRL/SA/diacritics/punctuation removed, substring either way).
+
+## 4. Apply (`intake-apply.service.ts`)
+
+`POST /communities/:id/intake/batches/:id/apply` takes every `APPROVED` (and `FAILED` / `STAGED`)
+invoice and bank-line record — **invoices first**, then bank lines against a refreshed catalogue (a
+settlement may target an invoice created by the same batch) — re-runs the checks, and per invoice:
+
+1. **Period must be OPEN.** `saveBillTemplateState` unconditionally resets the period to OPEN
+   (`template.service.ts` "Reopening any template moves the period back to OPEN"), so applying into a
+   PREPARED/CLOSED month would silently undo a close. Enforced at apply, not only at import.
+2. Allocations grouped by template. For each template: load the instance's current `values`,
+   **merge — never clobber** (conflicts were `VALUE_CONFLICT` blockers), set the item amounts and the
+   header keys from `template.output.invoice` (`numberKey`, `issueDateKey`, `dueDateKey`,
+   `serviceStart/EndPeriodKey`, `netKey`/`vatKey`/`grossKey`, with the conventional defaults). For an
+   invoice spanning templates, gross per template = that group's sum and net/VAT are pro-rated — so the
+   two `VendorInvoice` rows add up to the real invoice (the invoice list merges them by number).
+3. `attemptedTemplates` is written to `appliedRefs` **before** the call, then
+   `TemplateService.saveBillTemplateState(…, { state: 'SUBMITTED', values })` — the same primitive the
+   month-close uses — creates/updates the `VendorInvoice` (keyed by template instance, idempotent),
+   links the fund and creates the `CommunityCharge` lines via the allocation engine.
+4. That call hard-sets `source: 'INTERNAL'`, so intake then stamps `source: 'IMPORT'`, `hash`
+   (= `sourceSha256` if the agent gave one), net/VAT/dates, and
+   `provenance { intakeBatchId, intakeRecordId, agentLabel, promptVersion, contractVersion, sourceFile, templateCode }`,
+   and adds a `VendorInvoiceDoc` (`url = intake://<batch>/<record>/<file>`; no bytes).
+5. No template → `VendorInvoiceService.createInvoice` with the fallback fund (`source: 'IMPORT'`) —
+   invoice only, no expense lines; guarded by hash / provenance so a retry cannot create it twice.
+6. `appliedRefs` are persisted progressively; the record becomes `APPLIED`; the batch becomes `APPLIED`
+   when every invoice record is applied or skipped.
+
+**Templates are left `SUBMITTED`, not `CLOSED`.** Closing is the month-end checklist's step
+(`PeriodService.prepare` insists on it), so the admin keeps the existing "review each bill, then close"
+pass and can still edit values before preparing.
+
+**Metered invoices before the readings exist → `STAGED`, not failed.** The allocation engine never
+falls back (CLAUDE.md #7): a water invoice cannot be allocated until the month's `WATER_COLD` readings
+are entered. Apply pre-checks every allocated expense type (its rule and split-template leaves: any
+`BY_CONSUMPTION` needs UNIT measures of its `weightSource`/`measureType` in the period — the same test as
+`allocation.service.ts unitMeasuresForWeight`). When something is missing, the amounts are merged onto
+the template as **`FILLED`** — the state the manual *Cheltuieli* form produces, visible and editable
+there immediately — and the record becomes `STAGED` with `appliedRefs.waitingFor = ['WATER_COLD']`.
+No invoice is created yet. Once the readings are in, **Apply** again finalises it (SUBMITTED +
+provenance + doc link → `APPLIED`). No new *template* state was needed; only the intake record has one.
+If the engine still refuses at submit time (a case the pre-check did not foresee), its "No X readings"
+error is caught and the record is staged the same way instead of failing.
+
+Other partial failures are retryable too: a record's own earlier output (`attemptedTemplates`,
+`stagedTemplates`, provenance) is recognised so it is not reported as `TEMPLATE_ALREADY_SUBMITTED`,
+`VALUE_CONFLICT` or `DUPLICATE_INVOICE` on the next attempt. Re-applying an applied batch is a no-op; a
+batch with applied records cannot be deleted.
+
+### Bank lines (`applyBankLine`)
+
+Idempotent by **line key** `<reference>/<abs amount>` (`bankLineKey`): `refId` = `bank:<key>`
+(`intake:<recordId>` when the statement has no reference), `CashTx.refId` = the key, and the dedupe
+blockers above refuse a second booking of the same key. The amount is part of the key because Libra
+books a transfer's commission under the transfer's own reference ("Comision tranzactie (FT26222VJN8V)")
+— same reference, different amount, two real transactions. Register-imported receipts (`providerRef` =
+bare reference) are keyed with their own amount, so a month already imported from the register is
+caught as `DUPLICATE_PAYMENT` line by line.
+
+- **OWNER_PAYMENT** → `PaymentService.createOrApply(…, { method: 'BANK', provider: 'intake', providerRef: reference,
+  providerMeta: { cycleCode, intakeBatchId, intakeRecordId, sourceFile }, periodCode: <batch period>, allocationSpec })`.
+  The spec is the register-import recipe: no named funds → `[{advance:true, fundId: <advance fund>}]` and
+  the engine auto-spreads by the community strategy; named funds → one fixed `{fundId, amount}` per fund,
+  a fund-less fixed line for the remainder (FIFO over every open charge — a fixed line's own leftover
+  would otherwise go straight to advance), then the advance line for whatever nothing consumed.
+  `cycleCode` (named month, else the batch period) is what `prepare` uses to keep the payment in its
+  period on reapply. `appliedRefs` records `paymentId`, `applied`, `advance`.
+- **VENDOR_SETTLEMENT** → `VendorInvoiceService.createVendorPayment` per matched invoice, oldest first,
+  split by outstanding, the last one absorbing any surplus; guarded by `VendorPayment(refId, invoiceId)`.
+  With `INVOICE_NOT_FOUND` acknowledged → either a virtual pre-cutover invoice created and settled
+  (`mapping.openingInvoice: true`, `VendorInvoiceService.payOpening`, see `docs/cutover.md`) or
+  `CashService.createTx` OUT on `fundCode` without an invoice.
+- **CASH_TX** → `CashService.createTx({ refType: 'BANK_STATEMENT', refId: reference, direction by sign, kind, memo: counterparty — description })`, guarded by lookup.
+- **IGNORE** → nothing written; record `SKIPPED`.
+
+**Statement check.** After import/recheck/apply the batch carries `stats.balanceCheck`: per bank
+account, the statement's opening and closing balance vs Σ `cash_tx` of that account at those dates
+(shown above the review table). A difference is informational — usually a missing opening balance at
+the migration cutover (`docs/cutover.md`).
+
+Everything below the intake layer is the ordinary engine: `be_statement.payments`, penalties and the
+avizier pick the payment up at the next `prepare` like any receipt recorded in *Plăți*.
+
+## 5. Checking an agent's output without importing
+
+```bash
+npm run intake:validate -- <file.json> Kralik [--period 2026-07] [--json]
+npm run intake:validate -- --prompt Kralik 2026-07 > prompt.md      # print the pack
+```
+
+Parses + normalises the file, builds the live catalogue, prints every record with its mapping and
+blockers, exits 1 on contract errors or hard blockers. Writes nothing. This is the loop for improving
+the prompt: edit `intake-prompts.ts`, regenerate, run the agent again, validate.
+
+Expected on the sample against a fresh OPEN 2026-07:
+`npm run intake:validate -- data/Kralik/intake-sample-2026-07.json Kralik` → #0 #1 clean,
+#2 `AMOUNT_MISMATCH`, #3 `VENDOR_UNKNOWN`, #4 #5 clean receipts, #6 `UNIT_SUGGESTED` (payer name only),
+#7 `INVOICE_NOT_FOUND` (settles #2's invoice — clean once that is applied), #8 clean commission,
+#9 clean `IGNORE`, #10 `PHASE2_UNSUPPORTED`. Once that batch has been applied, the same file reports
+`TEMPLATE_ALREADY_SUBMITTED` + `DUPLICATE_INVOICE` on #0–#3 and `DUPLICATE_*` on the bank lines —
+re-importing what is already in the books is caught at both levels.
+
+## 6. Full automation
+
+- **Automation.** An in-app extractor can call the Claude API with the very same pack
+  (`format=json` gives prompt + schema + catalogue), send each PDF as a document block, and POST the
+  result to the same import endpoint. Everything downstream (checks, review, apply) is shared.
+
+## Gotchas
+
+- Water/metered invoices can be imported before the readings exist: they are staged as FILLED templates
+  and finalised by the next Apply (see §4).
+- The target period must be OPEN; create the next period before importing its invoices.
+- One real invoice across two templates becomes two `VendorInvoice` rows with the same number — by
+  design; the invoices list merges them.
+- Agent `warnings` become a `LOW_CONFIDENCE` check the admin must acknowledge — they are read from
+  `intake_batch.raw` on every recheck, so they never disappear.

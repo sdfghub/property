@@ -63,6 +63,19 @@ export class CommunityController {
     return this.svc.updateSettings(communityId, body)
   }
 
+  // #12 "Informații Asociație" — legal identity, bank accounts, governance, administrator.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get(':communityId/association-info')
+  async getAssociationInfo(@Param('communityId') communityId: string) {
+    return this.svc.getAssociationInfo(communityId)
+  }
+
+  @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Patch(':communityId/association-info')
+  async updateAssociationInfo(@Param('communityId') communityId: string, @Body() body: any) {
+    return this.svc.updateAssociationInfo(communityId, body)
+  }
+
   @Scopes({ role: 'COMMUNITY_ADMIN', scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Delete(':communityId/roles/:userId/:role')
   async removeRole(

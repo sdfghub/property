@@ -16,27 +16,35 @@ import { PollsTab } from './PollsTab'
 import { NotificationsTab } from './NotificationsTab'
 import { CommunicationsTab } from './CommunicationsTab'
 import { InventoryTab } from './InventoryTab'
+import { RequestsTab } from './RequestsTab'
 import { TodayHome } from './TodayHome'
-import { CloseBoard } from './CloseBoard'
+import { CloseWizard } from './CloseWizard'
 import { PeriodSettingsPanel } from './PeriodSettingsPanel'
 import { DebtorsPanel } from '../money/DebtorsPanel'
-import { UnpaidInvoicesPanel } from '../money/UnpaidInvoicesPanel'
-import { MoneyHub } from '../money/MoneyHub'
+import { InvoicesStatusTable } from '../money/InvoicesStatusTable'
+import { CashRegisterPanel } from '../money/CashRegisterPanel'
+import { VendorSummaryTable } from '../money/VendorSummaryTable'
 import { AvizierPanel } from './AvizierPanel'
+import { AssociationInfoPanel } from './AssociationInfoPanel'
 import { PenaltyReviewPanel } from './PenaltyReviewPanel'
 import { CommitteeDecisionsPanel } from './CommitteeDecisionsPanel'
 import { CorrectionsPanel } from './CorrectionsPanel'
+import { IntakePanel } from './intake/IntakePanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
 import { RiskPanel } from './RiskPanel'
+import { PeriodProvider, usePeriod } from '../../contexts/PeriodContext'
+import { PeriodSelectorBar } from './PeriodSelectorBar'
 
 export type CommunityAdminTabKey =
   | 'today'
   | 'close'
+  | 'association'
   | 'avizier'
   | 'penalties'
   | 'debtors'
-  | 'unpaidInvoices'
+  | 'vendors'
+  | 'cashRegister'
   | 'overview'
   | 'commandFinance'
   | 'config'
@@ -47,9 +55,11 @@ export type CommunityAdminTabKey =
   | 'polls'
   | 'communications'
   | 'inventory'
+  | 'requests'
   | 'notifications'
   | 'decisions'
   | 'corrections'
+  | 'intake'
   | 'governance'
   | 'payments'
   | 'statements'
@@ -73,8 +83,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'unpaidInvoices', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'unpaidInvoices', 'decisions', 'communications', 'polls', 'events', 'inventory', 'notifications'],
+  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -92,8 +102,10 @@ const FEATURE_BY_TAB: Partial<Record<CommunityAdminTabKey, string>> = {
   polls: 'polls',
   events: 'events',
   inventory: 'inventory',
+  requests: 'tickets',
   notifications: 'notifications',
   decisions: 'committee',
+  intake: 'aiIntake',
 }
 function featureAllowsTab(key: CommunityAdminTabKey, features?: Record<string, boolean> | null): boolean {
   const flag = FEATURE_BY_TAB[key]
@@ -129,7 +141,10 @@ export function CommunityAdminDashboard({
   const urlFor = (tab: CommunityAdminTabKey, extra?: Record<string, string>) => {
     const u = new URL(window.location.href)
     u.searchParams.set('tab', tab)
-    u.searchParams.delete('fund')
+    // Deep-link params are per-navigation and must not leak into the next tab (e.g. a stale
+    // ?scope=receipts&period=... from an "Încasări" drilldown overriding a later "Sold Bancă RON"
+    // drilldown, which only means to pass ?account=...).
+    ;['fund', 'account', 'accounts', 'scope', 'period', 'filter'].forEach((k) => u.searchParams.delete(k))
     if (extra) Object.entries(extra).forEach(([k, v]) => u.searchParams.set(k, v))
     return u.pathname + u.search + u.hash
   }
@@ -170,20 +185,6 @@ export function CommunityAdminDashboard({
   const [metersConfig, setMetersConfig] = React.useState<any | null>(null)
   const [funds, setFunds] = React.useState<any[]>([])
   const [fundError, setFundError] = React.useState<string | null>(null)
-  const [editablePeriod, setEditablePeriod] = React.useState<{
-    period?: { code: string; status: string }
-    meters?: { total: number; closed: number; open?: string[] }
-    bills?: { total: number; closed: number; open?: string[] }
-    canClose?: boolean
-    canPrepare?: boolean
-  } | null>(null)
-  const [lastClosed, setLastClosed] = React.useState<{ code: string; closedAt?: string } | null>(null)
-  const [lastClosedSummary, setLastClosedSummary] = React.useState<any | null>(null)
-  const [busy, setBusy] = React.useState<null | 'prepare' | 'close' | 'reopen' | 'create'>(null)
-  const [summary, setSummary] = React.useState<any | null>(null)
-  const [summaryError, setSummaryError] = React.useState<string | null>(null)
-  const [summaryLoading, setSummaryLoading] = React.useState(false)
-  const [periodActionError, setPeriodActionError] = React.useState<string | null>(null)
   const [navCollapsed, setNavCollapsed] = React.useState(false)
   const [dashboardData, setDashboardData] = React.useState<any | null>(null)
   const [dashboardLoading, setDashboardLoading] = React.useState(false)
@@ -206,6 +207,7 @@ export function CommunityAdminDashboard({
       label: t('nav.home') || 'Acasă',
       items: [
         { key: 'today', label: t('tab.today') || 'Today' },
+        { key: 'association', label: t('tab.association') || 'Informații asociație' },
       ],
     },
     {
@@ -216,6 +218,7 @@ export function CommunityAdminDashboard({
         { key: 'avizier', label: t('tab.avizier') || 'Avizier' },
         { key: 'meters', label: t('tab.meters') || 'Meters' },
         { key: 'expenses', label: t('tab.expenses') || 'Invoices & expenses' },
+        { key: 'intake', label: t('tab.intake') || 'AI intake' },
         { key: 'periodFocus', label: t('tab.periodFocus') || 'Period detail' },
       ],
     },
@@ -224,7 +227,8 @@ export function CommunityAdminDashboard({
       items: [
         { key: 'payments', label: t('tab.payments') || 'Payments' },
         { key: 'debtors', label: t('tab.debtors') || 'Debtors' },
-        { key: 'unpaidInvoices', label: t('tab.unpaidInvoices') || 'Unpaid invoices' },
+        { key: 'vendors', label: t('tab.vendors') || 'Furnizori' },
+        { key: 'cashRegister', label: t('tab.cashRegister') || 'Registru' },
         { key: 'funds', label: t('tab.funds') || 'Funds' },
         { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
         { key: 'corrections', label: t('tab.corrections') || 'Corecții' },
@@ -239,6 +243,7 @@ export function CommunityAdminDashboard({
         { key: 'polls', label: t('tab.polls') || 'Polls' },
         { key: 'events', label: t('tab.events') || 'Events' },
         { key: 'inventory', label: t('tab.inventory') || 'Inventory' },
+        { key: 'requests', label: t('tab.requests') || 'Solicitări' },
         { key: 'notifications', label: t('tab.notifications') || 'Notifications' },
       ],
     },
@@ -325,46 +330,6 @@ export function CommunityAdminDashboard({
       .catch((err) => setFundError(err?.message || 'Failed to load funds'))
   }, [communityCode])
 
-  const refreshEditable = React.useCallback(() => {
-    if (!communityCode) return Promise.resolve()
-    return api
-      .get<any>(`/communities/${communityCode}/periods/editable`)
-      .then((res) => setEditablePeriod(res))
-      .catch(() => setEditablePeriod(null))
-  }, [api, communityCode])
-
-  const refreshClosed = React.useCallback(() => {
-    if (!communityCode) return Promise.resolve()
-    return api
-      .get<Array<{ id: string; code: string; status: string; closedAt?: string }>>(`/communities/${communityCode}/periods/closed`)
-      .then((rows) => {
-        const last = rows?.[0]
-        if (last?.status === 'CLOSED') {
-          setLastClosed({ code: last.code, closedAt: (last as any).closedAt })
-        } else {
-          setLastClosed(null)
-        }
-      })
-      .catch(() => setLastClosed(null))
-  }, [api, communityCode])
-
-  const loadSummary = React.useCallback(async () => {
-    if (!communityCode || !editablePeriod?.period?.code) return
-    setSummaryLoading(true)
-    setSummaryError(null)
-    try {
-      const data = await api.get<any>(
-        `/communities/${communityCode}/periods/${editablePeriod.period.code}/summary`,
-      )
-      setSummary(data || null)
-    } catch (err: any) {
-      setSummary(null)
-      setSummaryError(err?.message || 'Failed to load summary')
-    } finally {
-      setSummaryLoading(false)
-    }
-  }, [api, communityCode, editablePeriod?.period?.code])
-
   const loadOverviewInvoices = React.useCallback(
     async (signal?: AbortSignal) => {
       if (!communityCode) return
@@ -382,31 +347,8 @@ export function CommunityAdminDashboard({
         if (!signal || !signal.aborted) setOverviewInvLoading(false)
       }
     },
-    [api, communityCode, editablePeriod?.period?.status],
+    [api, communityCode],
   )
-
-  const loadLastClosedSummary = React.useCallback(async () => {
-    if (!communityCode || !lastClosed?.code) return
-    try {
-      const data = await api.get<any>(`/communities/${communityCode}/periods/${lastClosed.code}/summary`)
-      setLastClosedSummary(data || null)
-    } catch {
-      setLastClosedSummary(null)
-    }
-  }, [api, communityCode, lastClosed?.code])
-
-  React.useEffect(() => {
-    if (!communityCode) {
-      setSummary(null)
-      setSummaryError(null)
-    }
-  }, [communityCode])
-
-  React.useEffect(() => {
-    if (!communityCode) return
-    setConfigError(null)
-    setFundError(null)
-  }, [communityCode])
 
   React.useEffect(() => {
     if (!communityId) {
@@ -423,12 +365,6 @@ export function CommunityAdminDashboard({
       .then((data) => {
         if (!active) return
         setDashboardData(data || null)
-        if (data?.currentPeriod !== undefined) {
-          setEditablePeriod(data.currentPeriod ?? null)
-        }
-        if (data?.lastClosedPeriod !== undefined) {
-          setLastClosed(data?.lastClosedPeriod ?? null)
-        }
       })
       .catch((err: any) => {
         if (!active) return
@@ -491,70 +427,6 @@ export function CommunityAdminDashboard({
       .catch((err) => setConfigError(err?.message || 'Failed to load config'))
   }, [api, activeTab, communityCode, configJson, onCommunityConfigLoaded])
 
-  const handlePrepare = React.useCallback(async () => {
-    if (!communityId || !editablePeriod?.period?.code) return
-    try {
-      setMessage(null)
-      setPeriodActionError(null)
-      setBusy('prepare')
-      await api.post(`/communities/${communityId}/periods/${editablePeriod.period.code}/prepare`)
-      await Promise.all([refreshEditable(), refreshClosed()])
-    } catch (err: any) {
-      setMessage(err?.message || 'Failed to prepare period')
-      setPeriodActionError(err?.message || 'Failed to prepare period')
-    } finally {
-      setBusy(null)
-    }
-  }, [api, communityId, editablePeriod?.period?.code, refreshEditable, refreshClosed])
-
-  const handleClose = React.useCallback(async () => {
-    if (!communityId || !editablePeriod?.period?.code) return
-    try {
-      setMessage(null)
-      setPeriodActionError(null)
-      setBusy('close')
-      await api.post(`/communities/${communityId}/periods/${editablePeriod.period.code}/approve`)
-      await Promise.all([refreshEditable(), refreshClosed()])
-    } catch (err: any) {
-      setMessage(err?.message || 'Failed to close period')
-      setPeriodActionError(err?.message || 'Failed to close period')
-    } finally {
-      setBusy(null)
-    }
-  }, [api, communityId, editablePeriod?.period?.code, refreshEditable, refreshClosed])
-
-  const handleReopen = React.useCallback(
-    async (code?: string | null) => {
-      const targetCode = code || lastClosed?.code
-      if (!communityId || !targetCode) return
-    try {
-      setMessage(null)
-      setBusy('reopen')
-      await api.post(`/communities/${communityId}/periods/${targetCode}/reopen`)
-      await Promise.all([refreshEditable(), refreshClosed()])
-    } catch (err: any) {
-      setMessage(err?.message || 'Failed to reopen period')
-    } finally {
-      setBusy(null)
-    }
-    },
-    [api, communityId, lastClosed?.code, refreshEditable, refreshClosed],
-  )
-
-  const handleCreatePeriod = React.useCallback(async () => {
-    if (!communityId) return
-    try {
-      setMessage(null)
-      setBusy('create')
-      await api.post(`/communities/${communityId}/periods/create`, {})
-      await Promise.all([refreshEditable(), refreshClosed()])
-    } catch (err: any) {
-      setMessage(err?.message || 'Failed to create period')
-    } finally {
-      setBusy(null)
-    }
-  }, [api, communityId, refreshClosed, refreshEditable])
-
   if (!communityId) {
     return (
       <div className="grid one" style={{ marginTop: 18 }}>
@@ -575,257 +447,557 @@ export function CommunityAdminDashboard({
             </div>
           </div>
 
-          <div className="row" style={{ gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div className="card soft" style={{ minWidth: navCollapsed ? 56 : 220, maxWidth: navCollapsed ? 56 : 260 }}>
-              <div className="stack" style={{ gap: 12 }}>
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  {!navCollapsed && (
-                    <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {t('nav.menu') || 'Menu'}
-                    </div>
-                  )}
-                  <button
-                    className="btn ghost small"
-                    type="button"
-                    onClick={() => setNavCollapsed((v) => !v)}
-                    title={navCollapsed ? 'Open menu' : 'Collapse menu'}
-                  >
-                    {navCollapsed ? '☰' : '×'}
-                  </button>
-                </div>
-                {!navCollapsed &&
-                  navGroups.map((group) => (
-                    <div key={group.label} className="stack" style={{ gap: 6 }}>
-                      <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {group.label}
-                      </div>
-                      <div className="stack" style={{ gap: 6 }}>
-                        {group.items.map((tab) => {
-                          const isActive = activeTab === tab.key
-                          return (
-                            <button
-                              key={tab.key}
-                              className="btn secondary"
-                              type="button"
-                              onClick={() => navigate(tab.key)}
-                              style={{
-                                justifyContent: 'flex-start',
-                                padding: '10px 12px',
-                                width: '100%',
-                                background: isActive ? 'rgba(43,212,213,0.15)' : undefined,
-                                borderColor: isActive ? 'rgba(43,212,213,0.5)' : undefined,
-                              }}
-                            >
-                              {tab.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            <div style={{ flex: 1, minWidth: 280 }}>
-              {(() => {
-                const group = navGroups.find((g) => g.items.some((i) => i.key === activeTab))
-                const item = group?.items.find((i) => i.key === activeTab)
-                return (
-                  <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                    {histDepth > 0 && (
-                      <button className="btn ghost small" type="button" onClick={goBack}>← {t('common.back') || 'Back'}</button>
-                    )}
-                    <span className="muted" style={{ fontSize: 13 }}>
-                      {group ? `${group.label} › ` : ''}
-                      <strong>{item?.label ?? activeTab}</strong>
-                    </span>
-                  </div>
-                )
-              })()}
-              {activeTab === 'today' && (
-                <TodayHome communityId={communityId} onNavigate={navigate} viewerRole={viewerRole} />
-              )}
-              {activeTab === 'close' && (
-                <CloseBoard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
-              )}
-              {activeTab === 'periodSettings' && (
-                <PeriodSettingsPanel communityId={communityId} readOnly={readOnly} />
-              )}
-              {activeTab === 'avizier' && (
-                <AvizierPanel
-                  communityId={communityId}
-                  cenzorEnabled={features ? features.cenzor !== false : true}
-                  onOpenConfig={() => {
-                    navigate('config')
-                    // ConfigTab renders several sections above it; jump straight to the Avizier one
-                    // instead of leaving the admin to scroll-hunt for it (the whole reason this button exists).
-                    setTimeout(() => document.getElementById('avizier-config')?.scrollIntoView({ block: 'start' }), 60)
-                  }}
-                />
-              )}
-              {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
-              {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
-              {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
-              {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
-              {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
-              {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
-              {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
-              {activeTab === 'unpaidInvoices' && <UnpaidInvoicesPanel communityId={communityId} />}
-              {activeTab === 'overview' && (
-                <OverviewTab
-                  communityId={communityId}
-                  communityCode={communityCode}
-                  communityName={activeCommunity?.name}
-                  billingEntities={configJson?.billingEntities || []}
-                  editablePeriod={editablePeriod}
-                  onPrepare={handlePrepare}
-                  onClose={handleClose}
-                  busy={busy}
-                  onRecompute={() => {
-                    if (!communityId || !editablePeriod?.period?.code) return
-                    setMessage(null)
-                    setBusy('prepare')
-                    api
-                      .post(`/communities/${communityId}/periods/${editablePeriod.period.code}/recompute`)
-                      .then(() => Promise.all([refreshEditable(), refreshClosed()]))
-                      .catch((err: any) => setMessage(err?.message || 'Failed to recompute allocations'))
-                      .finally(() => setBusy(null))
-                  }}
-                  lastClosed={lastClosed}
-                  onReopen={() => handleReopen(null)}
-                  onReopenPrepared={() => handleReopen(editablePeriod?.period?.code || null)}
-                  onCreatePeriod={handleCreatePeriod}
-                  summary={summary}
-                  summaryError={summaryError}
-                  summaryLoading={summaryLoading}
-                  onLoadSummary={loadSummary}
-                  lastClosedSummary={lastClosedSummary}
-                  onLoadLastClosedSummary={loadLastClosedSummary}
-                  funds={funds}
-                  invoices={overviewInv}
-                  invoicesLoading={overviewInvLoading}
-                  invoicesError={overviewInvError}
-                  onReloadInvoices={() => loadOverviewInvoices()}
-                  dashboardData={dashboardData}
-                  dashboardLoading={dashboardLoading}
-                  dashboardError={dashboardError}
-                  onEnsureFunds={ensureFundsLoaded}
-                  onEnsureInvoices={ensureInvoicesLoaded}
-                  onLinkInvoice={async (invoiceId, fundId, amount, portionKey, newInvoicePayload?: any) => {
-                    // If invoiceId is a sentinel, create invoice first
-                    let targetInvoiceId = invoiceId
-                    if (invoiceId === '__create__' && newInvoicePayload) {
-                      const created = await api.post<any>(`/communities/${communityCode}/invoices`, {
-                        vendorName: newInvoicePayload.vendorName,
-                        number: newInvoicePayload.number,
-                        gross: newInvoicePayload.gross ? Number(newInvoicePayload.gross) : null,
-                        currency: newInvoicePayload.currency || 'RON',
-                        issueDate: newInvoicePayload.issueDate || null,
-                      })
-                      targetInvoiceId = created?.id || created?.invoiceId || created?.invoice?.id || null
-                    }
-                    if (targetInvoiceId && fundId) {
-                      await api.post(`/communities/${communityCode}/invoices/${targetInvoiceId}/fund-links`, {
-                        fundId,
-                        amount: amount ?? undefined,
-                        portionKey: portionKey ?? undefined,
-                      })
-                    }
-                    await loadOverviewInvoices()
-                    return targetInvoiceId
-                  }}
-                />
-              )}
-              {activeTab === 'commandFinance' && (
-                <CommandFinanceDashboard
-                  communityCode={communityCode}
-                  onNavigate={(tab) => setActiveTab(tab)}
-                  onPrepare={handlePrepare}
-                  onClose={handleClose}
-                  onReopen={() => handleReopen(editablePeriod?.period?.code || null)}
-                  onCreatePeriod={handleCreatePeriod}
-                  periodError={periodActionError}
-                />
-              )}
-
-              {activeTab === 'meters' && (
-                <CommunityMetersPanel
-                  communityId={communityId}
-                  onStatusChange={() => refreshEditable()}
-                />
-              )}
-
-              {activeTab === 'periodFocus' && (
-                <PeriodAdmin
-                  communityId={communityId}
-                  communityCode={communityCode}
-                  onGoMeters={() => setActiveTab('meters')}
-                  onGoExpenses={() => setActiveTab('expenses')}
-                />
-              )}
-
-              {activeTab === 'config' && (
-                <ConfigTab
-                  communityId={communityId}
-                  configJson={configJson}
-                  metersConfig={metersConfig}
-                  configError={configError}
-                  loadingLabel={t('config.loading')}
-                />
-              )}
-
-              {activeTab === 'expenses' && (
-                <CommunityExpensesPanel
-                  communityId={communityId}
-                  onBillStatusChange={() => refreshEditable()}
-                />
-              )}
-
-              {activeTab === 'funds' && (
-                <FundsTab
-                  funds={funds}
-                  fundError={fundError}
-                  communityCode={communityCode}
-                  onRefreshFunds={refreshFunds}
-                  readOnly={readOnly}
-                />
-              )}
-              {activeTab === 'events' && <EventsTab communityCode={communityCode} readOnly={readOnly} />}
-              {activeTab === 'polls' && <PollsTab communityCode={communityCode} readOnly={readOnly} />}
-              {activeTab === 'communications' && (
-                <CommunicationsTab communityId={communityId} unitGroups={configJson?.unitGroups || []} readOnly={readOnly} />
-              )}
-              {activeTab === 'inventory' && <InventoryTab communityId={communityId} readOnly={readOnly} />}
-              {activeTab === 'notifications' && <NotificationsTab readOnly={readOnly} />}
-              {activeTab === 'payments' && (
-                <MoneyHub
-                  communityId={communityId}
-                  communityCode={communityCode}
-                  communityName={activeCommunity?.name}
-                  billingEntities={configJson?.billingEntities || []}
-                />
-              )}
-
-              {activeTab === 'statements' && (
-                <div className="stack">
-                  <h4>{t('statements.heading')}</h4>
-                  <p className="muted">{t('statements.subtitle')}</p>
-                </div>
-              )}
-
-              {activeTab === 'users' && <CommunityUsersPanel communityId={communityId} />}
-
-              {activeTab === 'health' && (
-                <div className="stack">
-                  <h4>{t('health.heading')}</h4>
-                  <p className="muted">{t('health.subtitle')}</p>
-                </div>
-              )}
-
-              {message && <div className="badge negative">{message}</div>}
-            </div>
-          </div>
+          <PeriodProvider communityId={communityId}>
+            <PeriodSelectorBar />
+            <CommunityAdminContent
+              communityId={communityId}
+              communityCode={communityCode}
+              activeCommunity={activeCommunity}
+              activeTab={activeTab}
+              navigate={navigate}
+              setActiveTab={setActiveTab}
+              goBack={goBack}
+              histDepth={histDepth}
+              navGroups={navGroups}
+              viewerRole={viewerRole}
+              readOnly={readOnly}
+              features={features}
+              configJson={configJson}
+              configError={configError}
+              metersConfig={metersConfig}
+              funds={funds}
+              fundError={fundError}
+              refreshFunds={refreshFunds}
+              ensureFundsLoaded={ensureFundsLoaded}
+              overviewInv={overviewInv}
+              overviewInvLoading={overviewInvLoading}
+              overviewInvError={overviewInvError}
+              loadOverviewInvoices={loadOverviewInvoices}
+              ensureInvoicesLoaded={ensureInvoicesLoaded}
+              dashboardData={dashboardData}
+              dashboardLoading={dashboardLoading}
+              dashboardError={dashboardError}
+              navCollapsed={navCollapsed}
+              setNavCollapsed={setNavCollapsed}
+              message={message}
+              setMessage={setMessage}
+            />
+          </PeriodProvider>
         </div>
+      </div>
+    </div>
+  )
+}
+
+type ContentProps = {
+  communityId: string
+  communityCode: string
+  activeCommunity: Community | null
+  activeTab: CommunityAdminTabKey
+  navigate: (tab: CommunityAdminTabKey, extra?: Record<string, string>) => void
+  setActiveTab: (tab: CommunityAdminTabKey) => void
+  goBack: () => void
+  histDepth: number
+  navGroups: Array<{ label: string; items: Array<{ key: CommunityAdminTabKey; label: string }> }>
+  viewerRole?: string
+  readOnly: boolean
+  features: Record<string, boolean> | null
+  configJson: any
+  configError: string | null
+  metersConfig: any | null
+  funds: any[]
+  fundError: string | null
+  refreshFunds: () => Promise<void> | void
+  ensureFundsLoaded: () => void
+  overviewInv: any[]
+  overviewInvLoading: boolean
+  overviewInvError: string | null
+  loadOverviewInvoices: () => Promise<void>
+  ensureInvoicesLoaded: () => void
+  dashboardData: any
+  dashboardLoading: boolean
+  dashboardError: string | null
+  navCollapsed: boolean
+  setNavCollapsed: React.Dispatch<React.SetStateAction<boolean>>
+  message: string | null
+  setMessage: (m: string | null) => void
+}
+
+// Everything below the global PeriodSelectorBar: the tab nav + whichever panel is active. Lives
+// inside <PeriodProvider> so it (and every panel it renders) shares one selected period instead of
+// each panel resolving/tracking its own — prepare/close/reopen act on whatever period is selected.
+function CommunityAdminContent({
+  communityId,
+  communityCode,
+  activeCommunity,
+  activeTab,
+  navigate,
+  setActiveTab,
+  goBack,
+  histDepth,
+  navGroups,
+  viewerRole,
+  readOnly,
+  features,
+  configJson,
+  configError,
+  metersConfig,
+  funds,
+  fundError,
+  refreshFunds,
+  ensureFundsLoaded,
+  overviewInv,
+  overviewInvLoading,
+  overviewInvError,
+  loadOverviewInvoices,
+  ensureInvoicesLoaded,
+  dashboardData,
+  dashboardLoading,
+  dashboardError,
+  navCollapsed,
+  setNavCollapsed,
+  message,
+  setMessage,
+}: ContentProps) {
+  const { api } = useAuth()
+  const { t } = useI18n()
+  const { periods, selectedCode, refresh } = usePeriod()
+
+  React.useEffect(() => {
+    if (activeTab === 'overview' || activeTab === 'vendors' || activeTab === 'payments') ensureInvoicesLoaded()
+  }, [activeTab, ensureInvoicesLoaded])
+
+  const [statusInfo, setStatusInfo] = React.useState<{
+    period?: { code: string; status: string }
+    meters?: { total: number; closed: number; open?: string[] }
+    bills?: { total: number; closed: number; open?: string[] }
+    canClose?: boolean
+    canPrepare?: boolean
+  } | null>(null)
+  const [busy, setBusy] = React.useState<null | 'prepare' | 'close' | 'reopen' | 'create'>(null)
+  const [periodActionError, setPeriodActionError] = React.useState<string | null>(null)
+  const [summary, setSummary] = React.useState<any | null>(null)
+  const [summaryError, setSummaryError] = React.useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = React.useState(false)
+  const [lastClosedSummary, setLastClosedSummary] = React.useState<any | null>(null)
+
+  const lastClosed = React.useMemo(() => {
+    const closed = periods.filter((p) => p.status === 'CLOSED').sort((a, b) => b.seq - a.seq)
+    return closed[0] ? { code: closed[0].code, closedAt: closed[0].closedAt ?? undefined } : null
+  }, [periods])
+
+  const loadStatusInfo = React.useCallback(() => {
+    if (!communityId || !selectedCode) {
+      setStatusInfo(null)
+      return Promise.resolve()
+    }
+    return api
+      .get<any>(`/communities/${communityId}/periods/${selectedCode}/status`)
+      .then((res: any) => setStatusInfo(res || null))
+      .catch(() => setStatusInfo(null))
+  }, [api, communityId, selectedCode])
+
+  React.useEffect(() => {
+    loadStatusInfo()
+  }, [loadStatusInfo])
+
+  const loadSummary = React.useCallback(async () => {
+    if (!communityCode || !selectedCode) return
+    setSummaryLoading(true)
+    setSummaryError(null)
+    try {
+      const data = await api.get<any>(`/communities/${communityCode}/periods/${selectedCode}/summary`)
+      setSummary(data || null)
+    } catch (err: any) {
+      setSummary(null)
+      setSummaryError(err?.message || 'Failed to load summary')
+    } finally {
+      setSummaryLoading(false)
+    }
+  }, [api, communityCode, selectedCode])
+
+  const loadLastClosedSummary = React.useCallback(async () => {
+    if (!communityCode || !lastClosed?.code) return
+    try {
+      const data = await api.get<any>(`/communities/${communityCode}/periods/${lastClosed.code}/summary`)
+      setLastClosedSummary(data || null)
+    } catch {
+      setLastClosedSummary(null)
+    }
+  }, [api, communityCode, lastClosed?.code])
+
+  const handlePrepare = React.useCallback(async () => {
+    if (!communityId || !selectedCode) return
+    try {
+      setMessage(null)
+      setPeriodActionError(null)
+      setBusy('prepare')
+      await api.post(`/communities/${communityId}/periods/${selectedCode}/prepare`)
+      await Promise.all([refresh(), loadStatusInfo()])
+    } catch (err: any) {
+      setMessage(err?.message || 'Failed to prepare period')
+      setPeriodActionError(err?.message || 'Failed to prepare period')
+    } finally {
+      setBusy(null)
+    }
+  }, [api, communityId, selectedCode, refresh, loadStatusInfo, setMessage])
+
+  const handleClose = React.useCallback(async () => {
+    if (!communityId || !selectedCode) return
+    try {
+      setMessage(null)
+      setPeriodActionError(null)
+      setBusy('close')
+      await api.post(`/communities/${communityId}/periods/${selectedCode}/approve`)
+      await Promise.all([refresh(), loadStatusInfo()])
+    } catch (err: any) {
+      setMessage(err?.message || 'Failed to close period')
+      setPeriodActionError(err?.message || 'Failed to close period')
+    } finally {
+      setBusy(null)
+    }
+  }, [api, communityId, selectedCode, refresh, loadStatusInfo, setMessage])
+
+  const handleReopen = React.useCallback(
+    async (code?: string | null) => {
+      const targetCode = code || selectedCode
+      if (!communityId || !targetCode) return
+      try {
+        setMessage(null)
+        setBusy('reopen')
+        await api.post(`/communities/${communityId}/periods/${targetCode}/reopen`)
+        await Promise.all([refresh(), loadStatusInfo()])
+      } catch (err: any) {
+        setMessage(err?.message || 'Failed to reopen period')
+      } finally {
+        setBusy(null)
+      }
+    },
+    [api, communityId, selectedCode, refresh, loadStatusInfo, setMessage],
+  )
+
+  const handleCreatePeriod = React.useCallback(async () => {
+    if (!communityId) return
+    try {
+      setMessage(null)
+      setBusy('create')
+      await api.post(`/communities/${communityId}/periods/create`, {})
+      await Promise.all([refresh(), loadStatusInfo()])
+    } catch (err: any) {
+      setMessage(err?.message || 'Failed to create period')
+    } finally {
+      setBusy(null)
+    }
+  }, [api, communityId, refresh, loadStatusInfo, setMessage])
+
+  return (
+    <div className="row" style={{ gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div className="card soft" style={{ minWidth: navCollapsed ? 56 : 220, maxWidth: navCollapsed ? 56 : 260 }}>
+        <div className="stack" style={{ gap: 12 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            {!navCollapsed && (
+              <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {t('nav.menu') || 'Menu'}
+              </div>
+            )}
+            <button
+              className="btn ghost small"
+              type="button"
+              onClick={() => setNavCollapsed((v) => !v)}
+              title={navCollapsed ? 'Open menu' : 'Collapse menu'}
+            >
+              {navCollapsed ? '☰' : '×'}
+            </button>
+          </div>
+          {!navCollapsed &&
+            navGroups.map((group) => (
+              <div key={group.label} className="stack" style={{ gap: 6 }}>
+                <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {group.label}
+                </div>
+                <div className="stack" style={{ gap: 6 }}>
+                  {group.items.map((tab) => {
+                    const isActive = activeTab === tab.key
+                    return (
+                      <button
+                        key={tab.key}
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => navigate(tab.key)}
+                        style={{
+                          justifyContent: 'flex-start',
+                          padding: '10px 12px',
+                          width: '100%',
+                          background: isActive ? 'rgba(43,212,213,0.15)' : undefined,
+                          borderColor: isActive ? 'rgba(43,212,213,0.5)' : undefined,
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minWidth: 280 }}>
+        {(() => {
+          const group = navGroups.find((g) => g.items.some((i) => i.key === activeTab))
+          const item = group?.items.find((i) => i.key === activeTab)
+          return (
+            <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+              {histDepth > 0 && (
+                <button className="btn ghost small" type="button" onClick={goBack}>← {t('common.back') || 'Back'}</button>
+              )}
+              <span className="muted" style={{ fontSize: 13 }}>
+                {group ? `${group.label} › ` : ''}
+                <strong>{item?.label ?? activeTab}</strong>
+              </span>
+            </div>
+          )
+        })()}
+        {activeTab === 'today' && (
+          <TodayHome communityId={communityId} communityCode={communityCode} onNavigate={navigate} viewerRole={viewerRole} />
+        )}
+        {activeTab === 'close' && (
+          <CloseWizard communityId={communityId} onNavigate={navigate} readOnly={readOnly} />
+        )}
+        {activeTab === 'association' && (
+          <AssociationInfoPanel communityId={communityId} communityCode={communityCode} readOnly={readOnly} />
+        )}
+        {activeTab === 'periodSettings' && (
+          <PeriodSettingsPanel communityId={communityId} readOnly={readOnly} />
+        )}
+        {activeTab === 'avizier' && (
+          <AvizierPanel
+            communityId={communityId}
+            cenzorEnabled={features ? features.cenzor !== false : true}
+          />
+        )}
+        {activeTab === 'penalties' && <PenaltyReviewPanel communityId={communityId} />}
+        {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
+        {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
+        {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
+        {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
+        {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
+        {activeTab === 'intake' && <IntakePanel communityId={communityId} />}
+        {activeTab === 'governance' && <GovernancePanel communityId={communityId} features={features} />}
+        {activeTab === 'vendors' && (
+          <div className="card">
+            <VendorSummaryTable invoices={overviewInv} />
+          </div>
+        )}
+        {activeTab === 'cashRegister' && (
+          <div className="card">
+            {/* Remount on every deep-link change (e.g. clicking a different "Sold ..." card while
+                already on this tab) so it re-reads the fresh URL params instead of keeping stale state. */}
+            <CashRegisterPanel key={window.location.search} communityId={communityId} />
+          </div>
+        )}
+        {activeTab === 'overview' && (
+          <OverviewTab
+            communityId={communityId}
+            communityCode={communityCode}
+            communityName={activeCommunity?.name}
+            billingEntities={configJson?.billingEntities || []}
+            editablePeriod={statusInfo}
+            onPrepare={handlePrepare}
+            onClose={handleClose}
+            busy={busy}
+            onRecompute={() => {
+              if (!communityId || !selectedCode) return
+              setMessage(null)
+              setBusy('prepare')
+              api
+                .post(`/communities/${communityId}/periods/${selectedCode}/recompute`)
+                .then(() => Promise.all([refresh(), loadStatusInfo()]))
+                .catch((err: any) => setMessage(err?.message || 'Failed to recompute allocations'))
+                .finally(() => setBusy(null))
+            }}
+            lastClosed={lastClosed}
+            onReopen={() => handleReopen(null)}
+            onReopenPrepared={() => handleReopen(selectedCode || null)}
+            onCreatePeriod={handleCreatePeriod}
+            summary={summary}
+            summaryError={summaryError}
+            summaryLoading={summaryLoading}
+            onLoadSummary={loadSummary}
+            lastClosedSummary={lastClosedSummary}
+            onLoadLastClosedSummary={loadLastClosedSummary}
+            funds={funds}
+            invoices={overviewInv}
+            invoicesLoading={overviewInvLoading}
+            invoicesError={overviewInvError}
+            onReloadInvoices={() => loadOverviewInvoices()}
+            dashboardData={dashboardData}
+            dashboardLoading={dashboardLoading}
+            dashboardError={dashboardError}
+            onEnsureFunds={ensureFundsLoaded}
+            onEnsureInvoices={ensureInvoicesLoaded}
+            onLinkInvoice={async (invoiceId, fundId, amount, portionKey, newInvoicePayload?: any) => {
+              // If invoiceId is a sentinel, create invoice first
+              let targetInvoiceId = invoiceId
+              if (invoiceId === '__create__' && newInvoicePayload) {
+                const created = await api.post<any>(`/communities/${communityCode}/invoices`, {
+                  vendorName: newInvoicePayload.vendorName,
+                  number: newInvoicePayload.number,
+                  gross: newInvoicePayload.gross ? Number(newInvoicePayload.gross) : null,
+                  currency: newInvoicePayload.currency || 'RON',
+                  issueDate: newInvoicePayload.issueDate || null,
+                })
+                targetInvoiceId = created?.id || created?.invoiceId || created?.invoice?.id || null
+              }
+              if (targetInvoiceId && fundId) {
+                await api.post(`/communities/${communityCode}/invoices/${targetInvoiceId}/fund-links`, {
+                  fundId,
+                  amount: amount ?? undefined,
+                  portionKey: portionKey ?? undefined,
+                })
+              }
+              await loadOverviewInvoices()
+              return targetInvoiceId
+            }}
+          />
+        )}
+        {activeTab === 'commandFinance' && (
+          <CommandFinanceDashboard
+            communityCode={communityCode}
+            onNavigate={(tab) => setActiveTab(tab)}
+            onPrepare={handlePrepare}
+            onClose={handleClose}
+            onReopen={() => handleReopen(selectedCode || null)}
+            onCreatePeriod={handleCreatePeriod}
+            periodError={periodActionError}
+          />
+        )}
+
+        {activeTab === 'meters' && (
+          <CommunityMetersPanel
+            communityId={communityId}
+            onStatusChange={() => loadStatusInfo()}
+          />
+        )}
+
+        {activeTab === 'periodFocus' && (
+          <PeriodAdmin
+            communityId={communityId}
+            communityCode={communityCode}
+            onGoMeters={() => setActiveTab('meters')}
+            onGoExpenses={() => setActiveTab('expenses')}
+          />
+        )}
+
+        {activeTab === 'config' && (
+          <ConfigTab
+            communityId={communityId}
+            configJson={configJson}
+            metersConfig={metersConfig}
+            configError={configError}
+            loadingLabel={t('config.loading')}
+          />
+        )}
+
+        {activeTab === 'expenses' && (
+          <CommunityExpensesPanel
+            communityId={communityId}
+            onBillStatusChange={() => loadStatusInfo()}
+          />
+        )}
+
+        {activeTab === 'funds' && (
+          <FundsTab
+            funds={funds}
+            fundError={fundError}
+            communityCode={communityCode}
+            onRefreshFunds={refreshFunds}
+            readOnly={readOnly}
+          />
+        )}
+        {activeTab === 'events' && <EventsTab communityCode={communityCode} readOnly={readOnly} />}
+        {activeTab === 'polls' && <PollsTab communityCode={communityCode} readOnly={readOnly} />}
+        {activeTab === 'communications' && (
+          <CommunicationsTab communityId={communityId} unitGroups={configJson?.unitGroups || []} readOnly={readOnly} />
+        )}
+        {activeTab === 'inventory' && <InventoryTab communityId={communityId} readOnly={readOnly} />}
+        {activeTab === 'requests' && <RequestsTab communityId={communityId} readOnly={readOnly} />}
+        {activeTab === 'notifications' && <NotificationsTab readOnly={readOnly} />}
+        {activeTab === 'payments' && (() => {
+          // Deep-link from the Dashboard's "De plată" widgets (?period=<code>&filter=current|paid)
+          // — same URL-param convention as the other panels (CashRegisterPanel, FundsTab).
+          const params = new URLSearchParams(window.location.search)
+          const filterPeriodCode = params.get('period')
+          const filterKind = params.get('filter')
+          const filterPeriod = filterPeriodCode ? periods.find((p) => p.code === filterPeriodCode) : null
+          const isForFilterPeriod = (inv: any) => !!filterPeriod && (inv.serviceStartPeriodId === filterPeriod.id || inv.serviceEndPeriodId === filterPeriod.id)
+          const isPaidInv = (inv: any) => Number(inv.due ?? (Number(inv.gross ?? 0) - Number(inv.paid ?? 0))) <= 0.005
+          // Mirrors VendorInvoiceService.invoiceSummaryForPeriod's isBeforeCurrent: an earlier
+          // period by seq, not just "any other period" (so a future-period invoice isn't overdue).
+          const isBeforeFilterPeriod = (inv: any) => {
+            if (!filterPeriod) return false
+            const p = inv.serviceStartPeriodId ? periods.find((x) => x.id === inv.serviceStartPeriodId) : null
+            return !!p && p.seq < filterPeriod.seq
+          }
+          // Was still outstanding as of the selected period's start: unpaid today, or paid but
+          // only after the period started (so it counts as having been overdue at the start,
+          // even though it's since been settled).
+          // Anchored to the period's own afisareDate (when its avizier was actually posted), not
+          // startDate — mirrors VendorInvoiceService.invoiceSummaryForPeriod exactly.
+          const wasOutstandingAtFilterPeriodStart = (inv: any) => {
+            if (!isPaidInv(inv)) return true
+            return !!filterPeriod?.afisareDate && !!inv.paidAt && new Date(inv.paidAt) >= new Date(filterPeriod.afisareDate)
+          }
+          // "Facturi plătite" = paid within the selected period's own billing window
+          // (afișare → scadență), regardless of which service period the invoice belongs to.
+          const wasPaidInFilterPeriodWindow = (inv: any) => {
+            if (!isPaidInv(inv) || !inv.paidAt || !filterPeriod?.afisareDate || !filterPeriod?.dueDate) return false
+            const paidAt = new Date(inv.paidAt)
+            const afisare = new Date(filterPeriod.afisareDate)
+            const due = new Date(filterPeriod.dueDate)
+            // Mirrors the backend: this association posts its avizier well after the nominal due
+            // date, so the window isn't chronologically ordered — span both, not assume afisare <= due.
+            const lo = afisare < due ? afisare : due
+            const hi = afisare < due ? due : afisare
+            return paidAt >= lo && paidAt <= hi
+          }
+          let filteredInv = overviewInv
+          let filteredTitle: string | undefined
+          if (filterPeriod && filterKind === 'current') {
+            filteredInv = overviewInv.filter(isForFilterPeriod)
+            filteredTitle = `${t('today.invoicesCurrent') || 'Facturi curente'} — ${filterPeriod.code}`
+          } else if (filterPeriod && filterKind === 'paid') {
+            filteredInv = overviewInv.filter(wasPaidInFilterPeriodWindow)
+            filteredTitle = `${t('today.invoicesPaid') || 'Facturi plătite'} — ${filterPeriod.code}`
+          } else if (filterPeriod && filterKind === 'overdue') {
+            filteredInv = overviewInv.filter((inv) => isBeforeFilterPeriod(inv) && wasOutstandingAtFilterPeriodStart(inv))
+            filteredTitle = `${t('today.invoicesOverdue') || 'Facturi restante'} — ${filterPeriod.code}`
+          }
+          return (
+            <div className="card">
+              <InvoicesStatusTable invoices={filteredInv} title={filteredTitle ?? (t('tab.payments') || 'Plăți')}
+                editable={!readOnly} communityId={communityId} onChanged={loadOverviewInvoices} />
+            </div>
+          )
+        })()}
+
+        {activeTab === 'statements' && (
+          <div className="stack">
+            <h4>{t('statements.heading')}</h4>
+            <p className="muted">{t('statements.subtitle')}</p>
+          </div>
+        )}
+
+        {activeTab === 'users' && <CommunityUsersPanel communityId={communityId} />}
+
+        {activeTab === 'health' && (
+          <div className="stack">
+            <h4>{t('health.heading')}</h4>
+            <p className="muted">{t('health.subtitle')}</p>
+          </div>
+        )}
+
+        {message && <div className="badge negative">{message}</div>}
       </div>
     </div>
   )

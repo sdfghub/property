@@ -61,6 +61,14 @@ export class PeriodController {
     return this.periods.summary(c, p)
   }
 
+  // Same shape as GET /periods/editable, but for an explicit period code — backs the global period
+  // selector so Overview's checklist + prepare/close actions can target whatever period is browsed.
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('status')
+  status(@Param('communityId') c: string, @Param('periodCode') p: string) {
+    return this.periods.getStatusFor(c, p)
+  }
+
   // Per-period settings: due date + per-fund penalty rate + community grace days.
   // Admin edits; cenzor/CEX may only view.
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })

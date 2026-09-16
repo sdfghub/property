@@ -5,9 +5,13 @@ import { NotificationsService } from '../notifications/notifications.service'
 
 type RoleAssignment = { role: string; scopeType: string; scopeId?: string | null }
 
-const TICKET_TYPES = new Set(['INCIDENT', 'TASK'])
+const TICKET_TYPES = new Set(['INCIDENT', 'TASK', 'REQUEST'])
 const TICKET_STATUSES = new Set(['NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELED', 'REOPENED'])
 const TICKET_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH'])
+const TICKET_IMPACTS = new Set([
+  'NUMAR_PERSOANE', 'PROPRIETAR', 'CHIRIAS', 'SERVICII', 'INFORMATII', 'ADEVERINTA', 'LUCRARI_TEHNICE',
+])
+const TICKET_REQUEST_KINDS = new Set(['SCHIMBARE', 'DEFECTIUNE', 'ACORD', 'ALTELE'])
 const TICKET_TAGS = new Set([
   'OUTAGE',
   'BREAKDOWN',
@@ -91,6 +95,21 @@ export class TicketingService {
     return value
   }
 
+  /** Only meaningful for REQUEST tickets — null for TASK/INCIDENT. */
+  private parseImpact(raw: any) {
+    if (raw == null) return null
+    const value = String(raw).toUpperCase()
+    if (!TICKET_IMPACTS.has(value)) throw new BadRequestException('Invalid impact')
+    return value
+  }
+
+  private parseRequestKind(raw: any) {
+    if (raw == null) return null
+    const value = String(raw).toUpperCase()
+    if (!TICKET_REQUEST_KINDS.has(value)) throw new BadRequestException('Invalid request kind')
+    return value
+  }
+
   private normalizeTags(raw: any) {
     if (!Array.isArray(raw)) return []
     const tags = raw
@@ -99,11 +118,16 @@ export class TicketingService {
     return Array.from(new Set(tags)) as TicketTag[]
   }
 
-  async listTickets(communityId: string, userId: string, roles: RoleAssignment[]) {
+  async listTickets(communityId: string, userId: string, roles: RoleAssignment[], filters?: { type?: string }) {
     await this.ensureCommunityMember(userId, roles, communityId)
     const isAdmin = this.isCommunityAdmin(roles, communityId)
+    const type = filters?.type ? this.parseTicketType(filters.type) : undefined
     return this.prisma.ticket.findMany({
-      where: isAdmin ? { communityId } : { communityId, createdById: userId },
+      where: {
+        communityId,
+        ...(isAdmin ? {} : { createdById: userId }),
+        ...(type ? { type: type as any } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       include: { tags: true, assignee: { select: { id: true, name: true, email: true } } },
     })
@@ -130,6 +154,8 @@ export class TicketingService {
     const description = input?.description ? String(input.description) : null
     const priority = this.parseTicketPriority(input?.priority)
     const tags = this.normalizeTags(input?.tags)
+    const impact = type === 'REQUEST' ? this.parseImpact(input?.impact) : null
+    const requestKind = type === 'REQUEST' ? this.parseRequestKind(input?.requestKind) : null
 
     const assigneeId = input?.assigneeId ? String(input.assigneeId) : null
     const data: any = {
@@ -138,6 +164,8 @@ export class TicketingService {
       title,
       description,
       priority,
+      impact,
+      requestKind,
       createdById: userId,
         tags: tags.length ? { create: tags.map((tag) => ({ tag })) } : undefined,
     }
@@ -200,6 +228,10 @@ export class TicketingService {
     if (input?.title != null) data.title = this.normalizeTitle(input.title)
     if (input?.description != null) data.description = String(input.description)
     if (input?.priority != null) data.priority = this.parseTicketPriority(input.priority)
+    if (ticket.type === 'REQUEST') {
+      if (input?.impact != null) data.impact = this.parseImpact(input.impact)
+      if (input?.requestKind != null) data.requestKind = this.parseRequestKind(input.requestKind)
+    }
 
     const tags = this.normalizeTags(input?.tags)
     const assigneeId = input?.assigneeId ? String(input.assigneeId) : null

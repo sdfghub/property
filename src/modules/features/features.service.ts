@@ -14,6 +14,7 @@ export const FEATURE_DEFAULTS = {
   inventory: true,
   notifications: true,
   tickets: true,
+  aiIntake: false,
 } as const
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS
@@ -34,6 +35,7 @@ export const FEATURE_META: Array<{ key: FeatureKey; label: string; hint?: string
   { key: 'inventory', label: 'Inventar' },
   { key: 'notifications', label: 'Notificări' },
   { key: 'tickets', label: 'Sarcini & incidente' },
+  { key: 'aiIntake', label: 'Import AI (facturi)', hint: 'Prompt pentru agent extern + import JSON cu revizuire înainte de aplicare' },
 ]
 
 @Injectable()

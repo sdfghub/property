@@ -7,6 +7,7 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { BillTemplatesHost } from './bills/BillTemplatesHost'
+import { usePeriodOptional } from '../contexts/PeriodContext'
 
 export function CommunityExpensesPanel({
   communityId,
@@ -16,20 +17,22 @@ export function CommunityExpensesPanel({
   onBillStatusChange?: (summary: { total: number; closed: number }) => void
 }) {
   const { api } = useAuth()
+  const shared = usePeriodOptional()
+  // Standalone fallback (no PeriodProvider ancestor): keep the old self-contained resolution.
   const [openPeriods, setOpenPeriods] = React.useState<Array<{ id: string; code: string }>>([])
-  const [periodCode, setPeriodCode] = React.useState('')
+  const [standalonePeriodCode, setStandalonePeriodCode] = React.useState('')
   const [message, setMessage] = React.useState<string | null>(null)
   const [editable, setEditable] = React.useState<{ period?: { code: string; status: string } } | null>(null)
-  const editablePeriod = editable?.period?.code || openPeriods[0]?.code || ''
-  const canEdit = periodCode === editablePeriod && !!editablePeriod
 
   React.useEffect(() => {
-    if (editable?.period?.code && editable?.period?.status !== 'CLOSED' && periodCode !== editable.period.code) {
-      setPeriodCode(editable.period.code)
+    if (shared) return
+    if (editable?.period?.code && editable?.period?.status !== 'CLOSED' && standalonePeriodCode !== editable.period.code) {
+      setStandalonePeriodCode(editable.period.code)
     }
-  }, [editable?.period?.code, editable?.period?.status])
+  }, [shared, editable?.period?.code, editable?.period?.status, standalonePeriodCode])
 
   React.useEffect(() => {
+    if (shared) return
     if (!communityId) return
     setMessage(null)
     let alive = true
@@ -53,11 +56,17 @@ export function CommunityExpensesPanel({
           closedRows[0]?.code ||
           ''
         // Don't clobber an existing (user) selection.
-        setPeriodCode((cur) => cur || preferred)
+        setStandalonePeriodCode((cur) => cur || preferred)
       })
       .catch((err: any) => { if (alive) setMessage(err?.message || 'Could not load periods') })
     return () => { alive = false }
-  }, [api, communityId])
+  }, [api, communityId, shared])
+
+  const periodCode = shared ? shared.selectedCode : standalonePeriodCode
+  const editablePeriodCode = shared
+    ? (shared.selectedPeriod?.status !== 'CLOSED' ? shared.selectedCode : '')
+    : (editable?.period?.code || openPeriods[0]?.code || '')
+  const canEdit = periodCode === editablePeriodCode && !!editablePeriodCode
 
   return (
     <div className="card" style={{ background: 'rgba(255,255,255,0.02)' }}>

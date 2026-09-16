@@ -31,7 +31,7 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
 
   const [form, setForm] = React.useState({
     code: '', name: '', description: '', status: 'PLANNED', currency: 'RON',
-    totalTarget: '', startPeriodCode: '', type: '', method: '', shortName: '', penaltyPerDayPct: '',
+    totalTarget: '', startPeriodCode: '', type: '', method: '', shortName: '', abbrev: '', penaltyPerDayPct: '',
   })
   const set = (patch: Partial<typeof form>) => setForm((s) => ({ ...s, ...patch }))
 
@@ -48,14 +48,14 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
       code: f.code || '', name: f.name || '', description: f.description || '', status: f.status || 'PLANNED',
       currency: f.currency || 'RON', totalTarget: f.totalTarget != null ? String(f.totalTarget) : '',
       startPeriodCode: f.startPeriodCode || '', type: a.type || '', method: a.method || '',
-      shortName: a.shortName || '', penaltyPerDayPct: a.penaltyPerDayPct != null ? String(a.penaltyPerDayPct) : '',
+      shortName: a.shortName || '', abbrev: a.abbrev || '', penaltyPerDayPct: a.penaltyPerDayPct != null ? String(a.penaltyPerDayPct) : '',
     })
   }, [])
 
   const startEdit = () => { if (fund) { setMode('edit'); loadForEdit(fund); setOpen(true); setError(null); setMsg(null) } }
   const startCreate = () => {
     setMode('create'); setOpen(true); setError(null); setMsg(null)
-    setForm({ code: '', name: '', description: '', status: 'PLANNED', currency: 'RON', totalTarget: '', startPeriodCode: '', type: '', method: '', shortName: '', penaltyPerDayPct: '' })
+    setForm({ code: '', name: '', description: '', status: 'PLANNED', currency: 'RON', totalTarget: '', startPeriodCode: '', type: '', method: '', shortName: '', abbrev: '', penaltyPerDayPct: '' })
   }
 
   async function save(e: React.FormEvent) {
@@ -68,6 +68,7 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
     if (form.type) allocation.type = form.type
     if (form.method) allocation.method = form.method
     if (form.shortName) allocation.shortName = form.shortName
+    if (form.abbrev) allocation.abbrev = form.abbrev
     if (form.penaltyPerDayPct !== '') allocation.penaltyPerDayPct = Number(form.penaltyPerDayPct)
     const body: any = {
       name: form.name.trim(),
@@ -119,6 +120,7 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
             </select>
             <input className="input" style={{ width: 160 }} placeholder={t('fundEdit.method', 'Metodă alocare')} value={form.method} onChange={(e) => set({ method: e.target.value })} />
             <input className="input" style={{ width: 160 }} placeholder={t('fundEdit.shortName', 'Nume scurt')} value={form.shortName} onChange={(e) => set({ shortName: e.target.value })} />
+            <input className="input" style={{ width: 120 }} placeholder={t('fundEdit.abbrev', 'Prescurtare')} value={form.abbrev} onChange={(e) => set({ abbrev: e.target.value })} />
           </div>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <input className="input" style={{ width: 140 }} type="number" step="0.01" placeholder={t('fundEdit.totalTarget', 'Țintă totală')} value={form.totalTarget} onChange={(e) => set({ totalTarget: e.target.value })} />

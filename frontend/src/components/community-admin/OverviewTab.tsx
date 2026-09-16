@@ -6,6 +6,7 @@ import { BillTemplatesHost } from '../bills/BillTemplatesHost'
 import { MeterTemplatesHost } from '../meters/MeterTemplatesHost'
 import { RecordReceiptModal } from '../money/RecordReceiptModal'
 import { PayBillModal } from '../money/PayBillModal'
+import { InvoicesStatusTable } from '../money/InvoicesStatusTable'
 
 type EditablePeriod = {
   period?: { code: string; status: string }
@@ -143,8 +144,13 @@ export function OverviewTab({
   React.useEffect(() => {
     if (!showInvoiceForm && !showNewInvoice) return
     onEnsureFunds?.()
+  }, [onEnsureFunds, showInvoiceForm, showNewInvoice])
+
+  // The invoice table below (due date + paid/unpaid status) is always visible on this tab, not
+  // just inside the add/link-invoice form — so it needs its data regardless of that form's state.
+  React.useEffect(() => {
     onEnsureInvoices?.()
-  }, [onEnsureFunds, onEnsureInvoices, showInvoiceForm, showNewInvoice])
+  }, [onEnsureInvoices])
 
   React.useEffect(() => {
     if (typeof dashboardLoading === 'boolean') {
@@ -702,27 +708,7 @@ export function OverviewTab({
                 </ul>
               </div>
             )}
-            {(invoices || []).length > 0 && (
-              <div className="stack" style={{ gap: 4 }}>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {t('payments.currentInvoices', 'Invoices for this period')}
-                </div>
-                <ul className="muted" style={{ margin: 0, paddingLeft: 16 }}>
-                  {invoices.map((inv: any) => (
-                    <li key={inv.id}>
-                      {(inv.vendor?.name || inv.vendorName || inv.number || inv.id) as string}{' '}
-                      {inv.gross ? `— ${inv.gross} ${inv.currency || ''}` : ''}
-                      {inv.status ? ` (${inv.status})` : ''}
-                      {inv.fundInvoices?.length
-                        ? ` · ${t('funds.label', 'Funds')}: ${inv.fundInvoices
-                            .map((fl: any) => fl.fund?.name || fl.fund?.code || fl.fundId)
-                            .join(', ')}`
-                        : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <InvoicesStatusTable invoices={invoices} />
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               {editablePeriod.period?.status !== 'OPEN' && (
                 <>
