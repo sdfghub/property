@@ -33,7 +33,10 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   const [fundCode, setFundCode] = React.useState<string | null>(null)
   const [unitsLoading, setUnitsLoading] = React.useState(true)
   const [search, setSearch] = React.useState('')
-  const [beCode, setBeCode] = React.useState<string | null>(null)
+  // Selection key = unitCode when the roster split per unit (a multi-unit BE), else beCode (a
+  // single-unit BE, or an untrusted multi-unit BE still showing one blended row) — unique per row
+  // either way, since debtorsByFund only ever emits one unitCode-less row per BE.
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null)
   const [detail, setDetail] = React.useState<any>(null)
   const [detailLoading, setDetailLoading] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
@@ -65,6 +68,8 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
   // Full debtor roster on the fund that actually carries a penalty rate today (backend defaults to
   // EXPENSES = Cheltuieli Întreținere) — every unit with a balance, not just the ones already being
   // charged a penalty this period, so you can pick any debtor and see where they stand.
+  const rowKey = (u: any) => u.unitCode ?? u.beCode
+
   const loadUnits = React.useCallback(() => {
     if (!period) return
     setUnitsLoading(true)
@@ -75,27 +80,30 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
         setFundName(d?.fundName ?? null)
         setFundCode(d?.fundCode ?? null)
         setUnitsLoading(false)
-        setBeCode((cur) => (cur && rows.some((r: any) => r.beCode === cur) ? cur : rows[0]?.beCode || null))
+        setSelectedKey((cur) => (cur && rows.some((r: any) => rowKey(r) === cur) ? cur : rowKey(rows[0]) || null))
       }).catch(() => { setUnits([]); setUnitsLoading(false) })
   }, [api, communityId, period])
   React.useEffect(() => { loadUnits() }, [loadUnits])
+
+  const selectedRow = React.useMemo(() => units.find((u) => rowKey(u) === selectedKey) ?? null, [units, selectedKey])
 
   const loadDetail = React.useCallback(() => {
     // Scope to the same fund the unit list came from — without this, `all=1` would also surface
     // every other fund's own (always-0%) buckets, since they're only hidden by default because
     // they never accrue anything to filter on.
-    if (!period || !beCode || !fundCode) { setDetail(null); return }
+    if (!period || !selectedRow?.beCode || !fundCode) { setDetail(null); return }
     setDetailLoading(true)
-    api.get<any>(`/communities/${communityId}/finance/avizier/explain-penalty?period=${encodeURIComponent(period)}&be=${encodeURIComponent(beCode)}&fund=${encodeURIComponent(fundCode)}&all=1`)
+    const unitParam = selectedRow.unitCode ? `&unit=${encodeURIComponent(selectedRow.unitCode)}` : ''
+    api.get<any>(`/communities/${communityId}/finance/avizier/explain-penalty?period=${encodeURIComponent(period)}&be=${encodeURIComponent(selectedRow.beCode)}&fund=${encodeURIComponent(fundCode)}&all=1${unitParam}`)
       .then((d: any) => { setDetail(d); setDetailLoading(false) })
       .catch(() => { setDetail({ error: true }); setDetailLoading(false) })
-  }, [api, communityId, period, beCode, fundCode])
+  }, [api, communityId, period, selectedRow, fundCode])
   React.useEffect(() => { loadDetail() }, [loadDetail])
 
   const filteredUnits = React.useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return units
-    return units.filter((u) => (u.beName || '').toLowerCase().includes(q) || (u.beCode || '').toLowerCase().includes(q))
+    return units.filter((u) => (u.beName || '').toLowerCase().includes(q) || (u.beCode || '').toLowerCase().includes(q) || (u.unitCodes || []).some((c: string) => c.toLowerCase().includes(q)))
   }, [units, search])
 
   // The day-count anchors on the period's own afișare (posting) date, same as the accrual engine —
@@ -207,10 +215,10 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
           ) : (
             <div className="stack" style={{ gap: 2, maxHeight: 480, overflowY: 'auto' }}>
               {filteredUnits.map((u) => {
-                const label = beLabel(u)
-                const selected = u.beCode === beCode
+                const label = beLabel({ ...u, units: u.unitCodes?.length ? u.unitCodes : undefined })
+                const selected = rowKey(u) === selectedKey
                 return (
-                  <button key={u.beCode} type="button" onClick={() => setBeCode(u.beCode)}
+                  <button key={rowKey(u)} type="button" onClick={() => setSelectedKey(rowKey(u))}
                     className="btn ghost small"
                     style={{
                       justifyContent: 'space-between', textAlign: 'left', display: 'flex', gap: 8, width: '100%',
@@ -231,7 +239,7 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
         <div className="card" style={fullscreen
           ? { position: 'fixed', inset: 0, zIndex: 800, background: 'var(--bg, #fff)', padding: 16, overflow: 'auto', borderRadius: 0 }
           : { flex: 1, minWidth: 320 }}>
-          {detailLoading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !beCode ? (
+          {detailLoading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !selectedKey ? (
             <div className="empty">{t('penledger.pickUnit', 'Alege o unitate din listă.')}</div>
           ) : detail?.error ? (
             <div className="badge negative">{t('common.error', 'Error')}</div>
@@ -239,7 +247,10 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
             <>
               <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-                  <h4 style={{ margin: 0 }}>{detail?.beName || beCode}</h4>
+                  <h4 style={{ margin: 0 }}>
+                    {selectedRow?.unitCodes?.length ? beLabel({ ...selectedRow, units: selectedRow.unitCodes }).primary : (detail?.beName || selectedKey)}
+                    {selectedRow?.unitCodes?.length ? <span className="muted" style={{ fontWeight: 400, fontSize: 13, marginLeft: 6 }}>· {detail?.beName}</span> : null}
+                  </h4>
                   <span className="muted" style={{ fontSize: 12 }}>{detail?.periodCode}</span>
                 </div>
                 <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

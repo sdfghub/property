@@ -187,8 +187,8 @@ async function main() {
       for (const c of createdForUnit) {
         await prisma.penaltyBucket.upsert({
           where: {
-            communityId_billingEntityId_fundId_originKey: {
-              communityId, billingEntityId: entry.beId, fundId: fund.id, originKey: c.originKey,
+            communityId_unitId_fundId_originKey: {
+              communityId, unitId: entry.unitId, fundId: fund.id, originKey: c.originKey,
             },
           },
           update: { unitId: entry.unitId, targetFundId: targetFund.id, dueDate: c.dueDate, firstPenalDay: c.firstPenalDay, principalOriginal: c.principal, seedPenaltyAccrued: c.seed },

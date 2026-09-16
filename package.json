@@ -39,6 +39,7 @@
     "reopen:period": "ts-node --transpile-only src/scripts/reopen-period.ts",
     "set:penalty-rate-history": "ts-node --transpile-only src/scripts/set-penalty-rate-history.ts",
     "import:historical-penalties": "ts-node --transpile-only src/scripts/import-historical-penalty-buckets.ts",
+    "reconcile:penalties": "ts-node --transpile-only src/scripts/import-historical-penalty-buckets.ts",
     "prepare:period": "ts-node --transpile-only src/scripts/prepare-period.ts",
     "backfill:corrections": "ts-node --transpile-only src/scripts/backfill-corrections.ts",
     "backfill:meter-readings": "ts-node --transpile-only src/scripts/backfill-meter-readings.ts",

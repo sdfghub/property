@@ -11,14 +11,15 @@
 import { PrismaService } from '../modules/user/prisma.service'
 import { ReportsService } from '../modules/reports/reports.service'
 import { FinanceService } from '../modules/finance/finance.service'
+import { PenaltyReconciliationService } from '../modules/period/penalty-reconciliation.service'
 
 const COMM = process.env.COMM || 'Kralik'
 const money = (n: any) => (n === null || n === undefined ? 'null' : Number(n).toFixed(2))
 
 async function main() {
   const prisma = new PrismaService()
-  const reports = new ReportsService(prisma as any)
   const finance = new FinanceService(prisma as any)
+  const reports = new ReportsService(prisma as any, new PenaltyReconciliationService(prisma as any), finance)
 
   const periods: any[] = await (prisma as any).$queryRawUnsafe(
     `select p.code, p.status, round(sum(bs.due_end),2)::float8 as due_end,

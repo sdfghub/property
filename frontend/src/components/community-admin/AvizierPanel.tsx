@@ -4,10 +4,16 @@ import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { beLabel, shortUnit } from './beLabel'
 import { usePeriodOptional } from '../../contexts/PeriodContext'
+import { SliceTable, tierForDays, toneColor, type TierMeta } from './RiskPanel'
 
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+// A negative amount anywhere in the avizier is a credit (paid more than owed, or an overpaid fund)
+// — always green, same convention Risc de expunere already uses for a credit row/fund. `base` is
+// the color a cell would otherwise carry (e.g. the muted gray restanțe columns already use).
+const negColor = (v: number | null | undefined, base?: string): React.CSSProperties =>
+  ({ color: Number(v) < 0 ? 'var(--success, #16a34a)' : base })
 
 // Column labels come from the backend (avizier.categoryLabels — expense-type/fund names + APA_DIF);
 // the frontend no longer hardcodes any code→label knowledge and falls back to the raw code.
@@ -148,10 +154,11 @@ export function AvizierPanel({
   // column, independently of its siblings — one level below band-level collapse.
   const [collapsedFunds, setCollapsedFunds] = React.useState<Set<string>>(new Set())
   const toggleFund = (k: string) => setCollapsedFunds((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
-  const [soldDetail, setSoldDetail] = React.useState<{ be: string; data: any } | null>(null)
+  const [soldDetail, setSoldDetail] = React.useState<{ be: string; riskRow?: any; data: any } | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [showInfo, setShowInfo] = React.useState(true) // #7 INFO columns (CPI / persoane / consum apă)
   const [showIncasari, setShowIncasari] = React.useState(false) // per-fund/De-plată Încasări column (prior period's receipts) — off by default
+  const [hideRestante, setHideRestante] = React.useState(false) // per-fund/De-plată Restanțe columns — shown by default, hidden on request (e.g. a notice that only needs to show current dues)
   const [publicMode, setPublicMode] = React.useState(true) // #10 GDPR: hide owner names (posted/exported view) — "Nume" off by default
   // Zoom: one stepper that bulk-sets every band/fund/category collapse state at once —
   // 0 = every super-band collapsed, 1 = bands open but every fund collapsed, 2 = normal
@@ -200,9 +207,12 @@ export function AvizierPanel({
   const toggleUnitHidden = (be: string) => setHiddenUnits((s) => { const n = new Set(s); n.has(be) ? n.delete(be) : n.add(be); return n })
   const filterActive = hiddenUnits.size > 0 || filterCpiMin !== '' || filterCpiMax !== ''
 
-  const openSold = (beCode: string) => {
+  // `row` (the full avizier row, when available) rides along purely to resolve this same unit/BE's
+  // risk breakdown in the dialog below — the dialog's actual sold/payments data still comes from
+  // `beCode` alone, exactly as before.
+  const openSold = (beCode: string, row?: any) => {
     if (RO) return
-    setSoldDetail({ be: beCode, data: null })
+    setSoldDetail({ be: beCode, riskRow: row, data: null })
     api.get<any>(`/communities/${communityId}/finance/avizier/explain-sold?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}`)
       .then((d) => setSoldDetail((cur) => (cur && cur.be === beCode ? { ...cur, data: d } : cur)))
       .catch(() => setSoldDetail((cur) => (cur ? { ...cur, data: { error: true } } : cur)))
@@ -285,6 +295,108 @@ export function AvizierPanel({
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
   }, [api, communityId, period, avizierBase, groupBy, RO])
+
+  // Risc de expunere (#13 v2) overlay: same reconciled-against-the-ledger data RiskPanel shows,
+  // joined onto this table's own rows by unit code ("unit" mode) or BE code ("entity" mode) — an
+  // admin/censor-only overlay (RO/resident and public/posted views never fetch or show it, same
+  // as every other drilldown here), since a risk classification is internal association business,
+  // not something to post publicly alongside residents' names/amounts.
+  const [riskData, setRiskData] = React.useState<any>(null)
+  React.useEffect(() => {
+    if (RO || !communityId || !period) { setRiskData(null); return }
+    let alive = true
+    api.get<any>(`/communities/${communityId}/reports/risk-detail?period=${encodeURIComponent(period)}`)
+      .then((d: any) => { if (alive) setRiskData(d) })
+      .catch(() => { if (alive) setRiskData(null) })
+    return () => { alive = false }
+  }, [api, communityId, period, RO])
+  const riskByUnit = React.useMemo(() => {
+    const m = new Map<string, Record<string, any>>()
+    for (const u of riskData?.units ?? []) m.set(u.unitCode, u.byFund)
+    return m
+  }, [riskData])
+  const riskByBe = React.useMemo(() => {
+    const m = new Map<string, Record<string, any>>()
+    for (const o of riskData?.owners ?? []) if (o.beCode) m.set(o.beCode, o.byFund)
+    return m
+  }, [riskData])
+  // Only "unit" and "entity" avizier rows have a clean 1:1 join key against risk-detail (a real
+  // unit code, or a real BE code) — "group" mode rows are physical PHYS_ groups, which can span
+  // several BEs, so there's no single risk row to point at.
+  const riskCellFor = (r: any, fundCode: string): any =>
+    groupBy === 'unit' ? riskByUnit.get(r.units?.[0])?.[fundCode]
+      : groupBy === 'entity' ? riskByBe.get(r.beCode)?.[fundCode]
+        : undefined
+  const RISK_TONE: Record<string, string> = { success: '#16a34a', warning: '#eab308', orange: '#f97316', destructive: '#dc2626' }
+  // Worst tier among the cell's own buckets — same "max, not average" rule as Risc de expunere
+  // (a single ancient bucket behind several fresh ones must still flag), kept in sync with that
+  // screen's own RiskDotSpan/tierForDays. Always same-size, transparent for no-risk instead of
+  // omitted, so a column of amounts stays aligned whether or not a given row carries risk.
+  const tierForCell = (cell: any) => {
+    const ages = (cell?.slices ?? []).filter((s: any) => s.principal > 0.005).map((s: any) => s.ageDays)
+    const maxAge = ages.length ? Math.max(...ages) : 0
+    return { tier: tierForDays(riskData?.tiers ?? [], maxAge), maxAge }
+  }
+  // Row-level counterpart of tierForCell — worst tier and per-tier totals across EVERY fund a
+  // unit/owner touches, for the "bulină per apartament" next to the name and its hover breakdown
+  // ("sumele per grad de risc"), same max-not-average rule, pooled community-wide instead of one fund.
+  const rowRiskInfo = (r: any) => {
+    const riskFunds = groupBy === 'unit' ? riskByUnit.get(r.units?.[0]) : groupBy === 'entity' ? riskByBe.get(r.beCode) : undefined
+    const tiers: TierMeta[] = riskData?.tiers ?? []
+    const byTier = new Map<string, number>()
+    let maxAge = 0
+    if (riskFunds) {
+      for (const fundCode of Object.keys(riskFunds)) {
+        for (const s of riskFunds[fundCode]?.slices ?? []) {
+          if (s.principal <= 0.005) continue
+          if (s.ageDays > maxAge) maxAge = s.ageDays
+          const tier = tierForDays(tiers, s.ageDays)
+          if (tier) byTier.set(tier.key, round2((byTier.get(tier.key) ?? 0) + s.principal))
+        }
+      }
+    }
+    return { tier: riskFunds ? tierForDays(tiers, maxAge) : null, byTier, tiers }
+  }
+  const RowRiskDot = ({ r }: { r: any }) => {
+    const { tier, byTier, tiers } = rowRiskInfo(r)
+    const show = tier && tier.tone !== 'success'
+    const breakdown = tiers.map((tr) => [tr, byTier.get(tr.key) ?? 0] as const).filter(([, sum]) => sum > 0.005)
+    const title = breakdown.length ? breakdown.map(([tr, sum]) => `${tr.label}: ${money(sum)}`).join(' · ') : undefined
+    // Real risk sits on at least one fund, but the row's own TOTAL nets to zero/negative because
+    // another fund is in credit — the debt is real and can't just cancel out against a different
+    // fund's surplus, so flag it distinctly instead of a dot that (correctly, but confusingly)
+    // would otherwise disappear right where the Total column also reads as "nothing owed".
+    if (show && Number(r.totalDue) <= 0.005) {
+      const hint = t('riskDetail.needsRedistribution', 'Există risc pe unele fonduri, dar totalul e zero sau negativ — administratorul trebuie să redistribuie fondurile')
+      return (
+        <span title={title ? `${title} — ${hint}` : hint} style={{ marginRight: 5, flexShrink: 0, color: toneColor(tier!.tone), fontWeight: 700 }}>⚠</span>
+      )
+    }
+    return (
+      <span
+        title={title}
+        style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: show ? toneColor(tier!.tone) : 'transparent', marginRight: 5, flexShrink: 0 }}
+      />
+    )
+  }
+  // "Detalii restanță" — one fund's own bucket-by-bucket breakdown (same SliceTable Risc de
+  // expunere uses), opened from a click on that specific restanță value in the main matrix —
+  // deliberately NOT the whole-row openSold summary (Restanțe precedente/Încasări/Net/…), which
+  // stays reachable from the row name for the coarser multi-fund view.
+  const [bucketDetail, setBucketDetail] = React.useState<{ row: any; fundCode: string } | null>(null)
+  const openBucketDetail = (row: any, fundCode: string) => { if (!RO) setBucketDetail({ row, fundCode }) }
+  const RiskDot = ({ cell }: { cell: any }) => {
+    const { tier } = tierForCell(cell)
+    const show = tier && tier.tone !== 'success'
+    return (
+      <span
+        title={show ? tier.label : undefined}
+        style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: show ? (RISK_TONE[tier.tone] || tier.tone) : 'transparent', marginLeft: 5, flexShrink: 0 }}
+      />
+    )
+  }
+  const fmtDaysPrecise = (n: number) => n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const [riskTotalOpen, setRiskTotalOpen] = React.useState(false)
 
   // Signature block (bottom of the printed avizier): Președinte / Cenzor / Administrator, sourced
   // from "Informații Asociație" (board members + administrator) — never hardcoded here.
@@ -436,7 +548,7 @@ export function AvizierPanel({
         g.categories.forEach((c) => cols2.push({ kind: 'cat', cat: c, group: g, sg }))
       }
       cols2.push({ kind: 'curente', group: g, sg })
-      cols2.push({ kind: 'restante', group: g, sg })
+      if (!hideRestante) cols2.push({ kind: 'restante', group: g, sg })
     }
     // The grand-total band — always present, defaults collapsed (see collapsedBands init) to a
     // single "Total" column, exactly like the reference report's "De plată" band.
@@ -445,7 +557,7 @@ export function AvizierPanel({
     } else {
       if (showIncasari) cols2.push({ kind: 'incasari', group: DEPLATA_GROUP, sg: DEPLATA_SG })
       cols2.push({ kind: 'curente', group: DEPLATA_GROUP, sg: DEPLATA_SG })
-      cols2.push({ kind: 'restante', group: DEPLATA_GROUP, sg: DEPLATA_SG })
+      if (!hideRestante) cols2.push({ kind: 'restante', group: DEPLATA_GROUP, sg: DEPLATA_SG })
       if (hasAdj) cols2.push({ kind: 'adjustments', group: DEPLATA_GROUP, sg: DEPLATA_SG })
       cols2.push({ kind: 'finalTotal', group: DEPLATA_GROUP, sg: DEPLATA_SG })
     }
@@ -769,6 +881,16 @@ export function AvizierPanel({
           >
             {!publicMode ? '☑ ' : '☐ '}{t('avizier.publicOff', 'Nume')}
           </button>
+          {!RO && riskData ? (
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() => setRiskTotalOpen(true)}
+              title={t('avizier.riskTotalHint', 'Sumele totale pe nivel de risc, și minimul de plată pentru a evita fiecare prag')}
+            >
+              {t('avizier.riskTotalBtn', 'Risc total')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn ghost small"
@@ -788,6 +910,16 @@ export function AvizierPanel({
             style={{ borderRadius: 999 }}
           >
             {showIncasari ? '☑ ' : '☐ '}{t('avizier.incasari', 'Încasări')}
+          </button>
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => setHideRestante((v) => !v)}
+            title={t('avizier.restanteToggle', 'Ascunde/arată coloanele de restanțe')}
+            aria-pressed={hideRestante}
+            style={{ borderRadius: 999 }}
+          >
+            {hideRestante ? '☑ ' : '☐ '}{t('avizier.hideRestante', 'Ascunde Restanțe')}
           </button>
           <button
             type="button"
@@ -991,10 +1123,11 @@ export function AvizierPanel({
                               {isExpanded ? '▾' : '▸'}
                             </button>
                           ) : null}
+                          {!indent ? <RowRiskDot r={r} /> : null}
                           {RO || indent ? (
                             <span style={{ fontWeight: indent ? 400 : 600, fontSize: indent ? 12 : undefined }}>{l.primary}</span>
                           ) : (
-                            <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.rowDetail', 'Vezi restanțe/încasări pe fonduri')}
+                            <button type="button" onClick={() => openSold(r.beCode, r)} title={t('avizier.rowDetail', 'Vezi restanțe/încasări pe fonduri')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', font: 'inherit', fontWeight: 600, textDecoration: 'underline dotted' }}>
                               {l.primary}
                             </button>
@@ -1003,7 +1136,7 @@ export function AvizierPanel({
                             <span title={t('avizier.unitEstimateHint', 'Restanțe necunoscute la nivel de unitate pentru această perioadă — doar taxele curente sunt reale aici')} style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>🔗</span>
                           ) : null}
                           {!indent && !RO && r.sharedWithUnits?.length ? (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); openSold(r.beCode) }}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); openSold(r.beCode, r) }}
                               title={`${t('avizier.sharedArrearsHint', 'Restanțe comune cu')} ${r.sharedWithUnits.map(shortUnit).join(', ')} — ${t('avizier.entityOwner', 'Proprietar')}`}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, fontSize: 12, opacity: 0.7 }}>
                               🔗
@@ -1049,7 +1182,7 @@ export function AvizierPanel({
                     if (col.kind === 'cat') {
                       const v = r.charges[col.cat]
                       return (
-                        <td key={`c${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>
+                        <td key={`c${i}`} style={{ padding: '6px 10px', ...negColor(v, 'var(--muted, #666)') }}>
                           {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> : (
                             <button type="button" onClick={() => openCell(r.beCode, col.cat)} title={t('avizier.explain', 'Cum s-a calculat?')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
@@ -1061,12 +1194,12 @@ export function AvizierPanel({
                     }
                     if (col.kind === 'curente') {
                       if (isDeplata(col.group)) return (
-                        <td key={`cu${i}`} style={{ padding: '6px 10px', fontWeight: 700 }}>{r.curentTotal ? money(r.curentTotal) : ''}</td>
+                        <td key={`cu${i}`} style={{ padding: '6px 10px', fontWeight: 700, ...negColor(r.curentTotal) }}>{r.curentTotal ? money(r.curentTotal) : ''}</td>
                       )
                       const single = col.group.categories.length === 1
                       const v = sumCats(r.charges, col.group.categories)
                       return (
-                        <td key={`cu${i}`} style={{ padding: '6px 10px', fontWeight: expanded.has(col.group.key) ? 700 : 400 }}>
+                        <td key={`cu${i}`} style={{ padding: '6px 10px', fontWeight: expanded.has(col.group.key) ? 700 : 400, ...negColor(v) }}>
                           {v ? (single ? (RO ? money(v) : (
                             <button type="button" onClick={() => openCell(r.beCode, col.group.categories[0])} title={t('avizier.explain', 'Cum s-a calculat?')}
                               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
@@ -1081,39 +1214,43 @@ export function AvizierPanel({
                       // zero — an owner who paid more than they owed shows a negative (credit) figure.
                       if (isDeplata(col.group)) {
                         const v = round2((Number(r.soldPrecedent) || 0) - (Number(r.payments) || 0))
-                        return <td key={`r${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>{v ? money(v) : ''}</td>
+                        return <td key={`r${i}`} style={{ padding: '6px 10px', ...negColor(v, 'var(--muted, #666)') }}>{v ? money(v) : ''}</td>
                       }
                       const v = r.soldByFund?.[col.group.key]
+                      const riskCell = riskCellFor(r, col.group.key)
                       return (
-                        <td key={`r${i}`} style={{ padding: '6px 10px', color: 'var(--muted, #666)' }}>
-                          {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}</span> : (
-                            <button type="button" onClick={() => openSold(r.beCode)} title={t('avizier.soldDetail', 'Din ce fonduri e compus?')}
-                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
-                              {money(v)}
-                            </button>
+                        <td key={`r${i}`} style={{ padding: '6px 10px', ...negColor(v, 'var(--muted, #666)') }}>
+                          {v ? (RO ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v)}<RiskDot cell={riskCell} /></span> : (
+                            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                              <button type="button" onClick={() => openBucketDetail(r, col.group.key)} title={t('avizier.bucketDetail', 'Detalii restanță pe luni')}
+                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textDecoration: 'underline dotted', fontVariantNumeric: 'tabular-nums' }}>
+                                {money(v)}
+                              </button>
+                              <RiskDot cell={riskCell} />
+                            </span>
                           )) : ''}
                         </td>
                       )
                     }
                     if (col.kind === 'fundTotal') {
                       const v = round2(sumCats(r.charges, col.group.categories) + (Number(r.soldByFund?.[col.group.key]) || 0))
-                      return <td key={`ft${i}`} style={{ padding: '6px 10px', fontWeight: 700 }}>{v ? money(v) : ''}</td>
+                      return <td key={`ft${i}`} style={{ padding: '6px 10px', fontWeight: 700, ...negColor(v) }}>{v ? money(v) : ''}</td>
                     }
                     if (col.kind === 'bandTotal') {
                       const v = round2(col.bandGroups.reduce((s, g) => s + sumCats(r.charges, g.categories) + (Number(r.soldByFund?.[g.key]) || 0), 0))
-                      return <td key={`bt${i}`} style={{ padding: '6px 10px', fontWeight: 700 }}>{v ? money(v) : ''}</td>
+                      return <td key={`bt${i}`} style={{ padding: '6px 10px', fontWeight: 700, ...negColor(v) }}>{v ? money(v) : ''}</td>
                     }
                     if (col.kind === 'adjustments') return (
-                      <td key={`a${i}`} style={{ padding: '6px 10px' }}>{r.adjustments ? (RO ? money(r.adjustments) : (
+                      <td key={`a${i}`} style={{ padding: '6px 10px', ...negColor(r.adjustments) }}>{r.adjustments ? (RO ? money(r.adjustments) : (
                         <button type="button" onClick={() => openAdjustments(r.beCode)} title={t('avizier.adjustments', 'Ajustări')}
-                          style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                          style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: r.adjustments < 0 ? 'inherit' : 'var(--link, #2563eb)', cursor: 'pointer', textDecoration: 'underline dotted' }}>
                           {money(r.adjustments)}
                         </button>
                       )) : ''}</td>
                     )
                     // finalTotal
                     return <td key={`fin${i}`} style={{
-                      padding: '6px 10px', fontWeight: 700,
+                      padding: '6px 10px', fontWeight: 700, ...negColor(r.totalDue),
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: rowBg } : {}),
                     }}>{money(r.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
@@ -1136,28 +1273,31 @@ export function AvizierPanel({
                     if (col.kind === 'incasari') return (
                       <td key={`i${i}`} style={{ padding: '8px 10px', fontStyle: 'italic' }}>{money(isDeplata(col.group) ? totals.payments : totals.paymentsByFund?.[col.group.key])}</td>
                     )
-                    if (col.kind === 'curente') return (
-                      <td key={`cu${i}`} style={{ padding: '8px 10px' }}>{money(isDeplata(col.group) ? totals.curentTotal : sumCats(totals.byCategory || {}, col.group.categories))}</td>
-                    )
-                    if (col.kind === 'restante') return (
-                      <td key={`r${i}`} style={{ padding: '8px 10px', color: 'var(--muted, #666)' }}>
-                        {money(isDeplata(col.group) ? round2((Number(totals.soldPrecedent) || 0) - (Number(totals.payments) || 0)) : totals.soldByFund?.[col.group.key])}
-                      </td>
-                    )
-                    if (col.kind === 'cat') return (
-                      <td key={`c${i}`} style={{ padding: '8px 10px' }}>{money(totals.byCategory?.[col.cat])}</td>
-                    )
-                    if (col.kind === 'fundTotal') return (
-                      <td key={`ft${i}`} style={{ padding: '8px 10px' }}>{money(round2(sumCats(totals.byCategory || {}, col.group.categories) + (Number(totals.soldByFund?.[col.group.key]) || 0)))}</td>
-                    )
-                    if (col.kind === 'bandTotal') return (
-                      <td key={`bt${i}`} style={{ padding: '8px 10px' }}>{money(round2(col.bandGroups.reduce((s, g) => s + sumCats(totals.byCategory || {}, g.categories) + (Number(totals.soldByFund?.[g.key]) || 0), 0)))}</td>
-                    )
+                    if (col.kind === 'curente') {
+                      const v = isDeplata(col.group) ? totals.curentTotal : sumCats(totals.byCategory || {}, col.group.categories)
+                      return <td key={`cu${i}`} style={{ padding: '8px 10px', ...negColor(v) }}>{money(v)}</td>
+                    }
+                    if (col.kind === 'restante') {
+                      const v = isDeplata(col.group) ? round2((Number(totals.soldPrecedent) || 0) - (Number(totals.payments) || 0)) : totals.soldByFund?.[col.group.key]
+                      return <td key={`r${i}`} style={{ padding: '8px 10px', ...negColor(v, 'var(--muted, #666)') }}>{money(v)}</td>
+                    }
+                    if (col.kind === 'cat') {
+                      const v = totals.byCategory?.[col.cat]
+                      return <td key={`c${i}`} style={{ padding: '8px 10px', ...negColor(v) }}>{money(v)}</td>
+                    }
+                    if (col.kind === 'fundTotal') {
+                      const v = round2(sumCats(totals.byCategory || {}, col.group.categories) + (Number(totals.soldByFund?.[col.group.key]) || 0))
+                      return <td key={`ft${i}`} style={{ padding: '8px 10px', ...negColor(v) }}>{money(v)}</td>
+                    }
+                    if (col.kind === 'bandTotal') {
+                      const v = round2(col.bandGroups.reduce((s, g) => s + sumCats(totals.byCategory || {}, g.categories) + (Number(totals.soldByFund?.[g.key]) || 0), 0))
+                      return <td key={`bt${i}`} style={{ padding: '8px 10px', ...negColor(v) }}>{money(v)}</td>
+                    }
                     if (col.kind === 'adjustments') return (
-                      <td key={`a${i}`} style={{ padding: '8px 10px' }}>{money(totals.adjustments)}</td>
+                      <td key={`a${i}`} style={{ padding: '8px 10px', ...negColor(totals.adjustments) }}>{money(totals.adjustments)}</td>
                     )
                     return <td key={`fin${i}`} style={{
-                      padding: '8px 10px',
+                      padding: '8px 10px', ...negColor(totals.totalDue),
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}>{money(totals.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
@@ -1318,7 +1458,7 @@ export function AvizierPanel({
                           <td key={i} style={{
                             textAlign: 'center', padding: '0.15em 0.3em', fontWeight: isBold ? 700 : 400,
                             fontStyle: col.kind === 'incasari' ? 'italic' : 'normal',
-                            color: col.kind === 'pen' ? '#b45309' : undefined,
+                            color: Number(v) < 0 ? 'var(--success, #16a34a)' : (col.kind === 'pen' ? '#b45309' : undefined),
                           }}>
                             {v ? money(v) : ''}
                           </td>
@@ -1349,7 +1489,7 @@ export function AvizierPanel({
                         case 'adjustments': v = totals.adjustments; break
                         default: v = totals.totalDue
                       }
-                      return <td key={i} style={{ textAlign: 'center', padding: '0.25em 0.3em' }}>{money(v)}</td>
+                      return <td key={i} style={{ textAlign: 'center', padding: '0.25em 0.3em', ...negColor(v) }}>{money(v)}</td>
                     })}
                   </tr>
                 ) : null}
@@ -1426,7 +1566,10 @@ export function AvizierPanel({
               <div className="badge negative">{t('common.error', 'Error')}</div>
             ) : !(soldDetail.data.rows || []).length ? (
               <div className="empty">{t('avizier.soldNone', 'Fără restanțe.')}</div>
-            ) : (
+            ) : (() => {
+              const riskFunds = groupBy === 'unit' ? riskByUnit.get(soldDetail.riskRow?.units?.[0])
+                : groupBy === 'entity' ? riskByBe.get(soldDetail.riskRow?.beCode) : undefined
+              return (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
                 <thead>
                   <tr style={{ textAlign: 'right', color: 'var(--muted, #666)' }}>
@@ -1436,33 +1579,139 @@ export function AvizierPanel({
                     <th style={{ padding: '4px 8px', fontWeight: 400 }} title={t('avizier.netHint', 'Restanțe rămase (Restanțe − Încasări), fără cheltuielile din luna curentă')}>{t('avizier.net', 'Net')}</th>
                     <th style={{ padding: '4px 8px', fontWeight: 400 }} title={t('avizier.curenteHint', 'Cheltuielile din luna curentă')}>{t('avizier.curente', 'Curente')}</th>
                     <th style={{ padding: '4px 8px', fontWeight: 700 }} title={t('avizier.totalHint', 'Net + Curente — tot ce rămâne de plată')}>{t('avizier.total', 'Total')}</th>
+                    {riskFunds ? <th style={{ padding: '4px 8px', fontWeight: 400 }} title={t('riskDetail.hint', '')}>{t('risk.title', 'Risc de expunere')}</th> : null}
                   </tr>
                 </thead>
                 <tbody>
-                  {(soldDetail.data.rows || []).map((r: any) => (
+                  {(soldDetail.data.rows || []).map((r: any) => {
+                    const rc = riskFunds?.[r.fundCode]
+                    return (
                     <tr key={r.fundCode} style={{ borderTop: '1px solid var(--border, #eee)' }}>
                       <td style={{ padding: '6px 8px' }}>{r.fundName}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(r.dueStart)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', ...negColor(r.dueStart, 'var(--muted, #666)') }}>{money(r.dueStart)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.payments)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(r.amount)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.charges)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(r.totalDue)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', ...negColor(r.amount, 'var(--muted, #666)') }}>{money(r.amount)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', ...negColor(r.charges) }}>{money(r.charges)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, ...negColor(r.totalDue) }}>{money(r.totalDue)}</td>
+                      {riskFunds ? (
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                          {rc && rc.liveTotal > 0.005 ? (() => {
+                            const { maxAge } = tierForCell(rc)
+                            const avgR = Math.round(rc.weightedAgeDays)
+                            const maxR = Math.round(maxAge)
+                            const parts = [avgR > 0 ? `${avgR}z` : null, maxR > 0 ? `${maxR}z` : null].filter(Boolean)
+                            const title = parts.length
+                              ? `${t('riskDetail.avgLabel', 'Vechime medie')}: ${fmtDaysPrecise(rc.weightedAgeDays)}z · ${t('riskDetail.maxLabel', 'Vechime maximă')}: ${fmtDaysPrecise(maxAge)}z`
+                              : undefined
+                            return (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }} title={title}>
+                                {parts.join(' / ')}<RiskDot cell={rc} />
+                              </span>
+                            )
+                          })() : ''}
+                        </td>
+                      ) : null}
                     </tr>
-                  ))}
+                    )
+                  })}
                   <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
                     <td style={{ padding: '8px' }}>{t('avizier.totalRow', 'TOTAL')}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(soldDetail.data.dueStartTotal)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', ...negColor(soldDetail.data.dueStartTotal, 'var(--muted, #666)') }}>{money(soldDetail.data.dueStartTotal)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.paymentsTotal)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--muted, #666)' }}>{money(soldDetail.data.total)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.chargesTotal)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(soldDetail.data.totalDueTotal)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', ...negColor(soldDetail.data.total, 'var(--muted, #666)') }}>{money(soldDetail.data.total)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', ...negColor(soldDetail.data.chargesTotal) }}>{money(soldDetail.data.chargesTotal)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', ...negColor(soldDetail.data.totalDueTotal) }}>{money(soldDetail.data.totalDueTotal)}</td>
+                    {riskFunds ? <td /> : null}
                   </tr>
                 </tbody>
               </table>
-            )}
+              )
+            })()}
           </div>
         </div>
       )}
+
+      {bucketDetail && (() => {
+        const cell = riskCellFor(bucketDetail.row, bucketDetail.fundCode)
+        const fundName = riskData?.funds?.find((f: any) => f.fundCode === bucketDetail.fundCode)?.fundName ?? bucketDetail.fundCode
+        const l = beLabel(bucketDetail.row, { publicMode })
+        const slices = (cell?.slices ?? []).slice().sort((a: any, b: any) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime())
+        return (
+          <div onClick={() => setBucketDetail(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+            <div className="card" onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 640, width: '90%', maxHeight: '80vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ margin: 0 }}>{t('avizier.bucketDetailTitle', 'Detalii restanță')}</h4>
+                <button className="btn ghost small" onClick={() => setBucketDetail(null)}>✕</button>
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{l.primary} · {fundName} · {data?.period?.code}</div>
+              <SliceTable rows={slices} showFundColumn={false} weightedAgeDays={cell?.weightedAgeDays ?? 0} tiers={riskData?.tiers ?? []} t={t} />
+            </div>
+          </div>
+        )
+      })()}
+
+      {riskTotalOpen && riskData ? (
+        <div onClick={() => setRiskTotalOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', zIndex: 1000 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480, width: '90%', maxHeight: '80vh', overflow: 'auto', background: 'var(--bg,#fff)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ margin: 0 }}>{t('avizier.riskTotalTitle', 'Risc de expunere — comunitate')}</h4>
+              <button className="btn ghost small" onClick={() => setRiskTotalOpen(false)}>✕</button>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>{data?.period?.code}</div>
+            {(() => {
+              const tt: Record<string, number> = riskData.tierTotals || {}
+              const tierAmt = (key: string) => Number(tt[key] || 0)
+              const minCourt = tierAmt('court')
+              const minCf = tierAmt('cf') + tierAmt('court')
+              const minPenalty = tierAmt('penalty') + tierAmt('cf') + tierAmt('court')
+              return (
+                <>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums', marginBottom: 14 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'right', color: 'var(--muted, #666)' }}>
+                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 400 }}>{t('avizier.riskLevel', 'Nivel de risc')}</th>
+                        <th style={{ padding: '4px 8px', fontWeight: 700 }}>{t('avizier.total', 'Sumă')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(riskData.tiers || []).map((tr: any) => (
+                        <tr key={tr.key} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                          <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: RISK_TONE[tr.tone] || tr.tone, flexShrink: 0 }} />
+                            {tr.label}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(tierAmt(tr.key))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t('avizier.minPayTitle', 'Minim de plată pentru a evita')}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                    <tbody>
+                      <tr style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                        <td style={{ padding: '6px 8px' }}>{t('avizier.minPayCourt', 'Acțiune în instanță')}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(minCourt)}</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                        <td style={{ padding: '6px 8px' }}>{t('avizier.minPayCf', 'Înscriere sarcină în Cartea Funciară')}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(minCf)}</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                        <td style={{ padding: '6px 8px' }}>{t('avizier.minPayPenalty', 'Continuarea acumulării de penalități')}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{money(minPenalty)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      ) : null}
 
       {payDetail && (
         <div onClick={() => setPayDetail(null)}
@@ -1541,12 +1790,12 @@ export function AvizierPanel({
                         {r.fundName}
                         {r.reason ? <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>{r.reason === 'scutire-penalizari' ? t('avizier.adjForgive', 'scutire penalizări') : r.reason}</span> : null}
                       </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{money(r.amount)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', ...negColor(r.amount) }}>{money(r.amount)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border, #ccc)', fontWeight: 700 }}>
                     <td style={{ padding: '8px' }}>{t('avizier.total', 'Total')}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{money(adjDetail.data.total)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', ...negColor(adjDetail.data.total) }}>{money(adjDetail.data.total)}</td>
                   </tr>
                 </tbody>
               </table>

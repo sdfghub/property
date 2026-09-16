@@ -1321,8 +1321,8 @@ model BeOpeningBalance {
 model PenaltyBucket {
   id                String   @id @default(cuid())
   communityId       String   @map("community_id")
-  billingEntityId   String   @map("billing_entity_id")
-  unitId            String?  @map("unit_id")          // the unit this debt belongs to (buckets are per-unit; null = legacy per-BE)
+  billingEntityId   String   @map("billing_entity_id") // owning BE at creation time — informational only, NOT part of the bucket's identity (see unitId)
+  unitId            String?  @map("unit_id")          // the unit this debt belongs to — the bucket's real identity going forward; null only for pre-migration legacy per-BE rows
   fundId            String   @map("fund_id")          // source fund whose principal this is
   targetFundId      String   @map("target_fund_id")   // resolved penaltyFundCode (earmark)
   originKey         String   @map("origin_key")       // 'period:<periodId>' | migrated opening originKey
@@ -1336,7 +1336,11 @@ model PenaltyBucket {
 
   periods PenaltyBucketPeriod[]
 
-  @@unique([communityId, billingEntityId, fundId, originKey])
+  // Unit-keyed, not BE-keyed: the debt belongs to the physical unit, which is what must stay
+  // stable across an ownership transfer. NULL unitId (pre-migration legacy per-BE rows) never
+  // collides under Postgres' default NULLS DISTINCT — safe to leave those rows as-is.
+  @@unique([communityId, unitId, fundId, originKey])
+  @@index([communityId, billingEntityId])
   @@index([communityId, status])
   @@map("penalty_bucket")
 }

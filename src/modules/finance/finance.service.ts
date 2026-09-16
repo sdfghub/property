@@ -3,6 +3,7 @@ import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
 import { resolveBeName as resolveBeNameShared } from '../../common/billing-entity-name.util'
 import { rateForDate, originAnchorDate } from '../period/penalty-rate'
+import { isUnitSplitTrusted } from './split-trusted'
 
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
@@ -144,31 +145,169 @@ export class FinanceService {
    * with EXPENSES only). Unlike `penaltyReview`, this lists every unit with an outstanding balance on
    * the fund, whether or not a penalty has started accruing yet — the roster to pick a unit from
    * before drilling into `explainPenalty`, not just the ones already being charged this period.
+   *
+   * One row per UNIT, not per billing entity — a multi-unit BE (e.g. Ap 11 + Ap 11A sharing one
+   * owner) must not have its debt (or the penalty engine's per-bucket aging) blended across units.
+   *
+   * A unit qualifies for the roster if EITHER is true:
+   *  - its BE carries live principal debt (be_statement due_start − payments), or
+   *  - it holds an OPEN PenaltyBucket with real remaining principal — this surfaces a unit whose
+   *    principal is already paid off (live debt ≈ 0) but which still owes accrued penalty from a
+   *    debt now cleared, or a legacy centralizator/historical backfill the live ledger never
+   *    reflects (e.g. an owner who settled the principal well after the penalty accrued). Without
+   *    this a real, verified restanță (per the association's own CentralizatorPenalizari report)
+   *    would silently vanish from this screen.
+   *
+   * Labels always resolve to the BE's real, currently-active unit code(s) — from
+   * BillingEntityMember, never `billing_entity_id`'s raw code — so nothing ever falls back to
+   * showing a "BE_..." code. Per-unit live-debt SPLIT still follows the avizier's "trust a
+   * multi-unit BE's split only when its BeUnitStatement rows sum back to the BE total" rule
+   * (splitTrustedForBe); an untrusted BE's units are still listed individually (each showing its
+   * own bucket-only debt, if any) rather than collapsed into one blended row — the one exception
+   * is a BE where NEITHER the live split NOR any bucket resolves a single unit's share, which
+   * still falls back to one combined row (labelled with all its units) sooner than fabricate a
+   * split.
    */
   async debtorsByFund(communityId: string, periodCode: string | undefined, fundCode = 'EXPENSES') {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { periodCode: null, fundCode, fundName: null, debtors: [] }
     const fund = await this.prisma.fund.findFirst({ where: { communityId, code: fundCode }, select: { id: true, name: true } })
     if (!fund) return { periodCode: period.code, fundCode, fundName: null, debtors: [] }
-    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select be.code as "beCode", be.name as "beName", be.display_name as "displayName",
-              coalesce(sum(bs.due_start - bs.payments),0)::float8 as debt
+    // Same "as of" boundary the drilldown (explainPenalty/PenaltyLedgerPanel) uses: a bucket whose
+    // own due date hasn't been reached yet is this period's freshly-issued charge, not overdue debt.
+    const pRow = await this.prisma.period.findUnique({ where: { id: period.id }, select: { afisareDate: true, endDate: true } })
+    const asOf = pRow?.afisareDate ?? pRow?.endDate ?? new Date()
+
+    const beRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select be.id as "beId", be.code as "beCode", be.name as "beName", be.display_name as "displayName",
+              coalesce(sum(bs.due_start - bs.payments),0)::float8 as debt, coalesce(sum(bs.due_end),0)::float8 as "dueEndTotal"
          from billing_entity be
          left join be_statement bs
            on bs.billing_entity_id = be.id and bs.community_id = be.community_id
           and bs.period_id = $2 and bs.fund_id = $3
         where be.community_id = $1
-        group by be.code, be.name, be.display_name
-       having coalesce(sum(bs.due_start - bs.payments),0) > 0.005
-        order by debt desc`,
+        group by be.id, be.code, be.name, be.display_name`,
       communityId, period.id, fund.id,
     )
-    return {
-      periodCode: period.code,
-      fundCode,
-      fundName: fund.name,
-      debtors: rows.map((r) => ({ ...r, debt: round2(Number(r.debt)) })),
+    const beById = new Map(beRows.map((r) => [r.beId, r]))
+
+    const unitRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select bus.billing_entity_id as "beId", bus.unit_id as "unitId", u.code as "unitCode",
+              sum(bus.due_start - bus.payments)::float8 as debt, sum(bus.due_end)::float8 as "dueEndSum"
+         from be_unit_statement bus join unit u on u.id = bus.unit_id
+        where bus.community_id = $1 and bus.period_id = $2 and bus.fund_id = $3
+        group by bus.billing_entity_id, bus.unit_id, u.code`,
+      communityId, period.id, fund.id,
+    )
+    const unitsByBe = new Map<string, any[]>()
+    for (const r of unitRows) unitsByBe.set(r.beId, [...(unitsByBe.get(r.beId) ?? []), r])
+
+    // Real remaining principal per (BE, unit) from OPEN buckets on this fund — the latest
+    // PenaltyBucketPeriod row if the bucket has ever been advanced, else its full original
+    // principal (never advanced yet, e.g. a fresh centralizator import).
+    const bucketRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select pb.billing_entity_id as "beId", pb.unit_id as "unitId",
+              sum(coalesce(latest.principal_remaining, pb.principal_original))::float8 as remaining
+         from penalty_bucket pb
+         left join lateral (
+           select pbp.principal_remaining from penalty_bucket_period pbp
+            where pbp.bucket_id = pb.id order by pbp.period_seq desc limit 1
+         ) latest on true
+        where pb.community_id = $1 and pb.fund_id = $2 and pb.status = 'OPEN'
+          and (pb.due_date is null or pb.due_date <= $3)
+        group by pb.billing_entity_id, pb.unit_id
+       having sum(coalesce(latest.principal_remaining, pb.principal_original)) > 0.005`,
+      communityId, fund.id, asOf,
+    )
+    const bucketByBe = new Map<string, Map<string, number>>() // beId -> (unitId|'' -> remaining)
+    let bucketBeTotal = new Map<string, number>()
+    for (const r of bucketRows) {
+      const m = bucketByBe.get(r.beId) ?? new Map<string, number>()
+      m.set(r.unitId ?? '', Number(r.remaining))
+      bucketByBe.set(r.beId, m)
+      bucketBeTotal.set(r.beId, (bucketBeTotal.get(r.beId) ?? 0) + Number(r.remaining))
     }
+
+    // Real, currently-active unit(s) per BE — the single source of truth for labels, independent
+    // of whether BeUnitStatement/PenaltyBucket happen to carry per-unit data this period.
+    const beIdsAll = Array.from(new Set([...beRows.map((r) => r.beId), ...bucketByBe.keys()]))
+    const members = beIdsAll.length ? await this.prisma.billingEntityMember.findMany({
+      where: { billingEntityId: { in: beIdsAll }, startSeq: { lte: period.seq }, OR: [{ endSeq: null }, { endSeq: { gte: period.seq } }] },
+      select: { billingEntityId: true, unit: { select: { id: true, code: true } } },
+    }) : []
+    const activeUnitsByBe = new Map<string, Array<{ unitId: string; unitCode: string }>>()
+    for (const m of members) {
+      if (!m.unit) continue
+      const arr = activeUnitsByBe.get(m.billingEntityId) ?? []
+      arr.push({ unitId: m.unit.id, unitCode: m.unit.code })
+      activeUnitsByBe.set(m.billingEntityId, arr)
+    }
+    // A BE with no CURRENTLY active unit (its membership ended — e.g. an ownership transfer) but
+    // real debt/penalty still on the books: fall back to the unit it most recently held, so the
+    // label still names a real apartment instead of nothing. Purely cosmetic — never changes which
+    // debt/bucket is shown, only what the row is labelled with.
+    const stillUnlabelled = beIdsAll.filter((id) => !(activeUnitsByBe.get(id)?.length))
+    if (stillUnlabelled.length) {
+      const past = await this.prisma.billingEntityMember.findMany({
+        where: { billingEntityId: { in: stillUnlabelled } },
+        orderBy: { startSeq: 'desc' },
+        select: { billingEntityId: true, unit: { select: { id: true, code: true } } },
+      })
+      for (const m of past) {
+        if (!m.unit || activeUnitsByBe.get(m.billingEntityId)?.length) continue
+        activeUnitsByBe.set(m.billingEntityId, [{ unitId: m.unit.id, unitCode: m.unit.code }])
+      }
+    }
+
+    const beIds = beIdsAll.filter((id) => {
+      const be = beById.get(id)
+      const liveDebt = be ? Number(be.debt) : 0
+      const bucketTotal = bucketBeTotal.get(id) ?? 0
+      return liveDebt > 0.005 || bucketTotal > 0.005
+    })
+
+    const debtors: any[] = []
+    for (const beId of beIds) {
+      const be = beById.get(beId) ?? { beCode: null, beName: null, displayName: null, debt: 0, dueEndTotal: 0 }
+      const activeUnits = activeUnitsByBe.get(beId) ?? []
+      const liveUnits = unitsByBe.get(beId) ?? []
+      const bucketByUnit = bucketByBe.get(beId) ?? new Map<string, number>()
+
+      if (activeUnits.length <= 1) {
+        const unitCodes = activeUnits.length ? [activeUnits[0].unitCode] : []
+        const liveDebt = round2(Number(be.debt ?? 0))
+        const bucketOnly = bucketByUnit.get(activeUnits[0]?.unitId ?? '') ?? bucketByUnit.get('') ?? (bucketBeTotal.get(beId) ?? 0)
+        debtors.push({ beCode: be.beCode, beName: be.beName, unitCodes, unitCode: unitCodes[0] ?? null, debt: liveDebt > 0.005 ? liveDebt : round2(bucketOnly) })
+        continue
+      }
+
+      // Multi-unit BE: trust the live per-unit split only when it foots to the BE's own total —
+      // same rule as the avizier's splitTrustedForBe, scoped to this one fund.
+      const unitDueEndSum = liveUnits.reduce((s, u) => s + Number(u.dueEndSum ?? 0), 0)
+      const liveTrusted = liveUnits.length > 0 && isUnitSplitTrusted(unitDueEndSum, Number(be.dueEndTotal ?? 0))
+      const liveByUnitId = new Map(liveUnits.map((u) => [u.unitId, Number(u.debt)]))
+
+      const resolved = activeUnits.map((u) => {
+        const live = liveTrusted ? liveByUnitId.get(u.unitId) : undefined
+        const bucket = bucketByUnit.get(u.unitId) ?? 0
+        const debt = live != null ? live : bucket > 0.005 ? bucket : null
+        return { u, debt }
+      })
+
+      if (resolved.every((r) => r.debt == null)) {
+        const liveDebt = round2(Number(be.debt ?? 0))
+        const bucketTotal = round2(bucketBeTotal.get(beId) ?? 0)
+        debtors.push({ beCode: be.beCode, beName: be.beName, unitCodes: activeUnits.map((u) => u.unitCode), unitCode: null, debt: liveDebt > 0.005 ? liveDebt : bucketTotal })
+      } else {
+        for (const r of resolved) {
+          debtors.push({ beCode: be.beCode, beName: be.beName, unitCodes: [r.u.unitCode], unitCode: r.u.unitCode, debt: round2(r.debt ?? 0) })
+        }
+      }
+    }
+    const withDebt = debtors.filter((d) => d.debt > 0.005)
+    withDebt.sort((a, b) => b.debt - a.debt)
+
+    return { periodCode: period.code, fundCode, fundName: fund.name, debtors: withDebt }
   }
 
   /** Vendor invoices with outstanding balance (gross − applied payments) > 0. */
@@ -588,7 +727,7 @@ export class FinanceService {
     const splitTrustedForBe = new Set<string>()
     for (const [beId, sum] of unitDueEndSumByBe) {
       const beTotal = Number(stmt.get(beId)?.total ?? 0)
-      if (Math.abs(round2(sum) - round2(beTotal)) < 0.015) splitTrustedForBe.add(beId)
+      if (isUnitSplitTrusted(sum, beTotal)) splitTrustedForBe.add(beId)
     }
     const unitSoldFundRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select bus.unit_id as "unitId", coalesce(f.code, 'ALTELE') as "fundCode",
@@ -1612,12 +1751,23 @@ export class FinanceService {
    * rate, the exact penalizable days in each period, the penalty posted that period, the cumulative
    * accrued, and the per-bucket cap. Returns both this month's total and the cumulative total.
    */
-  async explainPenalty(communityId: string, periodCode: string, beCode: string, sourceFund?: string, includeAll = false) {
+  async explainPenalty(communityId: string, periodCode: string, beCode: string, sourceFund?: string, includeAll = false, unitCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { buckets: [], monthTotal: 0, grandTotal: 0 }
     const p = await this.prisma.period.findUnique({ where: { id: period.id }, select: { code: true, seq: true } })
     const be = await this.prisma.billingEntity.findFirst({ where: { communityId, code: beCode }, select: { id: true, name: true } })
     if (!be || !p) return { buckets: [], monthTotal: 0, grandTotal: 0 }
+    // Scope to one physical unit within the BE when given (a multi-unit BE's buckets must not be
+    // blended) — resolved to its id since PenaltyBucket keys on unitId, not the unit's code.
+    const unit = unitCode ? await this.prisma.unit.findFirst({ where: { communityId, code: unitCode }, select: { id: true } }) : null
+    // A still-unmigrated legacy bucket (unitId=null, pre-dating the per-unit rework) is only safe
+    // to fold into a single-unit query — for a genuinely multi-unit BE a null-unit bucket would be
+    // ambiguous. Single-unit BEs are the overwhelming majority and are never migrated (per-BE ==
+    // per-unit there), so without this a unit-scoped query would silently exclude their history.
+    const beActiveUnitCount = unit ? await this.prisma.billingEntityMember.count({
+      where: { billingEntityId: be.id, startSeq: { lte: p?.seq ?? 0 }, OR: [{ endSeq: null }, { endSeq: { gte: p?.seq ?? 0 } }] },
+    }) : 0
+    const includeNullUnit = beActiveUnitCount <= 1
 
     const bucketRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select pb.id as "bucketId", pb.origin_key as "originKey", pb.principal_original::float8 as "principalOriginal",
@@ -1633,10 +1783,11 @@ export class FinanceService {
          join fund sf on sf.id = pb.fund_id
          left join fund tf on tf.id = pb.target_fund_id
          left join period op on pb.origin_key like 'period:%' and op.id = split_part(pb.origin_key, ':', 2)
-        where pb.community_id = $1 and pb.billing_entity_id = $2
+        where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.status != 'SPLIT'
           and ($3::text is null or sf.code = $3)
+          and ($4::text is null or pb.unit_id = $4 or ($5 and pb.unit_id is null))
         order by pb.created_at asc, pb.first_penal_day asc`,
-      communityId, be.id, sourceFund ?? null,
+      communityId, be.id, sourceFund ?? null, unit?.id ?? null, includeNullUnit,
     )
     const periodRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select pbp.bucket_id as "bucketId", pr.code as "periodCode", pr.seq as "seq",
@@ -1646,9 +1797,10 @@ export class FinanceService {
          from penalty_bucket_period pbp
          join penalty_bucket pb on pb.id = pbp.bucket_id
          join period pr on pr.id = pbp.period_id
-        where pb.community_id = $1 and pb.billing_entity_id = $2 and pr.seq <= $3
+        where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.status != 'SPLIT' and pr.seq <= $3
+          and ($4::text is null or pb.unit_id = $4 or ($5 and pb.unit_id is null))
         order by pbp.bucket_id, pr.seq`,
-      communityId, be.id, p.seq,
+      communityId, be.id, p.seq, unit?.id ?? null, includeNullUnit,
     )
     const periodsByBucket = new Map<string, any[]>()
     for (const r of periodRows) {
@@ -1765,7 +1917,7 @@ export class FinanceService {
       : null
 
     return {
-      beCode, beName: be.name, periodCode: p.code, sourceFund: sourceFund ?? null,
+      beCode, beName: be.name, unitCode: unitCode ?? null, periodCode: p.code, sourceFund: sourceFund ?? null,
       monthTotal: round2(monthTotal), grandTotal: round2(grandTotal),
       override,
       buckets,

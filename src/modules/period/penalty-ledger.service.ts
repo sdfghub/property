@@ -60,25 +60,76 @@ export class PenaltyLedgerService {
     return shares
   }
 
-  /** Principal paid to (BE, sourceFund) in this period — the coarse, payer-favored Stream-A amount.
-   * Reads the underlying PAYMENT ledger rows (kind=PAYMENT, lane=CASH) — the same source
-   * computeStatements aggregates into be_statement.payments — rather than the derived be_statement
-   * field. That field is empty when advance() runs (it executes before computeStatements, and reopen
-   * deletes be_statement outright), so reading it would drop this period's payments and skip the
-   * payer-favored paydown. */
-  private async streamAPayment(tx: TxOrClient, communityId: string, periodId: string, beId: string, fundId: string) {
-    const agg = await tx.beLedgerEntry.aggregate({
-      _sum: { amount: true },
-      where: { communityId, periodId, billingEntityId: beId, fundId, kind: 'PAYMENT', lane: 'CASH' },
-    })
-    // NOTE: for a self-targeted fund (source==target) this includes penalty payments too — a v1
-    // simplification that over-favors the payer; net-out is a documented follow-up.
-    return Number(agg._sum.amount ?? 0)
+  /**
+   * Per-unit share of a (BE, fund)'s cash payment this period — the coarse, payer-favored Stream-A
+   * amount, now attributed to the unit each PAYMENT ledger-detail row actually names (the same
+   * `be_ledger_entry_detail` source `computeUnitStatements` reads to attribute payments to units
+   * on the ledger track — see docs/architecture.md §5). Reading `be_ledger_entry_detail` directly
+   * rather than the derived `be_statement`/`be_unit_statement` fields matters for the same reason
+   * the old BE-level version did: those are empty when `advance()` runs (before `computeStatements`,
+   * and `reopen` deletes them outright), so reading them here would drop this period's payments.
+   *
+   * A detail row with no unit (a generic/untagged transfer) keys `''` — left there untouched when
+   * this (BE, fund) group still has a legacy null-unit bucket to naturally absorb it (a BE never
+   * migrated to per-unit buckets, where every bucket in the group is itself keyed `''` — this
+   * reproduces today's single pooled-payment behavior exactly), else resolved the same way
+   * `ensureBuckets()` resolves an untagged CHARGE: the group's one already-tagged unit absorbs it,
+   * several tagged units split it by their tagged share, or — with no tagged payment at all —
+   * `penaltyUnitShares()`'s membership-weighted fallback.
+   *
+   * Fixing the payment pool to a physical unit (rather than pooling a whole multi-unit BE's cash
+   * and applying it FIFO across every unit's buckets regardless of which unit the money actually
+   * paid) is what stops a payment tagged to unit A from paying down unit B's older bucket first —
+   * the mechanism found 2026-09-13 behind "some properties show a different restanță in the
+   * penalty list than everywhere else."
+   *
+   * NOTE: for a self-targeted fund (source==target) this includes penalty payments too — a v1
+   * simplification that over-favors the payer; net-out is a documented follow-up.
+   */
+  private async streamPaymentsByUnit(
+    tx: TxOrClient, communityId: string, periodId: string, beId: string, fundId: string, hasLegacyBucket: boolean,
+  ): Promise<Map<string, number>> {
+    const rows: Array<{ unitKey: string; amt: any }> = await (tx as any).$queryRawUnsafe(
+      `select coalesce(unit_id, '') as "unitKey", coalesce(sum(amount),0)::float8 as amt
+         from be_ledger_entry_detail
+        where community_id = $1 and period_id = $2 and billing_entity_id = $3 and fund_id = $4
+          and kind = 'PAYMENT'
+        group by coalesce(unit_id, '')`,
+      communityId, periodId, beId, fundId,
+    )
+    const byUnit = new Map<string, number>()
+    for (const r of rows) byUnit.set(r.unitKey, Number(r.amt ?? 0))
+    const untagged = byUnit.get('') ?? 0
+    if (!hasLegacyBucket && untagged > 0.0001) {
+      byUnit.delete('')
+      if (byUnit.size === 1) {
+        const [onlyUnit] = Array.from(byUnit.keys())
+        byUnit.set(onlyUnit, (byUnit.get(onlyUnit) ?? 0) + untagged)
+      } else if (byUnit.size === 0) {
+        const shares = await this.penaltyUnitShares(tx, communityId, beId, fundId)
+        const totalW = Array.from(shares.values()).reduce((s, v) => s + v, 0)
+        if (totalW > 0) for (const [u, w] of shares) byUnit.set(u, (byUnit.get(u) ?? 0) + untagged * (w / totalW))
+      } else {
+        const totalTagged = Array.from(byUnit.values()).reduce((s, v) => s + v, 0)
+        if (totalTagged > 0) for (const [u, v] of Array.from(byUnit.entries())) byUnit.set(u, v + untagged * (v / totalTagged))
+      }
+    }
+    return byUnit
   }
 
   /**
-   * Create one bucket per (BE × source-fund) principal charge staged THIS period, for funds that
-   * bear penalties. Idempotent on originKey='period:<periodId>' — safe to re-run on re-prepare.
+   * Create one bucket per (unit × source-fund) principal charge staged THIS period, for funds
+   * that bear penalties. Idempotent on originKey='period:<periodId>' — safe to re-run on
+   * re-prepare.
+   *
+   * Sourced from `be_ledger_entry_detail` (real per-unit split), not the BE-level
+   * `be_ledger_entry` — a multi-unit BE's charge must not be conflated into one bucket, since the
+   * debt (and its aging) belongs to the physical unit, not the payer entity. A detail row with no
+   * unitId (a synthetic/no-unit-detail charge, `ensureLedgerEntryDetail`'s fallback) is resolved to
+   * a real unit rather than left dangling: the BE's one already-tagged unit absorbs it, an even
+   * split across several already-tagged units by their tagged share, or — if the BE has no tagged
+   * unit at all this period — `penaltyUnitShares`' membership-weighted fallback. Every bucket this
+   * method creates therefore carries a real unitId; only pre-migration legacy rows are unitId=null.
    */
   async ensureBuckets(tx: TxOrClient, communityId: string, periodId: string) {
     const period = await tx.period.findUnique({ where: { id: periodId }, select: { dueDate: true, startDate: true } })
@@ -94,35 +145,77 @@ export class PenaltyLedgerService {
     const originDate = originAnchorDate(`period:${periodId}`, period?.dueDate ?? null, period?.startDate ?? null)
 
     for (const f of funds) {
-      // this period's NEW principal contribution per BE (staged charge, refType CLOSE_PREP), fund f
-      const rows: Array<{ beId: string; amt: any }> = await (tx as any).$queryRawUnsafe(
-        `select billing_entity_id as "beId", coalesce(sum(amount),0)::float8 as amt
-           from be_ledger_entry
+      // this period's NEW principal contribution per (BE, unit), fund f (staged charge, refType CLOSE_PREP)
+      const rows: Array<{ beId: string; unitId: string | null; amt: any }> = await (tx as any).$queryRawUnsafe(
+        `select billing_entity_id as "beId", unit_id as "unitId", coalesce(sum(amount),0)::float8 as amt
+           from be_ledger_entry_detail
           where community_id = $1 and period_id = $2 and fund_id = $3
             and kind = 'CHARGE' and ref_type = 'CLOSE_PREP'
-          group by billing_entity_id`,
+          group by billing_entity_id, unit_id`,
         communityId, periodId, f.id,
       )
+      const byBe = new Map<string, { tagged: Map<string, number>; untagged: number }>()
       for (const r of rows) {
-        const principal = Number(r.amt ?? 0)
-        if (principal <= 0) continue
-        await tx.penaltyBucket.upsert({
-          where: {
-            communityId_billingEntityId_fundId_originKey: {
-              communityId, billingEntityId: r.beId, fundId: f.id, originKey: `period:${periodId}`,
+        const g = byBe.get(r.beId) ?? { tagged: new Map<string, number>(), untagged: 0 }
+        const amt = Number(r.amt ?? 0)
+        if (r.unitId) g.tagged.set(r.unitId, (g.tagged.get(r.unitId) ?? 0) + amt)
+        else g.untagged += amt
+        byBe.set(r.beId, g)
+      }
+
+      for (const [beId, g] of byBe) {
+        const unitAmounts = new Map(g.tagged)
+        if (g.untagged > 0.0001) {
+          if (unitAmounts.size === 1) {
+            const [onlyUnit] = Array.from(unitAmounts.keys())
+            unitAmounts.set(onlyUnit, (unitAmounts.get(onlyUnit) ?? 0) + g.untagged)
+          } else if (unitAmounts.size === 0) {
+            const shares = await this.penaltyUnitShares(tx, communityId, beId, f.id)
+            const totalW = Array.from(shares.values()).reduce((s, v) => s + v, 0)
+            if (totalW > 0) for (const [u, w] of shares) unitAmounts.set(u, (unitAmounts.get(u) ?? 0) + g.untagged * (w / totalW))
+          } else {
+            const totalTagged = Array.from(unitAmounts.values()).reduce((s, v) => s + v, 0)
+            if (totalTagged > 0) for (const [u, v] of Array.from(unitAmounts.entries())) unitAmounts.set(u, v + g.untagged * (v / totalTagged))
+          }
+        }
+        for (const [unitId, principal] of unitAmounts) {
+          if (principal <= 0) continue
+          await tx.penaltyBucket.upsert({
+            where: {
+              communityId_unitId_fundId_originKey: {
+                communityId, unitId, fundId: f.id, originKey: `period:${periodId}`,
+              },
             },
-          },
-          update: { principalOriginal: principal, targetFundId: f.targetId, dueDate: period?.dueDate ?? null, firstPenalDay },
-          create: {
-            communityId, billingEntityId: r.beId, fundId: f.id, targetFundId: f.targetId,
-            originKey: `period:${periodId}`, dueDate: period?.dueDate ?? null, firstPenalDay,
-            principalOriginal: principal, status: 'OPEN',
-            // Informational snapshot only — `advance()` re-derives the live rate from the fund's
-            // schedule (if configured) using this debt's own origin anchor, so a later rate change
-            // never permanently freezes an older bucket at whatever the flat rate happened to be here.
-            ratePerDayPct: rateForDate(f.alloc, originDate, f.rate * 100),
-          } as any,
-        })
+            update: { principalOriginal: principal, targetFundId: f.targetId, dueDate: period?.dueDate ?? null, firstPenalDay, billingEntityId: beId },
+            create: {
+              communityId, billingEntityId: beId, unitId, fundId: f.id, targetFundId: f.targetId,
+              originKey: `period:${periodId}`, dueDate: period?.dueDate ?? null, firstPenalDay,
+              principalOriginal: principal, status: 'OPEN',
+              // Informational snapshot only — `advance()` re-derives the live rate from the fund's
+              // schedule (if configured) using this debt's own origin anchor, so a later rate change
+              // never permanently freezes an older bucket at whatever the flat rate happened to be here.
+              ratePerDayPct: rateForDate(f.alloc, originDate, f.rate * 100),
+            } as any,
+          })
+        }
+
+        // A pre-rework null-unit bucket for this SAME origin (created before ensureBuckets became
+        // unit-aware, e.g. an already-PREPARED-then-re-prepared period) is now superseded by the
+        // per-unit bucket(s) just written above — delete it, but only while it's still fully
+        // provisional (no COMMITTED period row). One with real committed history represents penalty
+        // already posted in a closed period and must never be silently discarded; that case can only
+        // reach here via `approve()`→reopen()→edit, which is not this method's job to reconcile —
+        // leave it for `split-penalty-buckets-per-unit.ts` to split instead.
+        if (unitAmounts.size) {
+          const stale = await tx.penaltyBucket.findFirst({
+            where: { communityId, billingEntityId: beId, unitId: null, fundId: f.id, originKey: `period:${periodId}`, status: 'OPEN' },
+            include: { periods: { where: { status: 'COMMITTED' }, take: 1 } },
+          })
+          if (stale && stale.periods.length === 0) {
+            await tx.penaltyBucketPeriod.deleteMany({ where: { bucketId: stale.id } })
+            await tx.penaltyBucket.delete({ where: { id: stale.id } })
+          }
+        }
       }
     }
   }
@@ -188,20 +281,27 @@ export class PenaltyLedgerService {
     const perBeFund = new Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number; postedByUnit: Map<string, number> }>()
 
     for (const g of groups.values()) {
-      let remainingPay = await this.streamAPayment(tx, communityId, periodId, g.beId, g.fundId)
+      // A group's payment pool is per-unit (see streamPaymentsByUnit) — except a group made
+      // entirely of legacy null-unit buckets (a BE never migrated to per-unit tracking), where
+      // every bucket below keys '' and this reproduces today's single BE-wide pool exactly.
+      const hasLegacyBucket = (g.buckets as any[]).some((b) => !b.unitId)
+      const payByUnit = await this.streamPaymentsByUnit(tx, communityId, periodId, g.beId, g.fundId, hasLegacyBucket)
       const ordered = (g.buckets as any[]).slice().sort((a, b) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime())
       let groupPosted = 0
       let groupOutstanding = 0
       const groupPostedByUnit = new Map<string, number>() // per-unit buckets attribute posted straight to their unit
       for (const b of ordered) {
+        const payKey = (b as any).unitId ?? ''
+        let remainingPay = payByUnit.get(payKey) ?? 0
         const prev = b.periods[0]
         let principalRemaining = prev ? Number(prev.principalRemaining) : Number(b.principalOriginal)
         const penaltyAccrued = prev ? Number(prev.penaltyAccrued) : Number((b as any).seedPenaltyAccrued ?? 0)
-        // apply payment FIFO oldest-first, BEFORE accrual (payer-favored)
+        // apply payment FIFO oldest-first WITHIN this unit's own buckets, BEFORE accrual (payer-favored)
         if (remainingPay > 0 && principalRemaining > 0) {
           const pay = Math.min(principalRemaining, remainingPay)
           principalRemaining -= pay
           remainingPay -= pay
+          payByUnit.set(payKey, remainingPay)
         }
         // exact, due-date-anchored penalizable days within this period
         const lo = new Date(b.firstPenalDay) > pStart ? new Date(b.firstPenalDay) : pStart
@@ -244,7 +344,7 @@ export class PenaltyLedgerService {
     communityId: string,
     periodId: string,
     commit: boolean,
-    perBeFund: Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number }>,
+    perBeFund: Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number; postedByUnit: Map<string, number> }>,
   ) {
     const penalRefType = `PENALTY_${commit ? 'CLOSE_FINAL' : 'CLOSE_PREP'}`
     // bySource: sourceCode → { targetId, lines }; beTarget: BE×target → total/detail
@@ -330,11 +430,16 @@ export class PenaltyLedgerService {
   }
 
   /**
-   * Cutover seed: build one bucket per (BE, penalty-bearing source fund) from the migrated arrears
-   * (`beOpeningBalance` at the cutover period). PRINCIPAL openings → the bucket's principal; carried
-   * PENALTY openings (fund=target, originKey `PEN:<srcCode>`) → the bucket's seeded `penaltyAccrued`
-   * via a COMMITTED PenaltyBucketPeriod at cutoverSeq-1 so `advance` starts from the carried state.
-   * Idempotent per (community, BE, fund) with originKey='opening'.
+   * Cutover seed: build one bucket per (unit, penalty-bearing source fund) from the migrated
+   * arrears (`beOpeningBalance` at the cutover period). PRINCIPAL openings → the bucket's
+   * principal; carried PENALTY openings (fund=target, originKey `PEN:<srcCode>`) → the bucket's
+   * seeded `penaltyAccrued` via a COMMITTED PenaltyBucketPeriod at cutoverSeq-1 so `advance`
+   * starts from the carried state. Idempotent per (community, unit, fund) with originKey='opening'.
+   *
+   * `beOpeningBalance.unitId` carries the real unit for most rows; a row with none (untagged
+   * migrated arrears) is resolved same as `ensureBuckets`'s synthetic fallback — the BE's one
+   * active unit at cutover absorbs it directly, several active units split it evenly (no charge
+   * history exists yet at cutover to weight by).
    */
   async seedFromOpenings(communityId: string, cutoverPeriodId: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -348,12 +453,30 @@ export class PenaltyLedgerService {
 
       const openings = await tx.beOpeningBalance.findMany({
         where: { communityId, periodId: cutoverPeriodId },
-        select: { billingEntityId: true, fundId: true, amount: true, dueDate: true, kind: true, originKey: true },
+        select: { billingEntityId: true, unitId: true, fundId: true, amount: true, dueDate: true, kind: true, originKey: true },
       })
       const fundIdToCode = new Map((await tx.fund.findMany({ where: { communityId }, select: { id: true, code: true } })).map((f) => [f.id, f.code]))
 
-      // principal per (BE, sourceFund); carried penalty per (BE, sourceFund)
-      const principal = new Map<string, { beId: string; f: PenalFund; amt: number; dueDate: Date | null }>()
+      // Resolve any untagged (unitId-less) row to a real unit: the BE's active membership at
+      // cutover, sole unit direct / several split evenly (no per-unit weight signal exists yet).
+      const untaggedBeIds = Array.from(new Set(openings.filter((o) => !o.unitId).map((o) => o.billingEntityId)))
+      const membersByBe = new Map<string, string[]>()
+      if (untaggedBeIds.length) {
+        const members = await tx.billingEntityMember.findMany({
+          where: { billingEntityId: { in: untaggedBeIds }, startSeq: { lte: period.seq }, OR: [{ endSeq: null }, { endSeq: { gte: period.seq } }] },
+          select: { billingEntityId: true, unitId: true },
+        })
+        for (const m of members) membersByBe.set(m.billingEntityId, [...(membersByBe.get(m.billingEntityId) ?? []), m.unitId])
+      }
+      const resolvedUnits = (o: (typeof openings)[number]): Array<{ unitId: string; weight: number }> => {
+        if (o.unitId) return [{ unitId: o.unitId, weight: 1 }]
+        const units = membersByBe.get(o.billingEntityId) ?? []
+        if (!units.length) return []
+        return units.map((u) => ({ unitId: u, weight: 1 / units.length }))
+      }
+
+      // principal per (unit, sourceFund); carried penalty per (unit, sourceFund)
+      const principal = new Map<string, { beId: string; unitId: string; f: PenalFund; amt: number; dueDate: Date | null }>()
       const carried = new Map<string, number>()
       for (const o of openings) {
         const amt = Number(o.amount ?? 0)
@@ -361,29 +484,36 @@ export class PenaltyLedgerService {
         if (o.kind === 'PENALTY') {
           // originKey 'PEN:<srcCode>' → attribute to that source fund's carried penalty
           const src = (o.originKey || '').startsWith('PEN:') ? o.originKey.slice(4) : null
-          if (src && codeToFund.has(src)) carried.set(`${o.billingEntityId}::${src}`, (carried.get(`${o.billingEntityId}::${src}`) ?? 0) + amt)
+          if (src && codeToFund.has(src)) {
+            for (const { unitId, weight } of resolvedUnits(o)) {
+              const k = `${unitId}::${src}`
+              carried.set(k, (carried.get(k) ?? 0) + amt * weight)
+            }
+          }
           continue
         }
         // PRINCIPAL: only for penalty-bearing source funds
         if (!fcode || !codeToFund.has(fcode)) continue
-        const k = `${o.billingEntityId}::${fcode}`
-        const cur = principal.get(k) ?? { beId: o.billingEntityId, f: codeToFund.get(fcode)!, amt: 0, dueDate: o.dueDate ?? null }
-        cur.amt += amt
-        if (o.dueDate && !cur.dueDate) cur.dueDate = o.dueDate
-        principal.set(k, cur)
+        for (const { unitId, weight } of resolvedUnits(o)) {
+          const k = `${unitId}::${fcode}`
+          const cur = principal.get(k) ?? { beId: o.billingEntityId, unitId, f: codeToFund.get(fcode)!, amt: 0, dueDate: o.dueDate ?? null }
+          cur.amt += amt * weight
+          if (o.dueDate && !cur.dueDate) cur.dueDate = o.dueDate
+          principal.set(k, cur)
+        }
       }
 
       let created = 0
-      for (const [k, p] of principal.entries()) {
+      for (const p of principal.values()) {
         if (p.amt <= 0) continue
         const firstPenalDay = p.dueDate
           ? new Date(new Date(p.dueDate).getTime() + (graceDays + 1) * DAY)
           : new Date(0)
-        const carriedPen = carried.get(`${p.beId}::${p.f.code}`) ?? 0
+        const carriedPen = carried.get(`${p.unitId}::${p.f.code}`) ?? 0
         await tx.penaltyBucket.upsert({
-          where: { communityId_billingEntityId_fundId_originKey: { communityId, billingEntityId: p.beId, fundId: p.f.id, originKey: 'opening' } },
-          update: { principalOriginal: p.amt, targetFundId: p.f.targetId, dueDate: p.dueDate, firstPenalDay, seedPenaltyAccrued: carriedPen } as any,
-          create: { communityId, billingEntityId: p.beId, fundId: p.f.id, targetFundId: p.f.targetId, originKey: 'opening', dueDate: p.dueDate, firstPenalDay, principalOriginal: p.amt, seedPenaltyAccrued: carriedPen, status: 'OPEN' } as any,
+          where: { communityId_unitId_fundId_originKey: { communityId, unitId: p.unitId, fundId: p.f.id, originKey: 'opening' } },
+          update: { principalOriginal: p.amt, targetFundId: p.f.targetId, dueDate: p.dueDate, firstPenalDay, seedPenaltyAccrued: carriedPen, billingEntityId: p.beId } as any,
+          create: { communityId, billingEntityId: p.beId, unitId: p.unitId, fundId: p.f.id, targetFundId: p.f.targetId, originKey: 'opening', dueDate: p.dueDate, firstPenalDay, principalOriginal: p.amt, seedPenaltyAccrued: carriedPen, status: 'OPEN' } as any,
         })
         created++
       }

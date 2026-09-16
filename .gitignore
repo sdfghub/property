@@ -61,3 +61,7 @@ property-expenses-59672-firebase-adminsdk-fbsvc-4aee2fc092.json
 # Captured script output (e.g. `npm run db:flush > debug`) — never source
 debug
 backups/
+
+# Claude Code local state (per-user permissions, worktrees)
+.claude/settings.local.json
+.claude/worktrees/
