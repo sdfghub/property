@@ -34,6 +34,7 @@ import { IntakePanel } from './intake/IntakePanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
 import { RiskPanel } from './RiskPanel'
+import { ForecastPanel } from './ForecastPanel'
 import { PeriodProvider, usePeriod } from '../../contexts/PeriodContext'
 import { PeriodSelectorBar } from './PeriodSelectorBar'
 
@@ -71,6 +72,7 @@ export type CommunityAdminTabKey =
   | 'periodSettings'
   | 'collectionRate'
   | 'riskExposure'
+  | 'forecast'
 
 type Props = {
   forceCommunityId?: string
@@ -85,8 +87,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
+  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'forecast', 'vendors', 'cashRegister', 'decisions'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'forecast', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -236,6 +238,7 @@ export function CommunityAdminDashboard({
         { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
         { key: 'corrections', label: t('tab.corrections') || 'Corecții' },
         { key: 'riskExposure', label: t('tab.riskExposure') || 'Risc de expunere' },
+        { key: 'forecast', label: t('tab.forecast') || 'Restanțe și prognoză' },
       ],
     },
     {
@@ -784,6 +787,7 @@ function CommunityAdminContent({
         {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
         {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
         {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
+        {activeTab === 'forecast' && <ForecastPanel communityId={communityId} />}
         {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
         {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
         {activeTab === 'intake' && <IntakePanel communityId={communityId} />}

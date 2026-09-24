@@ -196,12 +196,23 @@ export class PenaltyReconciliationService {
 
     // Every one of this BE's units' own CHARGE history, pooled by period (a multi-unit BE's own
     // months line up across its units since they're billed together) — same walk as
-    // reconcileUnitFund, just summed across units first.
+    // reconcileUnitFund, just summed across units first. For a unit this BE took over from a
+    // previous owner, the unit's charges from BEFORE the takeover (billed to the predecessor) are
+    // included too: a balance inherited with the unit (e.g. Ap 2/2, Gampe → Valean, 2026-06) must
+    // age from the months it was really charged, exactly like reconcileUnitFund (which walks the
+    // unit's history across owners) — not collapse into the pre-tracking "opening" catch-all
+    // (PRE_TRACKING_DUE_DATE). When nothing was inherited, FIFO simply pays those older months
+    // off first, so they add no slice.
     const rows: any[] = await (tx as any).$queryRawUnsafe(
       `select pr.id as "periodId", pr.code, pr.due_date as due, sum(led.amount)::float8 as amt
          from be_ledger_entry_detail led join period pr on pr.id = led.period_id
-        where led.community_id = $1 and led.billing_entity_id = $2 and led.fund_id = $3
+        where led.community_id = $1 and led.fund_id = $3
           and led.kind = 'CHARGE' and pr.seq < $4
+          and (led.billing_entity_id = $2 or exists (
+                select 1 from billing_entity_member bem
+                 where bem.billing_entity_id = $2 and bem.unit_id = led.unit_id
+                   and bem.start_seq <= $4 and (bem.end_seq is null or bem.end_seq >= $4)
+                   and pr.seq < bem.start_seq))
         group by pr.id, pr.code, pr.seq, pr.due_date
         order by pr.seq asc`,
       communityId, beId, fundId, period.seq,

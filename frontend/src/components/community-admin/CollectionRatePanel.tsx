@@ -2,17 +2,23 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { useMetadata } from '../../hooks/useMetadata'
+import { usePeriodOptional } from '../../contexts/PeriodContext'
+import { beLabel, shortUnit, prettyBe } from './beLabel'
 
 type Metric = { owed: number; paid: number; outstanding: number; opening: number; charges: number; adjustments: number; ratePct: number | null }
 type FundNode = Metric & { code: string; label: string; shortName: string | null; cpi: number }
 type DomainNode = Metric & { key: string; label: string; cpi: number; funds: FundNode[] }
-type BeRow = Metric & { beId: string; code: string | null; displayName: string; cpi: number; byFund: Record<string, Metric> }
+type BeRow = Metric & { beId: string; code: string | null; displayName: string; beName?: string | null; beDisplayName?: string | null; unitCodes?: string[]; cpi: number; byFund: Record<string, Metric> }
+// Unit-grain row ("Pe unitate") — `estimated`: a multi-unit entity whose per-unit split isn't
+// tracked, so its figures are split by CPI share (see ReportsService.collectionRate).
+type UnitRow = Metric & { unitId: string; unitCode: string; beCode: string | null; beName: string | null; estimated: boolean; restantOnly?: boolean; order: number; byFund: Record<string, Metric> }
 type HistoryPoint = { periodCode: string; status: string; owed: number; paid: number; outstanding: number; ratePct: number | null }
 type Report = {
   period: { code: string; status: string } | null
   totals: Metric & { cpi: number }
   domains: DomainNode[]
   rows: BeRow[]
+  unitRows?: UnitRow[]
   history?: HistoryPoint[]
   checks: { identityOk: boolean; residual: number }
 }
@@ -60,7 +66,15 @@ export function CollectionRatePanel({
   const meta = useMetadata()
 
   const [periods, setPeriods] = React.useState<any[]>([])
-  const [period, setPeriod] = React.useState<string>('')
+  // Admin view follows the global period selector (top bar) like the other money reports; the
+  // resident view (custom periodsPath = closed periods only) keeps its own dropdown.
+  const shared = usePeriodOptional()
+  const useShared = !!shared && !periodsPath
+  const [localPeriod, setPeriod] = React.useState<string>('')
+  const period = useShared ? shared!.selectedCode : localPeriod
+  // Same row modes and "Nume" toggle as the avizier / restanțieri / risc de expunere.
+  const [rowMode, setRowMode] = React.useState<'unit' | 'owner'>('owner')
+  const [showNames, setShowNames] = React.useState(false)
   const [domain, setDomain] = React.useState<string>('')
   const [data, setData] = React.useState<Report | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -68,11 +82,11 @@ export function CollectionRatePanel({
   const [chartHistory, setChartHistory] = React.useState<HistoryPoint[]>([])
 
   React.useEffect(() => {
-    if (!communityId) return
+    if (!communityId || useShared) return
     api.get<any[]>(periodsBase)
       .then((rows: any[]) => setPeriods(rows || []))
       .catch(() => setPeriods([]))
-  }, [api, communityId, periodsBase])
+  }, [api, communityId, periodsBase, useShared])
 
   // Full-timeline history for the chart (latest period), independent of the selected-period detail —
   // the per-period report truncates history to ≤ selected, so this keeps the chart complete.
@@ -86,18 +100,31 @@ export function CollectionRatePanel({
 
   React.useEffect(() => {
     if (!communityId) return
+    if (useShared && !period) return // wait for the global selector to resolve
     let alive = true
     setLoading(true)
     const qs = new URLSearchParams()
     if (period) qs.set('period', period)
     if (domain) qs.set('domain', domain)
+    qs.set('groupBy', 'unit') // unit rows are needed in both modes (Proprietar expands into them)
     api.get<Report>(`${reportBase}${qs.toString() ? `?${qs}` : ''}`)
-      .then((r: Report) => { if (alive) { setData(r); setLoading(false); if (!period && r?.period?.code) setPeriod(r.period.code) } })
+      .then((r: Report) => { if (alive) { setData(r); setLoading(false); if (!useShared && !period && r?.period?.code) setPeriod(r.period.code) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     return () => { alive = false }
-  }, [api, communityId, period, domain, reportBase])
+  }, [api, communityId, period, domain, reportBase, useShared])
 
   const toggle = (k: string) => setExpanded((e) => ({ ...e, [k]: !e[k] }))
+  const unitsByBeCode = React.useMemo(() => {
+    const m = new Map<string, UnitRow[]>()
+    for (const u of data?.unitRows ?? []) if (u.beCode) m.set(u.beCode, [...(m.get(u.beCode) ?? []), u])
+    return m
+  }, [data])
+  const ownerLabel = (r: BeRow) => beLabel({ displayName: r.beDisplayName, units: r.unitCodes ?? [], beName: r.beName ?? r.displayName, beCode: r.code ?? undefined })
+  const unitLabel = (u: UnitRow) => ({ primary: shortUnit(u.unitCode) || u.unitCode, secondary: prettyBe(u.beName ?? '') || u.beCode || undefined })
+  const estMark = (u: UnitRow) => (u.estimated ? ' ≈' : '')
+  const unitHint = (u: UnitRow) => u.estimated
+    ? t('collection.estimatedHint', 'Estimare: împărțirea pe unități a acestei entități nu e urmărită — sumele sunt repartizate după CPI.')
+    : u.restantOnly ? t('collection.restantOnlyHint', 'Entitate cu mai multe unități: pe unitate se cunoaște doar restantul (plățile se înregistrează pe entitate).') : undefined
 
   const isEmpty = !loading && (!data || !data.domains.length)
 
@@ -105,11 +132,30 @@ export function CollectionRatePanel({
     <div className="stack" style={{ gap: 12 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0 }}>{t('collection.title', 'Grad de colectare')}</h3>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}
-            aria-label={t('collection.period', 'Perioadă')}>
-            {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
-          </select>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="row" style={{ gap: 0, border: '1px solid var(--border,#ddd)', borderRadius: 6, overflow: 'hidden' }}>
+            <button type="button" className="btn ghost small"
+              style={{ borderRadius: 0, background: rowMode === 'unit' ? 'var(--muted-bg, #eef2ff)' : undefined, fontWeight: rowMode === 'unit' ? 600 : 400 }}
+              onClick={() => setRowMode('unit')}>
+              {t('forecast.modeUnit', 'Unitate')}
+            </button>
+            <button type="button" className="btn ghost small"
+              style={{ borderRadius: 0, background: rowMode === 'owner' ? 'var(--muted-bg, #eef2ff)' : undefined, fontWeight: rowMode === 'owner' ? 600 : 400 }}
+              onClick={() => setRowMode('owner')}>
+              {t('forecast.modeOwner', 'Proprietar')}
+            </button>
+          </div>
+          <button type="button" className="btn ghost small" onClick={() => setShowNames((v) => !v)}
+            title={t('avizier.publicToggle', 'Mod public: ascunde numele proprietarilor (GDPR) pentru afișare/print')}
+            aria-pressed={showNames} style={{ borderRadius: 999 }}>
+            {showNames ? '☑ ' : '☐ '}{t('avizier.publicOff', 'Nume')}
+          </button>
+          {!useShared ? (
+            <select className="input" value={period} onChange={(e) => setPeriod(e.target.value)}
+              aria-label={t('collection.period', 'Perioadă')}>
+              {periods.map((p) => <option key={p.code} value={p.code}>{p.code} ({p.status})</option>)}
+            </select>
+          ) : null}
           <select className="input" value={domain} onChange={(e) => setDomain(e.target.value)}
             aria-label={t('collection.domain', 'Domeniu')}>
             <option value="">{t('collection.allDomains', 'Toate domeniile')}</option>
@@ -132,7 +178,7 @@ export function CollectionRatePanel({
       ) : data ? (
         <>
           {/* History overview — click a period to load its detail below */}
-          {chartHistory.length > 1 ? <HistoryChart history={chartHistory} selected={data.period?.code || period} onSelect={setPeriod} /> : null}
+          {chartHistory.length > 1 ? <HistoryChart history={chartHistory} selected={data.period?.code || period} onSelect={(code) => (useShared ? shared!.setSelectedCode?.(code) : setPeriod(code))} /> : null}
 
           {/* Per-period detail */}
           <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
@@ -182,6 +228,9 @@ export function CollectionRatePanel({
                   <strong>{t('collection.owed', 'Datorat')} − {t('collection.charges', 'Facturat')} = {money(data.totals.owed - data.totals.charges)}</strong>{' '}
                   ({t('collection.explain.equalsOpeningPlusAdj', '= Sold precedent + Ajustări')}).
                 </p>
+                <p style={{ margin: '0 0 6px' }}>
+                  {t('collection.explain.dueBasis', 'Facturarea lunii selectate nu este inclusă (nu este încă scadentă), așa că Restant este exact restanța din Avizier, Restanțieri și Risc de expunere.')}
+                </p>
                 <p style={{ margin: 0 }}>
                   {t('collection.explain.sameDecomposition', 'Aceeași descompunere se aplică la fiecare nivel (domeniu, fond, proprietar). Gradul de colectare se raportează la')} <strong>{t('collection.charges', 'Facturat')}</strong> {t('collection.explain.rateBasis', '(Plătit ÷ Facturat), nu la Datorat.')}
                 </p>
@@ -197,7 +246,7 @@ export function CollectionRatePanel({
           {/* Tree: domain → fund → billing entity */}
           <div className="card">
             <div className="row" style={{ gap: 12, padding: '0 4px 6px', fontSize: 12 }}>
-              <span className="muted" style={{ flex: 1, minWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('collection.tree', 'Domeniu / fond / proprietar')}</span>
+              <span className="muted" style={{ flex: 1, minWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rowMode === 'unit' ? t('collection.treeUnit', 'Domeniu / fond / unitate') : t('collection.tree', 'Domeniu / fond / proprietar')}</span>
               <span className="muted" style={{ width: 190, textAlign: 'right' }}>{t('collection.rate', 'Grad')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.charges', 'Facturat')}</span>
               <span className="muted" style={{ width: 130, textAlign: 'right' }}>{t('collection.owed', 'Datorat')}</span>
@@ -213,17 +262,38 @@ export function CollectionRatePanel({
                     name={d.label} m={d} strong />
                   {expanded[dk] && d.funds.map((f) => {
                     const fk = `f:${d.key}:${f.code}`
-                    const leaves = data.rows
-                      .filter((r) => r.byFund[f.code])
-                      .map((r) => ({ row: r, m: r.byFund[f.code] }))
-                      .sort((a, b) => b.m.outstanding - a.m.outstanding)
                     return (
                       <div key={fk}>
                         <TreeRow depth={1} open={!!expanded[fk]} onToggle={() => toggle(fk)}
                           name={f.shortName || f.label} m={f} />
-                        {expanded[fk] && leaves.map(({ row, m }) => (
-                          <TreeRow key={`${fk}:${row.beId}`} depth={2} name={row.displayName} m={m} />
-                        ))}
+                        {expanded[fk] && (rowMode === 'unit'
+                          ? (data.unitRows ?? [])
+                              .filter((u) => u.byFund[f.code])
+                              .sort((a, b) => b.byFund[f.code].outstanding - a.byFund[f.code].outstanding)
+                              .map((u) => {
+                                const l = unitLabel(u)
+                                return <TreeRow key={`${fk}:u:${u.unitId}`} depth={2} name={l.primary + estMark(u)} secondary={showNames ? l.secondary : undefined} m={u.byFund[f.code]}
+                                  restantOnly={u.restantOnly} title={unitHint(u)} />
+                              })
+                          : data.rows
+                              .filter((r) => r.byFund[f.code])
+                              .sort((a, b) => b.byFund[f.code].outstanding - a.byFund[f.code].outstanding)
+                              .map((r) => {
+                                const l = ownerLabel(r)
+                                const units = r.code ? (unitsByBeCode.get(r.code) ?? []).filter((u) => u.byFund[f.code]) : []
+                                const ok = `${fk}:b:${r.beId}`
+                                const expandable = units.length > 1
+                                return (
+                                  <div key={ok}>
+                                    <TreeRow depth={2} name={l.primary} secondary={showNames ? l.secondary : undefined} m={r.byFund[f.code]}
+                                      open={expandable ? !!expanded[ok] : undefined} onToggle={expandable ? () => toggle(ok) : undefined} />
+                                    {expandable && expanded[ok] && units.map((u) => (
+                                      <TreeRow key={`${ok}:${u.unitId}`} depth={3} faded name={(shortUnit(u.unitCode) || u.unitCode) + estMark(u)} m={u.byFund[f.code]}
+                                        restantOnly={u.restantOnly} title={unitHint(u)} />
+                                    ))}
+                                  </div>
+                                )
+                              }))}
                       </div>
                     )
                   })}
@@ -325,13 +395,17 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function TreeRow({ depth, name, m, open, onToggle, strong }: {
+function TreeRow({ depth, name, secondary, m, open, onToggle, strong, faded, title, restantOnly }: {
   depth: number
   name: string
+  secondary?: string // owner name, own line under the unit / entity label ("Nume" on)
   m: Metric
   open?: boolean
   onToggle?: () => void
   strong?: boolean
+  faded?: boolean // an owner's expanded unit rows
+  title?: string
+  restantOnly?: boolean // multi-unit entity's unit row: only Restant is known per unit
 }) {
   const { t: rawT } = useI18n()
   const t = (k: string, d = '') => { const v = rawT(k as any); return v && v !== k ? v : d }
@@ -347,7 +421,9 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
         borderTop: '1px solid rgba(128,128,128,0.15)',
         cursor: clickable ? 'pointer' : 'default',
         fontWeight: strong ? 600 : 400,
+        ...(faded ? { background: 'var(--muted-bg, #fafafa)', fontSize: 12 } : {}),
       }}
+      title={title}
     >
       {/* Indent lives INSIDE the name cell so the value columns keep a fixed position and stay
           aligned across drill levels (indenting the whole row shifted them rightward). */}
@@ -355,16 +431,17 @@ function TreeRow({ depth, name, m, open, onToggle, strong }: {
         {depth > 0 ? <span style={{ display: 'inline-block', width: depth * 18 }} /> : null}
         {clickable ? <span className="muted" style={{ marginRight: 6 }}>{open ? '▾' : '▸'}</span> : null}
         {name}
+        {secondary ? <span className="muted" style={{ display: 'block', fontSize: 11, paddingLeft: depth * 18 + (clickable ? 16 : 0), overflow: 'hidden', textOverflow: 'ellipsis' }}>{secondary}</span> : null}
       </span>
       <span className="row" style={{ width: 190, gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
-        <span style={{ flex: 1 }}><Bar pct={m.ratePct} /></span>
-        <span style={{ width: 54, textAlign: 'right', color: rateColor(m.ratePct) }}>
-          {m.ratePct == null ? '—' : `${m.ratePct}%`}
+        <span style={{ flex: 1 }}>{restantOnly ? null : <Bar pct={m.ratePct} />}</span>
+        <span style={{ width: 54, textAlign: 'right', color: restantOnly ? undefined : rateColor(m.ratePct) }}>
+          {restantOnly || m.ratePct == null ? '—' : `${m.ratePct}%`}
         </span>
       </span>
-      <span style={{ width: 130, textAlign: 'right' }} title={money(m.adjustments) + ' ' + t('collection.adjustmentsLabel', 'ajustări')}>{money(m.charges)}</span>
-      <span style={{ width: 130, textAlign: 'right' }}>{money(m.owed)}</span>
-      <span style={{ width: 130, textAlign: 'right' }}>{money(m.paid)}</span>
+      <span style={{ width: 130, textAlign: 'right' }} title={restantOnly ? undefined : money(m.adjustments) + ' ' + t('collection.adjustmentsLabel', 'ajustări')}>{restantOnly ? '—' : money(m.charges)}</span>
+      <span style={{ width: 130, textAlign: 'right' }}>{restantOnly ? '—' : money(m.owed)}</span>
+      <span style={{ width: 130, textAlign: 'right' }}>{restantOnly ? '—' : money(m.paid)}</span>
       <span style={{ width: 130, textAlign: 'right' }}>{money(m.outstanding)}</span>
     </div>
   )

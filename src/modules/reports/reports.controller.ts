@@ -19,8 +19,9 @@ export class ReportsController {
     @Param('communityId') c: string,
     @Query('period') period?: string,
     @Query('domain') domain?: string,
+    @Query('groupBy') groupBy?: string,
   ) {
-    return this.reports.collectionRate(c, period, domain)
+    return this.reports.collectionRate(c, period, domain, { groupBy: groupBy === 'unit' ? 'unit' : 'be' })
   }
 
   /**
@@ -42,6 +43,22 @@ export class ReportsController {
   @Get('risk-detail')
   riskExposureDetail(@Param('communityId') c: string, @Query('period') period?: string) {
     return this.reports.riskExposureDetail(c, period)
+  }
+
+  /**
+   * Restanță + N-month cost forecast for one unit or one owner — see
+   * `ReportsService.forecastReport`'s own doc for what's a real invoice vs. an estimate.
+   * `unitCode` XOR `beCode` selects the target; `months` defaults to 3 (1–24).
+   */
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('forecast')
+  forecast(
+    @Param('communityId') c: string,
+    @Query('unitCode') unitCode?: string,
+    @Query('beCode') beCode?: string,
+    @Query('months') months?: string,
+  ) {
+    return this.reports.forecastReport(c, { unitCode, beCode, months: months != null ? Number(months) : undefined })
   }
 
   /**

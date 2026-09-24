@@ -38,9 +38,9 @@ export class FinanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Latest period that has computed be_statement rows (prefers CLOSED, else the newest prepared). */
-  private async latestStatementPeriod(communityId: string): Promise<{ id: string; code: string } | null> {
+  private async latestStatementPeriod(communityId: string): Promise<{ id: string; code: string; seq: number } | null> {
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select p.id, p.code
+      `select p.id, p.code, p.seq
          from period p
         where p.community_id = $1
           and exists (select 1 from be_statement bs where bs.period_id = p.id)
@@ -54,12 +54,64 @@ export class FinanceService {
   private async resolvePeriod(communityId: string, periodCode?: string) {
     if (periodCode) {
       const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
-        `select id, code from period where community_id=$1 and code=$2 limit 1`,
+        `select id, code, seq from period where community_id=$1 and code=$2 limit 1`,
         communityId, periodCode,
       )
       return rows?.[0] ?? null
     }
     return this.latestStatementPeriod(communityId)
+  }
+
+  /**
+   * Per billing-entity CPI (cotă-parte indiviză), summed across its member units — same shape as
+   * `ReportsService.cpiByBe` (unit's own latest-at-or-before-P SQM measure, membership resolved via
+   * the temporal window at seq P), duplicated here rather than cross-module-injected since it's a
+   * small, self-contained query and this service otherwise has no ReportsService dependency.
+   */
+  private async cpiByBe(communityId: string, seq: number): Promise<Map<string, number>> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `with latest as (
+         select distinct on (pm.scope_id) pm.scope_id as unit_id, pm.value
+           from period_measure pm
+           join period p on p.id = pm.period_id
+          where pm.community_id = $1 and pm.type_code = 'SQM'
+            and pm.scope_type = 'UNIT'
+          order by pm.scope_id,
+                   (p.seq <= $2) desc,
+                   case when p.seq <= $2 then -p.seq else p.seq end asc
+       ),
+       mem as (
+         select distinct on (bem.unit_id) bem.unit_id, bem.billing_entity_id
+           from billing_entity_member bem
+           join billing_entity be on be.id = bem.billing_entity_id
+          where be.community_id = $1
+          order by bem.unit_id,
+                   (bem.start_seq <= $2 and (bem.end_seq is null or bem.end_seq >= $2)) desc,
+                   bem.start_seq asc
+       )
+       select mem.billing_entity_id as be_id, sum(latest.value)::float8 as cpi
+         from latest
+         join mem on mem.unit_id = latest.unit_id
+        group by mem.billing_entity_id`,
+      communityId, seq,
+    )
+    return new Map(rows.map((r) => [r.be_id, Number(r.cpi ?? 0)]))
+  }
+
+  /** Same as `cpiByBe` but per unit, not summed across a BE's members — powers `receivables()`'s
+   * `groupBy: 'unit'` heatmap/list (tile size) and its CPI-proportional fallback split. */
+  private async cpiByUnit(communityId: string, seq: number): Promise<Map<string, number>> {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select distinct on (pm.scope_id) pm.scope_id as unit_id, pm.value::float8 as cpi
+         from period_measure pm
+         join period p on p.id = pm.period_id
+        where pm.community_id = $1 and pm.type_code = 'SQM' and pm.scope_type = 'UNIT'
+        order by pm.scope_id,
+                 (p.seq <= $2) desc,
+                 case when p.seq <= $2 then -p.seq else p.seq end asc`,
+      communityId, seq,
+    )
+    return new Map(rows.map((r) => [r.unit_id, Number(r.cpi ?? 0)]))
   }
 
   /**
@@ -73,14 +125,35 @@ export class FinanceService {
    * that have NO statement yet (uncommitted — e.g. the open period).
    *
    * totalDebt is the NET sum across every billing entity (credits from BEs in advance offset
-   * others' arrears), matching the avizier grand-total band exactly; debtors/debtorCount then
-   * filter to just the entities actually in arrears, since listing a credit balance in a "debtors"
-   * table wouldn't make sense. Each debtor's pctOfTotal is its share of the GROSS sum of listed
-   * debtors (not the netted totalDebt above) — "what fraction of the money owed to the
+   * others' arrears), matching the avizier grand-total band exactly; debtorCount counts just the
+   * entities actually in arrears (for the "Units with debt" KPI). `debtors` itself lists EVERY
+   * billing entity, including those at 0 or in credit (paid in advance) — the heatmap/list views
+   * want the full roster so a unit's good standing is visible, not just an absence from the list.
+   * Each row's pctOfTotal is its share of the GROSS sum of actual arrears only (not the netted
+   * totalDebt above, and 0 for a non-debtor row) — "what fraction of the money owed to the
    * association is owed by this owner," which is what a restanțieri list actually wants; it isn't
    * diluted by unrelated BEs sitting in credit.
+   *
+   * A BE with no CURRENTLY active unit membership at this period (a former owner whose
+   * BeStatement/ledger rows still carry a stale figure from before an ownership transfer, e.g. an
+   * owner who no longer holds any CPI) never appears in the roster — a former owner "no longer has
+   * property," so listing them as a debtor/paid-up row would misattribute a balance that in truth
+   * belongs to whoever holds the unit now. `totalDebt` is left as the raw, unfiltered net sum
+   * across every billing entity (unaffected), so it can disagree with the sum of listed rows by
+   * exactly such an orphaned balance — the real fix for that belongs in a `Correction` moving the
+   * balance to the current owner, not in silently hiding money from the community-wide total here.
+   *
+   * `groupBy: 'unit'` re-expresses the same `debtors` roster at unit grain instead of billing-
+   * entity grain, for a single-owner-multiple-units BE (see `splitTrustedForBe` elsewhere in this
+   * file). A single-unit BE's figure carries over exactly. A multi-unit BE's is split per unit
+   * from its own `be_unit_statement` rows when they're trustworthy (sum back to the BE's own
+   * total, `isUnitSplitTrusted`); otherwise — same spirit as the CPI fallback on a missing measure
+   * elsewhere in this method — it's ESTIMATED proportionally by each unit's own CPI share, since a
+   * visual roster showing a confident 0 for a unit whose owner demonstrably owes money would be
+   * more misleading than a labelled estimate. Do not treat `groupBy: 'unit'` figures as a ledger
+   * source of truth for per-unit collections — `debtors-by-fund`/`riskExposureDetail` are.
    */
-  async receivables(communityId: string, periodCode?: string) {
+  async receivables(communityId: string, periodCode?: string, groupBy: 'be' | 'unit' = 'be') {
     const period = await this.resolvePeriod(communityId, periodCode)
     if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, debtors: [], byFund: [] }
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
@@ -97,7 +170,7 @@ export class FinanceService {
             and not exists (select 1 from be_statement bs2 where bs2.period_id = le.period_id)
           group by le.billing_entity_id
        )
-       select be.code as "beCode", be.name as "beName",
+       select be.id as "beId", be.code as "beCode", be.name as "beName", be.display_name as "displayName",
               (coalesce(stmt.due_start,0) - coalesce(stmt.payments,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt
          from billing_entity be
          left join stmt on stmt.be_id = be.id
@@ -107,8 +180,85 @@ export class FinanceService {
       communityId, period.id,
     )
     const totalDebt = rows.reduce((s, r) => s + Number(r.debt), 0)
-    const debtors = rows.filter((r) => Number(r.debt) > 0.005)
-    const debtorsGrossTotal = debtors.reduce((s, r) => s + Number(r.debt), 0)
+    // Only a BE with a CURRENTLY active unit membership counts as a real debtor/roster row — see
+    // the method's own doc on why a former owner's stale balance must not surface here.
+    const activeBeRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select distinct bem.billing_entity_id as "beId"
+         from billing_entity_member bem
+         join billing_entity be on be.id = bem.billing_entity_id
+        where be.community_id = $1
+          and bem.start_seq <= $2 and (bem.end_seq is null or bem.end_seq >= $2)`,
+      communityId, period.seq,
+    )
+    const activeBeIds = new Set(activeBeRows.map((r) => r.beId))
+    const arrears = rows.filter((r) => Number(r.debt) > 0.005 && activeBeIds.has(r.beId))
+    const debtorsGrossTotal = arrears.reduce((s, r) => s + Number(r.debt), 0)
+    // CPI (cotă-parte indiviză) per BE — powers the heatmap view's square size on the frontend;
+    // null when a debtor's units have no SQM measure recorded, so the UI can fall back gracefully.
+    const cpiMap = await this.cpiByBe(communityId, period.seq)
+
+    // Active unit membership, computed once regardless of groupBy: the unit-grain split (below)
+    // needs full member rows; the BE-grain roster only needs each BE's own unit code list, so a
+    // multi-unit owner's row can say which units they cover (e.g. "AP 11, AP 11A").
+    const memberRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select bem.unit_id as "unitId", u.code as "unitCode", bem.billing_entity_id as "beId",
+              be.code as "beCode", be.name as "beName"
+         from billing_entity_member bem
+         join unit u on u.id = bem.unit_id
+         join billing_entity be on be.id = bem.billing_entity_id
+        where be.community_id = $1
+          and bem.start_seq <= $2 and (bem.end_seq is null or bem.end_seq >= $2)`,
+      communityId, period.seq,
+    )
+    const unitCodesByBe = new Map<string, string[]>()
+    for (const m of memberRows) unitCodesByBe.set(m.beId, [...(unitCodesByBe.get(m.beId) ?? []), m.unitCode])
+    // Name/displayName as of THIS period (same resolution as the avizier), so the roster's label
+    // (admin displayName, e.g. "AP 12" for a 3-unit entity) matches the avizier row for the period.
+    const nameHistory = await this.prisma.billingEntityNameHistory.findMany({
+      where: { billingEntity: { communityId } },
+      select: { billingEntityId: true, name: true, displayName: true, startSeq: true, endSeq: true },
+    })
+    const nameHistoryByBe = new Map<string, { name: string; displayName: string | null; startSeq: number; endSeq: number | null }[]>()
+    for (const h of nameHistory) nameHistoryByBe.set(h.billingEntityId, [...(nameHistoryByBe.get(h.billingEntityId) ?? []), h])
+
+    // groupBy: 'unit' — split each BE's already-computed `debt` (above) across its member units.
+    // See the method's own doc for the trusted-split-else-CPI-estimate rule.
+    let unitDebtors: { unitCode: string; beCode: string | null; beName: string | null; debt: number; cpi: number | null }[] = []
+    if (groupBy === 'unit') {
+      const debtByBe = new Map(rows.map((r) => [r.beId, Number(r.debt)]))
+      const unitStmtRows: any[] = await (this.prisma as any).$queryRawUnsafe(
+        `select unit_id as "unitId", sum(due_start - payments)::float8 as raw
+           from be_unit_statement
+          where community_id = $1 and period_id = $2
+          group by unit_id`,
+        communityId, period.id,
+      )
+      const rawByUnit = new Map(unitStmtRows.map((r) => [r.unitId, Number(r.raw)]))
+      const cpiByUnit = await this.cpiByUnit(communityId, period.seq)
+      const unitsByBe = new Map<string, any[]>()
+      for (const m of memberRows) unitsByBe.set(m.beId, [...(unitsByBe.get(m.beId) ?? []), m])
+
+      for (const [beId, units] of unitsByBe) {
+        const beDebt = debtByBe.get(beId) ?? 0
+        const cpiOf = (unitId: string) => (cpiByUnit.has(unitId) ? round2(cpiByUnit.get(unitId)!) : null)
+        if (units.length === 1) {
+          const m = units[0]
+          unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt), cpi: cpiOf(m.unitId) })
+          continue
+        }
+        const sumRaw = units.reduce((s, m) => s + (rawByUnit.get(m.unitId) ?? 0), 0)
+        if (isUnitSplitTrusted(sumRaw, beDebt)) {
+          for (const m of units) unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(rawByUnit.get(m.unitId) ?? 0), cpi: cpiOf(m.unitId) })
+        } else {
+          const cpiSum = units.reduce((s, m) => s + (cpiByUnit.get(m.unitId) ?? 0), 0)
+          for (const m of units) {
+            const share = cpiSum > 0 ? (cpiByUnit.get(m.unitId) ?? 0) / cpiSum : 1 / units.length
+            unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt * share), cpi: cpiOf(m.unitId) })
+          }
+        }
+      }
+    }
+    const unitGrossTotal = unitDebtors.filter((r) => r.debt > 0.005).reduce((s, r) => s + r.debt, 0)
 
     // Per-fund breakdown for the Dashboard's "Restanțe" card expander — summed directly from
     // be_statement's own (billing entity, fund) rows, not re-derived from the entity-level CTE
@@ -129,12 +279,24 @@ export class FinanceService {
     return {
       periodCode: period.code,
       totalDebt: round2(totalDebt),
-      debtorCount: debtors.length,
-      debtors: debtors.map((r) => ({
-        ...r,
-        debt: round2(r.debt),
-        pctOfTotal: debtorsGrossTotal > 0 ? round2((Number(r.debt) / debtorsGrossTotal) * 100) : 0,
-      })),
+      debtorCount: arrears.length,
+      debtors: groupBy === 'unit'
+        ? unitDebtors.map((r) => ({
+            unitCode: r.unitCode, beCode: r.beCode, beName: r.beName,
+            debt: r.debt,
+            pctOfTotal: r.debt > 0.005 && unitGrossTotal > 0 ? round2((r.debt / unitGrossTotal) * 100) : 0,
+            cpi: r.cpi,
+          }))
+        : rows.filter((r) => activeBeIds.has(r.beId)).map((r) => ({
+            beCode: r.beCode,
+            ...(({ name, displayName }) => ({ beName: name, displayName }))(
+              resolveBeNameShared({ id: r.beId, name: r.beName, displayName: r.displayName ?? null }, period.seq, nameHistoryByBe),
+            ),
+            debt: round2(r.debt),
+            pctOfTotal: Number(r.debt) > 0.005 && debtorsGrossTotal > 0 ? round2((Number(r.debt) / debtorsGrossTotal) * 100) : 0,
+            cpi: cpiMap.has(r.beId) ? round2(cpiMap.get(r.beId)!) : null,
+            unitCodes: unitCodesByBe.get(r.beId) ?? [],
+          })),
       byFund: byFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) })),
     }
   }
