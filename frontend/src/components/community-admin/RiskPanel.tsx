@@ -45,6 +45,7 @@ type Report = {
 type Row = { key: string; beCode?: string | null; label: { primary: string; secondary?: string }; unitCodes: string[]; byFund: Record<string, FundCell>; outstanding: number; weightedAgeDays: number; order: number }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+const FOOTER_KEY = '__total__'
 const money = (n?: number | null) => (n == null ? '—' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : '—')
 // Verde / Galben / Portocaliu / Roșu — four clearly distinct hues per tier, not two shades of orange.
@@ -122,6 +123,8 @@ export function RiskPanel({ communityId }: { communityId: string }) {
   const [viewMode, setViewMode] = React.useState<'fund' | 'age'>('fund')
   const [rowMode, setRowMode] = React.useState<'unit' | 'owner'>('unit')
   const [expandedTier, setExpandedTier] = React.useState<{ key: string; tierKey: string } | null>(null)
+  // Which Total's "Toate restanțele" drilldown is open: a row key, or FOOTER_KEY for the TOTAL row.
+  const [openTotal, setOpenTotal] = React.useState<string | null>(null)
   const [filterText, setFilterText] = React.useState('')
   const [sortKey, setSortKey] = React.useState<string | null>(null)
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc')
@@ -391,6 +394,36 @@ export function RiskPanel({ communityId }: { communityId: string }) {
     )
   }
 
+  // Total cell (both views): a button opening the "Toate restanțele" drilldown under the row.
+  const rowSlices = (row: Row, withUnit: boolean): AllSlice[] => Object.keys(row.byFund).flatMap((fundCode) =>
+    row.byFund[fundCode].slices.map((s) => ({ ...s, fundCode, ...(withUnit ? { unitLabel: row.label.primary } : {}) })))
+  const rowCredit = (row: Row) => round2(Object.values(row.byFund).reduce((s, c) => s + Math.min(0, c.liveTotal), 0))
+  const renderTotalCell = (row: Row) => {
+    const isOpen = openTotal === row.key
+    const hasSlices = rowSlices(row, false).some((s) => s.principal > 0.005)
+    const amount = <div style={{ fontWeight: 700, color: row.outstanding > 0.005 ? undefined : 'var(--success,#16a34a)' }}>{money(row.outstanding)}</div>
+    return (
+      <td style={{ padding: '6px 10px' }}>
+        {hasSlices ? (
+          <button type="button" className="btn ghost small" onClick={() => setOpenTotal(isOpen ? null : row.key)}
+            title={t('riskDetail.allSlicesHint', 'Click pentru toate restanțele, grupate pe fond sau pe nivel de risc (după vizualizarea curentă)')}
+            style={{ padding: '2px 6px', fontSize: 'inherit', background: isOpen ? 'var(--muted-bg, #eef2ff)' : undefined }}>
+            {amount}
+          </button>
+        ) : amount}
+        <AgeSubtitle avg={row.weightedAgeDays} max={rowMaxAge.get(row.key) ?? 0} t={t} />
+      </td>
+    )
+  }
+  const renderAllSlicesRow = (row: Row) => openTotal === row.key && data ? (
+    <tr>
+      <td colSpan={colCount} style={{ padding: '4px 10px 14px', background: 'var(--muted-bg, #fafafa)' }}>
+        <AllSlicesTable key={viewMode} slices={rowSlices(row, false)} groupBy={viewMode} funds={data.funds} tiers={data.tiers}
+          credit={rowCredit(row)} outstanding={row.outstanding} defaultCollapsed={false} t={t} />
+      </td>
+    </tr>
+  ) : null
+
   const renderSelectedTotalCell = (row: Row) => hasSelection ? (
     <td style={{ padding: '6px 10px', fontWeight: 700, background: 'var(--muted-bg, #f7f7f8)' }}>{money(selectedTotal(row))}</td>
   ) : null
@@ -432,12 +465,10 @@ export function RiskPanel({ communityId }: { communityId: string }) {
               </td>
             )
           })}
-          <td style={{ padding: '6px 10px' }}>
-            <div style={{ fontWeight: 700, color: row.outstanding > 0.005 ? undefined : 'var(--success,#16a34a)' }}>{money(row.outstanding)}</div>
-            <AgeSubtitle avg={row.weightedAgeDays} max={rowMaxAge.get(row.key) ?? 0} t={t} />
-          </td>
+          {renderTotalCell(row)}
           {renderSelectedTotalCell(row)}
         </tr>
+        {renderAllSlicesRow(row)}
         {openFund ? (
           <tr>
             <td colSpan={colCount} style={{ padding: '4px 10px 14px', background: 'var(--muted-bg, #fafafa)' }}>
@@ -484,12 +515,10 @@ export function RiskPanel({ communityId }: { communityId: string }) {
           {/* row.outstanding, NOT tierData.total: tierData only sums slices from funds the row
               actually owes on, so a row that's ahead on one fund and behind on another would show
               a Total here that doesn't net the credit, disagreeing with the fund view and avizier. */}
-          <td style={{ padding: '6px 10px' }}>
-            <div style={{ fontWeight: 700, color: row.outstanding > 0.005 ? undefined : 'var(--success,#16a34a)' }}>{money(row.outstanding)}</div>
-            <AgeSubtitle avg={row.weightedAgeDays} max={rowMaxAge.get(row.key) ?? 0} t={t} />
-          </td>
+          {renderTotalCell(row)}
           {renderSelectedTotalCell(row)}
         </tr>
+        {renderAllSlicesRow(row)}
         {openTier ? (
           <tr>
             <td colSpan={colCount} style={{ padding: '4px 10px 14px', background: 'var(--muted-bg, #fafafa)' }}>
@@ -730,11 +759,24 @@ export function RiskPanel({ communityId }: { communityId: string }) {
                     )
                   })}
                   <td style={{ padding: '8px 10px' }}>
-                    <div>{money(round2(sortedRows.reduce((s, r) => s + r.outstanding, 0)))}</div>
+                    <button type="button" className="btn ghost small" onClick={() => setOpenTotal(openTotal === FOOTER_KEY ? null : FOOTER_KEY)}
+                      title={t('riskDetail.allSlicesHint', 'Click pentru toate restanțele, grupate pe fond sau pe nivel de risc (după vizualizarea curentă)')}
+                      style={{ padding: '2px 6px', fontSize: 'inherit', fontWeight: 700, background: openTotal === FOOTER_KEY ? 'var(--muted-bg, #eef2ff)' : undefined }}>
+                      {money(round2(sortedRows.reduce((s, r) => s + r.outstanding, 0)))}
+                    </button>
                     <AgeSubtitle avg={footerWeightedAge} max={footerMaxAge} t={t} />
                   </td>
                   {hasSelection ? <td style={{ padding: '8px 10px' }}>{money(round2(sortedRows.reduce((s, r) => s + selectedTotal(r), 0)))}</td> : null}
                 </tr>
+                {openTotal === FOOTER_KEY ? (
+                  <tr>
+                    <td colSpan={colCount} style={{ padding: '4px 10px 14px', background: 'var(--muted-bg, #fafafa)', fontWeight: 400 }}>
+                      {/* every visible row's slices, labelled by row; starts folded — it's the whole portfolio */}
+                      <AllSlicesTable key={`${viewMode}:${rowMode}`} slices={sortedRows.flatMap((r) => rowSlices(r, true))} groupBy={viewMode}
+                        funds={data.funds} tiers={data.tiers} credit={round2(sortedRows.reduce((s, r) => s + rowCredit(r), 0))} outstanding={round2(sortedRows.reduce((s, r) => s + r.outstanding, 0))} defaultCollapsed t={t} />
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -852,6 +894,127 @@ function RowTierSliceTable({ tierLabel, entry, funds, t }: {
           </tbody>
         </table>
       )}
+    </div>
+  )
+}
+
+// "Toate restanțele" drilldown, opened from a Total (a row's, or the footer's): EVERY slice behind
+// it, each with its own risk dot, grouped by fund ("Pe fonduri") or by risk tier ("Pe vechime") to
+// match the matrix's current view. Each group folds on its header, which carries the group's worst
+// dot, subtotal and ages. Footer usage passes `unitLabel` on each slice and starts folded.
+type AllSlice = Slice & { fundCode: string; unitLabel?: string }
+function AllSlicesTable({ slices, groupBy, funds, tiers, credit, outstanding, defaultCollapsed, t }: {
+  slices: AllSlice[]; groupBy: 'fund' | 'age'; funds: FundMeta[]; tiers: TierMeta[]; credit: number; outstanding: number
+  defaultCollapsed: boolean; t: (k: string, d?: string) => string
+}) {
+  const live = slices.filter((s) => s.principal > 0.005)
+  const showUnit = live.some((s) => s.unitLabel)
+  const fundName = new Map(funds.map((f) => [f.fundCode, f.fundName]))
+  const groups: { key: string; label: string; tier?: TierMeta; slices: AllSlice[] }[] = groupBy === 'fund'
+    ? funds.map((f) => ({ key: f.fundCode, label: f.fundName, slices: live.filter((s) => s.fundCode === f.fundCode) }))
+    : tiers.map((tr) => ({ key: tr.key, label: tr.label, tier: tr, slices: live.filter((s) => tierForDays(tiers, s.ageDays)?.key === tr.key) }))
+  const shown = groups.filter((g) => g.slices.length)
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set(defaultCollapsed ? shown.map((g) => g.key) : []))
+  const toggle = (k: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const byDate = (a: AllSlice, b: AllSlice) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime() || b.ageDays - a.ageDays
+  const ages = (xs: AllSlice[]) => {
+    const p = xs.reduce((s, x) => s + x.principal, 0)
+    return { avg: p > 0.005 ? xs.reduce((s, x) => s + x.principal * x.ageDays, 0) / p : 0, max: xs.reduce((m, x) => Math.max(m, x.ageDays), 0) }
+  }
+  const cols = 6 + (showUnit ? 1 : 0)
+  const totalP = live.reduce((s, r) => s + r.principal, 0)
+  const all = ages(live)
+  // what reconciles the listed arrears back to the Total clicked: credits elsewhere, and this
+  // period's charges that aren't due yet (no age, so no slice)
+  const notDue = round2(outstanding - totalP - credit)
+
+  if (!live.length) return <div className="muted" style={{ fontSize: 12 }}>{t('risk.noRows', 'Nicio restanță urmărită.')}</div>
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <strong style={{ fontSize: 12 }}>{t('riskDetail.allSlices', 'Toate restanțele')} · {groupBy === 'fund' ? t('riskDetail.viewFund', 'Pe fonduri') : t('riskDetail.viewAge', 'Pe vechime')}</strong>
+        <span className="row" style={{ gap: 4 }}>
+          <button type="button" className="btn ghost small" onClick={() => setCollapsed(new Set())}>{t('riskDetail.expandAll', 'Extinde tot')}</button>
+          <button type="button" className="btn ghost small" onClick={() => setCollapsed(new Set(shown.map((g) => g.key)))}>{t('riskDetail.collapseAll', 'Restrânge tot')}</button>
+        </span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+        <thead>
+          <tr style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#ddd)' }}>
+            <th style={{ textAlign: 'left', padding: '4px 8px' }}>{groupBy === 'fund' ? t('riskDetail.colTier', 'Nivel risc') : t('riskDetail.colFund', 'Fond')}</th>
+            {showUnit ? <th style={{ textAlign: 'left', padding: '4px 8px' }}>{t('risk.entity', 'Unitate')}</th> : null}
+            <th style={{ textAlign: 'left', padding: '4px 8px' }}>{t('riskDetail.colOrigin', 'Lună origine')}</th>
+            <th style={{ padding: '4px 8px' }}>{t('riskDetail.colDue', 'Scadență')}</th>
+            <th style={{ padding: '4px 8px' }}>{t('riskDetail.colDays', 'Zile')}</th>
+            <th style={{ padding: '4px 8px' }}>{t('riskDetail.colPrincipal', 'Restanță')}</th>
+            <th style={{ padding: '4px 8px' }}>{t('riskDetail.colPenalty', 'Penalizare estimată')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((g) => {
+            const open = !collapsed.has(g.key)
+            const rows = g.slices.slice().sort(byDate)
+            const ga = ages(rows)
+            const worst = g.tier ?? tierForDays(tiers, ga.max)
+            return (
+              <React.Fragment key={g.key}>
+                <tr onClick={() => toggle(g.key)} style={{ cursor: 'pointer', borderTop: '1px solid var(--border,#ddd)', background: 'var(--muted-bg, #f4f4f5)', textAlign: 'right', fontWeight: 700 }}>
+                  <td colSpan={cols - 3} style={{ textAlign: 'left', padding: '5px 8px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="muted" style={{ width: 10 }}>{open ? '▾' : '▸'}</span>
+                      <RiskDotSpan tier={worst} />
+                      {g.label}
+                      <span className="muted" style={{ fontWeight: 400 }}>({rows.length})</span>
+                    </span>
+                  </td>
+                  <td style={{ padding: '5px 8px', fontWeight: 400 }}><AgeSubtitle avg={ga.avg} max={ga.max} t={t} /></td>
+                  <td style={{ padding: '5px 8px' }}>{money(rows.reduce((s, r) => s + r.principal, 0))}</td>
+                  <td style={{ padding: '5px 8px', color: 'var(--danger,#b45309)' }}>{money(rows.reduce((s, r) => s + r.penaltyProjected, 0))}</td>
+                </tr>
+                {open ? rows.map((r, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid var(--border,#eee)', textAlign: 'right' }}>
+                    <td style={{ textAlign: 'left', padding: '4px 8px 4px 24px' }}>
+                      {groupBy === 'fund' ? (tierForDays(tiers, r.ageDays)?.label ?? '') : (fundName.get(r.fundCode) ?? r.fundCode)}
+                    </td>
+                    {showUnit ? <td style={{ textAlign: 'left', padding: '4px 8px' }}>{r.unitLabel ?? ''}</td> : null}
+                    <td style={{ textAlign: 'left', padding: '4px 8px' }}>{monthLabel(r.originPeriodCode) ?? t('penledger.carriedOver', 'Restanță reportată')}</td>
+                    <td style={{ padding: '4px 8px' }}>{fmtDate(r.dueDate)}</td>
+                    <td style={{ padding: '4px 8px' }}>{r.ageDays}</td>
+                    <td style={{ padding: '4px 8px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                        {money(r.principal)}
+                        <RiskDotSpan tier={tierForDays(tiers, r.ageDays)} />
+                      </span>
+                    </td>
+                    <td style={{ padding: '4px 8px', color: 'var(--danger,#b45309)' }}>{money(r.penaltyProjected)}</td>
+                  </tr>
+                )) : null}
+              </React.Fragment>
+            )
+          })}
+          <tr style={{ borderTop: '2px solid var(--border,#ccc)', textAlign: 'right', fontWeight: 700 }}>
+            <td colSpan={cols - 3} style={{ textAlign: 'left', padding: '5px 8px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <RiskDotSpan tier={tierForDays(tiers, all.max)} />
+                {t('riskDetail.total', 'Total')} ({live.length})
+              </span>
+            </td>
+            <td style={{ padding: '5px 8px', fontWeight: 400 }}><AgeSubtitle avg={all.avg} max={all.max} t={t} /></td>
+            <td style={{ padding: '5px 8px' }}>{money(totalP)}</td>
+            <td style={{ padding: '5px 8px', color: 'var(--danger,#b45309)' }}>{money(live.reduce((s, r) => s + r.penaltyProjected, 0))}</td>
+          </tr>
+        </tbody>
+      </table>
+      {notDue > 0.005 ? (
+        <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+          {t('riskDetail.notDueNote', 'Sume curente, încă nescadente (nelistate): {amount}').replace('{amount}', money(notDue))}
+        </div>
+      ) : null}
+      {credit < -0.005 ? (
+        <div className="muted" style={{ fontSize: 11, marginTop: 4, color: 'var(--success,#16a34a)' }}>
+          {t('riskDetail.creditNote', 'Credite pe alte fonduri (nelistate): {amount}').replace('{amount}', money(credit))}
+        </div>
+      ) : null}
     </div>
   )
 }
