@@ -4,6 +4,20 @@ import { useI18n } from '../../i18n/useI18n'
 
 type SortKey = 'date' | 'amount'
 type GroupBy = 'none' | 'account' | 'fund'
+// One filter per table column: `text` = case- and diacritic-insensitive "contains", `pick` = a
+// value from the column's own distinct values, plus a date and an amount range.
+type Filters = {
+  dateFrom: string; dateTo: string; amountMin: string; amountMax: string
+  account: string; direction: string; kind: string; fund: string
+  unit: string; counterparty: string; invoice: string; memo: string
+}
+const EMPTY_FILTERS: Filters = {
+  dateFrom: '', dateTo: '', amountMin: '', amountMax: '',
+  account: '', direction: '', kind: '', fund: '',
+  unit: '', counterparty: '', invoice: '', memo: '',
+}
+const fold = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+const dayOf = (ts?: string | null) => (ts ? new Date(ts).toISOString().slice(0, 10) : '')
 
 // The bank/cash register — every CashTx row (bank RON, bank EUR, petty cash), the same data the
 // dashboard's "Sold Bancă/Numerar" and "Încasări" cards summarize. Deep-linked via URL params
@@ -31,6 +45,10 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
   const [sortKey, setSortKey] = React.useState<SortKey | null>(null)
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc')
   const [groupBy, setGroupBy] = React.useState<GroupBy>('none')
+  const [filters, setFilters] = React.useState<Filters>(EMPTY_FILTERS)
+  const [search, setSearch] = React.useState('')
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set())
+  const setFilter = (k: keyof Filters, v: string) => setFilters((f) => ({ ...f, [k]: v }))
 
   const isReceiptsScope = scope === 'receipts' && !!period
   const isFixedMultiAccount = !!fixedAccountIds && !initialAccount && !isReceiptsScope
@@ -65,12 +83,49 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
     return () => { alive = false }
   }, [api, communityId, selectedAccountId, isReceiptsScope, period, accounts])
 
-  const total = rows.reduce((acc: Record<string, number>, r: any) => {
+  const accountOf = (r: any) => r.account?.name || '—'
+  const fundOf = (r: any) => r.fund?.name || r.fund?.code || '—'
+  const directionLabel = (r: any) => (r.direction === 'IN' ? t('cashRegister.in', 'Încasare') : t('cashRegister.out', 'Plată'))
+
+  // Distinct values per pick-list column, from the rows actually loaded.
+  const distinct = (get: (r: any) => string) => Array.from(new Set(rows.map(get))).sort((a, b) => a.localeCompare(b, 'ro'))
+  const accountOptions = React.useMemo(() => distinct(accountOf), [rows])
+  const kindOptions = React.useMemo(() => distinct((r) => r.kind || '—'), [rows])
+  const fundOptions = React.useMemo(() => distinct(fundOf), [rows])
+
+  const activeFilterCount = Object.values(filters).filter((v) => v !== '').length + (search.trim() ? 1 : 0)
+  const filteredRows = React.useMemo(() => {
+    const q = fold(search.trim())
+    const has = (hay: unknown, needle: string) => !needle || fold(hay).includes(fold(needle))
+    const min = filters.amountMin !== '' ? Number(filters.amountMin.replace(',', '.')) : null
+    const max = filters.amountMax !== '' ? Number(filters.amountMax.replace(',', '.')) : null
+    return rows.filter((r: any) => {
+      const day = dayOf(r.ts)
+      const amount = Number(r.amount || 0)
+      if (filters.dateFrom && day < filters.dateFrom) return false
+      if (filters.dateTo && day > filters.dateTo) return false
+      if (min != null && !Number.isNaN(min) && amount < min) return false
+      if (max != null && !Number.isNaN(max) && amount > max) return false
+      if (filters.account && accountOf(r) !== filters.account) return false
+      if (filters.direction && r.direction !== filters.direction) return false
+      if (filters.kind && (r.kind || '—') !== filters.kind) return false
+      if (filters.fund && fundOf(r) !== filters.fund) return false
+      if (!has(r.unit, filters.unit) || !has(r.counterpartyName, filters.counterparty) || !has(r.invoiceNumber, filters.invoice) || !has(r.memo, filters.memo)) return false
+      if (q) {
+        const all = [day, r.ts ? new Date(r.ts).toLocaleDateString('ro-RO') : '', accountOf(r), directionLabel(r), r.kind, amount.toFixed(2),
+          r.unit, r.counterpartyName, r.invoiceNumber, fundOf(r), r.memo].map(fold).join(' ')
+        if (!all.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, filters, search])
+
+  const netOf = (list: any[]) => list.reduce((acc: Record<string, number>, r: any) => {
     const ccy = r.currency || 'RON'
-    const amt = Number(r.amount || 0) * (r.direction === 'OUT' ? -1 : 1)
-    acc[ccy] = (acc[ccy] ?? 0) + amt
+    acc[ccy] = (acc[ccy] ?? 0) + Number(r.amount || 0) * (r.direction === 'OUT' ? -1 : 1)
     return acc
   }, {})
+  const total = netOf(filteredRows)
 
   const money = (n: number, ccy: string) =>
     `${n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`
@@ -88,24 +143,62 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
     const cmp = sortValue(a) - sortValue(b)
     return sortDir === 'asc' ? cmp : -cmp
   }
-  const groupKeyOf = (r: any): string =>
-    groupBy === 'account' ? (r.account?.name || '—') : (r.fund?.name || r.fund?.code || '—')
+  const groupKeyOf = (r: any): string => (groupBy === 'account' ? accountOf(r) : fundOf(r))
 
-  let displayRows = rows
-  if (groupBy !== 'none') {
-    displayRows = [...rows].sort((a, b) => {
-      const byGroup = groupKeyOf(a).localeCompare(groupKeyOf(b))
-      return byGroup !== 0 ? byGroup : (sortKey ? compare(a, b) : 0)
-    })
-  } else if (sortKey) {
-    displayRows = [...rows].sort(compare)
-  }
+  const displayRows = sortKey ? [...filteredRows].sort(compare) : filteredRows
+  // Groups keep the (sorted) row order inside; each folds on its header.
+  const groups = React.useMemo(() => {
+    if (groupBy === 'none') return []
+    const m = new Map<string, any[]>()
+    for (const r of displayRows) m.set(groupKeyOf(r), [...(m.get(groupKeyOf(r)) ?? []), r])
+    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], 'ro')).map(([key, list]) => ({ key, rows: list, net: netOf(list) }))
+  }, [displayRows, groupBy])
+  const toggleGroup = (k: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
 
   const SortIcon = ({ k }: { k: SortKey }) => (
     <button type="button" onClick={() => toggleSort(k)} title={t('avizier.sort', 'Sortează')}
       style={{ background: 'none', border: 'none', padding: '0 0 0 3px', cursor: 'pointer', color: sortKey === k ? 'var(--accent, #0071e3)' : 'var(--border, #ccc)', fontSize: 10, verticalAlign: 'middle' }}>
       {sortKey === k ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
     </button>
+  )
+
+  // Filter-row controls: compact, full-width in their cell, highlighted while active.
+  const ctl = (active: boolean): React.CSSProperties => ({
+    width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: 12, padding: '4px 6px', borderRadius: 6,
+    border: `1px solid ${active ? 'var(--accent, #0071e3)' : 'var(--border, #ddd)'}`,
+    background: active ? 'var(--accent-soft, rgba(0,113,227,.08))' : 'var(--panel, #fff)', font: 'inherit',
+  })
+  const textFilter = (k: keyof Filters, label: string) => (
+    <input type="search" value={filters[k]} onChange={(e) => setFilter(k, e.target.value)}
+      placeholder={t('cashRegister.filterText', 'Filtrează…')} aria-label={label} style={ctl(!!filters[k])} />
+  )
+  const pickFilter = (k: keyof Filters, label: string, options: { value: string; label: string }[]) => (
+    <select value={filters[k]} onChange={(e) => setFilter(k, e.target.value)} aria-label={label} style={ctl(!!filters[k])}>
+      <option value="">{t('cashRegister.filterAll', 'Toate')}</option>
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  )
+  const asOptions = (xs: string[]) => xs.map((x) => ({ value: x, label: x }))
+
+  const renderRow = (r: any) => (
+    <tr key={r.id} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.ts ? new Date(r.ts).toLocaleDateString('ro-RO') : '—'}</td>
+      <td style={{ padding: '6px 8px' }}>{accountOf(r)}</td>
+      <td style={{ padding: '6px 8px' }}>
+        <span className={`badge ${r.direction === 'IN' ? 'positive' : 'negative'}`}>{directionLabel(r)}</span>
+      </td>
+      <td style={{ padding: '6px 8px' }}>{r.kind || '—'}</td>
+      <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {money(Number(r.amount || 0), r.currency || 'RON')}
+      </td>
+      <td style={{ padding: '6px 8px' }}>{r.unit || '—'}</td>
+      <td style={{ padding: '6px 8px' }}>{r.counterpartyName || '—'}</td>
+      <td style={{ padding: '6px 8px' }}>{r.invoiceNumber || '—'}</td>
+      <td style={{ padding: '6px 8px' }}>{fundOf(r)}</td>
+      <td style={{ padding: '6px 8px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.memo || ''}>
+        {r.memo || '—'}
+      </td>
+    </tr>
   )
 
   return (
@@ -132,6 +225,20 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
         )}
       </div>
 
+      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="search" className="input" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('cashRegister.search', 'Caută în tot registrul…')} aria-label={t('cashRegister.search', 'Caută în tot registrul…')}
+          style={{ flex: '1 1 260px', minWidth: 200 }} />
+        {activeFilterCount ? (
+          <button type="button" className="btn ghost small" onClick={() => { setFilters(EMPTY_FILTERS); setSearch('') }}>
+            ✕ {t('cashRegister.resetFilters', 'Resetează filtrele')} ({activeFilterCount})
+          </button>
+        ) : null}
+        <span className="muted" style={{ fontSize: 12 }}>
+          {t('cashRegister.shown', '{shown} din {total} tranzacții').replace('{shown}', String(filteredRows.length)).replace('{total}', String(rows.length))}
+        </span>
+      </div>
+
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
           {Object.entries(total).map(([ccy, sum]) => (
@@ -140,14 +247,20 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
             </span>
           ))}
         </div>
-        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+        <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="muted" style={{ fontSize: 12 }}>{t('cashRegister.groupBy', 'Grupează după')}:</span>
           <button type="button" className={`btn ghost small ${groupBy === 'none' ? 'primary' : 'secondary'}`}
             onClick={() => setGroupBy('none')}>{t('cashRegister.groupNone', 'Fără')}</button>
           <button type="button" className={`btn ghost small ${groupBy === 'account' ? 'primary' : 'secondary'}`}
-            onClick={() => setGroupBy('account')}>{t('cashRegister.account', 'Cont')}</button>
+            onClick={() => { setGroupBy('account'); setCollapsed(new Set()) }}>{t('cashRegister.account', 'Cont')}</button>
           <button type="button" className={`btn ghost small ${groupBy === 'fund' ? 'primary' : 'secondary'}`}
-            onClick={() => setGroupBy('fund')}>{t('funds.label', 'Fond')}</button>
+            onClick={() => { setGroupBy('fund'); setCollapsed(new Set()) }}>{t('funds.label', 'Fond')}</button>
+          {groupBy !== 'none' ? (
+            <>
+              <button type="button" className="btn ghost small" onClick={() => setCollapsed(new Set())}>{t('cashRegister.expandAll', 'Extinde tot')}</button>
+              <button type="button" className="btn ghost small" onClick={() => setCollapsed(new Set(groups.map((g) => g.key)))}>{t('cashRegister.collapseAll', 'Restrânge tot')}</button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -173,39 +286,56 @@ export function CashRegisterPanel({ communityId }: { communityId: string }) {
                 <th style={{ padding: '6px 8px' }}>{t('funds.label', 'Fond')}</th>
                 <th style={{ padding: '6px 8px' }}>{t('cashRegister.memo', 'Descriere')}</th>
               </tr>
+              {/* One filter per column, right under its header. */}
+              <tr style={{ verticalAlign: 'top' }}>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400, minWidth: 118 }}>
+                  <div className="stack" style={{ gap: 3 }}>
+                    <input type="date" value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)}
+                      aria-label={t('cashRegister.dateFrom', 'De la')} title={t('cashRegister.dateFrom', 'De la')} style={ctl(!!filters.dateFrom)} />
+                    <input type="date" value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)}
+                      aria-label={t('cashRegister.dateTo', 'Până la')} title={t('cashRegister.dateTo', 'Până la')} style={ctl(!!filters.dateTo)} />
+                  </div>
+                </th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{pickFilter('account', t('cashRegister.account', 'Cont'), asOptions(accountOptions))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{pickFilter('direction', t('cashRegister.direction', 'Sens'), [{ value: 'IN', label: t('cashRegister.in', 'Încasare') }, { value: 'OUT', label: t('cashRegister.out', 'Plată') }])}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{pickFilter('kind', t('cashRegister.kind', 'Tip'), asOptions(kindOptions))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400, minWidth: 90 }}>
+                  <div className="stack" style={{ gap: 3 }}>
+                    <input type="text" inputMode="decimal" value={filters.amountMin} onChange={(e) => setFilter('amountMin', e.target.value)}
+                      placeholder={t('cashRegister.amountMin', 'Min')} aria-label={t('cashRegister.amountMin', 'Min')} style={{ ...ctl(!!filters.amountMin), textAlign: 'right' }} />
+                    <input type="text" inputMode="decimal" value={filters.amountMax} onChange={(e) => setFilter('amountMax', e.target.value)}
+                      placeholder={t('cashRegister.amountMax', 'Max')} aria-label={t('cashRegister.amountMax', 'Max')} style={{ ...ctl(!!filters.amountMax), textAlign: 'right' }} />
+                  </div>
+                </th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{textFilter('unit', t('cashRegister.unit', 'Unitate'))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{textFilter('counterparty', t('cashRegister.counterparty', 'De la / Furnizor'))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{textFilter('invoice', t('cashRegister.invoiceNumber', 'Factură'))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{pickFilter('fund', t('funds.label', 'Fond'), asOptions(fundOptions))}</th>
+                <th style={{ padding: '2px 4px 6px', fontWeight: 400 }}>{textFilter('memo', t('cashRegister.memo', 'Descriere'))}</th>
+              </tr>
             </thead>
             <tbody>
-              {displayRows.map((r: any, i: number) => {
-                const showGroupHeader = groupBy !== 'none' && (i === 0 || groupKeyOf(displayRows[i - 1]) !== groupKeyOf(r))
+              {!filteredRows.length ? (
+                <tr><td colSpan={10} className="muted" style={{ padding: 14, textAlign: 'center' }}>{t('cashRegister.noMatch', 'Nicio tranzacție nu corespunde filtrelor.')}</td></tr>
+              ) : groupBy === 'none' ? displayRows.map(renderRow) : groups.map((g) => {
+                const open = !collapsed.has(g.key)
                 return (
-                  <React.Fragment key={r.id}>
-                    {showGroupHeader && (
-                      <tr>
-                        <td colSpan={10} style={{ padding: '10px 8px 4px', fontWeight: 700, color: 'var(--muted, #666)', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                          {groupKeyOf(r)}
-                        </td>
-                      </tr>
-                    )}
-                    <tr style={{ borderTop: '1px solid var(--border, #eee)' }}>
-                      <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.ts ? new Date(r.ts).toLocaleDateString('ro-RO') : '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{r.account?.name || '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <span className={`badge ${r.direction === 'IN' ? 'positive' : 'negative'}`}>
-                          {r.direction === 'IN' ? t('cashRegister.in', 'Încasare') : t('cashRegister.out', 'Plată')}
+                  <React.Fragment key={g.key}>
+                    <tr onClick={() => toggleGroup(g.key)} title={t('cashRegister.groupToggle', 'Click pentru a deschide / închide grupul')}
+                      style={{ cursor: 'pointer', background: 'var(--muted-bg, #f4f4f5)', borderTop: '2px solid var(--border, #ddd)' }}>
+                      <td colSpan={4} style={{ padding: '8px', fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span className="muted" style={{ width: 10 }}>{open ? '▾' : '▸'}</span>
+                          {g.key}
+                          <span className="muted" style={{ fontWeight: 400, textTransform: 'none' }}>({g.rows.length})</span>
                         </span>
                       </td>
-                      <td style={{ padding: '6px 8px' }}>{r.kind || '—'}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {money(Number(r.amount || 0), r.currency || 'RON')}
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {Object.entries(g.net).map(([ccy, sum]) => <div key={ccy}>{money(sum, ccy)}</div>)}
                       </td>
-                      <td style={{ padding: '6px 8px' }}>{r.unit || '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{r.counterpartyName || '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{r.invoiceNumber || '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{r.fund?.name || r.fund?.code || '—'}</td>
-                      <td style={{ padding: '6px 8px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.memo || ''}>
-                        {r.memo || '—'}
-                      </td>
+                      <td colSpan={5} />
                     </tr>
+                    {open ? g.rows.map(renderRow) : null}
                   </React.Fragment>
                 )
               })}
