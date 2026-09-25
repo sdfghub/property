@@ -168,6 +168,10 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
   // Same "Încasări" toggle as the avizier: the period's receipts per row, off by default, shown
   // just before the Restanțe [RON] column.
   const [showIncasari, setShowIncasari] = React.useState(false)
+  // A month that isn't CLOSED yet (PREPARED/OPEN) is still a draft: what it shows is owed ("Datorat"),
+  // not yet arrears ("Restanțe") — the column names say which.
+  const shownPeriod = shared?.periods?.find((p) => p.code === (data?.periodCode ?? selectedCode))
+  const isDraft = !!shownPeriod && shownPeriod.status !== 'CLOSED'
   // Proprietar mode: a multi-unit billing entity's row expands (click on its name, like the avizier)
   // into its individual units — fed by the SAME receivables endpoint at unit grain, fetched alongside.
   const [unitRows, setUnitRows] = React.useState<any[]>([])
@@ -606,14 +610,14 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
           <div className="stack" style={{ gap: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ textAlign: 'left' }}>
+                <tr style={{ textAlign: 'left' }} title={isDraft ? t('debtors.dueHint', 'Luna nu e închisă încă — sumele sunt datorate, nu restanțe') : undefined}>
                   <th style={{ padding: '6px 8px', textAlign: 'right' }}>#</th>
                   <th style={{ padding: '6px 8px' }}>{mode === 'unit' ? t('forecast.modeUnit', 'Unitate') : t('debtors.entity', 'Billing entity')}</th>
                   <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('avizier.cpiLabel', 'CPI')}</th>
                   {showIncasari ? <th style={{ padding: '6px 8px', textAlign: 'right' }} title={t('debtors.paymentsHint', 'Încasările aplicate în această perioadă (aceeași sumă ca Încasări din avizier)')}>{t('debtors.payments', 'Încasări [RON]')}</th> : null}
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.debt', 'Restanțe [RON]')}<SortIcon k="debt" /></th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.pct', 'Restanțe [%]')}<SortIcon k="pctOfTotal" /></th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.cumPct', 'Restanțe Cumulat [%]')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{isDraft ? t('debtors.dueDebt', 'Datorat [RON]') : t('debtors.debt', 'Restanțe [RON]')}<SortIcon k="debt" /></th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{isDraft ? t('debtors.duePct', 'Datorat [%]') : t('debtors.pct', 'Restanțe [%]')}<SortIcon k="pctOfTotal" /></th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{isDraft ? t('debtors.dueCumPct', 'Datorat Cumulat [%]') : t('debtors.cumPct', 'Restanțe Cumulat [%]')}</th>
                 </tr>
               </thead>
               {groupedByCategory.map((g) => {
