@@ -665,6 +665,9 @@ export class PaymentService {
     const chargeMarkers = chargeLines.filter((l) => l.chargeId && l.amount == null)
     const fixedLines = chargeLines.filter((l) => l.amount != null)
     const advanceFundId = advanceLines.find((l) => l.fundId)?.fundId ?? null
+    // the advance line's unit (a multi-unit BE's credit belongs to one unit) — without it the
+    // shared advance has no unit-tagged detail and the BE's per-unit split stops reconciling
+    const advanceUnitId = advanceLines.find((l) => l.fundId)?.unitId ?? null
     const explicitAdvance = advanceLines.reduce((s, l) => s + Number(l.amount ?? 0), 0)
     const chargeApplicable = Math.max(0, Number((amount - explicitAdvance).toFixed(4)))
 
@@ -733,7 +736,7 @@ export class PaymentService {
           spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: e.fundId, unitId: e.unitId, amount: Number(e.amount.toFixed(4)) },
         })),
       ...(advanceTotal > 0.0001 && advanceFundId
-        ? [{ paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, amount: advanceTotal } }]
+        ? [{ paymentId: paymentIdStr, amount: advanceTotal, spec: { source: 'ADVANCE', paymentId: paymentIdStr, fundId: advanceFundId, unitId: advanceUnitId, amount: advanceTotal } }]
         : []),
     ]
 

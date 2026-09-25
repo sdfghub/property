@@ -79,7 +79,12 @@ export function AvizierPanel({
   const useSharedPeriod = !periodsPath && !!sharedPeriod
   const [localPeriods, setLocalPeriods] = React.useState<any[]>([])
   const [localPeriod, setLocalPeriod] = React.useState<string>('')
-  const periods: any[] = useSharedPeriod ? sharedPeriod!.periods : localPeriods
+  // newest-first in both modes — goPeriod() below relies on it (the shared list comes unsorted)
+  const sharedPeriods = sharedPeriod?.periods
+  const periods: any[] = React.useMemo(
+    () => (useSharedPeriod ? (sharedPeriods ?? []).slice().sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0)) : localPeriods),
+    [useSharedPeriod, sharedPeriods, localPeriods],
+  )
   const period = useSharedPeriod ? sharedPeriod!.selectedCode : localPeriod
   const setPeriod = useSharedPeriod ? sharedPeriod!.setSelectedCode : setLocalPeriod
   const [data, setData] = React.useState<any>(null)
@@ -829,8 +834,11 @@ export function AvizierPanel({
         </div>
       </div>
 
-      <div className="row" style={{ justifyContent: useSharedPeriod ? 'flex-end' : 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        {!useSharedPeriod && (
+      {/* The global period selector sits under the fullscreen overlay, so in fullscreen the panel shows
+          its own month navigation (driving that same shared selection) — every view setting is local
+          state here and survives the switch. */}
+      <div className="row" style={{ justifyContent: useSharedPeriod && !fullscreen ? 'flex-end' : 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        {(!useSharedPeriod || fullscreen) && (
           <div className="row" style={{ gap: 4, alignItems: 'center' }}>
             <button type="button" className="btn ghost small" disabled={periodIdx < 0 || periodIdx >= periods.length - 1}
               onClick={() => goPeriod(1)} title={t('avizier.prevPeriod', 'Perioada anterioară')} aria-label={t('avizier.prevPeriod', 'Perioada anterioară')}>‹</button>
@@ -954,7 +962,7 @@ export function AvizierPanel({
 
       {associationView ? (
         <AvizierAssociationTable communityId={communityId} avizierBase={avizierBase} period={period} />
-      ) : loading ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !rows.length ? (
+      ) : loading && !data ? <div className="empty">{t('common.loading', 'Loading…')}</div> : !rows.length ? (
         <div className="empty">{t('avizier.none', 'No data for this period.')}</div>
       ) : !displayRows.length ? (
         <div className="empty">{t('avizier.filterNone', 'Niciun apartament nu corespunde filtrului.')}</div>
@@ -969,9 +977,12 @@ export function AvizierPanel({
         // fullscreen the cap must NOT apply: 70vh is routinely smaller than the space actually
         // available (100vh minus the toolbar/title/footer chrome), and a cap smaller than the real
         // budget is exactly what left a visible gap above the signatures before this fix.
+        // While another month loads the previous table stays mounted (dimmed), so the scroll position
+        // and every expand/collapse/sort setting carry over to the new month.
         <div className="card" style={{
           overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0,
           maxHeight: fullscreen ? undefined : '70vh', padding: 0, minWidth: 0,
+          opacity: loading ? 0.55 : 1, transition: 'opacity 120ms',
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
@@ -1309,7 +1320,7 @@ export function AvizierPanel({
         </div>
       )}
 
-      {!loading && rows.length > 0 && (
+      {(!loading || data) && rows.length > 0 && (
         // Fixed footer, pinned to the bottom of whatever scrolls it (the fullscreen panel, or the
         // page) via sticky+marginTop:auto, with a minHeight so the 3-signature row never collapses
         // below the space its own border-line + label needs, regardless of how few rows are above it.
