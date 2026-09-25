@@ -901,6 +901,16 @@ export class ReportsService {
     return { period: { code: period.code }, applied: true, ...res }
   }
 
+  /** The newest CLOSED period — `forecastReport`'s base: a PREPARED period is still a draft. */
+  private async latestClosedPeriod(communityId: string) {
+    const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
+      `select id, code, seq, status, afisare_date as "afisareDate", due_date as "dueDate"
+         from period where community_id = $1 and status = 'CLOSED' order by seq desc limit 1`,
+      communityId,
+    )
+    return rows?.[0] ?? null
+  }
+
   /** The newest period row, whatever its status — unlike `latestStatementPeriod` (which prefers
    *  CLOSED), `forecastReport` wants the period that's still ABOUT to become due. */
   private async latestPeriod(communityId: string) {
@@ -955,12 +965,12 @@ export class ReportsService {
 
   /**
    * Restanță + N-month cost forecast for one unit or one owner (billing entity) — a bill preview,
-   * not a debt-collection report. Row 0 is the CURRENT period (`latestPeriod`, not
-   * `latestStatementPeriod`'s CLOSED-preferring pick — the point here is the period that's still
-   * about to become due) and folds in every prior restanță via `reconcileCommunity`, which already
-   * excludes that period's own charge (see its own doc) — so adding that period's own charge on
-   * top double-counts nothing. Rows 1..months-1 are pure projections: no restanță component,
-   * since row 0 already carries all of it.
+   * not a debt-collection report. Row 0 is the CURRENT period — the newest CLOSED one, i.e. the last
+   * bill actually issued (a PREPARED period is still a draft) — and folds in every prior restanță
+   * via `reconcileCommunity`, which already excludes that period's own charge (see its own doc) — so
+   * adding that period's own charge on top double-counts nothing. Rows 1..months-1 carry no restanță
+   * component, since row 0 already carries all of it: a PREPARED (draft) period among them shows its
+   * own generated charges, flagged `draft` and unconfirmed; the rest are pure projections.
    *
    * Fund columns (Rulment/Reparații/Reabilitare 1/2/3) are projected from the LAST actual charge
    * line this target had on that fund. These are configurator-driven quotas (`Fund.targetPlan`
@@ -975,7 +985,9 @@ export class ReportsService {
     const months = Math.max(1, Math.min(24, Math.round(opts.months ?? 3)))
     if (!opts.unitCode && !opts.beCode) throw new BadRequestException('unitCode or beCode is required')
 
-    const current = await this.latestPeriod(communityId)
+    // Row 0 is the newest CLOSED period — the last bill actually issued. A PREPARED (or OPEN) period
+    // after it is still a draft: it shows up further down as a draft row, never as the base.
+    const current = (await this.latestClosedPeriod(communityId)) ?? (await this.latestPeriod(communityId))
     if (!current) return { months, target: null, current: null, expensesLabel: null, penaltiesLabel: null, fundColumns: [], fundsInfo: [], groupTotals: [], grandTotalCollected: 0, rows: [], assumptions: [] }
 
     let unitIds: string[]
@@ -1207,7 +1219,14 @@ export class ReportsService {
       take: HISTORY_LOOKBACK,
       select: { id: true, code: true, seq: true },
     })
-    const periodsForHistory = [{ id: current.id, code: current.code, seq: current.seq }, ...priorPeriods]
+    // Periods after `current` that already have their own generated charges (PREPARED) — drafts:
+    // their rows show those real draft amounts instead of a projection, still marked unconfirmed.
+    const draftPeriods = await this.prisma.period.findMany({
+      where: { communityId, seq: { gt: current.seq }, status: 'PREPARED' },
+      select: { id: true, code: true, seq: true, status: true, afisareDate: true, dueDate: true },
+    })
+    const draftByCode = new Map(draftPeriods.map((p) => [p.code, p]))
+    const periodsForHistory = [{ id: current.id, code: current.code, seq: current.seq }, ...priorPeriods, ...draftPeriods.map((p) => ({ id: p.id, code: p.code, seq: p.seq }))]
     const lines = await this.prisma.communityChargeLine.findMany({
       where: { unitId: { in: unitIds }, periodId: { in: periodsForHistory.map((p) => p.id) } },
       select: { amount: true, periodId: true, charge: { select: { fundId: true } } },
@@ -1274,32 +1293,36 @@ export class ReportsService {
     for (let i = 0; i < months; i++) {
       const isCurrent = i === 0
       const periodCode = addMonthsToCode(current.code, i)
+      const draft = i > 0 ? draftByCode.get(periodCode) ?? null : null
       if (i > 0) {
-        emitereChain = scadentaChain ? addDays(scadentaChain, 1) : null
-        scadentaChain = emitereChain ? addDays(emitereChain, DUE_AFTER_ISSUE_DAYS) : null
+        // a draft period already carries its own dates when the admin set them
+        emitereChain = draft?.afisareDate ? new Date(draft.afisareDate).toISOString() : (scadentaChain ? addDays(scadentaChain, 1) : null)
+        scadentaChain = draft?.dueDate ? new Date(draft.dueDate).toISOString() : (emitereChain ? addDays(emitereChain, DUE_AFTER_ISSUE_DAYS) : null)
       }
       const emitere = emitereChain
       const scadenta = scadentaChain
+      // a draft's own generated charge (0 when it has none on that fund) — real numbers, not final
+      const draftActual = (fundCode: string): number => round2(byPeriodFund.get(periodCode)?.get(fundCode) ?? 0)
 
       const expenses = isCurrent
         ? round2((restante['EXPENSES'] ?? 0) + (currentGenerated ? (currentActual('EXPENSES') ?? 0) : trailingAverage('EXPENSES', EXPENSES_AVG_WINDOW)))
-        : trailingAverage('EXPENSES', EXPENSES_AVG_WINDOW)
+        : draft ? draftActual('EXPENSES') : trailingAverage('EXPENSES', EXPENSES_AVG_WINDOW)
       const penalties = isCurrent
         ? round2((restante['PENALIZARI'] ?? 0) + (currentGenerated ? (currentActual('PENALIZARI') ?? 0) : lastActual('PENALIZARI')))
-        : lastActual('PENALIZARI')
+        : draft ? draftActual('PENALIZARI') : lastActual('PENALIZARI')
 
       const fundsOut: Record<string, number> = {}
       const confirmedFunds: Record<string, boolean> = {}
       for (const code of FUND_COLUMNS) {
         fundsOut[code] = isCurrent
           ? round2((restante[code] ?? 0) + (currentGenerated ? (currentActual(code) ?? 0) : projectFund(code, periodCode)))
-          : projectFund(code, periodCode)
+          : draft ? draftActual(code) : projectFund(code, periodCode)
         confirmedFunds[code] = isCurrent && currentGenerated
       }
 
       const total = round2(expenses + penalties + Object.values(fundsOut).reduce((s, v) => s + v, 0))
       rows.push({
-        periodCode, isCurrent, emitere, scadenta, expenses, penalties, funds: fundsOut, total,
+        periodCode, isCurrent, draft: !!draft, emitere, scadenta, expenses, penalties, funds: fundsOut, total,
         // Confirmed = read from the ledger/an already-generated charge; false = a projection/estimate.
         // Row 0's restanță is always a ledger fact, so its cells are confirmed once `current` itself
         // has generated charges — everything from row 1 on is, by construction, a projection.
@@ -1311,7 +1334,8 @@ export class ReportsService {
     // Kept intentionally short (one line each) — this list sits right above the funds/assumptions
     // panel and the whole report is meant to fit on one printed page.
     const assumptions = [
-      `Luna curentă (${current.code}) include restanța acumulată plus taxa lunii, ${currentGenerated ? 'deja generată' : 'estimată'}.`,
+      `Luna curentă (${current.code}) e ultima lună închisă: include restanța acumulată plus taxa lunii, ${currentGenerated ? 'deja generată' : 'estimată'}.`,
+      ...(draftPeriods.length ? [`Lunile pregătite (${draftPeriods.map((p) => p.code).join(', ')}) sunt draft: sumele lor generate apar gri, neconfirmate, până la închidere.`] : []),
       `Rulment/Reparații/Reabilitare 1-3: proiectate la ultima sumă facturată, cât timp fondul e activ.`,
       `Cheltuieli Întreținere: ESTIMATE ca medie pe ultimele ${EXPENSES_AVG_WINDOW} luni facturate.`,
       `Penalități: proiectate la ultima sumă facturată; nu se simulează acumulare nouă.`,

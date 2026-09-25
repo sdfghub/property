@@ -32,6 +32,7 @@ type RowConfirmed = { expenses: boolean; penalties: boolean; funds: Record<strin
 type ForecastRow = {
   periodCode: string
   isCurrent: boolean
+  draft?: boolean // a PREPARED period: its own generated amounts, not final until it closes
   emitere: string | null
   scadenta: string | null
   expenses: number
@@ -370,6 +371,7 @@ export function ForecastPanel({ communityId }: { communityId: string }) {
                     <td style={{ padding: '9px 11px' }}>
                       {r.periodCode}
                       {r.isCurrent ? <span className="badge secondary" style={{ marginLeft: 6, fontWeight: 400 }}>{t('forecast.currentBadge', 'curentă + restanțe')}</span> : null}
+                      {r.draft ? <span className="badge tertiary" style={{ marginLeft: 6, fontWeight: 400 }} title={t('forecast.draftHint', 'Lună pregătită, încă neînchisă — sumele pot să se schimbe')}>{t('forecast.draftBadge', 'draft')}</span> : null}
                     </td>
                     <td style={{ padding: '9px 11px', ...cellStyle(r.isCurrent) }}>{fmtDate(r.emitere)}</td>
                     <td style={{ padding: '9px 11px', ...cellStyle(r.isCurrent) }}>{fmtDate(r.scadenta)}</td>
