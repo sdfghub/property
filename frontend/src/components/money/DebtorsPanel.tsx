@@ -165,6 +165,9 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
   // Same "Nume" toggle as the avizier: owner names hidden by default, shown on their own line under
   // the unit / billing-entity label when on.
   const [showNames, setShowNames] = React.useState(false)
+  // Same "Încasări" toggle as the avizier: the period's receipts per row, off by default, shown
+  // just before the Restanțe [RON] column.
+  const [showIncasari, setShowIncasari] = React.useState(false)
   // Proprietar mode: a multi-unit billing entity's row expands (click on its name, like the avizier)
   // into its individual units — fed by the SAME receivables endpoint at unit grain, fetched alongside.
   const [unitRows, setUnitRows] = React.useState<any[]>([])
@@ -339,15 +342,17 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
       const subtotal = rows.reduce((s, d) => s + (Number(d.debt) || 0), 0)
       const subtotalPct = subtotal > 0 && totalPositive > 0 ? round1((subtotal / totalPositive) * 100) : 0
       const cpiSubtotal = rows.reduce((s, d) => s + (Number(d.cpi) || 0), 0)
+      const paymentsSubtotal = rows.reduce((s, d) => s + (Number(d.payments) || 0), 0)
       // Running total through this group, in the fixed critical->serious->warning->good order —
       // e.g. "Restanțe mari: 44.3%" then "Restanțe medii: 88.3%" (44.3% + medii's own share).
       runningPct += subtotalPct
-      return { ...c, rows, subtotal, subtotalPct, cpiSubtotal, cumThroughGroup: round1(runningPct) }
+      return { ...c, rows, subtotal, subtotalPct, cpiSubtotal, paymentsSubtotal, cumThroughGroup: round1(runningPct) }
     }).filter((g) => g.rows.length)
   }, [sortedDebtors])
   const listGrandTotal = React.useMemo(() => ({
     cpi: groupedByCategory.reduce((s, g) => s + g.cpiSubtotal, 0),
     debt: groupedByCategory.reduce((s, g) => s + g.subtotal, 0),
+    payments: groupedByCategory.reduce((s, g) => s + g.paymentsSubtotal, 0),
     pct: round1(groupedByCategory.reduce((s, g) => s + g.subtotalPct, 0)),
   }), [groupedByCategory])
   // Tile area is proportional to CPI (share of common ownership); a debtor with no recorded CPI
@@ -467,6 +472,13 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
               aria-pressed={showNames} style={{ borderRadius: 999 }}>
               {showNames ? '☑ ' : '☐ '}{t('avizier.publicOff', 'Nume')}
             </button>
+            {view === 'list' ? (
+              <button type="button" className="btn ghost small" onClick={() => setShowIncasari((v) => !v)}
+                title={t('avizier.incasariToggle', 'Arată/ascunde coloana de încasări')}
+                aria-pressed={showIncasari} style={{ borderRadius: 999 }}>
+                {showIncasari ? '☑ ' : '☐ '}{t('avizier.incasari', 'Încasări')}
+              </button>
+            ) : null}
             <div className="row" style={{ gap: 0, border: '1px solid var(--border,#ddd)', borderRadius: 6, overflow: 'hidden' }}>
               <button type="button" className="btn ghost small"
                 style={{ borderRadius: 0, background: view === 'list' ? 'var(--muted-bg, #eef2ff)' : undefined, fontWeight: view === 'list' ? 600 : 400 }}
@@ -598,9 +610,10 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
                   <th style={{ padding: '6px 8px', textAlign: 'right' }}>#</th>
                   <th style={{ padding: '6px 8px' }}>{mode === 'unit' ? t('forecast.modeUnit', 'Unitate') : t('debtors.entity', 'Billing entity')}</th>
                   <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('avizier.cpiLabel', 'CPI')}</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.debt', 'Arrears')}<SortIcon k="debt" /></th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.pct', '% of total')}<SortIcon k="pctOfTotal" /></th>
-                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.paretoCumLabel', 'Cumulative %')}</th>
+                  {showIncasari ? <th style={{ padding: '6px 8px', textAlign: 'right' }} title={t('debtors.paymentsHint', 'Încasările aplicate în această perioadă (aceeași sumă ca Încasări din avizier)')}>{t('debtors.payments', 'Încasări [RON]')}</th> : null}
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.debt', 'Restanțe [RON]')}<SortIcon k="debt" /></th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.pct', 'Restanțe [%]')}<SortIcon k="pctOfTotal" /></th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('debtors.cumPct', 'Restanțe Cumulat [%]')}</th>
                 </tr>
               </thead>
               {groupedByCategory.map((g) => {
@@ -619,6 +632,7 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
                         </span>
                       </td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, background: `rgba(${gr},${gg},${gb},0.12)`, borderTop: '2px solid var(--border, #ddd)' }}>{cpiFmt(g.cpiSubtotal)}</td>
+                      {showIncasari ? <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--success, #248a3d)', background: `rgba(${gr},${gg},${gb},0.12)`, borderTop: '2px solid var(--border, #ddd)' }}>{money(g.paymentsSubtotal)}</td> : null}
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, background: `rgba(${gr},${gg},${gb},0.12)`, borderTop: '2px solid var(--border, #ddd)' }}>{money(g.subtotal)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, background: `rgba(${gr},${gg},${gb},0.12)`, borderTop: '2px solid var(--border, #ddd)' }}>{pct(g.subtotalPct)}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, background: `rgba(${gr},${gg},${gb},0.12)`, borderTop: '2px solid var(--border, #ddd)' }}>{pct(g.cumThroughGroup)}</td>
@@ -647,6 +661,7 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
                             </span>
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted, #666)' }}>{cpiFmt(d.cpi)}</td>
+                          {showIncasari ? <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--success, #248a3d)' }}>{(Number(d.payments) || 0) > 0.005 ? money(d.payments) : '—'}</td> : null}
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(d.debt)}{onPick ? ' ›' : ''}</td>
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted, #666)' }}>{pct(d.pctOfTotal)}</td>
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted, #666)' }}>{rc ? pct(round1(rc.cumPct)) : '—'}</td>
@@ -658,6 +673,7 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
                             <td />
                             <td style={{ padding: '4px 8px 4px 28px' }}>{shortUnit(u.unitCode) || u.unitCode}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted, #666)' }}>{cpiFmt(u.cpi)}</td>
+                            {showIncasari ? <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--success, #248a3d)' }}>{(Number(u.payments) || 0) > 0.005 ? money(u.payments) : '—'}</td> : null}
                             <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(u.debt)}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted, #666)' }}>{(Number(u.debt) || 0) > 0.005 ? pct(u.pctOfTotal) : '—'}</td>
                             <td />
@@ -674,6 +690,7 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
                   <td style={{ padding: '6px 8px' }} />
                   <td style={{ padding: '6px 8px' }}>{t('avizier.total', 'Total')}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{cpiFmt(listGrandTotal.cpi)}</td>
+                  {showIncasari ? <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--success, #248a3d)' }}>{money(listGrandTotal.payments)}</td> : null}
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(listGrandTotal.debt)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct(listGrandTotal.pct)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct(100)}</td>

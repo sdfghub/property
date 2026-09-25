@@ -171,7 +171,8 @@ export class FinanceService {
           group by le.billing_entity_id
        )
        select be.id as "beId", be.code as "beCode", be.name as "beName", be.display_name as "displayName",
-              (coalesce(stmt.due_start,0) - coalesce(stmt.payments,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt
+              (coalesce(stmt.due_start,0) - coalesce(stmt.payments,0) - coalesce(uncommitted_pay.paid,0))::float8 as debt,
+              (coalesce(stmt.payments,0) + coalesce(uncommitted_pay.paid,0))::float8 as payments
          from billing_entity be
          left join stmt on stmt.be_id = be.id
          left join uncommitted_pay on uncommitted_pay.be_id = be.id
@@ -223,37 +224,40 @@ export class FinanceService {
 
     // groupBy: 'unit' — split each BE's already-computed `debt` (above) across its member units.
     // See the method's own doc for the trusted-split-else-CPI-estimate rule.
-    let unitDebtors: { unitCode: string; beCode: string | null; beName: string | null; debt: number; cpi: number | null }[] = []
+    let unitDebtors: { unitCode: string; beCode: string | null; beName: string | null; debt: number; payments: number; cpi: number | null }[] = []
     if (groupBy === 'unit') {
       const debtByBe = new Map(rows.map((r) => [r.beId, Number(r.debt)]))
+      const paymentsByBe = new Map(rows.map((r) => [r.beId, Number(r.payments)]))
       const unitStmtRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-        `select unit_id as "unitId", sum(due_start - payments)::float8 as raw
+        `select unit_id as "unitId", sum(due_start - payments)::float8 as raw, sum(payments)::float8 as pay
            from be_unit_statement
           where community_id = $1 and period_id = $2
           group by unit_id`,
         communityId, period.id,
       )
       const rawByUnit = new Map(unitStmtRows.map((r) => [r.unitId, Number(r.raw)]))
+      const payByUnit = new Map(unitStmtRows.map((r) => [r.unitId, Number(r.pay)]))
       const cpiByUnit = await this.cpiByUnit(communityId, period.seq)
       const unitsByBe = new Map<string, any[]>()
       for (const m of memberRows) unitsByBe.set(m.beId, [...(unitsByBe.get(m.beId) ?? []), m])
 
       for (const [beId, units] of unitsByBe) {
         const beDebt = debtByBe.get(beId) ?? 0
+        const bePay = paymentsByBe.get(beId) ?? 0
         const cpiOf = (unitId: string) => (cpiByUnit.has(unitId) ? round2(cpiByUnit.get(unitId)!) : null)
         if (units.length === 1) {
           const m = units[0]
-          unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt), cpi: cpiOf(m.unitId) })
+          unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt), payments: round2(bePay), cpi: cpiOf(m.unitId) })
           continue
         }
         const sumRaw = units.reduce((s, m) => s + (rawByUnit.get(m.unitId) ?? 0), 0)
         if (isUnitSplitTrusted(sumRaw, beDebt)) {
-          for (const m of units) unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(rawByUnit.get(m.unitId) ?? 0), cpi: cpiOf(m.unitId) })
+          for (const m of units) unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(rawByUnit.get(m.unitId) ?? 0), payments: round2(payByUnit.get(m.unitId) ?? 0), cpi: cpiOf(m.unitId) })
         } else {
           const cpiSum = units.reduce((s, m) => s + (cpiByUnit.get(m.unitId) ?? 0), 0)
           for (const m of units) {
             const share = cpiSum > 0 ? (cpiByUnit.get(m.unitId) ?? 0) / cpiSum : 1 / units.length
-            unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt * share), cpi: cpiOf(m.unitId) })
+            unitDebtors.push({ unitCode: m.unitCode, beCode: m.beCode, beName: m.beName, debt: round2(beDebt * share), payments: round2(bePay * share), cpi: cpiOf(m.unitId) })
           }
         }
       }
@@ -284,6 +288,7 @@ export class FinanceService {
         ? unitDebtors.map((r) => ({
             unitCode: r.unitCode, beCode: r.beCode, beName: r.beName,
             debt: r.debt,
+            payments: r.payments,
             pctOfTotal: r.debt > 0.005 && unitGrossTotal > 0 ? round2((r.debt / unitGrossTotal) * 100) : 0,
             cpi: r.cpi,
           }))
@@ -293,6 +298,7 @@ export class FinanceService {
               resolveBeNameShared({ id: r.beId, name: r.beName, displayName: r.displayName ?? null }, period.seq, nameHistoryByBe),
             ),
             debt: round2(r.debt),
+            payments: round2(Number(r.payments)),
             pctOfTotal: Number(r.debt) > 0.005 && debtorsGrossTotal > 0 ? round2((Number(r.debt) / debtorsGrossTotal) * 100) : 0,
             cpi: cpiMap.has(r.beId) ? round2(cpiMap.get(r.beId)!) : null,
             unitCodes: unitCodesByBe.get(r.beId) ?? [],
