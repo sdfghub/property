@@ -31,10 +31,10 @@ async function main() {
     const first = await prisma.cashTx.findFirst({ where: { communityId: COMM, refType: { not: 'OPENING_BALANCE' } }, orderBy: { ts: 'asc' }, select: { ts: true } })
     if (!first) throw new Error('no cash book for Kralik')
     const cutover = first.ts.toISOString().slice(0, 10)
-    const existing = await prisma.vendorPayment.findMany({ where: { communityId: COMM }, select: { ts: true, amount: true, refId: true, vendor: { select: { name: true } } } })
+    const existing = await prisma.vendorPayment.findMany({ where: { communityId: COMM }, select: { id: true, invoiceId: true, ts: true, amount: true, refId: true, vendor: { select: { name: true } } } })
     console.log(`${APPLY ? '== APPLY ==' : '== DRY RUN (pass --apply to write) =='}  cash book starts ${cutover}; ${rows.length} fund-register payments`)
 
-    let created = 0, present = 0
+    let created = 0, present = 0, renamed = 0
     const missing: Row[] = []
     for (const r of rows) {
       if (r.date >= cutover) {
@@ -44,7 +44,25 @@ async function main() {
         continue
       }
       const refId = `fund-register:${r.fund}:${r.n}`
-      if (existing.some((p) => p.refId === refId)) { present++; continue }
+      const prior = existing.find((p) => p.refId === refId)
+      if (prior) {
+        present++
+        // The data file's supplier was corrected since the import (e.g. an unnamed register row
+        // identified later): move the invoice + payment to it.
+        if (prior.vendor?.name !== r.vendor) {
+          console.log(`   ↻ ${r.date} ${r.amount.toFixed(2).padStart(11)}  ${prior.vendor?.name ?? '—'} → ${r.vendor}`)
+          if (APPLY) {
+            const vendor = (await prisma.vendor.findFirst({ where: { communityId: COMM, name: r.vendor }, select: { id: true } }))
+              ?? (await prisma.vendor.create({ data: { communityId: COMM, name: r.vendor }, select: { id: true } }))
+            await prisma.$transaction([
+              prisma.vendorInvoice.update({ where: { id: prior.invoiceId }, data: { vendorId: vendor.id } }),
+              prisma.vendorPayment.update({ where: { id: prior.id }, data: { vendorId: vendor.id } }),
+            ])
+          }
+          renamed++
+        }
+        continue
+      }
       console.log(`   ${r.date} ${r.amount.toFixed(2).padStart(11)}  ${r.fund.padEnd(13)} ${r.vendor.padEnd(30)} ${r.invoiceNumber ?? ''}`)
       if (APPLY) {
         const inv = await ensurePaidOnlyInvoice(prisma, svc, COMM, {
@@ -59,7 +77,7 @@ async function main() {
       }
       created++
     }
-    console.log(`${APPLY ? 'created' : 'would create'} ${created}; already present ${present}`)
+    console.log(`${APPLY ? 'created' : 'would create'} ${created}; already present ${present}; supplier corrected ${renamed}`)
     for (const r of missing) console.log(`   ⚠ ${r.date} ${r.amount.toFixed(2)} ${r.vendor} (${r.fund} #${r.n}) is after ${cutover} but has no vendor payment in the app`)
   } finally {
     await prisma.$disconnect()

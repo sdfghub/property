@@ -87,10 +87,10 @@
       "amount": 24248.75,
       "account": "BANK",
       "doc": "PLATA BANCARA OP 14",
-      "vendor": "Nespecificat în registru",
+      "vendor": "StudioUnu",
       "invoiceNumber": "SLF 0068",
       "invoiceDate": "2022-06-28",
-      "note": null,
+      "note": "furnizor confirmat de administrator (proiect)",
       "text": "(Bancă) - Plată din fond proiect+reabilitare FOND PROIECT +REABILIATRE - proiect fct slf nr 0068/28.06.2022 avans"
     },
     {
@@ -438,10 +438,10 @@
       "amount": 36601.07,
       "account": "BANK",
       "doc": "OP 28",
-      "vendor": "Nespecificat în registru",
+      "vendor": "StudioUnu",
       "invoiceNumber": "STU 008",
       "invoiceDate": "2024-08-08",
-      "note": null,
+      "note": "furnizor confirmat de administrator (proiect)",
       "text": "(Bancă) - Plată din fond proiect+reabilitare FOND PROIECT +REABILIATRE - FCT STU 008/8.08.2024 AVANS LUCRARE PROIECT"
     },
     {
@@ -490,10 +490,10 @@
       "amount": 119801.26,
       "account": "BANK",
       "doc": "OP 30",
-      "vendor": "Nespecificat în registru",
+      "vendor": "Schela G3",
       "invoiceNumber": "SCHG3 20210502",
       "invoiceDate": "2025-09-24",
-      "note": null,
+      "note": "furnizor confirmat de administrator (fct seria SCHG3)",
       "text": "(Bancă) - Plată din fond proiect+reabilitare FOND PROIECT +REABILIATRE - FCT SERIA SCHG3 NR20210502/24.09.2025 CF CONT 7.08.2025 MANOPERA MONTARE ,DMONTARE ,CHIREE"
     },
     {
