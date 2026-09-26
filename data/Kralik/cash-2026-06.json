@@ -1,6 +1,6 @@
 {
   "cycleCode": "2026-06",
-  "_note": "Every transaction in ExtrasCont lei.pdf / ExtrasCont euro.pdf and the Registru Bancă / Registru Casă / Registru Bancă cont euro Libra documents (01.07.2026-19.08.2026), treated as June's settlement window per instruction. Fund splits sourced from the Registru documents' own per-transaction breakdowns. Two commission fees (20.00 each, refs FT26224CL04T and FT26226GJV3C) and one final owner payment (FT262317M754, 19.08) appear in ExtrasCont but were dropped from Registru Bancă's own summary — added back from the raw statement. Regenerated 2026-08-28 to be self-sufficient for a fresh reseed: the 6 EUR-account entries (tx 81-86) carry a `cashFunds` override with the real EUR amounts for CashTx purposes — `amount`/`funds` stay as the source PDF's RON-equivalent mislabeling, because dev's Payment rows for these were never corrected (only CashTx was), and reproducing dev means matching that inconsistency, not fixing it. 8 entries (6 April/June duplicates + 2 units dev's original import never resolved) are flagged skipPayment. 15 entries outside June's own collection window (12 past the afișare cutoff, 3 with no matching Registru Bancă entry) carry an explicit cycle:\"2026-07\" so the importer routes their Payment to next cycle directly. KNOWN GAP: the 3 register-gap entries' TODO audit Correction rows (informational only, zero ledger effect) aren't reproduced.",
+  "_note": "Every transaction in ExtrasCont lei.pdf / ExtrasCont euro.pdf and the Registru Bancă / Registru Casă / Registru Bancă cont euro Libra documents (01.07.2026-19.08.2026), treated as June's settlement window per instruction. Fund splits sourced from the Registru documents' own per-transaction breakdowns. Two commission fees (20.00 each, refs FT26224CL04T and FT26226GJV3C) and one final owner payment (FT262317M754, 19.08) appear in ExtrasCont but were dropped from Registru Bancă's own summary — added back from the raw statement. Regenerated 2026-08-28 to be self-sufficient for a fresh reseed: the 6 EUR-account entries (tx 81-86) carry a `cashFunds` override with the real EUR amounts for CashTx purposes — `amount`/`funds` stay as the source PDF's RON-equivalent mislabeling, because dev's Payment rows for these were never corrected (only CashTx was), and reproducing dev means matching that inconsistency, not fixing it. 8 entries (6 April/June duplicates + 2 units dev's original import never resolved) are flagged skipPayment. 15 entries outside June's own collection window (12 past the afișare cutoff, 3 with no matching Registru Bancă entry) carry an explicit cycle:\"2026-07\" so the importer routes their Payment to next cycle directly. KNOWN GAP: the 3 register-gap entries' TODO audit Correction rows (informational only, zero ledger effect) aren't reproduced. 2026-09-26: tx 1-18 and 70 (01.07-10.07) marked void: cash-2026-05.json already carries these lines, so importing both doubled their CashTx rows (see src/scripts/link-kralik-vendor-payments.ts).",
   "accounts": {
     "BANK": "BANK_LIBRA_RON",
     "CASH": "CASH_RON",
@@ -9,6 +9,8 @@
   "tx": [
     {
       "n": 1,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-01",
       "ref": "FT261826W1B5",
@@ -20,6 +22,8 @@
     },
     {
       "n": 2,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-01",
       "ref": "FT261826W1B5",
@@ -32,6 +36,8 @@
     },
     {
       "n": 3,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-02",
       "ref": "FT26183DBB8V",
@@ -52,6 +58,8 @@
     },
     {
       "n": 4,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-02",
       "ref": "FT2618330CWQ",
@@ -71,6 +79,8 @@
     },
     {
       "n": 5,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-03",
       "ref": "FT261841QM3Q",
@@ -82,6 +92,8 @@
     },
     {
       "n": 6,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-03",
       "ref": "FT261842YGY5",
@@ -101,6 +113,8 @@
     },
     {
       "n": 7,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-03",
       "ref": "FT261841QM3Q",
@@ -113,6 +127,8 @@
     },
     {
       "n": 8,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-08",
       "ref": "FT26189CRVGY",
@@ -129,6 +145,8 @@
     },
     {
       "n": 9,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-08",
       "ref": "FT26189PXZ5S",
@@ -145,6 +163,8 @@
     },
     {
       "n": 10,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190J1NGQ",
@@ -156,6 +176,8 @@
     },
     {
       "n": 11,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190X930X",
@@ -167,6 +189,8 @@
     },
     {
       "n": 12,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190J1NGQ",
@@ -178,6 +202,8 @@
     },
     {
       "n": 13,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190X930X",
@@ -189,6 +215,8 @@
     },
     {
       "n": 14,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190JR4C4",
@@ -200,6 +228,8 @@
     },
     {
       "n": 15,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190BLLNR",
@@ -211,6 +241,8 @@
     },
     {
       "n": 16,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190BLLNR",
@@ -222,6 +254,8 @@
     },
     {
       "n": 17,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190JR4C4",
@@ -234,6 +268,8 @@
     },
     {
       "n": 18,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "BANK",
       "date": "2026-07-09",
       "ref": "FT26190H1GTJ",
@@ -1234,6 +1270,8 @@
     },
     {
       "n": 70,
+      "void": true,
+      "voidReason": "overlap: already imported from cash-2026-05.json (same bank ref, 01.07-10.07)",
       "acct": "CASH",
       "date": "2026-07-10",
       "ref": "SCHA1129",

@@ -477,6 +477,43 @@ export class VendorInvoiceService {
     return payment
   }
 
+  /**
+   * Records a vendor payment whose cash already left through the imported cash book (register
+   * `CashTx` rows): a VendorPayment + its applications, and NO new cash row or ledger legs — the
+   * register import already moved the money, so createVendorPayment here would count it twice.
+   * `applications` may cover several invoices (one bank transfer paying split invoice rows) and may
+   * total less than `amount` (the rest stays unapplied). Idempotent per `refId`.
+   */
+  async recordRegisterPayment(
+    communityId: string,
+    body: { accountId?: string | null; amount: number; currency?: string | null; ts: string | Date; method?: string | null; refId: string; applications: Array<{ invoiceId: string; amount: number }>; spec?: any },
+  ) {
+    const amount = Number(body.amount)
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('Payment amount must be positive')
+    if (!body.refId) throw new BadRequestException('refId required')
+    if (!body.applications?.length) throw new BadRequestException('At least one invoice application required')
+    const existing = await this.prisma.vendorPayment.findFirst({ where: { communityId, refId: body.refId } })
+    if (existing) return existing
+    const invoices = await this.prisma.vendorInvoice.findMany({
+      where: { communityId, id: { in: body.applications.map((a) => a.invoiceId) } },
+      select: { id: true, vendorId: true, currency: true },
+    })
+    if (invoices.length !== new Set(body.applications.map((a) => a.invoiceId)).size) throw new NotFoundException('Invoice not found')
+    const applied = body.applications.reduce((s, a) => s + Number(a.amount), 0)
+    if (applied - amount > 0.005) throw new BadRequestException('Applications exceed the payment amount')
+    const accountId = body.accountId ? await this.ensureCashAccount(communityId, body.accountId) : null
+    const first = invoices.find((i) => i.id === body.applications[0].invoiceId)!
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.vendorPayment.create({
+        data: { communityId, vendorId: first.vendorId ?? null, invoiceId: first.id, accountId, amount, currency: body.currency || first.currency || 'RON', ts: new Date(body.ts), method: body.method ?? 'BANK', refId: body.refId, status: 'POSTED' },
+      })
+      for (const a of body.applications) {
+        await tx.vendorPaymentApplication.create({ data: { paymentId: created.id, invoiceId: a.invoiceId, amount: a.amount, spec: { source: 'CASH_REGISTER', invoiceId: a.invoiceId, ...(body.spec ?? {}) } } })
+      }
+      return created
+    })
+  }
+
   /** createOpeningInvoice + createVendorPayment for the same amount — the *Plăți* / intake path. */
   async payOpening(communityId: string, body: { vendorId?: string | null; vendorName?: string | null; number?: string | null; amount: number; currency?: string | null; fundId?: string | null; fundCode?: string | null; issueDate?: string | null; accountId?: string | null; ts?: string | Date | null; method?: string | null; refId?: string | null; openingKey?: string | null; provenance?: any }) {
     const invoice = await this.createOpeningInvoice(communityId, { vendorId: body.vendorId, vendorName: body.vendorName, number: body.number, amount: body.amount, currency: body.currency, fundId: body.fundId, fundCode: body.fundCode, issueDate: body.issueDate, openingKey: body.openingKey, provenance: body.provenance })

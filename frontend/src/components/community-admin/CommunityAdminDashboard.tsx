@@ -327,7 +327,12 @@ export function CommunityAdminDashboard({
         return res.json()
       })
       .then((rows) => setFunds(Array.isArray(rows) ? rows : []))
-      .catch((err) => setFundError(err?.message || 'Failed to load funds'))
+      .catch((err) => {
+        setFundError(err?.message || 'Failed to load funds')
+        // Un-mark as loaded so the next visit retries instead of staying empty until a full reload
+        // (e.g. after the API was briefly down).
+        setFundsLoadedFor(null)
+      })
   }, [communityCode])
 
   const loadOverviewInvoices = React.useCallback(
@@ -343,6 +348,9 @@ export function CommunityAdminDashboard({
         if (signal && signal.aborted) return
         setOverviewInvError(err?.message || 'Failed to load invoices')
         setOverviewInv([])
+        // Un-mark as loaded so the next visit to Plăți/Furnizori retries instead of staying empty
+        // until a full reload (e.g. after the API or its database was briefly down).
+        setInvoicesLoadedFor(null)
       } finally {
         if (!signal || !signal.aborted) setOverviewInvLoading(false)
       }
