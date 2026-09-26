@@ -39,6 +39,7 @@
     "reopen:period": "ts-node --transpile-only src/scripts/reopen-period.ts",
     "prepare:period": "ts-node --transpile-only src/scripts/prepare-period.ts",
     "link:kralik-vendor-payments": "ts-node --transpile-only src/scripts/link-kralik-vendor-payments.ts",
+    "import:kralik-fund-register-payments": "ts-node --transpile-only src/scripts/import-kralik-fund-register-payments.ts",
     "backfill:corrections": "ts-node --transpile-only src/scripts/backfill-corrections.ts",
     "backfill:meter-readings": "ts-node --transpile-only src/scripts/backfill-meter-readings.ts",
     "prune:meters": "ts-node --transpile-only src/scripts/prune-stale-meters.ts",

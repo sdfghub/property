@@ -21,6 +21,7 @@
 import { PrismaService } from '../modules/user/prisma.service'
 import { VendorInvoiceService } from '../modules/billing/vendor-invoice.service'
 import { bankLineKey } from '../modules/intake/intake-blockers'
+import { ensurePaidOnlyInvoice } from './kralik-paid-only-invoice'
 
 const COMM = 'Kralik'
 const APPLY = process.argv.includes('--apply')
@@ -69,32 +70,6 @@ const LINKS: Array<{ ref: string; amount: number; target: Target; note?: string 
 const LIBRA_FEES = { number: '2026.08.10-09.10', from: '2026-08-10', toExcl: '2026-09-11', amount: 82 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
-
-// An invoice that exists only so a register payment has something to settle — no accrual. Uses
-// createOpeningInvoice where the DB knows DocSource.OPENING; a DB still on the pre-OPENING schema
-// (the avizier-aug dev stack) gets the same shape by hand: source IMPORT and NO fund link, since
-// linkFund on a non-OPENING invoice would post FUND_SPEND and move the fund balances.
-async function ensurePaidOnlyInvoice(
-  prisma: PrismaService,
-  svc: VendorInvoiceService,
-  b: { vendorName: string; number: string | null; amount: number; fundCode: string; issueDate: string; openingKey: string; provenance: any },
-) {
-  const [{ ok }] = await prisma.$queryRaw<Array<{ ok: boolean }>>`select 'OPENING' = any(enum_range(null::"DocSource")::text[]) as ok`
-  if (ok) return svc.createOpeningInvoice(COMM, b)
-  const existing = await prisma.vendorInvoice.findFirst({ where: { communityId: COMM, provenance: { path: ['openingKey'], equals: b.openingKey } } })
-  if (existing) return existing
-  let vendor = await prisma.vendor.findFirst({ where: { communityId: COMM, name: b.vendorName }, select: { id: true } })
-  if (!vendor) vendor = await prisma.vendor.create({ data: { communityId: COMM, name: b.vendorName }, select: { id: true } })
-  const issue = new Date(b.issueDate)
-  const label = b.vendorName.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase().slice(0, 24)
-  return prisma.vendorInvoice.create({
-    data: {
-      communityId: COMM, vendorId: vendor.id, number: b.number || `OPENING-${label}-${b.issueDate}`, issueDate: issue, dueDate: issue,
-      currency: 'RON', gross: b.amount, source: 'IMPORT',
-      provenance: { ...b.provenance, opening: true, openingKey: b.openingKey, fundCode: b.fundCode },
-    },
-  })
-}
 
 async function dedupOverlap(prisma: PrismaService) {
   const rows = await prisma.cashTx.findMany({
@@ -145,7 +120,7 @@ async function main() {
         const o = l.target.opening
         label = `OPENING ${o.number ?? '(fără număr)'}`
         if (!APPLY) { applications = [] } else {
-          const inv = await ensurePaidOnlyInvoice(prisma, svc, {
+          const inv = await ensurePaidOnlyInvoice(prisma, svc, COMM, {
             vendorName: l.target.vendor, number: o.number ?? null, amount: l.amount, fundCode: t.fund.code,
             issueDate: o.issueDate ?? t.ts.toISOString().slice(0, 10), openingKey: `register:${l.ref}/${l.amount.toFixed(2)}`,
             provenance: { source: 'cash-register', cashTxId: t.id },
