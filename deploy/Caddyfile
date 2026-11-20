@@ -14,6 +14,20 @@
 		file_server
 	}
 
+	# Public website (site/, built to /srv/site): only paths that exist there. `/` is its home page;
+	# the app has no routes of its own, so it answers on /app and on every other path
+	# (/invite, /reset-password, /communities/...), exactly as before.
+	@site file {
+		root /srv/site
+		try_files {path}/index.html {path}
+	}
+	handle @site {
+		root * /srv/site
+		rewrite * {http.matchers.file.relative}
+		header Cache-Control "no-cache"
+		file_server
+	}
+
 	# SPA shell + everything else — never stale-cache index.html, so browsers
 	# pick up new builds automatically after each deploy.
 	handle {

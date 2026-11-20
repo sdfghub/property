@@ -28,6 +28,8 @@ import { IntakeModule } from './modules/intake/intake.module'
 import { FeaturesModule } from './modules/features/features.module'
 import { MetadataModule } from './modules/metadata/metadata.module'
 import { ReportsModule } from './modules/reports/reports.module'
+import { ServicesModule } from './modules/services/services.module'
+import { BudgetModule } from './modules/budget/budget.module'
 
 @Controller()
 class HealthController {
@@ -66,6 +68,8 @@ class HealthController {
     FeaturesModule,
     MetadataModule,
     ReportsModule,
+    ServicesModule,
+    BudgetModule,
   ],
   controllers: [HealthController],
 })

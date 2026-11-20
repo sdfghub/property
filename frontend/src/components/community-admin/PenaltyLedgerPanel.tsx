@@ -168,7 +168,11 @@ export function PenaltyLedgerPanel({ communityId }: { communityId: string }) {
       // anterioare + 1 → afișarea lunii selectate) — independent of asOfDate/forgiveDate.
       const curFrom = calcStart && currentPeriodStart ? (calcStart > currentPeriodStart ? calcStart : currentPeriodStart) : null
       const curDays = curFrom && currentPeriodEnd ? countDays(curFrom, currentPeriodEnd) : 0
-      const curPenalty = Math.min(round2(principalRemaining * (rate / 100) * curDays), principalOriginal)
+      // The backend's own figure for this window — the same one posted on the avizier (cumulative-cap
+      // aware); the client-side product is only a fallback for an older API without the field.
+      const curPenalty = b.penaltyThisPeriod != null
+        ? Number(b.penaltyThisPeriod) || 0
+        : Math.min(round2(principalRemaining * (rate / 100) * curDays), principalOriginal)
       return { b, calcStart, qualifies, days, totalPenalty, curFrom, curDays, curPenalty }
     })
     .sort((a, b) => {

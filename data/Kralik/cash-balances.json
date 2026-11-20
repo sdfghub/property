@@ -1,0 +1,62 @@
+{
+  "_note": "Account balances taken from bank statements / registers (balance at the END of `date`). The latest checkpoint per account anchors the app's balances: opening = that balance − every movement recorded up to that day; earlier checkpoints are shown as checks (statement vs app). Loaded by `npm run seed:cash-balances -- Kralik` into CashAccount.notes.balanceCheckpoints. `fxRates` = RON per 1 unit for non-RON accounts, with its date: `buy` = what the bank pays for 1 EUR (EUR → lei conversions), `sell` = what 1 EUR costs (lei → EUR conversions) (statement rate when the statement shows one; otherwise the bank's published rate that day) → CashAccount.notes.fxRates; each period's total uses the rate valid at its end.",
+  "accounts": {
+    "BANK_LIBRA_RON": [
+      {
+        "date": "2026-06-10",
+        "balance": 161389.38,
+        "source": "Registru Bancă – sold inițial la 11.06.2026 (cash-2026-05.json openingSold.BANK)"
+      },
+      {
+        "date": "2026-10-13",
+        "balance": 305740.05,
+        "source": "Libra ExtrasCont RON 14/10–19/11/2026 – sold inițial"
+      },
+      {
+        "date": "2026-11-19",
+        "balance": 444230.0,
+        "source": "Libra ExtrasCont RON 14/10–19/11/2026 – sold final (= Registru Bancă 19.11.2026)"
+      }
+    ],
+    "CASH_RON": [
+      {
+        "date": "2026-06-10",
+        "balance": 0.05,
+        "source": "Registru Casă – sold inițial la 11.06.2026 (cash-2026-05.json openingSold.CASH)"
+      },
+      {
+        "date": "2026-10-18",
+        "balance": 1555.9,
+        "source": "Registru Casă 19.10–19.11.2026 – sold inițial"
+      },
+      {
+        "date": "2026-11-19",
+        "balance": 982.43,
+        "source": "Registru Casă 19.10–19.11.2026 – sold final"
+      }
+    ],
+    "BANK_LIBRA_EUR": [
+      {
+        "date": "2026-10-31",
+        "balance": 16628.28,
+        "source": "Libra ExtrasCont EUR 01/11–19/11/2026 – sold inițial"
+      },
+      {
+        "date": "2026-11-19",
+        "balance": 19628.28,
+        "source": "Libra ExtrasCont EUR 01/11–19/11/2026 – sold final (SumarConturi 19.11.2026)"
+      }
+    ]
+  },
+  "fxRates": {
+    "BANK_LIBRA_EUR": [
+      {
+        "date": "2026-11-20",
+        "buy": 5.29,
+        "sell": 5.4,
+        "bnr": 5.3442,
+        "source": "Libra Bank, curs online EUR: Primești 5,2900 / Plătești 5,4000 (librabank.ro/Curs_valutar); BNR 5,3442; extrasele EUR nu conțin curs"
+      }
+    ]
+  }
+}

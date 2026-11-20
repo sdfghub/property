@@ -2,8 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { AVIZIER_FUND_GROUP_META } from '../../common/enums-meta'
 import { resolveBeName as resolveBeNameShared } from '../../common/billing-entity-name.util'
-import { rateForDate, originAnchorDate } from '../period/penalty-rate'
 import { isUnitSplitTrusted } from './split-trusted'
+import { PenaltyReconciliationService, penaltyAccrualWindow, penaltyAsOf, slicePenaltyInWindow, type ReconciledAging } from '../period/penalty-reconciliation.service'
 
 // #8 Avizier configurator — per-community display config, persisted under Community.features.avizierConfig.
 type AvizierConfig = {
@@ -35,7 +35,7 @@ const normalizeAvizierConfig = (raw: any): AvizierConfig => {
  */
 @Injectable()
 export class FinanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly reconciliation: PenaltyReconciliationService) {}
 
   /** Latest period that has computed be_statement rows (prefers CLOSED, else the newest prepared). */
   private async latestStatementPeriod(communityId: string): Promise<{ id: string; code: string; seq: number } | null> {
@@ -153,14 +153,36 @@ export class FinanceService {
    * more misleading than a labelled estimate. Do not treat `groupBy: 'unit'` figures as a ledger
    * source of truth for per-unit collections — `debtors-by-fund`/`riskExposureDetail` are.
    */
-  async receivables(communityId: string, periodCode?: string, groupBy: 'be' | 'unit' = 'be') {
+  async receivables(communityId: string, periodCode?: string, groupBy: 'be' | 'unit' = 'be', fundCodes?: string[]) {
+    // Every fund with its effective avizier super-group (config override, else domain-derived — same
+    // rule as avizierConfigContext), so the panel can offer a fund / fund-group filter.
+    const [fundRows, avizierCfg] = await Promise.all([
+      this.prisma.fund.findMany({ where: { communityId }, select: { id: true, code: true, name: true, allocation: true }, orderBy: { code: 'asc' } }),
+      this.getAvizierConfig(communityId),
+    ])
+    const superGroupMeta = new Map(AVIZIER_FUND_GROUP_META.map((g) => [g.key, g]))
+    const superGroupOf = (f: { code: string; allocation: any }) =>
+      avizierCfg.fundGroupOverrides[f.code]
+        ?? (f.code === 'EXPENSES' || f.code === 'PENALIZARI' ? 'intretinere'
+          : String((f.allocation as any)?.type ?? '').trim().toLowerCase() === 'strategic' ? 'reabilitare'
+            : 'operational')
+    const funds = fundRows.map((f) => {
+      const key = superGroupOf(f)
+      return { code: f.code, name: f.name, superGroup: { key, label: avizierCfg.fundGroupLabels[key] ?? superGroupMeta.get(key)?.label ?? key, sortOrder: superGroupMeta.get(key)?.sortOrder ?? 99 } }
+    })
+    // Optional fund filter: restricts every figure below (debt, payments, unit split, byFund) to
+    // these funds. Unknown codes are ignored; none left = no filter (all funds).
+    const selectedFundIds = fundCodes?.length ? fundRows.filter((f) => fundCodes.includes(f.code)).map((f) => f.id) : []
+    const fundFilter = selectedFundIds.length ? selectedFundIds : null
+    const selectedFunds = fundFilter ? fundRows.filter((f) => selectedFundIds.includes(f.id)).map((f) => f.code) : null
     const period = await this.resolvePeriod(communityId, periodCode)
-    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, debtors: [], byFund: [] }
+    if (!period) return { periodCode: null, totalDebt: 0, debtorCount: 0, debtors: [], byFund: [], funds, selectedFunds }
     const rows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `with stmt as (
          select bs.billing_entity_id as be_id, sum(bs.due_start) as due_start, sum(bs.payments) as payments
            from be_statement bs
           where bs.community_id = $1 and bs.period_id = $2
+            and ($3::text[] is null or bs.fund_id = any($3::text[]))
           group by bs.billing_entity_id
        ),
        uncommitted_pay as (
@@ -168,6 +190,7 @@ export class FinanceService {
            from be_ledger_entry le
           where le.community_id = $1 and le.kind = 'PAYMENT' and le.lane = 'CASH'
             and not exists (select 1 from be_statement bs2 where bs2.period_id = le.period_id)
+            and ($3::text[] is null or le.fund_id = any($3::text[]))
           group by le.billing_entity_id
        )
        select be.id as "beId", be.code as "beCode", be.name as "beName", be.display_name as "displayName",
@@ -178,7 +201,7 @@ export class FinanceService {
          left join uncommitted_pay on uncommitted_pay.be_id = be.id
         where be.community_id = $1
         order by debt desc`,
-      communityId, period.id,
+      communityId, period.id, fundFilter,
     )
     const totalDebt = rows.reduce((s, r) => s + Number(r.debt), 0)
     // Only a BE with a CURRENTLY active unit membership counts as a real debtor/roster row — see
@@ -232,8 +255,9 @@ export class FinanceService {
         `select unit_id as "unitId", sum(due_start - payments)::float8 as raw, sum(payments)::float8 as pay
            from be_unit_statement
           where community_id = $1 and period_id = $2
+            and ($3::text[] is null or fund_id = any($3::text[]))
           group by unit_id`,
-        communityId, period.id,
+        communityId, period.id, fundFilter,
       )
       const rawByUnit = new Map(unitStmtRows.map((r) => [r.unitId, Number(r.raw)]))
       const payByUnit = new Map(unitStmtRows.map((r) => [r.unitId, Number(r.pay)]))
@@ -274,10 +298,11 @@ export class FinanceService {
               coalesce(sum(bs.due_start - bs.payments),0)::float8 as amount
          from be_statement bs join fund f on f.id = bs.fund_id
         where bs.community_id = $1 and bs.period_id = $2
+          and ($3::text[] is null or bs.fund_id = any($3::text[]))
         group by f.code, f.name
        having coalesce(sum(bs.due_start - bs.payments),0) <> 0
         order by f.code`,
-      communityId, period.id,
+      communityId, period.id, fundFilter,
     )
 
     return {
@@ -304,6 +329,8 @@ export class FinanceService {
             unitCodes: unitCodesByBe.get(r.beId) ?? [],
           })),
       byFund: byFundRows.map((r) => ({ ...r, amount: round2(Number(r.amount)) })),
+      funds,
+      selectedFunds,
     }
   }
 
@@ -343,8 +370,8 @@ export class FinanceService {
     if (!fund) return { periodCode: period.code, fundCode, fundName: null, debtors: [] }
     // Same "as of" boundary the drilldown (explainPenalty/PenaltyLedgerPanel) uses: a bucket whose
     // own due date hasn't been reached yet is this period's freshly-issued charge, not overdue debt.
-    const pRow = await this.prisma.period.findUnique({ where: { id: period.id }, select: { afisareDate: true, endDate: true } })
-    const asOf = pRow?.afisareDate ?? pRow?.endDate ?? new Date()
+    const pRow = await this.prisma.period.findUnique({ where: { id: period.id }, select: { afisareDate: true, penaltyAsOfDate: true, endDate: true } })
+    const asOf = pRow ? penaltyAsOf(pRow) : new Date()
 
     const beRows: any[] = await (this.prisma as any).$queryRawUnsafe(
       `select be.id as "beId", be.code as "beCode", be.name as "beName", be.display_name as "displayName",
@@ -783,23 +810,39 @@ export class FinanceService {
     )
     const stmt = new Map(stmtRows.map((r) => [r.beId, r]))
 
-    // penalties from the aging ledger, per (BE, source fund): this period's posted (month) and
-    // cumulative-to-date (total). Grouped by the SOURCE fund (pb.fund_id) so each fund's penalties can
-    // be shown next to that fund's own column.
+    // Penalties per (BE, source fund): `month` = the penalty actually posted this period (the
+    // `penalty:<sourceFund>` community charges — the same figure PenaltyLedgerService.postFromReconciliation
+    // bills), `total` = what is still owed on that source's penalty fund at the end of the period
+    // (be_statement.due_end of the target fund: carried-over penalties + this month's − payments, with
+    // manual overrides and write-offs / scutiri included). Grouped by the SOURCE fund so each fund's
+    // penalties sit next to that fund's own column. A target fund maps to one source (the one with the
+    // highest configured rate) so a balance is never shown twice.
+    const penFundRows = await this.prisma.fund.findMany({ where: { communityId }, select: { code: true, allocation: true } })
+    const penSourceByTarget = new Map<string, { code: string; rate: number }>()
+    for (const f of penFundRows) {
+      const a = (f.allocation as any) || {}
+      if (a.penaltyPerDayPct == null) continue
+      const target = a.penaltyFundCode || 'PENALIZARI'
+      if (target === f.code) continue // self-targeted: no separate penalty balance to show
+      const rate = Math.max(Number(a.penaltyPerDayPct) || 0, ...((a.penaltyRateHistory ?? []) as any[]).map((h) => Number(h?.ratePerDayPct) || 0))
+      const cur = penSourceByTarget.get(target)
+      if (!cur || rate > cur.rate || (rate === cur.rate && f.code < cur.code)) penSourceByTarget.set(target, { code: f.code, rate })
+    }
+    const penTargets = [...penSourceByTarget.keys()]
     const penMonthRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pb.billing_entity_id as "beId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
-         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
-        where pb.community_id = $1 and pbp.period_id = $2
-        group by pb.billing_entity_id, sf.code`,
+      `select l.billing_entity_id as "beId", split_part(cc.source_key, ':', 2) as fund, coalesce(sum(l.amount),0)::float8 as amt
+         from community_charge_line l join community_charge cc on cc.id = l.charge_id
+        where cc.community_id = $1 and cc.period_id = $2 and cc.source_key like 'penalty:%'
+        group by l.billing_entity_id, split_part(cc.source_key, ':', 2)`,
       communityId, period.id,
     )
-    const penTotalRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pb.billing_entity_id as "beId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
-         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
-        where pb.community_id = $1 and pbp.period_seq <= $2
-        group by pb.billing_entity_id, sf.code`,
-      communityId, p?.seq ?? 0,
-    )
+    const penTotalRows: any[] = penTargets.length ? (await (this.prisma as any).$queryRawUnsafe(
+      `select bs.billing_entity_id as "beId", tf.code as target, coalesce(sum(bs.due_end),0)::float8 as amt
+         from be_statement bs join fund tf on tf.id = bs.fund_id
+        where bs.community_id = $1 and bs.period_id = $2 and tf.code = any($3::text[])
+        group by bs.billing_entity_id, tf.code`,
+      communityId, period.id, penTargets,
+    )).map((r: any) => ({ beId: r.beId, fund: penSourceByTarget.get(r.target)!.code, amt: r.amt })) : []
     // penaltyByFund: beId -> fundCode -> { month, total }; penaltyFundSet: funds that ever accrued.
     const penaltyByFund = new Map<string, Map<string, { month: number; total: number }>>()
     const penaltyFundSet = new Set<string>()
@@ -915,23 +958,29 @@ export class FinanceService {
       pm[r.fundCode] = round2((pm[r.fundCode] ?? 0) + Number(r.payments))
       paymentsByFundByUnit.set(r.unitId, pm)
     }
-    // PenaltyBucket already carries a real unitId (per-unit by construction, see
-    // PeriodService/PenaltyLedgerService) — same aging-ledger source as the BE-level
-    // penMonthRows/penTotalRows above, just grouped by unit instead.
+    // Same sources as the BE-level penMonthRows/penTotalRows above, per unit: posted penalty charge
+    // lines (+ this unit's share of a manual override, whose legs are unit-split) and the penalty
+    // fund's be_unit_statement.due_end.
     const unitPenMonthRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pb.unit_id as "unitId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
-         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
-        where pb.community_id = $1 and pbp.period_id = $2 and pb.unit_id is not null
-        group by pb.unit_id, sf.code`,
-      communityId, period.id,
+      `select x."unitId", x.fund, sum(x.amt)::float8 as amt from (
+         select l.unit_id as "unitId", split_part(cc.source_key, ':', 2) as fund, l.amount as amt
+           from community_charge_line l join community_charge cc on cc.id = l.charge_id
+          where cc.community_id = $1 and cc.period_id = $2 and cc.source_key like 'penalty:%' and l.unit_id is not null
+         union all
+         select d.unit_id, $3::text, d.amount
+           from be_ledger_entry_detail d join fund f on f.id = d.fund_id
+          where d.community_id = $1 and d.period_id = $2 and d.ref_type in ('CHG_OVR_REV','CHG_OVR_SET')
+            and f.code = $4 and d.unit_id is not null
+       ) x group by x."unitId", x.fund`,
+      communityId, period.id, penSourceByTarget.get('PENALIZARI')?.code ?? 'EXPENSES', 'PENALIZARI',
     )
-    const unitPenTotalRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pb.unit_id as "unitId", sf.code as fund, coalesce(sum(pbp.penalty_posted),0)::float8 as amt
-         from penalty_bucket_period pbp join penalty_bucket pb on pb.id = pbp.bucket_id join fund sf on sf.id = pb.fund_id
-        where pb.community_id = $1 and pbp.period_seq <= $2 and pb.unit_id is not null
-        group by pb.unit_id, sf.code`,
-      communityId, p?.seq ?? 0,
-    )
+    const unitPenTotalRows: any[] = penTargets.length ? (await (this.prisma as any).$queryRawUnsafe(
+      `select us.unit_id as "unitId", tf.code as target, coalesce(sum(us.due_end),0)::float8 as amt
+         from be_unit_statement us join fund tf on tf.id = us.fund_id
+        where us.community_id = $1 and us.period_id = $2 and tf.code = any($3::text[])
+        group by us.unit_id, tf.code`,
+      communityId, period.id, penTargets,
+    )).map((r: any) => ({ unitId: r.unitId, fund: penSourceByTarget.get(r.target)!.code, amt: r.amt })) : []
     const penaltyByFundByUnit = new Map<string, Map<string, { month: number; total: number }>>()
     const bumpPenUnit = (unitId: string, fund: string, key: 'month' | 'total', amt: number) => {
       const m = penaltyByFundByUnit.get(unitId) ?? new Map<string, { month: number; total: number }>()
@@ -1265,9 +1314,10 @@ export class FinanceService {
       if (pbf) for (const [f, v] of pbf) penByFundOut[f] = { month: v.month, total: v.total }
       // The override's delta always belongs on EXPENSES (see the penaltyFundSet note above) — never
       // split across whichever funds happen to have a (zero-rate, unrelated) penalty_bucket row.
+      // Only `month` needs it: `total` is the penalty fund's due_end, which already nets the override legs.
       if (delta !== 0) {
         const cur = penByFundOut.EXPENSES ?? { month: 0, total: 0 }
-        penByFundOut.EXPENSES = { month: round2(cur.month + delta), total: round2(cur.total + delta) }
+        penByFundOut.EXPENSES = { month: round2(cur.month + delta), total: cur.total }
       }
       const soldPrecedent = round2(Number(s?.sold ?? 0))
       const payments = round2(Number(s?.pay ?? 0))
@@ -1287,7 +1337,7 @@ export class FinanceService {
         soldByFund: soldByFundByBe.get(beId) ?? {},
         paymentsByFund: paymentsByFundByBe.get(beId) ?? {},
         penaltyMonth: round2(grossMonth + delta),
-        penaltyTotal: round2((penTotal.get(beId) ?? 0) + delta),
+        penaltyTotal: round2(penTotal.get(beId) ?? 0),
         penaltyByFund: penByFundOut,
         payments,
         adjustments: round2(rawAdjustments - delta),
@@ -1866,7 +1916,8 @@ export class FinanceService {
       m === 'BY_RESIDENTS' ? 'după număr de persoane' :
       m === 'EQUAL' || m === 'equal-fallback' ? 'egal pe unitate' :
       (m === 'BY_SQM' || m === 'EXPLICIT') ? 'după cota-parte indiviză' :
-      m === 'PENALTY' ? 'penalizare de întârziere' : (m || '—')
+      m === 'PENALTY' ? 'penalizare de întârziere' :
+      m === 'FIXED' ? 'sumă fixă pe unitate' : (m || '—')
 
     // group this BE's lines by underlying charge
     const byCharge = new Map<string, any[]>()
@@ -1884,7 +1935,9 @@ export class FinanceService {
         const a = l.meta?.allocation || {}
         const base = a.base ?? c0.chargeTotal
         let formula: string
-        if (method === 'PENALTY') {
+        if (a.detail) {
+          formula = `${a.detail} = ${fmt(l.amt)}`
+        } else if (method === 'PENALTY') {
           formula = `${num(a.ratePerDayPct)}%/zi pe sold restant ${fmt(a.principal)} → acumulat ${fmt(a.base)}; cotă unitate ${num(a.unitMeasure)}/${num(a.totalMeasure)} = ${fmt(l.amt)}`
         } else if (method === 'BY_CONSUMPTION') {
           formula = `${num(a.unitMeasure)} / ${num(a.totalMeasure)} × ${fmt(base)} = ${fmt(l.amt)}`
@@ -1913,11 +1966,11 @@ export class FinanceService {
   }
 
   /**
-   * Detailed penalty drilldown for one billing entity, up to a period. Reads the per-bucket aging
-   * ledger (`PenaltyBucket` + `PenaltyBucketPeriod`) — one "bucket" per penalizable due (the migrated
-   * opening arrears, and each period's charge) — and reconstructs, per due: the principal, its daily
-   * rate, the exact penalizable days in each period, the penalty posted that period, the cumulative
-   * accrued, and the per-bucket cap. Returns both this month's total and the cumulative total.
+   * Detailed penalty drilldown for one billing entity (or one of its units) for a period, from the
+   * same FIFO aging slices the posted avizier penalty is computed from (`PenaltyReconciliationService`,
+   * see `PenaltyLedgerService.postFromReconciliation`): per overdue month, the principal still owed,
+   * its daily rate, the penalized days in this afișare window, this period's penalty and the
+   * cumulative penalty since its first penal day. Returns this month's total and the cumulative total.
    */
   async explainPenalty(communityId: string, periodCode: string, beCode: string, sourceFund?: string, includeAll = false, unitCode?: string) {
     const period = await this.resolvePeriod(communityId, periodCode)
@@ -1932,146 +1985,80 @@ export class FinanceService {
     // to fold into a single-unit query — for a genuinely multi-unit BE a null-unit bucket would be
     // ambiguous. Single-unit BEs are the overwhelming majority and are never migrated (per-BE ==
     // per-unit there), so without this a unit-scoped query would silently exclude their history.
-    const beActiveUnitCount = unit ? await this.prisma.billingEntityMember.count({
-      where: { billingEntityId: be.id, startSeq: { lte: p?.seq ?? 0 }, OR: [{ endSeq: null }, { endSeq: { gte: p?.seq ?? 0 } }] },
-    }) : 0
-    const includeNullUnit = beActiveUnitCount <= 1
+    const per = await this.prisma.period.findUnique({ where: { id: period.id }, select: { seq: true, status: true, startDate: true, endDate: true, afisareDate: true, penaltyAsOfDate: true } })
+    if (!per) return { buckets: [], monthTotal: 0, grandTotal: 0 }
+    const { start: windowStart, end: asOf } = await penaltyAccrualWindow(this.prisma as any, communityId, per)
+    const members = await this.prisma.billingEntityMember.findMany({
+      where: { billingEntityId: be.id, startSeq: { lte: per.seq }, OR: [{ endSeq: null }, { endSeq: { gte: per.seq } }] },
+      select: { unitId: true },
+    })
+    const unitIds = unit ? [unit.id] : members.map((m) => m.unitId)
+    // Penalty-bearing source funds (penaltyPerDayPct configured, rate may be 0 today), optionally one.
+    const fundRows = await this.prisma.fund.findMany({ where: { communityId }, select: { id: true, code: true, allocation: true } })
+    const sourceFunds = fundRows.filter((f) => (f.allocation as any)?.penaltyPerDayPct != null && (!sourceFund || f.code === sourceFund))
+    const codeById = new Map(fundRows.map((f) => [f.id, f.code]))
 
-    const bucketRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pb.id as "bucketId", pb.origin_key as "originKey", pb.principal_original::float8 as "principalOriginal",
-              pb.due_date as "dueDate", pb.first_penal_day as "firstPenalDay", pb.status as "bucketStatus",
-              pb.rate_per_day_pct::float8 as "bucketRate",
-              sf.code as "sourceFund", sf.name as "sourceFundName", tf.code as "targetFund", sf.allocation as "srcAlloc",
-              -- the overdue month itself, for display: origin_key 'period:<id>' names the live-engine
-              -- period that staged the charge; 'hist:<unitId>:<periodCode>' (the historical import)
-              -- already carries its own month in the key, no join needed. start_date feeds
-              -- originAnchorDate() (rate resolution) for 'period:<id>' buckets.
-              op.code as "originPeriodCodeJoined", op.start_date as "originPeriodStart"
-         from penalty_bucket pb
-         join fund sf on sf.id = pb.fund_id
-         left join fund tf on tf.id = pb.target_fund_id
-         left join period op on pb.origin_key like 'period:%' and op.id = split_part(pb.origin_key, ':', 2)
-        where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.status != 'SPLIT'
-          and ($3::text is null or sf.code = $3)
-          and ($4::text is null or pb.unit_id = $4 or ($5 and pb.unit_id is null))
-        order by pb.created_at asc, pb.first_penal_day asc`,
-      communityId, be.id, sourceFund ?? null, unit?.id ?? null, includeNullUnit,
-    )
-    const periodRows: any[] = await (this.prisma as any).$queryRawUnsafe(
-      `select pbp.bucket_id as "bucketId", pr.code as "periodCode", pr.seq as "seq",
-              pr.start_date as "startDate", pr.end_date as "endDate", pr.afisare_date as "afisareDate",
-              pbp.principal_remaining::float8 as "principalRemaining",
-              pbp.penalty_accrued::float8 as "penaltyAccrued", pbp.penalty_posted::float8 as "penaltyPosted", pbp.status as status
-         from penalty_bucket_period pbp
-         join penalty_bucket pb on pb.id = pbp.bucket_id
-         join period pr on pr.id = pbp.period_id
-        where pb.community_id = $1 and pb.billing_entity_id = $2 and pb.status != 'SPLIT' and pr.seq <= $3
-          and ($4::text is null or pb.unit_id = $4 or ($5 and pb.unit_id is null))
-        order by pbp.bucket_id, pr.seq`,
-      communityId, be.id, p.seq, unit?.id ?? null, includeNullUnit,
-    )
-    const periodsByBucket = new Map<string, any[]>()
-    for (const r of periodRows) {
-      const arr = periodsByBucket.get(r.bucketId) ?? []
-      arr.push(r)
-      periodsByBucket.set(r.bucketId, arr)
+    // The same FIFO slices the avizier's posted penalty, the risk report and Restanțe are built from
+    // (PenaltyReconciliationService) — so this drilldown always explains the billed figure. A
+    // multi-unit BE whose per-unit split isn't trusted is explained at BE grain, as it is posted.
+    const agings: ReconciledAging[] = []
+    for (const f of sourceFunds) {
+      const rs: ReconciledAging[] = []
+      for (const uid of unitIds) {
+        const r = await this.reconciliation.reconcileUnitFund(this.prisma as any, communityId, uid, f.id, period.id)
+        if (r) rs.push(r)
+      }
+      if (!unit && members.length > 1 && rs.some((r) => !r.anchorTrusted)) {
+        const r = await this.reconciliation.reconcileBeFund(this.prisma as any, communityId, be.id, f.id, period.id)
+        if (r) agings.push(r)
+      } else agings.push(...rs)
     }
 
     const DAY = 24 * 60 * 60 * 1000
     const countDays = (from: Date, to: Date) => (from > to ? 0 : Math.floor((to.getTime() - from.getTime()) / DAY) + 1)
-
     let monthTotal = 0
     let grandTotal = 0
-    const buckets = bucketRows.map((b) => {
-      const firstPenal = new Date(b.firstPenalDay)
-      // Resolve the rate live from the source fund's penaltyRateHistory schedule (if configured),
-      // using this debt's own origin ANCHOR date (the calendar month the charge was actually
-      // incurred — see originAnchorDate's doc; NOT firstPenal, which is 2-4 months later once this
-      // association's billing lag + grace period are added on top and can push a charge into a
-      // later rate era than the one genuinely in force when it was billed) — the same lookup
-      // PenaltyLedgerService#advance uses to accrue it, so the displayed rate always matches the
-      // posted amount. The bucket's stamped rate (falling back to the fund's current flat rate for
-      // legacy buckets) is the fallback for funds with no schedule.
-      const stampedFallbackPct = b.bucketRate != null ? Number(b.bucketRate) : Number((b.srcAlloc as any)?.penaltyPerDayPct ?? 0)
-      const originDate = originAnchorDate(b.originKey, b.dueDate, b.originPeriodStart)
-      const ratePerDayPct = rateForDate(b.srcAlloc, originDate, stampedFallbackPct)
-      const rate = ratePerDayPct / 100
-      const due = b.dueDate ? new Date(b.dueDate) : null
-      let penalDaysToDate = 0 // cumulative days actually penalized (after grace), across periods
-      const hist = (periodsByBucket.get(b.bucketId) ?? []).map((pr) => {
-        // Anchor on the period's own afișare (posting/display) date, same as PenaltyLedgerService#advance's
-        // accrual window — falls back to the calendar end date for periods with no afisareDate stamped.
-        const periodEnd = pr.afisareDate ? new Date(pr.afisareDate) : new Date(pr.endDate)
-        // Zile: days actually penalized in THIS period (counted from firstPenalDay, i.e. after grace).
-        const lo = firstPenal > new Date(pr.startDate) ? firstPenal : new Date(pr.startDate)
-        const days = countDays(lo, periodEnd)
-        penalDaysToDate += days
-        // Total zile: total AGE of the debt = days overdue since scadența through this period's afișare
-        // (the grace month included). Falls back to penalized-days when the bucket has no due date.
-        const daysToDate = due ? countDays(new Date(due.getTime() + DAY), periodEnd) : penalDaysToDate
-        return {
-          periodCode: pr.periodCode,
-          principalRemaining: round2(pr.principalRemaining),
-          days,
-          daysToDate,
-          penaltyPosted: round2(pr.penaltyPosted),
-          penaltyAccrued: round2(pr.penaltyAccrued),
-          status: pr.status,
-          current: pr.periodCode === p.code,
-        }
-      })
-      const totalDays = hist.length ? hist[hist.length - 1].daysToDate : 0 // total age through latest period
-      const cur = hist.find((h) => h.current)
-      const last = hist[hist.length - 1]
-      const postedThis = cur?.penaltyPosted ?? 0
-      const accruedToDate = last?.penaltyAccrued ?? round2(b.principalOriginal && 0)
-      monthTotal += postedThis
-      grandTotal += accruedToDate
-      // 'opening' = the original cutover seed; 'hist:<unitId>:opening' = the per-unit historical
-      // import's own catch-all for whatever predates this system's own tracked charge history.
-      const isOpening = b.originKey === 'opening' || /:opening$/.test(b.originKey || '')
-      // The overdue month, for a separate display column: 'period:<id>' resolves via the join above;
-      // 'hist:<unitId>:<periodCode>' (historical import) and 'cent:<unitId>:<periodCode>'
-      // (centralizator-PDF import) both carry it as the key's own last segment, no join needed —
-      // matches any such '<prefix>:<unitId>:<code>' key so a future import source needs no matching
-      // change here (mirrors originAnchorDate's identical generalization in penalty-rate.ts).
-      // Opening/cutover buckets have no single origin month.
-      const keyedMonthMatch = /^[a-z]+:[^:]+:(.+)$/.exec(b.originKey || '')
-      const originPeriodCode: string | null = isOpening ? null : (b.originPeriodCodeJoined ?? (keyedMonthMatch ? keyedMonthMatch[1] : null))
-      // Migrated buckets carry no real "original principal" — they use a 1e9 sentinel to disable the
-      // legal cap (the penalty was already accrued in the source system). Flag them so the UI omits the
-      // meaningless "Datorie" figure and never claims the cap was reached.
-      const uncapped = b.originKey === 'migrated' || Number(b.principalOriginal) >= 1e9
+    const buckets = agings.flatMap((a) => a.slices.map((s) => {
+      const isOpening = /:opening$/.test(s.originKey)
+      const due = s.dueDate ? new Date(s.dueDate) : null
+      const first = new Date(s.firstPenalDay)
+      const days = countDays(first > windowStart ? first : windowStart, asOf) // penalized days in THIS window
+      const totalDays = due ? countDays(new Date(due.getTime() + DAY), asOf) : Math.max(0, s.ageDays) // age since scadență
+      const rawThisPeriod = slicePenaltyInWindow(s, windowStart)
+      const penaltyThisPeriod = round2(rawThisPeriod)
+      const penaltyToDate = round2(s.penaltyProjected)
+      monthTotal += rawThisPeriod // unrounded, as posted — per-slice rounding would drift from the avizier
+      grandTotal += penaltyToDate
+      const fund = codeById.get(a.fundId) ?? a.fundCode
       return {
         label: isOpening
-          ? `Restanță reportată (${b.sourceFund})`
-          : `Cotă ${b.sourceFund}${b.dueDate ? ` · scadentă ${new Date(b.dueDate).toLocaleDateString('ro-RO')}` : ''}`,
-        originPeriodCode,
-        sourceFund: b.sourceFund,
-        targetFund: b.targetFund,
-        dueDate: b.dueDate,
-        firstPenalDay: b.firstPenalDay,
-        ratePerDayPct,
-        uncapped,
-        principalOriginal: uncapped ? null : round2(b.principalOriginal),
-        principalRemaining: round2(cur?.principalRemaining ?? last?.principalRemaining ?? b.principalOriginal),
-        penaltyThisPeriod: round2(postedThis),
-        penaltyToDate: round2(accruedToDate),
+          ? `Restanță reportată (${fund})`
+          : `Cotă ${fund}${due ? ` · scadentă ${due.toLocaleDateString('ro-RO')}` : ''}`,
+        originPeriodCode: s.originPeriodCode,
+        sourceFund: fund,
+        targetFund: 'PENALIZARI',
+        dueDate: s.dueDate,
+        firstPenalDay: s.firstPenalDay,
+        ratePerDayPct: s.ratePerDayPct,
+        uncapped: false,
+        principalOriginal: round2(s.principal),
+        principalRemaining: round2(s.principal),
+        penaltyThisPeriod,
+        penaltyToDate,
         totalDays,
-        capReached: !uncapped && accruedToDate + 0.005 >= Number(b.principalOriginal),
-        status: b.bucketStatus,
-        history: hist,
+        penalDaysTotal: Math.max(0, s.ageDays), // penalized days since firstPenalDay — the risk report's "Zile"
+        penalDaysCurrent: days, // penalized days inside this afișare window
+        capReached: penaltyToDate + 0.005 >= s.principal,
+        status: 'OPEN',
+        history: [{
+          periodCode: p.code, principalRemaining: round2(s.principal), days, daysToDate: totalDays,
+          penaltyPosted: penaltyThisPeriod, penaltyAccrued: penaltyToDate, status: per.status, current: true,
+        }],
       }
-    })
-      // Default: hide buckets that never accrued anything up to this period (the avizier drilldown's
-      // original behavior — keep it unchanged there). includeAll also keeps buckets with a real
-      // outstanding balance but no penalty yet (0% era, still in grace, etc.) — the "Verificare
-      // Penalități" ledger wants every restanță visible so its own sum matches the current total,
-      // not just the penalty-bearing subset. Fully settled buckets (nothing owed, nothing accrued)
-      // stay hidden either way — they're not a restanță any more.
+    }))
+      // Default: only debts that accrue penalty; includeAll also lists every restanță slice (0% era,
+      // still in grace…) so the "Verificare Penalități" ledger's own sum matches the current total.
       .filter((b) => b.penaltyToDate > 0.0001 || b.penaltyThisPeriod > 0.0001 || (includeAll && b.principalRemaining > 0.0001))
-      // keep creation-date order (SQL) by default; callers that want every restanță visible care most
-      // about how old each one is, so sort those by age (totalDays) descending.
       .sort((a, b) => (includeAll ? b.totalDays - a.totalDays : 0))
 
     // Manual correction (if any) applied to this BE's penalty for the period — shown as a banner so the

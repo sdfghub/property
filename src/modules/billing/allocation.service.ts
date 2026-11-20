@@ -748,7 +748,7 @@ export class AllocationService {
             source: 'ALLOC',
             expenseType: expenseTypeCode,
             splitNodeId: null,
-            allocation: { method, weightSource: 'explicit' },
+            allocation: { method, weightSource: 'explicit', ...(entry.detail ? { detail: String(entry.detail) } : {}) }, // detail: text shown as the avizier cell explanation
           }
           const fundLines = linesByFund.get(fundId) ?? []
           fundLines.push({ unitId: unit.id, beId, amount, meta: lineMeta })

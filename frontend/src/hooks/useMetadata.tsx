@@ -15,6 +15,8 @@ export type CommunityMetadata = {
   impactTags: EnumMeta[]
   requestImpacts?: EnumMeta[]
   requestKinds?: EnumMeta[]
+  incidentActions?: EnumMeta[]
+  ticketStatuses?: (EnumMeta & { open: boolean })[]
   audienceTypes: EnumMeta[]
   meterModes: EnumMeta[]
   waterMethods: EnumMeta[]

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <meta name="robots" content="{{robots}}">
+  <link rel="canonical" href="{{ORIGIN}}{{path}}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ro_RO">
+  <meta property="og:site_name" content="VICUSIA">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:url" content="{{ORIGIN}}{{path}}">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/site.css">
+  <script src="/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#continut">Sari la conținut</a>
+  <header class="nav">
+    <div class="nav-in">
+      <a class="brand" href="/" aria-label="VICUSIA, pagina principală">
+        <img src="/favicon.svg" alt="" width="28" height="28"><span>VICUSIA</span>
+      </a>
+      <nav class="nav-links" id="meniu" aria-label="Navigare principală">
+        <a href="/cum-functioneaza/">Cum funcționează</a>
+        <a href="/#pentru-cine">Pentru cine</a>
+        <a href="/despre/">Despre</a>
+        <a class="nav-menu-cta" href="/contact/">Participă la validare</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost btn-sm" href="{{LOGIN_URL}}">Intră în cont</a>
+        <a class="btn btn-primary btn-sm nav-cta" href="/contact/">Participă la validare</a>
+        <button class="nav-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false" aria-controls="meniu"><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+  <main id="continut">
+{{content}}
+  </main>
+  <footer class="footer">
+    <div class="wrap footer-in">
+      <div class="footer-brand">
+        <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28"><span>VICUSIA</span></a>
+        <p>Civism Starts at Home.</p>
+      </div>
+      <nav aria-label="Pentru cine">
+        <h2>Pentru cine</h2>
+        <a href="/proprietari/">Proprietari și chiriași</a>
+        <a href="/administratori/">Administratori și manageri</a>
+        <a href="/imobiliare/">Imobiliare</a>
+      </nav>
+      <nav aria-label="VICUSIA">
+        <h2>VICUSIA</h2>
+        <a href="/cum-functioneaza/">Cum funcționează</a>
+        <a href="/despre/">Viziune și echipă</a>
+        <a href="/contact/">Contact și validare</a>
+      </nav>
+      <nav aria-label="Cont">
+        <h2>Cont</h2>
+        <a href="{{LOGIN_URL}}">Intră în cont</a>
+        <a href="/confidentialitate/">Confidențialitate</a>
+      </nav>
+    </div>
+    <div class="wrap footer-note">© {{YEAR}} VICUSIA. Produs în curs de validare. Exemplele de pe acest site folosesc date fictive.</div>
+  </footer>
+</body>
+</html>

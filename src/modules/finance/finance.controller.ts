@@ -12,8 +12,9 @@ export class FinanceController {
 
   @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
   @Get('receivables')
-  receivables(@Param('communityId') c: string, @Query('period') period?: string, @Query('groupBy') groupBy?: string) {
-    return this.finance.receivables(c, period, groupBy === 'unit' ? 'unit' : 'be')
+  receivables(@Param('communityId') c: string, @Query('period') period?: string, @Query('groupBy') groupBy?: string, @Query('funds') funds?: string) {
+    const fundCodes = (funds ?? '').split(',').map((f) => f.trim()).filter(Boolean)
+    return this.finance.receivables(c, period, groupBy === 'unit' ? 'unit' : 'be', fundCodes.length ? fundCodes : undefined)
   }
 
   // Full debtor roster for one fund (default EXPENSES = Cheltuieli Întreținere) — every unit with a

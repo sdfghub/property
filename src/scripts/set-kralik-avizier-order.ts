@@ -1,6 +1,6 @@
 // Set the explicit service and fund display order for Kralik's avizier, per Adriana Dascal's
-// request: services Apa Rece, Apa Rece - Dif, Apa Meteo, Curent Scara, Salubritate, Curatenie,
-// Administrare, Comision Banca (APA_DIF auto-inserts right after APA_RECE — see
+// request: services Apa Rece, Apa Rece - Dif, Apa Meteo, Curent Scara, Salubritate,
+// Interfon, Curatenie, Administrare, Comision Banca (APA_DIF auto-inserts right after APA_RECE — see
 // FinanceService.serviceOrderIndex()); funds Rulment, Reparatii, Reabilitare 1, 2, 3.
 // Both mechanisms already exist in the app (Community.features.associationInfo.serviceConfig.domains
 // for services, Community.features.avizierConfig.fundOrder for funds) — they were just empty for
@@ -32,7 +32,7 @@ async function main() {
   const defaultDomain = {
     key: 'default',
     name: 'Servicii',
-    serviceCodes: ['APA_RECE', 'APA_METEO', 'CURENT_SCARA', 'SALUBRITATE', 'CURATENIE', 'ADMINISTRARE', 'COMISION_BANCA'],
+    serviceCodes: ['APA_RECE', 'APA_METEO', 'CURENT_SCARA', 'SALUBRITATE', 'INTERFON', 'CURATENIE', 'ADMINISTRARE', 'COMISION_BANCA'],
   }
   if (idx >= 0) domains[idx] = { ...domains[idx], ...defaultDomain }
   else domains.push(defaultDomain)

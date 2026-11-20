@@ -9,6 +9,7 @@ Postgres). **New here? Start with [onboarding.md](./onboarding.md).**
 | [local-dev.md](./local-dev.md) | Running the stack: Postgres, API, frontend, `start-dev.sh`, ports, the full env-var table, gotchas. |
 | [architecture.md](./architecture.md) | The domain model: topology, periods, funds, allocation, statements/ledger, payments, penalty aging, charge overrides, corrections, meters, the avizier. |
 | [meters.md](./meters.md) | Meter → reading → measure, the `(scope, typeCode)` aggregation rule, INDEX vs CONSUMPTION, and why allocation hard-errors instead of splitting equally. |
+| [budget.md](./budget.md) | Buget vs Forecast vs Actual: Operațional / Tactic / Strategic lines tied to funds, live actuals, per-unit split, `import:budget`. |
 | [corrections.md](./corrections.md) | Reshuffles, credit transfers, penalty write-offs, manual adjustments: declarations with a **derived** ledger. |
 | [intake.md](./intake.md) | AI intake: prompt pack for an external agent, `intake-import/v1` contract, review + apply through template submission |
 | [frontend-conventions.md](./frontend-conventions.md) | No hardcoded domain knowledge (metadata registry + `useMetadata()`) and the EN/RO i18n contract. Read before adding UI. |

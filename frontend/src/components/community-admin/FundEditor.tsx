@@ -39,10 +39,10 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
   // instead of one flat %/day, so a debt keeps the rate that was in force when it originated (e.g. the
   // 0.02%/day of 2021–2023 vs. today's 0.2%/day) rather than every bucket re-rating to whatever the
   // flat field says right now. Empty by default — funds that don't need this keep using the flat field.
-  const [rateHistory, setRateHistory] = React.useState<Array<{ from: string; ratePerDayPct: string }>>([])
-  const setRateRow = (i: number, patch: Partial<{ from: string; ratePerDayPct: string }>) =>
+  const [rateHistory, setRateHistory] = React.useState<Array<{ from: string; ratePerDayPct: string; note: string }>>([])
+  const setRateRow = (i: number, patch: Partial<{ from: string; ratePerDayPct: string; note: string }>) =>
     setRateHistory((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-  const addRateRow = () => setRateHistory((rows) => [...rows, { from: '', ratePerDayPct: '' }])
+  const addRateRow = () => setRateHistory((rows) => [...rows, { from: '', ratePerDayPct: '', note: '' }])
   const removeRateRow = (i: number) => setRateHistory((rows) => rows.filter((_, idx) => idx !== i))
 
   React.useEffect(() => {
@@ -61,7 +61,7 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
       shortName: a.shortName || '', abbrev: a.abbrev || '', penaltyPerDayPct: a.penaltyPerDayPct != null ? String(a.penaltyPerDayPct) : '',
     })
     const hist = Array.isArray(a.penaltyRateHistory) ? a.penaltyRateHistory : []
-    setRateHistory(hist.map((h: any) => ({ from: h?.from ? String(h.from).slice(0, 10) : '', ratePerDayPct: h?.ratePerDayPct != null ? String(h.ratePerDayPct) : '' })))
+    setRateHistory(hist.map((h: any) => ({ from: h?.from ? String(h.from).slice(0, 10) : '', ratePerDayPct: h?.ratePerDayPct != null ? String(h.ratePerDayPct) : '', note: h?.note ? String(h.note) : '' })))
   }, [])
 
   const startEdit = () => { if (fund) { setMode('edit'); loadForEdit(fund); setOpen(true); setError(null); setMsg(null) } }
@@ -85,7 +85,8 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
     if (form.penaltyPerDayPct !== '') allocation.penaltyPerDayPct = Number(form.penaltyPerDayPct)
     const cleanHistory = rateHistory
       .filter((r) => r.from && r.ratePerDayPct !== '')
-      .map((r) => ({ from: r.from, ratePerDayPct: Number(r.ratePerDayPct) }))
+      // `note` documents why a rate era exists (an association decision, a source document) — kept with the schedule
+      .map((r) => ({ from: r.from, ratePerDayPct: Number(r.ratePerDayPct), ...(r.note.trim() ? { note: r.note.trim() } : {}) }))
       .sort((a, b) => a.from.localeCompare(b.from))
     if (cleanHistory.length) allocation.penaltyRateHistory = cleanHistory
     else delete allocation.penaltyRateHistory
@@ -167,6 +168,8 @@ export function FundEditor({ communityCode, fund, onSaved }: { communityCode: st
                   onChange={(e) => setRateRow(i, { from: e.target.value })} title={t('fundEdit.rateHistoryFrom', 'Valabil de la')} />
                 <input className="input" type="number" step="0.001" style={{ width: 110 }} placeholder={t('fundEdit.penalty', 'Penaliz. %/zi')}
                   value={row.ratePerDayPct} onChange={(e) => setRateRow(i, { ratePerDayPct: e.target.value })} />
+                <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder={t('fundEdit.rateHistoryNote', 'Notă (de ce / decizia asociației)')}
+                  value={row.note} onChange={(e) => setRateRow(i, { note: e.target.value })} title={t('fundEdit.rateHistoryNote', 'Notă (de ce / decizia asociației)')} />
                 <button type="button" className="btn ghost small" onClick={() => removeRateRow(i)} title={t('common.remove', 'Elimină')}>✕</button>
               </div>
             ))}

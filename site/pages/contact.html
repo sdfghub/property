@@ -1,0 +1,32 @@
+<!-- {"title":"Contact și validare | VICUSIA","description":"Spune-ne rolul tău și problema concretă. Ne ajuți să validăm modelul VICUSIA.","path":"/contact/"} -->
+<section class="page-hero" style="padding-bottom:0">
+  <div class="narrow">
+    <h1 class="display">Participă la validare.</h1>
+    <p class="lead">Spune-ne pe scurt cine ești și ce problemă ai întâlnit. Folosim răspunsul pentru cercetare și pentru a discuta cu tine, dacă ești de acord.</p>
+  </div>
+</section>
+<section class="section" style="padding-top:0">
+  <div class="narrow">
+    <form class="form" id="validare" data-email="{{CONTACT_EMAIL}}">
+      <div class="field"><label for="nume">Nume</label><input id="nume" name="nume" autocomplete="name" required></div>
+      <div class="field"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="rol">Rolul tău</label>
+        <select id="rol" name="rol" required>
+          <option value="">Alege</option>
+          <option>Proprietar</option>
+          <option>Chiriaș</option>
+          <option>Reprezentant de asociație</option>
+          <option>Administrator</option>
+          <option>Property manager</option>
+          <option>Facility manager</option>
+          <option>Agent sau consultant imobiliar</option>
+          <option>Altul</option>
+        </select></div>
+      <div class="field" id="camp-portofoliu" hidden><label for="portofoliu">Dimensiunea aproximativă a portofoliului <span class="opt">(opțional)</span></label><input id="portofoliu" name="portofoliu" placeholder="De exemplu, numărul de clădiri"></div>
+      <div class="field"><label for="problema">Problema concretă</label><textarea id="problema" name="problema" aria-describedby="problema-hint" required></textarea><p class="hint" id="problema-hint">Descrie un caz recent. Nu include date personale ale altor persoane și nu trimite documente confidențiale.</p></div>
+      <p class="hint">Toate câmpurile sunt obligatorii, în afara celor marcate opțional. Această solicitare nu creează un cont și nu te înscrie într-o aplicație. Vezi <a href="/confidentialitate/">informațiile de confidențialitate</a>.</p>
+      <p class="form-status" id="stare-formular" role="status"></p>
+      <div><button class="btn btn-primary" type="submit">Trimite solicitarea</button></div>
+    </form>
+  </div>
+</section>

@@ -2,6 +2,8 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import type { CommunityAdminTabKey } from './CommunityAdminDashboard'
+import { ServicesDashboard } from './ServicesDashboard'
+import { bigNumberStyle, collapseBtnStyle, innerCardStyle, outerCardStyle, sectionLabelStyle } from './dashboardStyles'
 import { usePeriod } from '../../contexts/PeriodContext'
 import { API_BASE } from '../../api/client'
 
@@ -38,18 +40,6 @@ const shortDate = (d: string | null | undefined) =>
 // neutral, generously-rounded card system: white outer cards with a subtle border, light-grey
 // nested sub-cards, uppercase tracked-out section labels, tabular-nums financial figures.
 const TONE_COLOR: Record<string, string> = { warn: 'var(--danger, #ff5724)', success: 'var(--success, #22c35d)' }
-const outerCardStyle: React.CSSProperties = {
-  background: 'var(--bg, #fff)', border: '1px solid var(--border, #e5e5e5)', borderRadius: 16,
-  padding: '18px 20px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-}
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted, #737373)', fontWeight: 500,
-}
-const bigNumberStyle: React.CSSProperties = { fontSize: 28, fontWeight: 700, letterSpacing: '-0.01em', marginTop: 6 }
-const collapseBtnStyle: React.CSSProperties = {
-  width: 32, height: 32, borderRadius: 999, border: '1px solid var(--border, #e5e5e5)', background: '#eceef1',
-  color: 'var(--text, #1d1d1f)', cursor: 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0,
-}
 const MONTHS_RO_SHORT = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'noi', 'dec']
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
@@ -181,6 +171,8 @@ export function TodayHome({ communityId, communityCode, onNavigate, viewerRole }
   })
   const requestRows = (dash?.requests ?? []).slice(0, 3).map((x: any) => ({ label: x.title }))
   const requestsTotal: number = dash?.requestsTotal ?? (dash?.requests ?? []).length
+  const incidentRows = (dash?.incidents ?? []).slice(0, 3).map((x: any) => ({ label: x.title, sub: x.serviceItem?.name }))
+  const incidentsTotal: number = dash?.incidentsTotal ?? (dash?.incidents ?? []).length
 
   // Grad de încasare pe lună = Încasări / (De încasat: Curente + Restanțe) — not the backend's
   // collection.ratePct, which is Încasări/Curente only (ignores outstanding Restanțe).
@@ -244,6 +236,8 @@ export function TodayHome({ communityId, communityCode, onNavigate, viewerRole }
           {balances?.lastActivityDate ? `, ${t('today.dashboardAsOf', 'la')} ${shortDate(balances.lastActivityDate)} (${t('today.lastBankStatement', 'ultimul extras bancar')})` : ''}.
         </p>
       </div>
+
+      <ServicesDashboard communityId={communityId} canEdit={isAdmin} onOpenIncidents={() => onNavigate('incidents')} />
 
       {/* Money widgets (finance reads — visible to all roles that reach this home), in order:
           1. Disponibil — bank/cash balances, combined RON-equivalent total up top.
@@ -328,7 +322,8 @@ export function TodayHome({ communityId, communityCode, onNavigate, viewerRole }
 
       {/* De făcut / Evenimente viitoare / Solicitări (admin + committee — cenzor is finance-only) */}
       {(isAdmin || isCommittee) && (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <ListCard title={t('today.incidentsTitle', 'Incidente deschise')} rows={incidentRows} count={incidentsTotal} badgeTone="warn" onOpen={() => onNavigate('incidents')} empty={t('today.noIncidents', 'Niciun incident deschis')} />
           <ListCard title={t('today.tasksTitle', 'De făcut')} rows={taskRows} onOpen={() => onNavigate('inventory')} empty={t('today.noTasks', 'No open tasks')} count={taskRows.length} />
           <ListCard title={t('today.eventsTitle', 'Evenimente viitoare')} rows={eventRows} onOpen={() => onNavigate('events')} empty={t('today.noEvents', 'No upcoming events')} count={eventRows.length} />
           <ListCard title={t('today.requestsTitle', 'Solicitări')} rows={requestRows} count={requestsTotal} badgeTone="warn" onOpen={() => onNavigate('requests')} empty={t('today.noRequests', 'Nicio solicitare')} />
@@ -419,7 +414,7 @@ function Widget({
     <div
       onClick={onClick}
       style={{
-        background: '#eceef1', border: '1px solid var(--border, #e5e5e5)', borderRadius: 12, padding: 14,
+        ...innerCardStyle,
         display: 'flex', flexDirection: 'column', gap: 4, cursor: onClick ? 'pointer' : 'default',
         fontStyle: italic ? 'italic' : undefined,
       }}

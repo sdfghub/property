@@ -17,6 +17,13 @@ month:
 - April afisare `2026-06-11`, May afisare `2026-07-13` → May window = 32 days.
 - `PenaltyLedgerService.advance()` uses `[prevAfisare+1 .. thisAfisare]`; it falls back to
   calendar bounds when `afisareDate` is null, so other communities are unaffected.
+- **Since 2026-09 penalties run "la zi": up to the day before the afișare date** (afișare 19.11 →
+  computed through 18.11, as HomeFile does). The boundary is `penaltyBoundary()` in
+  `penalty-reconciliation.service.ts`: `Period.penaltyAsOfDate` if set, else `afisareDate − 1 day`; the
+  next period's window starts the day after it. Periods closed under the old through-afișare rule
+  (2026-05…2026-08) carry `penaltyAsOfDate = afisareDate`, stamped by `npm run backfill:penalty-as-of`
+  — run it on any database before preparing a new month with this code. `penaltyAsOfDate` can also be
+  set per period (`POST periods/:code/settings {penaltyAsOfDate}`) when a month needs another cut-off.
 
 ## Penalty buckets & the back-penalty forgiveness
 

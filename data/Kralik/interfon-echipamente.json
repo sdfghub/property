@@ -1,0 +1,325 @@
+{
+ "_note": "Interfon - Echipamente: the per-unit extra on the întreținere list (column N 'Cost pe lista Intretinere suplimentar' of sheet 'Internfon - Posturi', Google Sheet 1WMwGy2NqM0pRFWLke5mhOg4By15jSDQBY12U19725Fw, read 2026-11-19). amount = postExtra (price over the default post Audio (sticlă) - Negru, 390 lei, covered from the fund) + cardsCost (25 lei/card) + keysCost. The 'Asociatie' row (spare cards + service providers, 575 lei) is paid from the fund, not charged to units. AP 12 (SAD 4/A, B, C): the sheet's 3 cards (75 lei, all on SAD 4/C) split 1 card / 25 lei per unit, at the user's request (2026-11-19).",
+ "defaultPost": "Audio (sticla) - Negru",
+ "defaultPostPrice": 390,
+ "cardPrice": 25,
+ "association": {
+  "label": "Asociatie",
+  "cards": 23,
+  "cardsCost": 575.0,
+  "amount": 575.0,
+  "note": "Din fond"
+ },
+ "units": [
+  {
+   "unit": "AP 1",
+   "post": "Audio (sticla) - Negru",
+   "postBase": 390.0,
+   "postExtra": 0.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 75.0
+  },
+  {
+   "unit": "AP 1/B",
+   "post": "Audio (sticla) - Negru",
+   "postBase": 390.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  },
+  {
+   "unit": "AP 2/1",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 0,
+   "cardsCost": 0.0,
+   "keysCost": 0.0,
+   "amount": 190.0
+  },
+  {
+   "unit": "AP 2/2",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 3",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 4 (I)",
+   "post": "Video 7\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 290.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 365.0
+  },
+  {
+   "unit": "AP 4A",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 5 (I-A)",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 5 (I-B)",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 6",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 6A",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 8",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 9",
+   "post": "Video 7\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 290.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 365.0
+  },
+  {
+   "unit": "AP 10A",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 10B",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 31",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 32",
+   "post": "Video 7\" - Negru",
+   "postBase": 390.0,
+   "postExtra": 260.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 335.0
+  },
+  {
+   "unit": "AP 4 (III)",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 265.0
+  },
+  {
+   "unit": "AP 5 (III)",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 11",
+   "post": "Audio (sticla) - Negru",
+   "postBase": 390.0,
+   "postExtra": 0.0,
+   "cards": 2,
+   "cardsCost": 50.0,
+   "keysCost": 0.0,
+   "amount": 50.0
+  },
+  {
+   "unit": "AP 11A",
+   "post": "Audio (sticla) - Negru",
+   "postBase": 390.0,
+   "postExtra": 0.0,
+   "cards": 2,
+   "cardsCost": 50.0,
+   "keysCost": 0.0,
+   "amount": 50.0
+  },
+  {
+   "unit": "AP 11B",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 105.0
+  },
+  {
+   "unit": "AP 12 (SAD 4/A)",
+   "post": "Audio (sticla) - Negru",
+   "postBase": 390.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  },
+  {
+   "unit": "AP 12 (SAD 4/B)",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  },
+  {
+   "unit": "AP 12 (SAD 4/C)",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  },
+  {
+   "unit": "AP 14A",
+   "post": "Audio (sticla) - Alb",
+   "postBase": 390.0,
+   "postExtra": 30.0,
+   "cards": 2,
+   "cardsCost": 50.0,
+   "keysCost": 0.0,
+   "amount": 80.0
+  },
+  {
+   "unit": "AP 14B",
+   "post": "Video 3.5\" - Alb",
+   "postBase": 390.0,
+   "postExtra": 190.0,
+   "cards": 6,
+   "cardsCost": 150.0,
+   "keysCost": 0.0,
+   "amount": 340.0
+  },
+  {
+   "unit": "SPAȚIU COMERCIAL",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 2,
+   "cardsCost": 50.0,
+   "keysCost": 0.0,
+   "amount": 50.0
+  },
+  {
+   "unit": "SAD 2/1",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 3,
+   "cardsCost": 75.0,
+   "keysCost": 0.0,
+   "amount": 75.0
+  },
+  {
+   "unit": "SAD 2/2",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  },
+  {
+   "unit": "SAD 1",
+   "post": null,
+   "postBase": 0.0,
+   "postExtra": 0.0,
+   "cards": 1,
+   "cardsCost": 25.0,
+   "keysCost": 0.0,
+   "amount": 25.0
+  }
+ ]
+}

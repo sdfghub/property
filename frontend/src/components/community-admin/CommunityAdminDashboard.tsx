@@ -16,7 +16,9 @@ import { PollsTab } from './PollsTab'
 import { NotificationsTab } from './NotificationsTab'
 import { CommunicationsTab } from './CommunicationsTab'
 import { InventoryTab } from './InventoryTab'
+import { ServicesTab } from './ServicesTab'
 import { RequestsTab } from './RequestsTab'
+import { IncidentsTab } from './IncidentsTab'
 import { TodayHome } from './TodayHome'
 import { CloseWizard } from './CloseWizard'
 import { PeriodSettingsPanel } from './PeriodSettingsPanel'
@@ -33,8 +35,10 @@ import { CorrectionsPanel } from './CorrectionsPanel'
 import { IntakePanel } from './intake/IntakePanel'
 import { GovernancePanel } from './GovernancePanel'
 import { CollectionRatePanel } from './CollectionRatePanel'
+import { CashHistoryPanel } from './CashHistoryPanel'
 import { RiskPanel } from './RiskPanel'
 import { ForecastPanel } from './ForecastPanel'
+import { BudgetPanel } from './BudgetPanel'
 import { PeriodProvider, usePeriod } from '../../contexts/PeriodContext'
 import { PeriodSelectorBar } from './PeriodSelectorBar'
 
@@ -58,7 +62,9 @@ export type CommunityAdminTabKey =
   | 'polls'
   | 'communications'
   | 'inventory'
+  | 'services'
   | 'requests'
+  | 'incidents'
   | 'notifications'
   | 'decisions'
   | 'corrections'
@@ -71,8 +77,10 @@ export type CommunityAdminTabKey =
   | 'periodFocus'
   | 'periodSettings'
   | 'collectionRate'
+  | 'cashHistory'
   | 'riskExposure'
   | 'forecast'
+  | 'budget'
 
 type Props = {
   forceCommunityId?: string
@@ -87,8 +95,8 @@ type Props = {
 // Which tabs each role may see. Oversight roles get a read-focused subset; the admin-centric
 // "today" home is excluded (they land on a role-appropriate page instead).
 const OVERSIGHT_TABS: Record<string, CommunityAdminTabKey[]> = {
-  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'forecast', 'vendors', 'cashRegister', 'decisions'],
-  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'riskExposure', 'forecast', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'requests', 'notifications'],
+  CENSOR: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'cashHistory', 'riskExposure', 'forecast', 'budget', 'vendors', 'cashRegister', 'decisions', 'services', 'incidents'],
+  EXECUTIVE_COMITEE_MEMBER: ['today', 'close', 'association', 'periodSettings', 'avizier', 'penalties', 'penaltyLedger', 'funds', 'debtors', 'collectionRate', 'cashHistory', 'riskExposure', 'forecast', 'budget', 'vendors', 'cashRegister', 'decisions', 'communications', 'polls', 'events', 'inventory', 'services', 'incidents', 'requests', 'notifications'],
 }
 function tabAllowedFor(key: CommunityAdminTabKey, viewerRole?: string): boolean {
   const allow = viewerRole ? OVERSIGHT_TABS[viewerRole] : undefined
@@ -106,7 +114,9 @@ const FEATURE_BY_TAB: Partial<Record<CommunityAdminTabKey, string>> = {
   polls: 'polls',
   events: 'events',
   inventory: 'inventory',
+  services: 'services',
   requests: 'tickets',
+  incidents: 'tickets',
   notifications: 'notifications',
   decisions: 'committee',
   intake: 'aiIntake',
@@ -234,11 +244,13 @@ export function CommunityAdminDashboard({
         { key: 'debtors', label: t('tab.debtors') || 'Debtors' },
         { key: 'vendors', label: t('tab.vendors') || 'Furnizori' },
         { key: 'cashRegister', label: t('tab.cashRegister') || 'Registru' },
+        { key: 'cashHistory', label: t('tab.cashHistory') || 'Istoric încasări/plăți' },
         { key: 'funds', label: t('tab.funds') || 'Funds' },
         { key: 'collectionRate', label: t('tab.collectionRate') || 'Grad de colectare' },
         { key: 'corrections', label: t('tab.corrections') || 'Corecții' },
         { key: 'riskExposure', label: t('tab.riskExposure') || 'Risc de expunere' },
         { key: 'forecast', label: t('tab.forecast') || 'Restanțe și prognoză' },
+        { key: 'budget', label: t('tab.budget') || 'Buget vs Forecast vs Actual' },
       ],
     },
     {
@@ -249,6 +261,8 @@ export function CommunityAdminDashboard({
         { key: 'polls', label: t('tab.polls') || 'Polls' },
         { key: 'events', label: t('tab.events') || 'Events' },
         { key: 'inventory', label: t('tab.inventory') || 'Inventory' },
+        { key: 'services', label: t('tab.services') || 'Evaluare servicii' },
+        { key: 'incidents', label: t('tab.incidents') || 'Incidente' },
         { key: 'requests', label: t('tab.requests') || 'Solicitări' },
         { key: 'notifications', label: t('tab.notifications') || 'Notifications' },
       ],
@@ -786,8 +800,10 @@ function CommunityAdminContent({
         {activeTab === 'penaltyLedger' && <PenaltyLedgerPanel communityId={communityId} />}
         {activeTab === 'debtors' && <DebtorsPanel communityId={communityId} />}
         {activeTab === 'collectionRate' && <CollectionRatePanel communityId={communityId} />}
+        {activeTab === 'cashHistory' && <CashHistoryPanel communityId={communityId} />}
         {activeTab === 'riskExposure' && <RiskPanel communityId={communityId} />}
         {activeTab === 'forecast' && <ForecastPanel communityId={communityId} />}
+        {activeTab === 'budget' && <BudgetPanel communityId={communityId} />}
         {activeTab === 'decisions' && <CommitteeDecisionsPanel communityId={communityId} />}
         {activeTab === 'corrections' && <CorrectionsPanel communityId={communityId} />}
         {activeTab === 'intake' && <IntakePanel communityId={communityId} />}
@@ -929,7 +945,9 @@ function CommunityAdminContent({
           <CommunicationsTab communityId={communityId} unitGroups={configJson?.unitGroups || []} readOnly={readOnly} />
         )}
         {activeTab === 'inventory' && <InventoryTab communityId={communityId} readOnly={readOnly} />}
+        {activeTab === 'services' && <ServicesTab communityId={communityId} communityName={activeCommunity?.name} readOnly={readOnly} />}
         {activeTab === 'requests' && <RequestsTab communityId={communityId} readOnly={readOnly} />}
+        {activeTab === 'incidents' && <IncidentsTab communityId={communityId} readOnly={readOnly} />}
         {activeTab === 'notifications' && <NotificationsTab readOnly={readOnly} />}
         {activeTab === 'payments' && (() => {
           // Deep-link from the Dashboard's "De plată" widgets (?period=<code>&filter=current|paid)

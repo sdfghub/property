@@ -112,6 +112,24 @@ export const TICKET_REQUEST_KIND_META: EnumMeta[] = [
   { key: 'ALTELE', label: 'Altele', labelEn: 'Other' },
 ]
 
+// Incidente (Ticket.type = 'INCIDENT') — the action reported on the affected service; a subset of
+// enum ServiceOperationalStatus, so an incident can also lower the service's own status.
+export const INCIDENT_SERVICE_ACTION_META: EnumMeta[] = [
+  { key: 'NOT_FUNCTIONAL', label: 'Nefuncțional', labelEn: 'Not functional', tone: 'red' },
+  { key: 'PARTIAL', label: 'Funcțional parțial', labelEn: 'Partially functional', tone: 'yellow' },
+]
+
+// Ticket lifecycle — enum TicketStatus. `open` = counts as an open incident/request.
+export const TICKET_STATUS_META: Array<EnumMeta & { open: boolean }> = [
+  { key: 'NEW', label: 'Nou', labelEn: 'New', open: true },
+  { key: 'IN_PROGRESS', label: 'În lucru', labelEn: 'In progress', open: true },
+  { key: 'REOPENED', label: 'Redeschis', labelEn: 'Reopened', open: true },
+  { key: 'RESOLVED', label: 'Rezolvat', labelEn: 'Resolved', open: false },
+  { key: 'CLOSED', label: 'Închis', labelEn: 'Closed', open: false },
+  { key: 'CANCELED', label: 'Anulat', labelEn: 'Canceled', open: false },
+]
+export const OPEN_TICKET_STATUSES = TICKET_STATUS_META.filter((s) => s.open).map((s) => s.key)
+
 // Announcement audience types — enum AnnouncementAudienceType.
 export const AUDIENCE_TYPE_META: EnumMeta[] = [
   { key: 'COMMUNITY', label: 'Toată asociația' },
@@ -241,6 +259,8 @@ export const COMMUNITY_METADATA = {
   impactTags: IMPACT_TAG_META,
   requestImpacts: TICKET_IMPACT_META,
   requestKinds: TICKET_REQUEST_KIND_META,
+  incidentActions: INCIDENT_SERVICE_ACTION_META,
+  ticketStatuses: TICKET_STATUS_META,
   audienceTypes: AUDIENCE_TYPE_META,
   meterModes: MEASURE_MODE_META,
   waterMethods: WATER_METHOD_META,

@@ -12,6 +12,10 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 type CloseStage = 'CLOSE_PREP' | 'CLOSE_FINAL'
 type TxOrClient = PrismaClient | Prisma.TransactionClient
 
+// Prepare/approve rebuild every billing entity's statements inside one interactive transaction; with a
+// month of receipts that runs past Prisma's 5 s default and the transaction is dropped mid-way (P2028).
+const PERIOD_TX_OPTIONS = { maxWait: 10_000, timeout: 120_000 }
+
 @Injectable()
 export class PeriodService {
   constructor(
@@ -212,12 +216,23 @@ export class PeriodService {
       this.log('[PAY] reapplying payments during prepare', { communityId, period: period.id })
       await this.paymentService.reapplyForPeriod(tx, communityId, period.id)
 
-      if (await this.features.isEnabled(communityId, 'penalties')) {
+      const penaltiesOn = await this.features.isEnabled(communityId, 'penalties')
+      if (penaltiesOn) {
         // stateful penalty aging ledger: ensure this period's buckets, then advance (provisional).
-        // Runs after payments so the paydown is applied before accrual; penalty charges it posts are
-        // new debt and are intentionally left unsettled by this period's principal payment.
+        // Runs after payments so the paydown is applied before accrual. Bucket bookkeeping only —
+        // the billed penalty is posted below by postFromReconciliation.
         await this.penaltyLedger.ensureBuckets(tx, communityId, period.id)
         await this.penaltyLedger.advance(tx, communityId, period.id, { commit: false })
+        // The billed penalty ages the same FIFO slices as the risk report / Restanțe, which read
+        // be_statement's `dueStart − payments` — so statements (with this period's payments and
+        // corrections) must exist first. Penalty charges land on the penalty fund, never on the
+        // funds they are computed from, so this first pass is not circular.
+        // A previous prepare/approve's override legs are stale here (re-derived after the penalty is
+        // posted) and must not skew the per-unit split the penalty reads.
+        await this.clearChargeOverrideLegs(tx, communityId, period.id)
+        await this.applyCorrections(tx, communityId, period.id)
+        await this.computeStatements(tx, communityId, period.id)
+        await this.penaltyLedger.postFromReconciliation(tx, communityId, period.id, { commit: false })
       }
 
       // apply admin manual charge overrides (two ADJUSTMENT legs) after all charges are staged
@@ -235,7 +250,7 @@ export class PeriodService {
         data: { status: 'PREPARED', preparedAt: new Date() },
       })
       return { ok: true }
-    })
+    }, PERIOD_TX_OPTIONS)
   }
 
   async approve(communityId: string, periodCode: string) {
@@ -348,7 +363,7 @@ export class PeriodService {
         data: { status: 'CLOSED', closedAt: new Date() },
       })
       return { ok: true }
-    })
+    }, PERIOD_TX_OPTIONS)
   }
 
   async recompute(communityId: string, periodCode: string) {
@@ -414,6 +429,7 @@ export class PeriodService {
         status: period.status,
         dueDate: period.dueDate,
         afisareDate: (period as any).afisareDate ?? null,
+        penaltyAsOfDate: (period as any).penaltyAsOfDate ?? null,
         startDate: period.startDate,
         endDate: period.endDate,
         preparedAt: period.preparedAt,
@@ -450,6 +466,16 @@ export class PeriodService {
       if (body.afisareDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid afisareDate')
       await this.prisma.period.update({ where: { id: period.id }, data: { afisareDate: d } })
       out.afisareDate = d
+    }
+
+    if (body?.penaltyAsOfDate !== undefined) {
+      // Last day penalties are computed for, when it differs from the afișare date (null = afișare date).
+      // Same history rule: it bounds this period's accrual window and the next one's start.
+      if (period.status === 'CLOSED') throw new BadRequestException('Cannot change the penalty date on a closed period')
+      const d = body.penaltyAsOfDate ? new Date(body.penaltyAsOfDate) : null
+      if (body.penaltyAsOfDate && Number.isNaN(d!.getTime())) throw new BadRequestException('Invalid penaltyAsOfDate')
+      await this.prisma.period.update({ where: { id: period.id }, data: { penaltyAsOfDate: d } as any })
+      out.penaltyAsOfDate = d
     }
 
     if (body?.graceDays !== undefined && body.graceDays !== null) {
@@ -813,7 +839,8 @@ export class PeriodService {
    * equals the admin value. Deleted + re-derived on every prepare/approve/write so it tracks the current
    * computed charge and survives statement recompute. Generic — PENALIZARI is the first consumer.
    */
-  async applyChargeOverrides(tx: TxOrClient, communityId: string, periodId: string) {
+  /** Drop the period's derived override legs (re-derived by applyChargeOverrides). */
+  private async clearChargeOverrideLegs(tx: TxOrClient, communityId: string, periodId: string) {
     const prior = await tx.beLedgerEntry.findMany({
       where: { communityId, periodId, refType: { in: ['CHG_OVR_REV', 'CHG_OVR_SET'] } },
       select: { id: true },
@@ -822,6 +849,10 @@ export class PeriodService {
       await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
       await tx.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
     }
+  }
+
+  async applyChargeOverrides(tx: TxOrClient, communityId: string, periodId: string) {
+    await this.clearChargeOverrideLegs(tx, communityId, periodId)
     const overrides = await tx.chargeOverride.findMany({ where: { communityId, periodId }, orderBy: { createdAt: 'desc' } })
     const seen = new Set<string>()
     for (const o of overrides) {
@@ -831,12 +862,20 @@ export class PeriodService {
       if (o.overrideAmount == null) continue // cleared → no legs, statement falls back to computed
       const computed = await this.computedFundCharge(tx, communityId, periodId, o.billingEntityId, o.fundId)
       const target = Number(o.overrideAmount)
+      // Split both legs across the BE's units by the computed charge's own per-unit detail, so a
+      // multi-unit BE's be_unit_statement rows still sum to its be_statement — a unitId-null leg broke
+      // that identity, which flips the BE's per-unit split to untrusted (avizier unit view shows zero,
+      // penalties fall back to BE grain) for this period and every later one carrying it forward.
+      const unitShares = await this.overrideUnitShares(tx, communityId, periodId, o.billingEntityId, o.fundId)
       for (const leg of [
         { refType: 'CHG_OVR_REV', amount: -computed, reason: 'override-reverse' },
         { refType: 'CHG_OVR_SET', amount: target, reason: 'override-set' },
       ]) {
         const le = await tx.beLedgerEntry.create({ data: { communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', lane: 'ACCRUAL', amount: leg.amount, currency: 'RON', refType: leg.refType, refId: periodId, fundId: o.fundId } })
-        await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', fundId: o.fundId, currency: 'RON', refType: leg.refType, refId: periodId, unitId: null, amount: leg.amount, meta: { reason: leg.reason, overrideId: o.id, computed, override: target, comment: o.comment, actor: o.actor } } })
+        const parts: Array<[string | null, number]> = unitShares.length ? this.splitByShares(leg.amount, unitShares) : [[null, leg.amount]]
+        for (const [unitId, amount] of parts) {
+          await tx.beLedgerEntryDetail.create({ data: { ledgerEntryId: le.id, communityId, periodId, billingEntityId: o.billingEntityId, kind: 'ADJUSTMENT', fundId: o.fundId, currency: 'RON', refType: leg.refType, refId: periodId, unitId, amount, meta: { reason: leg.reason, overrideId: o.id, computed, override: target, comment: o.comment, actor: o.actor } } })
+        }
       }
     }
   }
@@ -940,6 +979,37 @@ export class PeriodService {
   }
 
   /** The value computeStatements books as `charges` for a (BE, fund): CHARGE / ACCRUAL / ¬OPENING_BALANCE. */
+  /** Per-unit weights for an override's legs: the computed charge's own unit split; else an even
+   *  split over the BE's active units; unit-less only for a BE with no active unit. */
+  private async overrideUnitShares(tx: TxOrClient, communityId: string, periodId: string, billingEntityId: string, fundId: string): Promise<Array<[string, number]>> {
+    const rows: Array<{ unitId: string; amt: number }> = await (tx as any).$queryRawUnsafe(
+      `select d.unit_id as "unitId", sum(d.amount)::float8 as amt
+         from be_ledger_entry_detail d join be_ledger_entry e on e.id = d.ledger_entry_id
+        where e.community_id = $1 and e.period_id = $2 and e.billing_entity_id = $3 and e.fund_id = $4
+          and e.kind = 'CHARGE' and e.lane = 'ACCRUAL' and e.ref_type <> 'OPENING_BALANCE' and d.unit_id is not null
+        group by d.unit_id having sum(d.amount) > 0`,
+      communityId, periodId, billingEntityId, fundId,
+    )
+    if (rows.length) return rows.map((r) => [r.unitId, Number(r.amt)])
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true } })
+    const members = await tx.billingEntityMember.findMany({
+      where: { billingEntityId, startSeq: { lte: period?.seq ?? 0 }, OR: [{ endSeq: null }, { endSeq: { gte: period?.seq ?? 0 } }] },
+      select: { unitId: true },
+    })
+    return members.map((m) => [m.unitId, 1] as [string, number])
+  }
+
+  /** Split an amount by weights, the last part taking the rounding remainder so parts sum exactly. */
+  private splitByShares(amount: number, shares: Array<[string, number]>): Array<[string, number]> {
+    const total = shares.reduce((s, [, w]) => s + w, 0)
+    let rest = amount
+    return shares.map(([unitId, w], i) => {
+      const part = i === shares.length - 1 ? rest : Math.round((amount * w / total) * 10000) / 10000
+      rest -= part
+      return [unitId, part]
+    })
+  }
+
   private async computedFundCharge(tx: TxOrClient, communityId: string, periodId: string, billingEntityId: string, fundId: string): Promise<number> {
     const agg = await tx.beLedgerEntry.aggregate({
       _sum: { amount: true },

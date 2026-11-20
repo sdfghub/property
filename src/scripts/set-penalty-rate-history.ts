@@ -1,25 +1,31 @@
 import { PrismaClient } from '@prisma/client'
 
 /**
- * Seeds the EXPENSES fund's penalty rate schedule for one community, from the historical rates
- * visible on the old homefile.ro exports (e.g. "Gh Lazar 4 - Penalitati - 1B-Jul", the detailed
- * per-month sheet for Ap 1/B): 0.02%/day from Jan 2021, a real 0% dip Jul–Sep 2021 (confirmed by
- * the association, 2026-09 — an earlier version of this script treated that dip as a one-off
- * export glitch and dropped it; it is a genuine regime change), back to 0.02%/day Oct 2021–Jun
- * 2023, 0% Jul 2023–Apr 2026, then 0.2%/day from May 2026 — the rate the association currently
- * charges. Adjust the dates/rates below — or edit them afterwards from the Fund editor's "Istoric
- * rată penalizare" — before relying on this for real charges.
+ * Seeds the EXPENSES fund's penalty rate schedule for one community. Each entry carries a `note`
+ * (shown in the Fund editor and "Informații asociație") documenting why that era exists.
+ *
+ * Current schedule (association decision, 2026-10-15): NO penalty on any debt that originated before
+ * May 2026 — 0%/day from 2021-01-01 — then 0.2%/day from 2026-05-01, the rate the association charges
+ * today. Until 2026-10-15 the schedule mirrored the old homefile.ro exports instead (e.g. "Gh Lazar 4 -
+ * Penalitati - 1B-Jul"): 0.02%/day Jan–Jun 2021, 0% Jul–Sep 2021, 0.02%/day Oct 2021–Jun 2023,
+ * 0% Jul 2023–Apr 2026. Adjust below — or afterwards from the Fund editor's "Istoric rată
+ * penalizare" — before relying on this for real charges.
  *
  *   npm run set:penalty-rate-history -- <COMMUNITY_ID> [FUND_CODE]
  */
 const prisma = new PrismaClient()
 
 const DEFAULT_HISTORY = [
-  { from: '2021-01-01', ratePerDayPct: 0.02 },
-  { from: '2021-07-01', ratePerDayPct: 0 },
-  { from: '2021-10-01', ratePerDayPct: 0.02 },
-  { from: '2023-07-01', ratePerDayPct: 0 },
-  { from: '2026-05-01', ratePerDayPct: 0.2 },
+  {
+    from: '2021-01-01',
+    ratePerDayPct: 0,
+    note: 'Decizie asociație (15.10.2026): fără penalizări pentru datorii apărute înainte de mai 2026. Înlocuiește istoricul HomeFile (0,02%/zi ian–iun 2021 și oct 2021–iun 2023, 0% în rest).',
+  },
+  {
+    from: '2026-05-01',
+    ratePerDayPct: 0.2,
+    note: 'Rata curentă a asociației: 0,2%/zi pentru datorii apărute din mai 2026 încoace.',
+  },
 ]
 
 async function main() {

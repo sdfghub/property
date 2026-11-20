@@ -1,0 +1,3999 @@
+{
+ "source": "b.xlsx",
+ "version": {
+  "code": "BUG-2026",
+  "name": "Buget 2026 – servicii, fonduri, proiecte",
+  "fiscalYear": 2026,
+  "status": "DRAFT",
+  "baselineYear": 2025,
+  "notes": "Din „b.xlsx”: Portofoliu (coloana 2026 = bugetul anual; proiecte multianuale cu tranșe pe ani), Proiect - Serviciu (împărțirea pe servicii), Structura buget (catalogul de servicii), Contract-Factura (angajamente și plăți)."
+ },
+ "fxRates": {
+  "2022": {
+   "rate": 4.9313,
+   "basis": "medie anuală BCE (257 zile)"
+  },
+  "2023": {
+   "rate": 4.9467,
+   "basis": "medie anuală BCE (255 zile)"
+  },
+  "2024": {
+   "rate": 4.9746,
+   "basis": "medie anuală BCE (256 zile)"
+  },
+  "2025": {
+   "rate": 5.0522003429,
+   "fromFund": {
+    "code": "REABILITARE_2",
+    "ron": 1768270.12,
+    "eur": 350000.0
+   },
+   "basis": "Fond Reabilitare 2 = 1.768.270,12 lei (Portofoliu 2025) = 350.000 € (Buget - Sumar)"
+  },
+  "2026": {
+   "rate": 5.2364,
+   "fromFund": {
+    "code": "REABILITARE_3",
+    "ron": 890188.0,
+    "eur": 170000.0
+   },
+   "basis": "Fond Reabilitare 3 = 890.188,00 lei (Portofoliu 2026) = 170.000 € (Buget - Sumar)"
+  },
+  "2027": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2028": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2029": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2030": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2031": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2032": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2033": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  },
+  "2034": {
+   "rate": 5.2364,
+   "basis": "ca în 2026 (estimare)"
+  }
+ },
+ "funds": [
+  {
+   "code": "EXPENSES",
+   "label": "Cheltuieli Întreținere",
+   "dimension": "OPERATIONAL",
+   "appFund": true
+  },
+  {
+   "code": "RULMENT",
+   "label": "Fond Rulment",
+   "dimension": "OPERATIONAL",
+   "appFund": true
+  },
+  {
+   "code": "CONSUMABILE",
+   "label": "Consumabile",
+   "dimension": "OPERATIONAL",
+   "appFund": false
+  },
+  {
+   "code": "MENTENANTE",
+   "label": "Fond Mentenanțe",
+   "dimension": "TACTIC",
+   "appFund": false
+  },
+  {
+   "code": "CONFORMITATE",
+   "label": "Conformitate",
+   "dimension": "TACTIC",
+   "appFund": false
+  },
+  {
+   "code": "REPARATII",
+   "label": "Fond Reparații",
+   "dimension": "TACTIC",
+   "appFund": true
+  },
+  {
+   "code": "REABILITARE_1",
+   "label": "Fond Reabilitare 1",
+   "dimension": "STRATEGIC",
+   "appFund": true
+  },
+  {
+   "code": "REABILITARE_2",
+   "label": "Fond Reabilitare 2",
+   "dimension": "STRATEGIC",
+   "appFund": true
+  },
+  {
+   "code": "REABILITARE_3",
+   "label": "Fond Reabilitare 3",
+   "dimension": "STRATEGIC",
+   "appFund": true
+  },
+  {
+   "code": "REABILITARE_4",
+   "label": "Fond Reabilitare 4",
+   "dimension": "STRATEGIC",
+   "appFund": false
+  },
+  {
+   "code": "REABILITARE_5",
+   "label": "Fond Reabilitare 5",
+   "dimension": "STRATEGIC",
+   "appFund": false
+  }
+ ],
+ "services": [
+  {
+   "code": "APA_RECE",
+   "name": "Apa Rece",
+   "category": "Utilitati",
+   "domain": "Apa",
+   "specCode": "S05-01",
+   "serviceItem": {
+    "domain": "Apă",
+    "name": "Apă rece"
+   },
+   "sortOrder": 0
+  },
+  {
+   "code": "APA_CALDA",
+   "name": "Apa Calda",
+   "category": "Utilitati",
+   "domain": "Apa",
+   "specCode": "S05-01",
+   "serviceItem": {
+    "domain": "Apă",
+    "name": "Apă caldă"
+   },
+   "sortOrder": 1
+  },
+  {
+   "code": "CANALIZARE",
+   "name": "Canalizare",
+   "category": "Utilitati",
+   "domain": "Apa",
+   "specCode": "S05-02",
+   "serviceItem": {
+    "domain": "Apă",
+    "name": "Canalizare"
+   },
+   "sortOrder": 2
+  },
+  {
+   "code": "APA_METEO",
+   "name": "Apa Meteo",
+   "category": "Utilitati",
+   "domain": "Apa",
+   "specCode": "S05-03",
+   "serviceItem": {
+    "domain": "Apă",
+    "name": "Ape pluviale"
+   },
+   "sortOrder": 3
+  },
+  {
+   "code": "ENERGIE_TERMICA",
+   "name": "Energie Termica",
+   "category": "Utilitati",
+   "domain": "Energie",
+   "specCode": "S05-05",
+   "serviceItem": {
+    "domain": "Energie",
+    "name": "Energie termică"
+   },
+   "sortOrder": 4
+  },
+  {
+   "code": "ENERGIE_ELECTRICA",
+   "name": "Energie Electrica",
+   "category": "Utilitati",
+   "domain": "Energie",
+   "specCode": "S05-04",
+   "serviceItem": {
+    "domain": "Energie",
+    "name": "Energie electrică"
+   },
+   "sortOrder": 5
+  },
+  {
+   "code": "SIGURANTA_PSI",
+   "name": "Siguranta - PSI",
+   "category": "Servicii Asociatie",
+   "domain": "Siguranta",
+   "specCode": "S02-01",
+   "serviceItem": {
+    "domain": "Siguranță",
+    "name": "Protecția și stingerea incendiilor"
+   },
+   "sortOrder": 6
+  },
+  {
+   "code": "SIGURANTA_PREVENIER_INUNDATII",
+   "name": "Siguranta - Prevenier Inundatii",
+   "category": "Servicii Asociatie",
+   "domain": "Siguranta",
+   "specCode": "S02-04",
+   "serviceItem": {
+    "domain": "Siguranță",
+    "name": "Prevenire inundații"
+   },
+   "sortOrder": 7
+  },
+  {
+   "code": "ILUMINAT",
+   "name": "Iluminat",
+   "category": "Servicii Asociatie",
+   "domain": "Iluminat",
+   "specCode": "S03-01",
+   "serviceItem": {
+    "domain": "Iluminat",
+    "name": "Iluminat spații comune"
+   },
+   "sortOrder": 8
+  },
+  {
+   "code": "INTERFON",
+   "name": "Interfon",
+   "category": "Servicii Asociatie",
+   "domain": "Securitate & Acces",
+   "specCode": "S01-01",
+   "serviceItem": {
+    "domain": "Securitate & Acces",
+    "name": "Interfon"
+   },
+   "sortOrder": 9
+  },
+  {
+   "code": "LIFT",
+   "name": "Lift",
+   "category": "Servicii Asociatie",
+   "domain": "Mobilitate",
+   "specCode": "S07-01",
+   "serviceItem": {
+    "domain": "Mobilitate",
+    "name": "Lift"
+   },
+   "sortOrder": 10
+  },
+  {
+   "code": "INCALZIRE",
+   "name": "Incalzire",
+   "category": "Servicii Asociatie",
+   "domain": "HVAC (confort)",
+   "specCode": "S04-01",
+   "serviceItem": {
+    "domain": "Încălzire, Răcire & Ventilație",
+    "name": "Încălzire"
+   },
+   "sortOrder": 11
+  },
+  {
+   "code": "RACIRE",
+   "name": "Racire",
+   "category": "Servicii Asociatie",
+   "domain": "HVAC (confort)",
+   "specCode": "S04-02",
+   "serviceItem": {
+    "domain": "Încălzire, Răcire & Ventilație",
+    "name": "Răcire"
+   },
+   "sortOrder": 12
+  },
+  {
+   "code": "VENTILATIE",
+   "name": "Ventilatie",
+   "category": "Servicii Asociatie",
+   "domain": "HVAC (confort)",
+   "specCode": "S04-03",
+   "serviceItem": {
+    "domain": "Încălzire, Răcire & Ventilație",
+    "name": "Ventilație"
+   },
+   "sortOrder": 13
+  },
+  {
+   "code": "ACCES",
+   "name": "Acces",
+   "category": "Servicii Asociatie",
+   "domain": "Securitate & Acces",
+   "specCode": "S01-01",
+   "serviceItem": {
+    "domain": "Securitate & Acces",
+    "name": "Acces controlat"
+   },
+   "sortOrder": 14
+  },
+  {
+   "code": "CURATENIE",
+   "name": "Curatenie",
+   "category": "Servicii Furnizor",
+   "domain": "Igiena & ingrijire",
+   "specCode": "S06-01",
+   "serviceItem": {
+    "domain": "Igienă & Îngrijire",
+    "name": "Curățenie"
+   },
+   "sortOrder": 15
+  },
+  {
+   "code": "SALUBRIZARE",
+   "name": "Salubrizare",
+   "category": "Servicii Furnizor",
+   "domain": "Igiena & ingrijire",
+   "specCode": "S06-02",
+   "serviceItem": {
+    "domain": "Igienă & Îngrijire",
+    "name": "Salubritate"
+   },
+   "sortOrder": 16
+  },
+  {
+   "code": "DDD",
+   "name": "DDD",
+   "category": "Servicii Furnizor",
+   "domain": "Igiena & ingrijire",
+   "specCode": "S06-03",
+   "serviceItem": {
+    "domain": "Igienă & Îngrijire",
+    "name": "Dezinsecție, dezinfecție și deratizare"
+   },
+   "sortOrder": 17
+  },
+  {
+   "code": "ADMINISTRARE",
+   "name": "Administrare",
+   "category": "Servicii Furnizor",
+   "domain": "Administrativ",
+   "specCode": "S10-01",
+   "serviceItem": {
+    "domain": "Administrativ",
+    "name": "Administrare"
+   },
+   "sortOrder": 18
+  },
+  {
+   "code": "COMISIOANE_BANCARE",
+   "name": "Comisioane Bancare",
+   "category": "Servicii Furnizor",
+   "domain": "Administrativ",
+   "specCode": "S10-01",
+   "serviceItem": {
+    "domain": "Administrativ",
+    "name": "Bancar"
+   },
+   "sortOrder": 19
+  },
+  {
+   "code": "JURIDIC",
+   "name": "Juridic",
+   "category": "Servicii Furnizor",
+   "domain": "Administrativ",
+   "specCode": "S10-02",
+   "serviceItem": {
+    "domain": "Administrativ",
+    "name": "Juridic"
+   },
+   "sortOrder": 20
+  },
+  {
+   "code": "INTRETINERE_SPATII_VERZI",
+   "name": "Intretinere Spatii verzi",
+   "category": "Servicii Furnizor",
+   "domain": "Igiena & ingrijire",
+   "specCode": "S06-04",
+   "serviceItem": {
+    "domain": "Igienă & Îngrijire",
+    "name": "Spații verzi"
+   },
+   "sortOrder": 21
+  },
+  {
+   "code": "ESTETICA",
+   "name": "Estetică",
+   "category": "Servicii Asociatie",
+   "domain": "Cladire",
+   "specCode": "S08-01",
+   "serviceItem": {
+    "domain": "Clădire",
+    "name": "Estetică"
+   },
+   "sortOrder": 22
+  },
+  {
+   "code": "FUNCTIONALITATE",
+   "name": "Funcționalitate",
+   "category": "Servicii Asociatie",
+   "domain": "Cladire",
+   "specCode": "S08-01",
+   "serviceItem": {
+    "domain": "Clădire",
+    "name": "Funcționalitate"
+   },
+   "sortOrder": 23
+  },
+  {
+   "code": "STRUCTURA",
+   "name": "Siguranță",
+   "category": "Servicii Asociatie",
+   "domain": "Cladire",
+   "specCode": "S08-01",
+   "serviceItem": {
+    "domain": "Clădire",
+    "name": "Siguranță"
+   },
+   "sortOrder": 24
+  },
+  {
+   "code": "SUPRAVEGHERE_VIDEO",
+   "name": "Supraveghere Video",
+   "category": "Servicii Asociatie",
+   "domain": "Securitate & Acces",
+   "specCode": "S01-03",
+   "serviceItem": {
+    "domain": "Securitate & Acces",
+    "name": "Supraveghere video"
+   },
+   "sortOrder": 25
+  },
+  {
+   "code": "INTERNET",
+   "name": "Internet",
+   "category": "Servicii Asociatie",
+   "domain": "Comunicatii",
+   "specCode": "S09-01",
+   "serviceItem": {
+    "domain": "Comunicații",
+    "name": "Internet"
+   },
+   "sortOrder": 26
+  },
+  {
+   "code": "FINANCIAR",
+   "name": "Financiar",
+   "category": "Servicii Asociatie",
+   "domain": "Administrativ",
+   "specCode": null,
+   "serviceItem": {
+    "domain": "Administrativ",
+    "name": "Financiar"
+   },
+   "sortOrder": 27
+  }
+ ],
+ "programs": [
+  {
+   "code": "PGM-001",
+   "name": "(P1) Investitii - Cladire - Reabilitare",
+   "dimension": "STRATEGIC",
+   "sortOrder": 0
+  },
+  {
+   "code": "PGM-002",
+   "name": "(P1) Investitii - Cladire - Consolidare structurala",
+   "dimension": "STRATEGIC",
+   "sortOrder": 1
+  },
+  {
+   "code": "PGM-003",
+   "name": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "sortOrder": 2
+  },
+  {
+   "code": "PGM-004",
+   "name": "Conformitate & Amenzi",
+   "dimension": "TACTIC",
+   "sortOrder": 3
+  },
+  {
+   "code": "PGM-005",
+   "name": "Mentenante Reactive (Reparatii)",
+   "dimension": "TACTIC",
+   "sortOrder": 4
+  },
+  {
+   "code": "PGM-006",
+   "name": "(P1) Investitii - Securitate & Acces",
+   "dimension": "STRATEGIC",
+   "sortOrder": 5
+  },
+  {
+   "code": "PGM-007",
+   "name": "Servicii Furnizor",
+   "dimension": "OPERATIONAL",
+   "sortOrder": 6
+  },
+  {
+   "code": "PGM-008",
+   "name": "Utilitati",
+   "dimension": "OPERATIONAL",
+   "sortOrder": 7
+  },
+  {
+   "code": "PGM-009",
+   "name": "Taxe & Comisioane",
+   "dimension": "OPERATIONAL",
+   "sortOrder": 8
+  },
+  {
+   "code": "PGM-010",
+   "name": "Diverse (Gospodaresc)",
+   "dimension": "OPERATIONAL",
+   "sortOrder": 9
+  },
+  {
+   "code": "PGM-011",
+   "name": "Fonduri operaționale",
+   "dimension": "OPERATIONAL",
+   "sortOrder": 10
+  }
+ ],
+ "projects": [
+  {
+   "code": "PRJ-001",
+   "programCode": "PGM-001",
+   "name": "1. Reabilitare - Proiectare & Organizare Santier",
+   "scope": "Proiectare & Organizare Santier",
+   "fundCode": "REABILITARE_1",
+   "fundLabel": "Reablitare 1",
+   "voteYear": 2025,
+   "durationYears": 4,
+   "budgetAmount": 390000.0,
+   "budgetEur": 78000.0,
+   "yearPlan": {
+    "2022": 110000.0,
+    "2023": 120000.0,
+    "2024": 120000.0,
+    "2025": 40000.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 2
+  },
+  {
+   "code": "PRJ-002",
+   "programCode": "PGM-001",
+   "name": "2. Reabilitare - Acoperis & Curtea interioara",
+   "scope": "Acoperis & Curtea interioara",
+   "fundCode": "REABILITARE_2",
+   "fundLabel": "Reabilitare 2",
+   "voteYear": 2025,
+   "durationYears": 1,
+   "budgetAmount": 1768270.12,
+   "budgetEur": 350000.0,
+   "yearPlan": {
+    "2025": 1768270.12
+   },
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 3
+  },
+  {
+   "code": "PRJ-003",
+   "programCode": "PGM-001",
+   "name": "3. Reabilitare - Calcane & Fatada Exterioara",
+   "scope": "Scari, Calcane & Fatada Exterioara",
+   "fundCode": "REABILITARE_3",
+   "fundLabel": "Reabilitare 3",
+   "voteYear": 2025,
+   "durationYears": 1,
+   "budgetAmount": 598725.0,
+   "budgetEur": 114339.05,
+   "yearPlan": {
+    "2026": 598725.0
+   },
+   "serviceSplit": [
+    {
+     "code": "STRUCTURA",
+     "weight": 0.043541
+    },
+    {
+     "code": "ESTETICA",
+     "weight": 0.478229
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.47823
+    }
+   ],
+   "serviceSplitNote": "Clădire: Siguranță 4,35% (lucrările la subsol: 27.971 din 642.405 lei prevăzuți în Contract-Factura); restul, în părți egale, Estetică și Funcționalitate.",
+   "sourceRow": 4
+  },
+  {
+   "code": "PRJ-004",
+   "programCode": "PGM-001",
+   "name": "Reabilitare - Instalatii",
+   "scope": "Electrice, Internet, Interfon, HVAC",
+   "fundCode": "REABILITARE_3",
+   "fundLabel": "Reabilitare 3",
+   "voteYear": 2026,
+   "durationYears": 1,
+   "budgetAmount": 220350.0,
+   "budgetEur": 42080.44,
+   "yearPlan": {
+    "2026": 220350.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 5
+  },
+  {
+   "code": "PRJ-005",
+   "programCode": "PGM-001",
+   "name": "Instalare - Corpuri Iluminat",
+   "scope": "Corpuri de Iluminat",
+   "fundCode": "REABILITARE_5",
+   "fundLabel": "Reabilitare 5",
+   "voteYear": 2027,
+   "durationYears": 1,
+   "budgetAmount": 40000.0,
+   "budgetEur": 7547.17,
+   "yearPlan": {
+    "2027": 40000.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 6
+  },
+  {
+   "code": "PRJ-006",
+   "programCode": "PGM-001",
+   "name": "Reabilitare - Constructie Specialitati",
+   "scope": "Tamplarie (poarta intrare), Confectii Metalice (Usi Lift), Tinichigerie (Pluviale), Ceramica & Caramida (Decoratiuni)",
+   "fundCode": "REABILITARE_3",
+   "fundLabel": "Reabilitare 3",
+   "voteYear": 2027,
+   "durationYears": 1,
+   "budgetAmount": 71113.0,
+   "budgetEur": 13580.51,
+   "yearPlan": {
+    "2026": 71113.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 7
+  },
+  {
+   "code": "PRJ-007",
+   "programCode": "PGM-002",
+   "name": "Evaluare structurala & Testare Materiale",
+   "scope": "Evaluare structurala & Testare Materiale",
+   "fundCode": "REABILITARE_4",
+   "fundLabel": "Reabilitare 4",
+   "voteYear": 2028,
+   "durationYears": 2,
+   "budgetAmount": 160325.0,
+   "budgetEur": 30250.0,
+   "yearPlan": {
+    "2028": 160325.0
+   },
+   "serviceSplit": [
+    {
+     "code": "STRUCTURA",
+     "weight": 1
+    }
+   ],
+   "serviceSplitNote": "Proiect de siguranță a clădirii (structură): atribuit integral serviciului Siguranță.",
+   "sourceRow": 8
+  },
+  {
+   "code": "PRJ-008",
+   "programCode": "PGM-006",
+   "name": "Usi la subsol cu acces cu cartela",
+   "scope": null,
+   "fundCode": "REABILITARE_5",
+   "fundLabel": "Reabilitare 5",
+   "voteYear": 2026,
+   "durationYears": null,
+   "budgetAmount": null,
+   "budgetEur": null,
+   "yearPlan": {},
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.3
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.3
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.4
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 24
+  },
+  {
+   "code": "PRJ-009",
+   "programCode": "PGM-006",
+   "name": "Usi la pod cu acces cu cartela",
+   "scope": null,
+   "fundCode": "REABILITARE_5",
+   "fundLabel": "Reabilitare 5",
+   "voteYear": 2026,
+   "durationYears": null,
+   "budgetAmount": null,
+   "budgetEur": null,
+   "yearPlan": {},
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.3
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.3
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.4
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 25
+  },
+  {
+   "code": "PRJ-010",
+   "programCode": "PGM-006",
+   "name": "Camere Video - zona Deseuri",
+   "scope": null,
+   "fundCode": "REABILITARE_5",
+   "fundLabel": "Reabilitare 5",
+   "voteYear": 2026,
+   "durationYears": null,
+   "budgetAmount": null,
+   "budgetEur": null,
+   "yearPlan": {},
+   "serviceSplit": [
+    {
+     "code": "SALUBRIZARE",
+     "weight": 0.4
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.6
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 26
+  },
+  {
+   "code": "PRJ-011",
+   "programCode": "PGM-006",
+   "name": "Camere Video - zona Hol",
+   "scope": null,
+   "fundCode": "REABILITARE_5",
+   "fundLabel": "Reabilitare 5",
+   "voteYear": 2026,
+   "durationYears": null,
+   "budgetAmount": null,
+   "budgetEur": null,
+   "yearPlan": {},
+   "serviceSplit": [
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitNote": null,
+   "sourceRow": 27
+  }
+ ],
+ "lines": [
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Instalatii Sanitare",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "APA_RECE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Apa Rece": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 9,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-001",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Canalizare",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "CANALIZARE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Canalizare": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 10,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-002",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Pluviale",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "APA_METEO",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Apa Meteo": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 11,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-003",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Instalatii Termice (Cos Fum)",
+   "scope": null,
+   "fundCode": "REPARATII",
+   "fundLabel": "Reparatii",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "INCALZIRE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Incalzire": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 12,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-004",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Instalatii Termice (Cazane, Pompe)",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "INCALZIRE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Incalzire": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 13,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-005",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Stingatoare",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Siguranta": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 14,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-006",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenanta Interfon",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 1344.0,
+   "years": {
+    "2026": 1344.0
+   },
+   "serviceSplit": [
+    {
+     "code": "INTERFON",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Interfon": 1.0
+   },
+   "expenseTypes": [
+    "INTERFON"
+   ],
+   "sourceRow": 15,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-007",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Mentenante Proactive",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Mentenante Suport Tehnic (SLA)",
+   "scope": null,
+   "fundCode": "MENTENANTE",
+   "fundLabel": "Mentenante",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.041667
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.041667
+    },
+    {
+     "code": "APA_RECE",
+     "weight": 0.083333
+    },
+    {
+     "code": "CANALIZARE",
+     "weight": 0.083333
+    },
+    {
+     "code": "APA_METEO",
+     "weight": 0.083333
+    },
+    {
+     "code": "INCALZIRE",
+     "weight": 0.083333
+    },
+    {
+     "code": "ILUMINAT",
+     "weight": 0.083333
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.083333
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.083333
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.083333
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.083333
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.083333
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.083336
+    }
+   ],
+   "serviceSplitRaw": {
+    "Cladire": 0.08333333333333333,
+    "Apa Rece": 0.08333333333333333,
+    "Canalizare": 0.08333333333333333,
+    "Apa Meteo": 0.08333333333333333,
+    "Incalzire": 0.08333333333333333,
+    "Iluminat": 0.08333333333333333,
+    "Interfon": 0.08333333333333333,
+    "Supraveghere Video": 0.08333333333333333,
+    "Acces Controlat": 0.08333333333333333,
+    "Siguranta": 0.08333333333333333,
+    "Lift": 0.08333333333333333,
+    "Internet": 0.08333333333333333
+   },
+   "expenseTypes": null,
+   "sourceRow": 16,
+   "costType": "PREVENTIVE_MAINTENANCE",
+   "code": "BUG-TAC-008",
+   "programCode": "PGM-003"
+  },
+  {
+   "program": "Conformitate & Amenzi",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Conformitate ISCIR (cazane)",
+   "scope": null,
+   "fundCode": "CONFORMITATE",
+   "fundLabel": "Conformitate",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "INCALZIRE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Incalzire": 0.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 17,
+   "costType": "COMPLIANCE",
+   "code": "BUG-TAC-009",
+   "programCode": "PGM-004"
+  },
+  {
+   "program": "Conformitate & Amenzi",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Conformitate ISCIR (lift)",
+   "scope": null,
+   "fundCode": "CONFORMITATE",
+   "fundLabel": "Conformitate",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "LIFT",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Lift": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 18,
+   "costType": "COMPLIANCE",
+   "code": "BUG-TAC-010",
+   "programCode": "PGM-004"
+  },
+  {
+   "program": "Conformitate & Amenzi",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Conformitate ANRE (magistrala gaz)",
+   "scope": null,
+   "fundCode": "CONFORMITATE",
+   "fundLabel": "Conformitate",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "INCALZIRE",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Incalzire": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 19,
+   "costType": "COMPLIANCE",
+   "code": "BUG-TAC-011",
+   "programCode": "PGM-004"
+  },
+  {
+   "program": "Conformitate & Amenzi",
+   "dimension": "TACTIC",
+   "maintenanceKind": "PREVENTIVE",
+   "name": "Amenda ISU",
+   "scope": null,
+   "fundCode": "CONFORMITATE",
+   "fundLabel": "Conformitate",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Siguranta": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 20,
+   "costType": "COMPLIANCE",
+   "code": "BUG-TAC-012",
+   "programCode": "PGM-004"
+  },
+  {
+   "program": "Mentenante Reactive (Reparatii)",
+   "dimension": "TACTIC",
+   "maintenanceKind": "REACTIVE",
+   "name": "Reparatii Instalatii Sanitare",
+   "scope": null,
+   "fundCode": "REPARATII",
+   "fundLabel": "Reparatii",
+   "annual": 7200.0,
+   "years": {
+    "2026": 7200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "APA_RECE",
+     "weight": 0.5
+    },
+    {
+     "code": "CANALIZARE",
+     "weight": 0.5
+    }
+   ],
+   "serviceSplitRaw": {
+    "Apa Rece": 1.0,
+    "Canalizare": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 21,
+   "costType": "REPAIR",
+   "code": "BUG-TAC-013",
+   "programCode": "PGM-005"
+  },
+  {
+   "program": "Mentenante Reactive (Reparatii)",
+   "dimension": "TACTIC",
+   "maintenanceKind": "REACTIVE",
+   "name": "Reparatii Instalatii Pluviale",
+   "scope": null,
+   "fundCode": "REPARATII",
+   "fundLabel": "Reparatii",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "APA_METEO",
+     "weight": 1.0
+    }
+   ],
+   "serviceSplitRaw": {
+    "Apa Meteo": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 22,
+   "costType": "REPAIR",
+   "code": "BUG-TAC-014",
+   "programCode": "PGM-005"
+  },
+  {
+   "program": "Mentenante Reactive (Reparatii)",
+   "dimension": "TACTIC",
+   "maintenanceKind": "REACTIVE",
+   "name": "Reparatii Tamplarie",
+   "scope": null,
+   "fundCode": "REPARATII",
+   "fundLabel": "Reparatii",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "serviceSplitRaw": {
+    "Cladire": 1.0
+   },
+   "expenseTypes": null,
+   "sourceRow": 23,
+   "costType": "REPAIR",
+   "code": "BUG-TAC-015",
+   "programCode": "PGM-005"
+  },
+  {
+   "program": "Servicii Furnizor",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Curatenie",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 10080.0,
+   "years": {
+    "2026": 10080.0
+   },
+   "serviceSplit": [
+    {
+     "code": "CURATENIE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "CURATENIE"
+   ],
+   "sourceRow": 28,
+   "costType": "SUBSCRIPTION",
+   "code": "BUG-OPE-016",
+   "programCode": "PGM-007"
+  },
+  {
+   "program": "Servicii Furnizor",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Administrare",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 9600.0,
+   "years": {
+    "2026": 9600.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ADMINISTRARE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "ADMINISTRARE"
+   ],
+   "sourceRow": 29,
+   "costType": "SUBSCRIPTION",
+   "code": "BUG-OPE-017",
+   "programCode": "PGM-007"
+  },
+  {
+   "program": "Servicii Furnizor",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Salubritate",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 8400.0,
+   "years": {
+    "2026": 8400.0
+   },
+   "serviceSplit": [
+    {
+     "code": "SALUBRIZARE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "SALUBRITATE"
+   ],
+   "sourceRow": 30,
+   "costType": "SUBSCRIPTION",
+   "code": "BUG-OPE-018",
+   "programCode": "PGM-007"
+  },
+  {
+   "program": "Servicii Furnizor",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Dezinsecție, dezinfecție și deratizare",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0,
+    "2027": 3200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "DDD",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": null,
+   "sourceRow": 31,
+   "costType": "SUBSCRIPTION",
+   "code": "BUG-OPE-019",
+   "programCode": "PGM-007"
+  },
+  {
+   "program": "Utilitati",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Iluminat",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "CURENT_SCARA"
+   ],
+   "sourceRow": 32,
+   "costType": "CONSUMPTION",
+   "code": "BUG-OPE-020",
+   "programCode": "PGM-008"
+  },
+  {
+   "program": "Utilitati",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Apa Rece",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 14400.0,
+   "years": {
+    "2026": 14400.0
+   },
+   "serviceSplit": [
+    {
+     "code": "APA_RECE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "APA_RECE",
+    "APA_RECE_DIF",
+    "PENALITATI_APA"
+   ],
+   "sourceRow": 33,
+   "costType": "CONSUMPTION",
+   "code": "BUG-OPE-021",
+   "programCode": "PGM-008"
+  },
+  {
+   "program": "Utilitati",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Canalizare",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 10800.0,
+   "years": {
+    "2026": 10800.0
+   },
+   "serviceSplit": [
+    {
+     "code": "CANALIZARE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "CANALIZARE"
+   ],
+   "sourceRow": 34,
+   "costType": "CONSUMPTION",
+   "code": "BUG-OPE-022",
+   "programCode": "PGM-008"
+  },
+  {
+   "program": "Utilitati",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Apa Meteo",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 1200.0,
+   "years": {
+    "2026": 1200.0
+   },
+   "serviceSplit": [
+    {
+     "code": "APA_METEO",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "APA_METEO"
+   ],
+   "sourceRow": 35,
+   "costType": "CONSUMPTION",
+   "code": "BUG-OPE-023",
+   "programCode": "PGM-008"
+  },
+  {
+   "program": "Taxe & Comisioane",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Comisioane Banca",
+   "scope": null,
+   "fundCode": "EXPENSES",
+   "fundLabel": "Intretinere",
+   "annual": 1000.0,
+   "years": {
+    "2026": 1000.0
+   },
+   "serviceSplit": [
+    {
+     "code": "COMISIOANE_BANCARE",
+     "weight": 1
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": [
+    "COMISION_BANCA"
+   ],
+   "sourceRow": 36,
+   "costType": "FEES",
+   "code": "BUG-OPE-024",
+   "programCode": "PGM-009"
+  },
+  {
+   "program": "Diverse (Gospodaresc)",
+   "dimension": "OPERATIONAL",
+   "maintenanceKind": null,
+   "name": "Becuri, Ghivece Flori, Hartie, Decoratiuni etc",
+   "scope": "Becuri, Ghivece Flori, Hartie, Decoratiuni etc",
+   "fundCode": "CONSUMABILE",
+   "fundLabel": "Consumabile",
+   "annual": 0.0,
+   "years": {
+    "2027": 3480.0
+   },
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.25
+    },
+    {
+     "code": "INTRETINERE_SPATII_VERZI",
+     "weight": 0.25
+    },
+    {
+     "code": "ADMINISTRARE",
+     "weight": 0.25
+    },
+    {
+     "code": "ESTETICA",
+     "weight": 0.125
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.125
+    }
+   ],
+   "serviceSplitRaw": null,
+   "expenseTypes": null,
+   "sourceRow": 37,
+   "costType": "SUPPLIES",
+   "code": "BUG-OPE-025",
+   "programCode": "PGM-010"
+  },
+  {
+   "name": "Demontare aparate de climatizare (intervenție)",
+   "program": "Mentenante Reactive (Reparatii)",
+   "dimension": "TACTIC",
+   "maintenanceKind": "REACTIVE",
+   "fundCode": "EXPENSES",
+   "expenseTypes": [
+    "DEMONTARE_CLIMA"
+   ],
+   "forecastMethod": "NONE",
+   "assumption": "Nu figurează în Portofoliu; cost facturat prin avizier în 2026 (nebugetat).",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "RACIRE",
+     "weight": 1
+    }
+   ],
+   "appOnly": true,
+   "costType": "REPAIR",
+   "code": "BUG-TAC-026",
+   "programCode": "PGM-005"
+  },
+  {
+   "name": "Fond de rulment – constituire",
+   "program": "Fonduri operaționale",
+   "dimension": "OPERATIONAL",
+   "fundCode": "RULMENT",
+   "actualFund": "RULMENT",
+   "budgetFromFundTarget": true,
+   "forecastMethod": "BUDGET",
+   "assumption": "Nu figurează în Portofoliu; bugetul anual = ținta fondului de rulment din aplicație.",
+   "annual": 0.0,
+   "years": {},
+   "serviceSplit": [
+    {
+     "code": "FINANCIAR",
+     "weight": 1
+    }
+   ],
+   "appOnly": false,
+   "costType": "FUND",
+   "code": "BUG-OPE-027",
+   "programCode": "PGM-011"
+  }
+ ],
+ "strategic": [
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Contract nr. 95/18.10.2025",
+   "name": "Larisuk – Contract nr. 95/18.10.2025",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 2,
+     "description": "Faza 1 (Acoperis) - Avans 50%",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 476787.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 2,
+     "description": "Faza 1 (Acoperis) - Avans 50%",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 476787.0
+    },
+    {
+     "sourceRow": 2,
+     "description": "Faza 1 (Acoperis) - Avans 50%",
+     "documentRef": "SM nr. 36",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 238393.5,
+     "date": "2025-10-22",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 14,
+     "description": "Faza 1 (Acoperis) - Transa 1",
+     "documentRef": "SM nr. 49",
+     "note": "Ce e SL1?",
+     "kind": "PAYMENT",
+     "amount": 74482.0,
+     "date": "2026-04-03",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 15,
+     "description": "Faza 1 (Acoperis) - Transa 2",
+     "documentRef": "SM nr. 49",
+     "note": "Plati inainte de supendarea santierului",
+     "kind": "PAYMENT",
+     "amount": 53200.0,
+     "date": "2026-04-08",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 16,
+     "description": "Faza 1 (Acoperis) - Transa 3/1 (fonduri dif)",
+     "documentRef": "SM nr. 49",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 36434.99,
+     "date": "2026-04-09",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 17,
+     "description": "Faza 1 (Acoperis) - Transa 3/2 (fonduri dif)",
+     "documentRef": "SM nr. 49",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 49245.01,
+     "date": "2026-04-09",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-001"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 1",
+   "name": "Larisuk – Act adițional 1",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 3,
+     "description": "Reparatie Calcan - Aripa Vest",
+     "documentRef": "Act adițional 1",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 219010.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 3,
+     "description": "Reparatie Calcan - Aripa Vest",
+     "documentRef": "Act adițional 1",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 219010.0
+    },
+    {
+     "sourceRow": 3,
+     "description": "Reparatie Calcan - Aripa Vest",
+     "documentRef": "SM nr. 40",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 76817.16,
+     "date": "2025-12-16",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 4,
+     "description": "Reparatie Calcan - Aripa Vest",
+     "documentRef": "SM nr. 40",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 44182.84,
+     "date": "2025-12-16",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 5,
+     "description": "Reparatie Calcan - Aripa Vest",
+     "documentRef": "SM nr. 54",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 98010.0,
+     "date": "2026-08-14",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-002"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 2",
+   "name": "Larisuk – Act adițional 2",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 6,
+     "description": "Reparatie Zidarie si Structura acoperis deasupra casei liftului",
+     "documentRef": "Act adițional 2",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 81675.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 6,
+     "description": "Reparatie Zidarie si Structura acoperis deasupra casei liftului",
+     "documentRef": "Act adițional 2",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 81675.0
+    },
+    {
+     "sourceRow": 6,
+     "description": "Reparatie Zidarie si Structura acoperis deasupra casei liftului",
+     "documentRef": "SM nr. 39",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 81675.0,
+     "date": "2025-12-02",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-003"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 3",
+   "name": "Larisuk – Act adițional 3",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 7,
+     "description": "Refacere Calcan/Atic - Aripa Nord (Spate) - 20mx1m - Avans",
+     "documentRef": "Act adițional 3",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 144595.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 7,
+     "description": "Refacere Calcan/Atic - Aripa Nord (Spate) - 20mx1m - Avans",
+     "documentRef": "Act adițional 3",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 144595.0
+    },
+    {
+     "sourceRow": 7,
+     "description": "Refacere Calcan/Atic - Aripa Nord (Spate) - 20mx1m - Avans",
+     "documentRef": "SM nr. 44",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 64493.0,
+     "date": "2026-02-06",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 8,
+     "description": "Refacere Calcan/Atic - Aripa Nord (Spate) - 20mx1m - Rest",
+     "documentRef": "SM nr. 44",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 80102.0,
+     "date": "2026-02-20",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-004"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 4",
+   "name": "Larisuk – Act adițional 4",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 9,
+     "description": "Debarasare Deseuri Pod (integral)",
+     "documentRef": "Act adițional 4",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 19360.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 9,
+     "description": "Debarasare Deseuri Pod (integral)",
+     "documentRef": "Act adițional 4",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 19360.0
+    },
+    {
+     "sourceRow": 9,
+     "description": "Debarasare Deseuri Pod (integral)",
+     "documentRef": "SM nr. 41",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 19360.0,
+     "date": "2026-01-19",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-005"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 5",
+   "name": "Larisuk – Act adițional 5",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 10,
+     "description": "Debarasare Tigrla veche",
+     "documentRef": "Act adițional 5",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 21780.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 10,
+     "description": "Debarasare Tigrla veche",
+     "documentRef": "Act adițional 5",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 21780.0
+    },
+    {
+     "sourceRow": 10,
+     "description": "Debarasare Tigrla veche",
+     "documentRef": "SM nr. 42",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 21780.0,
+     "date": "2026-01-19",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-006"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 7",
+   "name": "Larisuk – Act adițional 7",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 11,
+     "description": "Protejare Casa vecini- Aripa Nord (Spate)",
+     "documentRef": "Act adițional 7",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 14127.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 11,
+     "description": "Protejare Casa vecini- Aripa Nord (Spate)",
+     "documentRef": "Act adițional 7",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 14127.0
+    },
+    {
+     "sourceRow": 11,
+     "description": "Protejare Casa vecini- Aripa Nord (Spate)",
+     "documentRef": "SM nr. 45",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 14127.0,
+     "date": "2026-02-09",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-007"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "Larisuk",
+   "document": "Contract nr. 95/18.10.2025",
+   "name": "Larisuk – Contract nr. 95/18.10.2025",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 12,
+     "description": "Avans 50% - Faza 2 (Curtea Interioara) - Transa 1/1 (fonduri dif)",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 405588.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 12,
+     "description": "Avans 50% - Faza 2 (Curtea Interioara) - Transa 1/1 (fonduri dif)",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 405588.0
+    },
+    {
+     "sourceRow": 12,
+     "description": "Avans 50% - Faza 2 (Curtea Interioara) - Transa 1/1 (fonduri dif)",
+     "documentRef": "SM nr. 47",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 178831.45,
+     "date": "2026-03-06",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": "Fond Pod + Fațadă",
+     "fundInferred": false
+    },
+    {
+     "sourceRow": 13,
+     "description": "Avans 50% - Faza 2 (Curtea Interioara) - Transa 1/2 (fonduri dif)",
+     "documentRef": "SM nr. 47",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 23962.61,
+     "date": "2026-03-06",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-008"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "1. Acoperis",
+   "vendor": "Larisuk",
+   "document": "Act adițional 9",
+   "name": "Larisuk – Act adițional 9",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 18,
+     "description": "Structura protectie pentru Reparatie Calcan - Aripa Vest",
+     "documentRef": "Act adițional 9",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 24200.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 18,
+     "description": "Structura protectie pentru Reparatie Calcan - Aripa Vest",
+     "documentRef": "Act adițional 9",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 24200.0
+    },
+    {
+     "sourceRow": 18,
+     "description": "Structura protectie pentru Reparatie Calcan - Aripa Vest",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 24200.0,
+     "date": "2026-07-09",
+     "fundCode": "REABILITARE_3",
+     "fundLabel": "Fond Reabilitare 3",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-009"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "4. Fatada Exterioara",
+   "vendor": "Larisuk",
+   "document": "Decor ipsos (Scultor Attila Nagy)",
+   "name": "Larisuk – Decor ipsos (Scultor Attila Nagy)",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 19,
+     "description": "Decor ipsos (Scultor Attila Nagy)",
+     "documentRef": "Decor ipsos (Scultor Attila Nagy)",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 6000.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 19,
+     "description": "Decor ipsos (Scultor Attila Nagy)",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 6000.0,
+     "date": "2026-06-29",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-010"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Larisuk",
+   "document": "Contract nr. 95/18.10.2025",
+   "name": "Larisuk – Contract nr. 95/18.10.2025",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 20,
+     "description": "Plata Responsabil Tehnic - RTE Puie (nu mai mult de 5000 EUR)",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 31000.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 20,
+     "description": "Plata Responsabil Tehnic - RTE Puie (nu mai mult de 5000 EUR)",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 31000.0
+    },
+    {
+     "sourceRow": 20,
+     "description": "Plata Responsabil Tehnic - RTE Puie (nu mai mult de 5000 EUR)",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 10890.0,
+     "date": "2026-06-29",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": "Fond Proiect + Reabilitare",
+     "fundInferred": false
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-011"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "Larisuk",
+   "document": "Act adițional 6",
+   "name": "Larisuk – Act adițional 6",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 21,
+     "description": "Reabilitare Cursive",
+     "documentRef": "Act adițional 6",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 259375.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 21,
+     "description": "Reabilitare Cursive",
+     "documentRef": "Act adițional 6",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 259375.0
+    },
+    {
+     "sourceRow": 21,
+     "description": "Reabilitare Cursive",
+     "documentRef": "SM nr. 55",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 129684.12,
+     "date": "2026-09-18",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-012"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "Larisuk",
+   "document": "Act adițional 8",
+   "name": "Larisuk – Act adițional 8",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 22,
+     "description": "Acoperire Slituri",
+     "documentRef": "Act adițional 8",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 24281.75,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 22,
+     "description": "Acoperire Slituri",
+     "documentRef": "Act adițional 8",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 24281.75
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-013"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "Larisuk",
+   "document": "Estimare",
+   "name": "Larisuk – Estimare",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 23,
+     "description": "Casa Liftului - Zidarie",
+     "documentRef": "Estimare",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 47593.55,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 23,
+     "description": "Casa Liftului - Zidarie",
+     "documentRef": "Estimare",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 47593.55
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-014"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "5. Scari interioare",
+   "vendor": "Larisuk",
+   "document": "Cotatie",
+   "name": "Larisuk – Cotatie",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 24,
+     "description": "Casa Scarii 1+ Hol Intrare",
+     "documentRef": "Cotatie",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 236733.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 24,
+     "description": "Casa Scarii 1+ Hol Intrare",
+     "documentRef": "Cotatie",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 236733.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-015"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "4. Fatada Exterioara",
+   "vendor": "Larisuk",
+   "document": "Contract nr. 95/18.10.2025",
+   "name": "Larisuk – Contract nr. 95/18.10.2025",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 26,
+     "description": "Contract nr. 95/18.10.2025",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 183473.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 26,
+     "description": "Contract nr. 95/18.10.2025",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 183473.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-016"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "3. Calcane",
+   "vendor": "Larisuk",
+   "document": "Contract nr. 95/18.10.2025",
+   "name": "Larisuk – Contract nr. 95/18.10.2025",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 27,
+     "description": "De validat daca sunt toate calcanele (inclusiv cele 2 curti ventilatie). Devizul include 556mp",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 185728.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 27,
+     "description": "De validat daca sunt toate calcanele (inclusiv cele 2 curti ventilatie). Devizul include 556mp",
+     "documentRef": "Contract nr. 95/18.10.2025",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 185728.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-017"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "6. Subsol",
+   "vendor": "Larisuk",
+   "document": "Act Aditional 9 subsol-1",
+   "name": "Larisuk – Act Aditional 9 subsol-1",
+   "serviceSplit": [
+    {
+     "code": "STRUCTURA",
+     "weight": 1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 28,
+     "description": "URGENT:Consolidare subsol cu popi pentru a sustine in siguranta schela si lucrarile",
+     "documentRef": "Act Aditional 9 subsol-1",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 22251.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 28,
+     "description": "URGENT:Consolidare subsol cu popi pentru a sustine in siguranta schela si lucrarile",
+     "documentRef": "Act Aditional 9 subsol-1",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 22251.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-018"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "6. Subsol",
+   "vendor": "TBD_Structurist",
+   "document": "Cotatie Trifa",
+   "name": "TBD_Structurist – Cotatie Trifa",
+   "serviceSplit": [
+    {
+     "code": "STRUCTURA",
+     "weight": 1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 29,
+     "description": "URGENT:Consolidare subsol cu popi pentru a sustine in siguranta schela si lucrarile",
+     "documentRef": "Cotatie Trifa",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 5720.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 29,
+     "description": "URGENT:Consolidare subsol cu popi pentru a sustine in siguranta schela si lucrarile",
+     "documentRef": "Cotatie Trifa",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 5720.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-019"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.1. Electrice",
+   "vendor": "Larisuk",
+   "document": "Act adițional 10",
+   "name": "Larisuk – Act adițional 10",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 30,
+     "description": "URGENT: Transformare WC aripa est in Spatiu tehnic (Internet, Sigurante, Interfon etc)",
+     "documentRef": "Act adițional 10",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 12870.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 30,
+     "description": "URGENT: Transformare WC aripa est in Spatiu tehnic (Internet, Sigurante, Interfon etc)",
+     "documentRef": "Act adițional 10",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 12870.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-020"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "-1. Majorari",
+   "vendor": "Larisuk",
+   "document": "Act adițional 8 (initial)",
+   "name": "Larisuk – Act adițional 8 (initial)",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 31,
+     "description": "„Valoarea lucrărilor executate și facturate până la data prezentului act adițional este de 726.812,45 lei. Majorarea de 13%, conform prevederilor contractuale, este în cuantum de 94.485,62 lei, la care se adaugă TVA de 21%, rezultând suma totală de 114.327,60 lei. Majorari cauzate de schimbarea cadrului legislativ pentru Actul adițional nr. 3/10.12.2025, Actul adițional nr. 4/15.12.2025, Actul adițional nr. 5/16.12.2025, Actul adițional nr. 7/23.01.2026, devizul nr. 150/18.10.2025 – acoperiș și 50% din fațada interioară a curții, devizul nr.151/18.10.2025. Lucrările și devizele rămase de executat și de facturat vor face obiectul printrun nou act aditional, devize și facturări ulterioare, conform prevederilor contractuale.",
+     "documentRef": "Act adițional 8 (initial)",
+     "note": "Rândul nu are proiect în registru; atribuit proiectului 2 (actul adițional citează devizele pentru acoperiș și curte).",
+     "kind": "COMMITMENT",
+     "amount": 114327.6
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-021"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.1. Electrice",
+   "vendor": "ProfiVent",
+   "document": null,
+   "name": "ProfiVent",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 32,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 167400.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 32,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 171398.0
+    },
+    {
+     "sourceRow": 33,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 44374.33,
+     "date": null,
+     "fundCode": "REABILITARE_3",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 34,
+     "description": null,
+     "documentRef": "PVT 0361",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 127023.38,
+     "date": "2026-08-12",
+     "fundCode": "REABILITARE_3",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-022"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.2. Interfon",
+   "vendor": "Schmidt",
+   "document": null,
+   "name": "Schmidt",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 35,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 17170.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 35,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 17170.0
+    },
+    {
+     "sourceRow": 60,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 4910.0,
+     "inBaseline": true,
+     "baselineFlag": "personal"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-023"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.4. Gaz",
+   "vendor": "FastHidro Instal (Ing Rotariu)",
+   "document": null,
+   "name": "FastHidro Instal (Ing Rotariu) – Mutare conducta + electrovalva",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 36,
+     "description": "Mutare conducta + electrovalva",
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 8000.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 36,
+     "description": "Mutare conducta + electrovalva",
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 8000.0
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-024"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Adam's Construct",
+   "document": "Contract Dirigentie",
+   "name": "Adam's Construct – Contract Dirigentie",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 37,
+     "description": "Diriginte Santier",
+     "documentRef": "Contract Dirigentie",
+     "note": "2 luni",
+     "kind": "ESTIMATE",
+     "amount": 88000.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 37,
+     "description": "Diriginte Santier",
+     "documentRef": "Contract Dirigentie",
+     "note": "2 luni",
+     "kind": "COMMITMENT",
+     "amount": 8470.0
+    },
+    {
+     "sourceRow": 37,
+     "description": "Diriginte Santier",
+     "documentRef": null,
+     "note": "2 luni",
+     "kind": "PAYMENT",
+     "amount": 8470.0,
+     "date": "2026-05-06",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 38,
+     "description": "Diriginte Santier",
+     "documentRef": "Contract Dirigentie",
+     "note": "iulie",
+     "kind": "COMMITMENT",
+     "amount": 4235.0
+    },
+    {
+     "sourceRow": 38,
+     "description": "Diriginte Santier",
+     "documentRef": "ADMRO 0359",
+     "note": "iulie",
+     "kind": "PAYMENT",
+     "amount": 4235.0,
+     "date": "2026-08-14",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 39,
+     "description": "Diriginte Santier",
+     "documentRef": "Contract Dirigentie",
+     "note": "iulie",
+     "kind": "COMMITMENT",
+     "amount": 4235.0
+    },
+    {
+     "sourceRow": 39,
+     "description": "Diriginte Santier",
+     "documentRef": "ADMRO 0277/ 06.03.2026",
+     "note": "iulie",
+     "kind": "PAYMENT",
+     "amount": 4235.0,
+     "date": "2026-03-06",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 40,
+     "description": "Diriginte Santier",
+     "documentRef": "Contract Dirigentie",
+     "note": "iulie",
+     "kind": "COMMITMENT",
+     "amount": 4235.0
+    },
+    {
+     "sourceRow": 40,
+     "description": "Diriginte Santier",
+     "documentRef": "ADMRO 0307/ 25.02.2026",
+     "note": "iulie",
+     "kind": "PAYMENT",
+     "amount": 4235.0,
+     "date": "2026-03-06",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-025"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "RETIM",
+   "document": null,
+   "name": "RETIM – Deseuri Constructii",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 41,
+     "description": "Deseuri Constructii",
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 10000.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 41,
+     "description": "Deseuri Constructii",
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 7087.0
+    },
+    {
+     "sourceRow": 41,
+     "description": "Deseuri Constructii",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 7087.0,
+     "date": null,
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-026"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Instalatii",
+   "document": null,
+   "name": "Instalatii – Amenajare WC",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 42,
+     "description": "Amenajare WC",
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 5300.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-027"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Diverse",
+   "document": null,
+   "name": "Diverse",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 43,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 4754.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 43,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 4754.0
+    },
+    {
+     "sourceRow": 64,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 2721.9,
+     "date": null,
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-028"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Schela G3",
+   "document": "Initial",
+   "name": "Schela G3 – Initial",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 44,
+     "description": "Schele",
+     "documentRef": "Initial",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 119801.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 44,
+     "description": "Schele",
+     "documentRef": "Initial",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 119801.0
+    },
+    {
+     "sourceRow": 44,
+     "description": "Schele",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 119801.0,
+     "date": null,
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-029"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Schela G3",
+   "document": "Extra",
+   "name": "Schela G3 – Extra",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 45,
+     "description": "Schele",
+     "documentRef": "Extra",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 46800.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-030"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.1. Proiectare & AC",
+   "vendor": "StudioUnu",
+   "document": "Proiect Reabilitare",
+   "name": "StudioUnu – Proiect Reabilitare",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 46,
+     "description": "1. Contract ( 10300 EUR+TVA = 12257, Curs 4.9769)",
+     "documentRef": "Proiect Reabilitare",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 60850.45,
+     "inBaseline": true,
+     "baselineFlag": "na"
+    },
+    {
+     "sourceRow": 46,
+     "description": "1. Contract ( 10300 EUR+TVA = 12257, Curs 4.9769)",
+     "documentRef": "Proiect Reabilitare",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 60850.45
+    },
+    {
+     "sourceRow": 47,
+     "description": "2. Proiectare - Avans",
+     "documentRef": "slf nr 0068/28.06.2022",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 24248.75,
+     "date": "2022-06-29",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 48,
+     "description": "3. Proiectare - Rest",
+     "documentRef": "FCT STU 008/8.08.2024",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 36601.07,
+     "date": "2024-09-09",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-031"
+  },
+  {
+   "projectCode": "PRJ-006",
+   "category": "Constructie - Specialitati",
+   "area": "7.1. Tamplarie",
+   "vendor": "Lala Décor",
+   "document": "Inchidere Spatii Comune",
+   "name": "Lala Décor – Inchidere Spatii Comune",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 49,
+     "description": "Usi WC - 2 buc (2800 EUR / 14.700RON)",
+     "documentRef": "Inchidere Spatii Comune",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 14700.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 49,
+     "description": "Usi WC - 2 buc (2800 EUR / 14.700RON)",
+     "documentRef": "Inchidere Spatii Comune",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 14700.0
+    },
+    {
+     "sourceRow": 49,
+     "description": "Usi WC - 2 buc (2800 EUR / 14.700RON)",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 16652.5,
+     "date": "2026-06-26",
+     "fundCode": "REABILITARE_3",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 54,
+     "description": "Poarta intrare, Usa Curtea Interioara + Usi Batante Hol",
+     "documentRef": "Inchidere Spatii Comune",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 18533.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-032"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "Lala Décor",
+   "document": "Determinare culori",
+   "name": "Lala Décor – Determinare culori",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 50,
+     "description": "3. Analiza Stratigrafica - Feronerie (350 EUR/ 1840 RON)",
+     "documentRef": "Determinare culori",
+     "note": "Data din registru 26.06.2027 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "COMMITMENT",
+     "amount": 1840.0
+    },
+    {
+     "sourceRow": 50,
+     "description": "3. Analiza Stratigrafica - Feronerie (350 EUR/ 1840 RON)",
+     "documentRef": null,
+     "note": "Data din registru 26.06.2027 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "PAYMENT",
+     "amount": 1840.0,
+     "date": "2026-06-26",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": null,
+     "fundInferred": true
+    },
+    {
+     "sourceRow": 51,
+     "description": "2. Analiza Stratigrafica - Zidarie (1050 EUR / 5491.5 RON) - Rest",
+     "documentRef": "Determinare culori",
+     "note": "Data din registru 26.06.2028 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "COMMITMENT",
+     "amount": 2991.5
+    },
+    {
+     "sourceRow": 51,
+     "description": "2. Analiza Stratigrafica - Zidarie (1050 EUR / 5491.5 RON) - Rest",
+     "documentRef": null,
+     "note": "Data din registru 26.06.2028 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "PAYMENT",
+     "amount": 2991.5,
+     "date": "2026-06-26",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-033"
+  },
+  {
+   "projectCode": "PRJ-003",
+   "category": "Constructie - General",
+   "area": "4. Fatada Exterioara",
+   "vendor": "Lala Décor",
+   "document": "Determinare culori",
+   "name": "Lala Décor – Determinare culori",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 52,
+     "description": "1. Analiza Stratigrafica - Zidarie (1050 EUR / 5491.5 RON)- Avans",
+     "documentRef": "Determinare culori",
+     "note": "Data din registru 26.06.2029 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "COMMITMENT",
+     "amount": 2500.0
+    },
+    {
+     "sourceRow": 52,
+     "description": "1. Analiza Stratigrafica - Zidarie (1050 EUR / 5491.5 RON)- Avans",
+     "documentRef": null,
+     "note": "Data din registru 26.06.2029 corectată la 2026 (eroare de completare în Excel).",
+     "kind": "PAYMENT",
+     "amount": 2500.0,
+     "date": "2026-06-26",
+     "fundCode": "REABILITARE_3",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-034"
+  },
+  {
+   "projectCode": "PRJ-002",
+   "category": "Constructie - General",
+   "area": "2. Curte interioară",
+   "vendor": "San Marco Arte",
+   "document": "Determinare culori",
+   "name": "San Marco Arte – Determinare culori",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 53,
+     "description": "Vopsea - proba de culoare balustrada cursive (70g)",
+     "documentRef": "Determinare culori",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 500.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 53,
+     "description": "Vopsea - proba de culoare balustrada cursive (70g)",
+     "documentRef": "Determinare culori",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 227.54
+    },
+    {
+     "sourceRow": 53,
+     "description": "Vopsea - proba de culoare balustrada cursive (70g)",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 227.54,
+     "date": "2026-09-14",
+     "fundCode": "REABILITARE_2",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_2",
+   "code": "BUG-STR-035"
+  },
+  {
+   "projectCode": "PRJ-006",
+   "category": "Constructie - Specialitati",
+   "area": "7.2. Confectii metalice",
+   "vendor": "TBD",
+   "document": "Inchidere Spatii Comune",
+   "name": "TBD – Inchidere Spatii Comune",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 55,
+     "description": "Usi Subsol + Usi Pod",
+     "documentRef": "Inchidere Spatii Comune",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 5380.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    },
+    {
+     "sourceRow": 56,
+     "description": "Casa Liftului - Usi Lift",
+     "documentRef": "Inchidere Spatii Comune",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 18000.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-036"
+  },
+  {
+   "projectCode": "PRJ-006",
+   "category": "Constructie - Specialitati",
+   "area": "7.4. Ceramica si Caramida",
+   "vendor": "Simona Perjescu (designer ceramist)",
+   "document": null,
+   "name": "Simona Perjescu (designer ceramist)",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 57,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 14500.0,
+     "inBaseline": false,
+     "baselineFlag": "nu"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-037"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.5. HVAC (AC)",
+   "vendor": "Romtest",
+   "document": null,
+   "name": "Romtest",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 58,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 8000.0,
+     "inBaseline": true,
+     "baselineFlag": "personal"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-038"
+  },
+  {
+   "projectCode": "PRJ-004",
+   "category": "Instalatii",
+   "area": "8.6. HVAC (Centrale)",
+   "vendor": "TBD",
+   "document": null,
+   "name": "TBD",
+   "serviceSplit": [
+    {
+     "code": "ILUMINAT",
+     "weight": 0.4
+    },
+    {
+     "code": "INTERFON",
+     "weight": 0.1
+    },
+    {
+     "code": "SUPRAVEGHERE_VIDEO",
+     "weight": 0.1
+    },
+    {
+     "code": "ACCES",
+     "weight": 0.1
+    },
+    {
+     "code": "SIGURANTA_PSI",
+     "weight": 0.1
+    },
+    {
+     "code": "LIFT",
+     "weight": 0.1
+    },
+    {
+     "code": "INTERNET",
+     "weight": 0.1
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 59,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 2000.0,
+     "inBaseline": true,
+     "baselineFlag": "personal"
+    }
+   ],
+   "fundCode": "REABILITARE_3",
+   "code": "BUG-STR-039"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Instalatii",
+   "document": "BlocConstruct",
+   "name": "Instalatii – BlocConstruct",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 61,
+     "description": "BlocConstruct",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 3800.0,
+     "date": "2026-03-30",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-040"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Diverse",
+   "document": "Primaria",
+   "name": "Diverse – Primaria",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 62,
+     "description": "Amenda Santier",
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 2032.1,
+     "date": "2025-07-31",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-041"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Instalatii",
+   "document": null,
+   "name": "Instalatii",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 63,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 1500.0
+    },
+    {
+     "sourceRow": 63,
+     "description": null,
+     "documentRef": null,
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 1500.0,
+     "date": "2026-03-25",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-042"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.1. Proiectare & AC",
+   "vendor": "Culte",
+   "document": "Monumente",
+   "name": "Culte – Monumente",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 65,
+     "description": "Proiectare - Aviz Monumente",
+     "documentRef": "Monumente",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 7800.0,
+     "inBaseline": true,
+     "baselineFlag": "na"
+    },
+    {
+     "sourceRow": 65,
+     "description": "Proiectare - Aviz Monumente",
+     "documentRef": "Monumente",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 7800.0
+    },
+    {
+     "sourceRow": 65,
+     "description": "Proiectare - Aviz Monumente",
+     "documentRef": "FCT STU 008/8.08.2024",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 7800.0,
+     "date": null,
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-043"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.1. Proiectare & AC",
+   "vendor": "ISC",
+   "document": "ISC",
+   "name": "ISC – ISC",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 66,
+     "description": "Proiectare - Aviz ISC",
+     "documentRef": "ISC",
+     "note": null,
+     "kind": "ESTIMATE",
+     "amount": 1820.0,
+     "inBaseline": true,
+     "baselineFlag": "na"
+    },
+    {
+     "sourceRow": 66,
+     "description": "Proiectare - Aviz ISC",
+     "documentRef": "ISC",
+     "note": null,
+     "kind": "COMMITMENT",
+     "amount": 1820.0
+    },
+    {
+     "sourceRow": 66,
+     "description": "Proiectare - Aviz ISC",
+     "documentRef": "FCT STU 008/8.08.2024",
+     "note": null,
+     "kind": "PAYMENT",
+     "amount": 1820.0,
+     "date": null,
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-044"
+  },
+  {
+   "projectCode": "PRJ-001",
+   "category": "Constructie - General",
+   "area": "0.2. Organizare santier",
+   "vendor": "Curatenie & Debarasare",
+   "document": "Debarasare si Curatenie in subsol",
+   "name": "Curatenie & Debarasare – Debarasare si Curatenie in subsol",
+   "serviceSplit": [
+    {
+     "code": "ESTETICA",
+     "weight": 0.5
+    },
+    {
+     "code": "FUNCTIONALITATE",
+     "weight": 0.5
+    }
+   ],
+   "entries": [
+    {
+     "sourceRow": 67,
+     "description": "Debarasare & Curatenie subsol",
+     "documentRef": "Debarasare si Curatenie in subsol",
+     "note": "2 luni",
+     "kind": "ESTIMATE",
+     "amount": 17000.0,
+     "inBaseline": true,
+     "baselineFlag": "da"
+    },
+    {
+     "sourceRow": 67,
+     "description": "Debarasare & Curatenie subsol",
+     "documentRef": "Debarasare si Curatenie in subsol",
+     "note": "2 luni",
+     "kind": "COMMITMENT",
+     "amount": 17000.0
+    },
+    {
+     "sourceRow": 67,
+     "description": "Debarasare & Curatenie subsol",
+     "documentRef": null,
+     "note": "2 luni",
+     "kind": "PAYMENT",
+     "amount": 17000.0,
+     "date": "2023-07-17",
+     "fundCode": "REABILITARE_1",
+     "fundLabel": null,
+     "fundInferred": true
+    }
+   ],
+   "fundCode": "REABILITARE_1",
+   "code": "BUG-STR-045"
+  }
+ ]
+}

@@ -1,0 +1,926 @@
+{
+ "_note": "August 2026 cycle (window 10.09–13.10.2026 = end of Registru Bancă / Libra statement; BILL_COMISION_BANCA covers the same window: 106.00 = all 13 'Comision tranzactie' debits 14.09–12.10). Sources: Registru Bancă 01.09–13.10.2026 (rows #10–#58 + #2), Registru Casă 01.08–25.09.2026 (rows #10–#14), verified line by line against Libra ExtrasCont 01.09–13.10.2026. Where the register differs from the statement the statement wins: #25–#27 (register 9602.91, bank 9603.00 → 0.09 advance EXPENSES SAD 1, as HomeFile), #47 (register 436.75; bank 437.55 — the 0.80 went to FOND RULMENT per Registru Fond Rulment #19 of 10.10), #2 Florea 5000 dated 03.09 without ref = bank FT26282353CD 09.10. #67–#72 Primărie 13.10 (register 151748.28, bank 151748.60): only rehabilitation funds — the register's rulment/reparații rows #70–#72 (290.40) + the 0.32 go to REABILITARE_1 on SAD4/B (A/C keep HomeFile's R1 −270.00 / −33.37). Casă CHHF 381 (13.10, Semenescu SAD 2/1, value 0: Reabilitare 1 credit 13482.00 → EXP 110.65 / RUL 72.60 / REP 37.50 / R3 13261.25) is a fund reattribution, recorded as PAYMENT_REATTRIB corrections, not here. Replaces the 25.09 provisional import (cash-2026-08-live.json).",
+ "cycleCode": "2026-08",
+ "accounts": {
+  "BANK": "BANK_LIBRA_RON",
+  "CASH": "CASH_RON"
+ },
+ "payments": [
+  {
+   "n": 1,
+   "acct": "CASH",
+   "date": "2026-09-15",
+   "ref": "CHHF376",
+   "be": "cmticfnao003d1tgyr05h6twa",
+   "unit": "1",
+   "payer": "Gutuleac Alexandru",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026",
+   "register": "Casă #11",
+   "funds": {
+    "EXPENSES": 43.2
+   },
+   "amount": 43.2,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 2,
+   "acct": "CASH",
+   "date": "2026-09-15",
+   "ref": "CHHF377",
+   "be": "cmticfnao003d1tgyr05h6twa",
+   "unit": "1",
+   "payer": "Gutuleac Alexandru",
+   "mode": "REGISTRU",
+   "memo": "Fond rulment",
+   "register": "Casă #12",
+   "funds": {
+    "RULMENT": 14.52
+   },
+   "amount": 14.52,
+   "advance": "RULMENT"
+  },
+  {
+   "n": 3,
+   "acct": "CASH",
+   "date": "2026-09-15",
+   "ref": "CHHF378",
+   "be": "cmticfnao003d1tgyr05h6twa",
+   "unit": "1",
+   "payer": "Gutuleac Alexandru",
+   "mode": "REGISTRU",
+   "memo": "Fond reparații",
+   "register": "Casă #13",
+   "funds": {
+    "REPARATII": 21.6
+   },
+   "amount": 21.6,
+   "advance": "REPARATII"
+  },
+  {
+   "n": 4,
+   "acct": "CASH",
+   "date": "2026-09-15",
+   "ref": "CHHF379",
+   "be": "cmticfngr00ij1tgyyrd1y950",
+   "unit": "11B",
+   "payer": "Soames Mariana",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026 228.04 + rulment 0.44",
+   "register": "Casă #14",
+   "funds": {
+    "EXPENSES": 228.04,
+    "RULMENT": 0.44
+   },
+   "amount": 228.48,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 5,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT262570C67J",
+   "be": "cmticfnbw00691tgyxmxumjtl",
+   "unit": "3",
+   "payer": "BOLOG BLEICH OANA",
+   "mode": "REGISTRU",
+   "memo": "Iun 2026 -2.56 + avans, Iul 2026 189.99",
+   "register": "Bancă #14",
+   "funds": {
+    "EXPENSES": 187.43
+   },
+   "amount": 187.43,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 6,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT262574MSDC",
+   "be": "cmticfnh000j91tgyv2kblh3i",
+   "unit": "12 (SAD4/C)",
+   "payer": "Jakabhazi Alexandru",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026 + avans",
+   "register": "Bancă #15",
+   "funds": {
+    "EXPENSES": 46.0
+   },
+   "amount": 46.0,
+   "unitId": "cmticfn9y002t1tgy8xo1n4sb",
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 7,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT262574ZX0R",
+   "be": "cmticfnbw00691tgyxmxumjtl",
+   "unit": "3",
+   "payer": "Codrea Ruxandra",
+   "mode": "REGISTRU",
+   "memo": "Fond rulment iulie 2026",
+   "register": "Bancă #16",
+   "funds": {
+    "RULMENT": 14.52
+   },
+   "amount": 14.52,
+   "advance": "RULMENT"
+  },
+  {
+   "n": 8,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT262572BPWP",
+   "be": "cmticfnbw00691tgyxmxumjtl",
+   "unit": "3",
+   "payer": "Codrea Ruxandra",
+   "mode": "REGISTRU",
+   "memo": "Fond reparații iulie 2026",
+   "register": "Bancă #17",
+   "funds": {
+    "REPARATII": 34.6
+   },
+   "amount": 34.6,
+   "advance": "REPARATII"
+  },
+  {
+   "n": 9,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT26257MTZQ2",
+   "be": "cmticfnbw00691tgyxmxumjtl",
+   "unit": "3",
+   "payer": "Codrea Ruxandra",
+   "mode": "REGISTRU",
+   "memo": "Fond reabilitare 3 iulie 2026",
+   "register": "Bancă #18",
+   "funds": {
+    "REABILITARE_3": 2250.3
+   },
+   "amount": 2250.3,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 10,
+   "acct": "BANK",
+   "date": "2026-09-15",
+   "ref": "FT262588R58J",
+   "be": "cmticfnhr00lf1tgyi3onux3j",
+   "unit": "14A",
+   "payer": "POPESCU MIRUNA",
+   "mode": "REGISTRU",
+   "memo": "Jarda Cristian — dif Iun -23.15, Iul 276.17",
+   "register": "Bancă #19+#20",
+   "funds": {
+    "EXPENSES": 253.02,
+    "RULMENT": 14.52,
+    "REPARATII": 28.4,
+    "REABILITARE_2": 34.06
+   },
+   "amount": 330.0,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 11,
+   "acct": "BANK",
+   "date": "2026-09-16",
+   "ref": "FT26259Z4666",
+   "be": "cmticfnfm00fn1tgyo4j5iu3l",
+   "unit": "4(III)",
+   "payer": "Alexandru Grosu",
+   "mode": "REGISTRU",
+   "memo": "Pricop Alexandra — Iul 2026",
+   "register": "Bancă #21",
+   "funds": {
+    "EXPENSES": 111.68,
+    "RULMENT": 14.52,
+    "REPARATII": 23.2,
+    "REABILITARE_3": 2581.55
+   },
+   "amount": 2730.95,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 12,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261MRHX3",
+   "be": "cmticfnf300e71tgyy3q9hzn9",
+   "unit": "31",
+   "payer": "FIKL EMIL",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026",
+   "register": "Bancă #22",
+   "funds": {
+    "EXPENSES": 181.6,
+    "RULMENT": 29.04,
+    "REPARATII": 68.6
+   },
+   "amount": 279.24,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 13,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261L2M0B",
+   "be": "cmticfnio00o31tgyxor4gmhk",
+   "unit": "SAD 1",
+   "payer": "BRINZEU ADINA",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026 + avans",
+   "register": "Bancă #23+#24",
+   "funds": {
+    "EXPENSES": 184.68,
+    "RULMENT": 14.52,
+    "REPARATII": 47.8
+   },
+   "amount": 247.0,
+   "unitId": "cmticfna200351tgyxunxyv8p",
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 14,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261GFP34",
+   "be": "cmticfnio00o31tgyxor4gmhk",
+   "unit": "SAD 1",
+   "payer": "BRINZEU ADINA",
+   "mode": "REGISTRU",
+   "memo": "R3 SAD 1 5318.87 + SAD 2/2 4284.03 + chelt. SAD 2/2 0.01; extras 9603.00 → 0.09 nealocați în registru, puși avans pe cheltuieli SAD 1 (ca în lista HomeFile August 2026)",
+   "register": "Bancă #25-#27",
+   "funds": {
+    "REABILITARE_3": 9602.9,
+    "EXPENSES": 0.1
+   },
+   "amount": 9603.0,
+   "unitId": "cmticfna200351tgyxunxyv8p",
+   "lines": [
+    {
+     "fund": "REABILITARE_3",
+     "unitId": "cmticfna200351tgyxunxyv8p",
+     "amount": 5318.87
+    },
+    {
+     "fund": "REABILITARE_3",
+     "unitId": "cmticfna100331tgyboi25vsu",
+     "amount": 4284.03
+    },
+    {
+     "fund": "EXPENSES",
+     "unitId": "cmticfna100331tgyboi25vsu",
+     "amount": 0.01
+    }
+   ],
+   "advance": "EXPENSES",
+   "advanceUnitId": "cmticfna200351tgyxunxyv8p"
+  },
+  {
+   "n": 15,
+   "acct": "BANK",
+   "date": "2026-09-21",
+   "ref": "FT26264NN8W6",
+   "be": "cmticfnhr00lf1tgyi3onux3j",
+   "unit": "14A",
+   "payer": "JARDA ADINA SABINA",
+   "mode": "REGISTRU",
+   "memo": "Fond Pod și Fațadă",
+   "register": "Bancă #31",
+   "funds": {
+    "REABILITARE_2": 10000.0
+   },
+   "amount": 10000.0,
+   "advance": "REABILITARE_2"
+  },
+  {
+   "n": 16,
+   "acct": "BANK",
+   "date": "2026-09-22",
+   "ref": "FT26265R2RBW",
+   "be": "cmticfnf300e71tgyy3q9hzn9",
+   "unit": "31",
+   "payer": "FIKL EMIL",
+   "mode": "REGISTRU",
+   "memo": "Rată Fond 3",
+   "register": "Bancă #32",
+   "funds": {
+    "REABILITARE_3": 10000.0
+   },
+   "amount": 10000.0,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 17,
+   "acct": "BANK",
+   "date": "2026-09-22",
+   "ref": "FT26265PZSSP",
+   "be": "cmticfne900c11tgy2ytxfd8m",
+   "unit": "9",
+   "payer": "Mares Marian Mihai",
+   "mode": "REGISTRU",
+   "memo": "Mai 211.13, Iun 184.75, parțial Iul 207.83",
+   "register": "Bancă #33",
+   "funds": {
+    "EXPENSES": 603.71,
+    "RULMENT": 43.56,
+    "REPARATII": 64.8,
+    "REABILITARE_3": 7210.53
+   },
+   "amount": 7922.6,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 18,
+   "acct": "BANK",
+   "date": "2026-09-24",
+   "ref": "FT2626705XXW",
+   "be": "cmticfnci007p1tgyaqulz2r8",
+   "unit": "4A",
+   "payer": "CATARGIU CONSTANTIN",
+   "mode": "REGISTRU",
+   "memo": "FReab3 — repartizat de administrator RUL/REP/R3",
+   "register": "Bancă #34",
+   "funds": {
+    "RULMENT": 14.52,
+    "REPARATII": 74.7,
+    "REABILITARE_3": 8222.91
+   },
+   "amount": 8312.13,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 19,
+   "acct": "BANK",
+   "date": "2026-09-28",
+   "ref": "FT262717BD18",
+   "be": "cmticfnfx00gd1tgyi5o00bwk",
+   "unit": "5(III)",
+   "payer": "Lucia Alexandra Marusceac",
+   "mode": "REGISTRU",
+   "memo": "Jarda Gheorghe — Feb..Iun 2026 + parțial Iul 222.77",
+   "register": "Bancă #36",
+   "funds": {
+    "EXPENSES": 866.0
+   },
+   "amount": 866.0,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 20,
+   "acct": "BANK",
+   "date": "2026-09-29",
+   "ref": "FT26272V7RYS",
+   "be": "cmticfnb100431tgyoj3g7by6",
+   "unit": "1B",
+   "payer": "Corina Matei",
+   "mode": "REGISTRU",
+   "memo": "Matei Viorel — parțial Ian 2021",
+   "register": "Bancă #42",
+   "funds": {
+    "EXPENSES": 300.0
+   },
+   "amount": 300.0,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 21,
+   "acct": "BANK",
+   "date": "2026-09-29",
+   "ref": "FT26272YQTFM",
+   "be": "cmticfndd009v1tgy6w0vgtif",
+   "unit": "6",
+   "payer": "FLOREA LUCIAN-CRISTIAN",
+   "mode": "REGISTRU",
+   "memo": "Iun 193.32, Iul 216.26",
+   "register": "Bancă #43",
+   "funds": {
+    "EXPENSES": 409.58,
+    "RULMENT": 29.04,
+    "REPARATII": 54.8,
+    "REABILITARE_3": 4506.58
+   },
+   "amount": 5000.0,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 22,
+   "acct": "BANK",
+   "date": "2026-09-30",
+   "ref": "FT26273ZQGDN",
+   "be": "cmticfni000m51tgy4ayqkn84",
+   "unit": "14B",
+   "payer": "Marius Adrian David",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026 + avans",
+   "register": "Bancă #44",
+   "funds": {
+    "EXPENSES": 480.96,
+    "RULMENT": 87.12,
+    "REPARATII": 144.6,
+    "REABILITARE_3": 11168.34
+   },
+   "amount": 11881.02,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 23,
+   "acct": "BANK",
+   "date": "2026-10-06",
+   "ref": "FT26279SXWQF",
+   "be": "cmticfnc7006z1tgy3qiaqawr",
+   "unit": "4(I)",
+   "payer": "ATHOME TM SRL",
+   "mode": "REGISTRU",
+   "memo": "Petrean Delia — Mai 310.26, Iun 298.01, Iul 339.00",
+   "register": "Bancă #45",
+   "funds": {
+    "EXPENSES": 947.27,
+    "RULMENT": 72.6,
+    "REPARATII": 323.5,
+    "REABILITARE_1": 661.0,
+    "REABILITARE_2": 12995.63
+   },
+   "amount": 15000.0,
+   "advance": "REABILITARE_2"
+  },
+  {
+   "n": 24,
+   "acct": "BANK",
+   "date": "2026-10-06",
+   "ref": "FT262791JGC1",
+   "be": "cmticfnfc00ex1tgyxqibky3j",
+   "unit": "32",
+   "payer": "FIKL GHEORGHE",
+   "mode": "REGISTRU",
+   "memo": "AP 32 Reabilitare 3",
+   "register": "Bancă #46",
+   "funds": {
+    "REABILITARE_3": 6960.0
+   },
+   "amount": 6960.0,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 25,
+   "acct": "BANK",
+   "date": "2026-10-07",
+   "ref": "FT26280N1H7K",
+   "be": "cmticfnfc00ex1tgyxqibky3j",
+   "unit": "32",
+   "payer": "Adriana Dascal",
+   "mode": "REGISTRU",
+   "memo": "Detalii plătitor: RULM 58.06 REPA 274.8 REA3 104.69. Registrul bancă #47 are 436.75 (REPA 274.00); diferența de 0.80 e pusă de administrator pe FOND RULMENT (Registru Fond Rulment #19, 10.10.2026) — urmăm registrul.",
+   "register": "Bancă #47 + Fond Rulment #19",
+   "funds": {
+    "RULMENT": 58.86,
+    "REPARATII": 274.0,
+    "REABILITARE_3": 104.69
+   },
+   "amount": 437.55,
+   "advance": "REPARATII"
+  },
+  {
+   "n": 26,
+   "acct": "BANK",
+   "date": "2026-10-07",
+   "ref": "FT2628087FY3",
+   "be": "cmticfnfc00ex1tgyxqibky3j",
+   "unit": "32",
+   "payer": "Gheorghe Fikl",
+   "mode": "REGISTRU",
+   "memo": "dif Iun -0.30, Iul 137.40 + 862.90 avans",
+   "register": "Bancă #48+#49",
+   "funds": {
+    "EXPENSES": 1000.0
+   },
+   "amount": 1000.0,
+   "advance": "EXPENSES"
+  },
+  {
+   "n": 27,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT26281LTRMP",
+   "be": "cmticfni900mv1tgy4ccoubys",
+   "unit": "SP COM",
+   "payer": "MINI MARKET MELTES SRL",
+   "mode": "REGISTRU",
+   "memo": "Iul 2026 + Fond Pod și Fațadă",
+   "register": "Bancă #56",
+   "funds": {
+    "EXPENSES": 88.06,
+    "RULMENT": 14.52,
+    "REPARATII": 47.7,
+    "REABILITARE_2": 9938.72
+   },
+   "amount": 10089.0,
+   "advance": "REABILITARE_2"
+  },
+  {
+   "n": 28,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT262810YF0V",
+   "be": "cmticfnc7006z1tgy3qiaqawr",
+   "unit": "4(I)",
+   "payer": "ATHOME TM SRL",
+   "mode": "REGISTRU",
+   "memo": "Petrean Delia — Fond Pod și Fațadă",
+   "register": "Bancă #57",
+   "funds": {
+    "REABILITARE_2": 30000.0
+   },
+   "amount": 30000.0,
+   "advance": "REABILITARE_2"
+  },
+  {
+   "n": 29,
+   "acct": "BANK",
+   "date": "2026-10-09",
+   "ref": "FT26282KYB6K",
+   "be": "cmticfnc7006z1tgy3qiaqawr",
+   "unit": "4(I)",
+   "payer": "ATHOME TM SRL",
+   "mode": "REGISTRU",
+   "memo": "Petrean Delia — Fond Pod și Fațadă",
+   "register": "Bancă #58",
+   "funds": {
+    "REABILITARE_2": 1340.0
+   },
+   "amount": 1340.0,
+   "advance": "REABILITARE_2"
+  },
+  {
+   "n": 30,
+   "acct": "BANK",
+   "date": "2026-10-09",
+   "ref": "FT26282353CD",
+   "be": "cmticfndd009v1tgy6w0vgtif",
+   "unit": "6",
+   "payer": "FLOREA LUCIAN-CRISTIAN",
+   "mode": "REGISTRU",
+   "memo": "Fonduri — în registru ca #2 din 03.09.2026 fără referință; extrasul o are pe 09.10",
+   "register": "Bancă #2 (redatat)",
+   "funds": {
+    "REABILITARE_3": 5000.0
+   },
+   "amount": 5000.0,
+   "advance": "REABILITARE_3"
+  },
+  {
+   "n": 31,
+   "acct": "BANK",
+   "date": "2026-10-13",
+   "ref": "FT2628688Y28",
+   "be": "cmticfnh000j91tgyv2kblh3i",
+   "unit": "12 (SAD4/A+B+C)",
+   "unitId": "cmticfn9x002p1tgy1qhpj1ik",
+   "payer": "MUNICIPIUL TIMISOARA",
+   "mode": "REGISTRU",
+   "memo": "Primăria Timișoara — REF 043801 30.09.26, ch. com. rep. art.1 al.2 OG22/2002, pentru 12 (SAD4/A) Catargiu, (SAD4/B) Fântânariu, (SAD4/C) Jakabhazi. Plata acoperă doar fondurile de reabilitare: Pod și Fațadă + Fond reabilitare 3 per registru (#67–#69); cei 290.40 trecuți în registru pe rulment/reparații (#70–#72) + 0.32 (extras 151748.60 − registru 151748.28) merg pe Fond Proiect+Reabilitare la SAD4/B — A și C rămân la soldul HomeFile (−270.00 / −33.37); restul datoriei B pe Proiect+Reabilitare e mutat pe Fond reabilitare 3 (add-kralik-august-reattributions.ts). Fond reabilitare 3 (30668.07 în registru: 10223.80 / 10223.80 / 10220.47) e realocat între cele 3 unități ale aceluiași proprietar ca în lista HomeFile August 2026: fiecare unitate își folosește propriul credit de pe Proiect+Reabilitare (A 270.00, C 33.37) pe reabilitare 3, fără egalizare între unități — restanța reabilitare 3: A 4841.90, B 5112.92 (HomeFile 5111.90; +1.02 rotunjire rămasă pe B), C 5075.31. Partea pe unități: A 7667.86, B 15334.69 (incl. 7667.85 mutați pe Proiect+Reabilitare), C 7665.52.",
+   "register": "Bancă #67-#72",
+   "funds": {
+    "REABILITARE_2": 120789.81,
+    "REABILITARE_3": 30668.07,
+    "REABILITARE_1": 290.72
+   },
+   "amount": 151748.6,
+   "lines": [
+    {
+     "fund": "REABILITARE_2",
+     "unitId": "cmticfn9x002p1tgy1qhpj1ik",
+     "amount": 39595.35
+    },
+    {
+     "fund": "REABILITARE_3",
+     "unitId": "cmticfn9x002p1tgy1qhpj1ik",
+     "amount": 7667.86
+    },
+    {
+     "fund": "REABILITARE_2",
+     "unitId": "cmticfn9y002r1tgye59g8jeo",
+     "amount": 40597.23
+    },
+    {
+     "fund": "REABILITARE_3",
+     "unitId": "cmticfn9y002r1tgye59g8jeo",
+     "amount": 15334.69
+    },
+    {
+     "fund": "REABILITARE_2",
+     "unitId": "cmticfn9y002t1tgy8xo1n4sb",
+     "amount": 40597.23
+    },
+    {
+     "fund": "REABILITARE_3",
+     "unitId": "cmticfn9y002t1tgy8xo1n4sb",
+     "amount": 7665.52
+    },
+    {
+     "fund": "REABILITARE_1",
+     "unitId": "cmticfn9y002r1tgye59g8jeo",
+     "amount": 290.4
+    }
+   ],
+   "advance": "REABILITARE_1",
+   "advanceUnitId": "cmticfn9y002r1tgye59g8jeo"
+  }
+ ],
+ "outflows": [
+  {
+   "n": 101,
+   "acct": "CASH",
+   "date": "2026-09-11",
+   "ref": "TM1461",
+   "fund": "EXPENSES",
+   "amount": 800.0,
+   "kind": "PAYMENT",
+   "memo": "RUSADMINISTRA — fct 1794/22.05.2026 administrare"
+  },
+  {
+   "n": 102,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT26257CT3BZ",
+   "fund": "EXPENSES",
+   "amount": 840.0,
+   "kind": "PAYMENT",
+   "memo": "RICH CLEAN — fct RC 0121 curățenie august 2026"
+  },
+  {
+   "n": 103,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT26257CT3BZ",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 104,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT2625777G97",
+   "fund": "REPARATII",
+   "amount": 227.54,
+   "kind": "PAYMENT",
+   "memo": "SAN MARCO ARTE — fct SAN 1648/06.07.2026 vopsea"
+  },
+  {
+   "n": 105,
+   "acct": "BANK",
+   "date": "2026-09-14",
+   "ref": "FT2625777G97",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 106,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261WHXKZ",
+   "fund": "REABILITARE_2",
+   "amount": 128512.51,
+   "kind": "PAYMENT",
+   "memo": "SM LARISUK — fct SM 55/15.09.2026 avans (fond pod și fațadă)"
+  },
+  {
+   "n": 107,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261WHXKZ",
+   "fund": "REABILITARE_3",
+   "amount": 1171.61,
+   "kind": "PAYMENT",
+   "memo": "SM LARISUK — fct SM 55/15.09.2026 avans (fond reabilitare 3)"
+  },
+  {
+   "n": 108,
+   "acct": "BANK",
+   "date": "2026-09-18",
+   "ref": "FT26261WHXKZ",
+   "fund": "EXPENSES",
+   "amount": 20,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 109,
+   "acct": "BANK",
+   "date": "2026-09-28",
+   "ref": "FT26271871S6",
+   "fund": "EXPENSES",
+   "amount": 63.0,
+   "kind": "PAYMENT",
+   "memo": "Primăria Timișoara — taxă ocupare domeniu public"
+  },
+  {
+   "n": 110,
+   "acct": "BANK",
+   "date": "2026-09-28",
+   "ref": "FT26271871S6",
+   "fund": "EXPENSES",
+   "amount": 20,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 111,
+   "acct": "BANK",
+   "date": "2026-09-28",
+   "ref": "FT262713W0YW",
+   "fund": "REABILITARE_3",
+   "amount": 12080.0,
+   "kind": "PAYMENT",
+   "memo": "SCHMIDT CO — fct SCCOTM 49411/22.09.2026 interfon video rata 1"
+  },
+  {
+   "n": 112,
+   "acct": "BANK",
+   "date": "2026-09-28",
+   "ref": "FT262713W0YW",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 113,
+   "acct": "BANK",
+   "date": "2026-09-29",
+   "ref": "FT2627278Z31",
+   "fund": "REABILITARE_1",
+   "amount": 774.4,
+   "kind": "PAYMENT",
+   "memo": "RETIM — fct DI010261/29.09.2026 container 3mc"
+  },
+  {
+   "n": 114,
+   "acct": "BANK",
+   "date": "2026-09-29",
+   "ref": "FT2627278Z31",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 115,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT262812KWRB",
+   "fund": "REABILITARE_3",
+   "amount": 2000.0,
+   "kind": "PAYMENT",
+   "memo": "NAGY E. JOZSEF ATTILA PFA — fct 0043/14.08.2026 montaj tranșa 3"
+  },
+  {
+   "n": 116,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT262812KWRB",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 117,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT26281WQ0JH",
+   "fund": "REABILITARE_2",
+   "amount": 2650.0,
+   "kind": "PAYMENT",
+   "memo": "LALA ANTIK DECOR — fct A0123/08.10.2026 studiu parament"
+  },
+  {
+   "n": 118,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT26281WQ0JH",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 119,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT26281WP8NJ",
+   "fund": "REABILITARE_2",
+   "amount": 1855.0,
+   "kind": "PAYMENT",
+   "memo": "LALA ANTIK DECOR — fct A0124/08.10.2026 stratigrafie fier bătut"
+  },
+  {
+   "n": 120,
+   "acct": "BANK",
+   "date": "2026-10-08",
+   "ref": "FT26281WP8NJ",
+   "fund": "EXPENSES",
+   "amount": 6,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 121,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT262854RYR7",
+   "fund": "REABILITARE_3",
+   "amount": 12870.0,
+   "kind": "PAYMENT",
+   "memo": "SM LARISUK — fct SM 57/07.10.2026 lucrări act adițional 10"
+  },
+  {
+   "n": 122,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT262854RYR7",
+   "fund": "EXPENSES",
+   "amount": 6.0,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 123,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT262857TB6W",
+   "fund": "EXPENSES",
+   "amount": 686.32,
+   "kind": "PAYMENT",
+   "memo": "RETIM — fct TM 19812119/31.07.2026 salubritate iulie"
+  },
+  {
+   "n": 124,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT262857TB6W",
+   "fund": "EXPENSES",
+   "amount": 6.0,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 125,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT26285HN205",
+   "fund": "EXPENSES",
+   "amount": 2165.66,
+   "kind": "PAYMENT",
+   "memo": "AQUATIM — fct 1015558474/06.07.2026"
+  },
+  {
+   "n": 126,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT26285HN205",
+   "fund": "EXPENSES",
+   "amount": 6.0,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  },
+  {
+   "n": 127,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT26285TB7TF",
+   "fund": "EXPENSES",
+   "amount": 186.01,
+   "kind": "PAYMENT",
+   "memo": "PPC ENERGIE — cod plată 511102723, ID fct 46011360915"
+  },
+  {
+   "n": 128,
+   "acct": "BANK",
+   "date": "2026-10-12",
+   "ref": "FT26285TB7TF",
+   "fund": "EXPENSES",
+   "amount": 6.0,
+   "kind": "OTHER",
+   "memo": "Comision bancar",
+   "suffix": "com"
+  }
+ ]
+}

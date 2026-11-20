@@ -47,7 +47,7 @@ type Row = { key: string; beCode?: string | null; label: { primary: string; seco
 const round2 = (n: number) => Math.round(n * 100) / 100
 const FOOTER_KEY = '__total__'
 const money = (n?: number | null) => (n == null ? '—' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
-const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : '—')
+export const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('ro-RO') : '—')
 // Verde / Galben / Portocaliu / Roșu — four clearly distinct hues per tier, not two shades of orange.
 const TONE: Record<string, string> = { success: '#16a34a', warning: '#eab308', orange: '#f97316', destructive: '#dc2626' }
 export const toneColor = (tone?: string) => TONE[tone || ''] || 'var(--muted, #888)'
@@ -56,7 +56,7 @@ export const toneColor = (tone?: string) => TONE[tone || ''] || 'var(--muted, #8
 // component's own tierOfDays callback, which just closes over `data.tiers`.
 export const tierForDays = (tiers: TierMeta[], days: number) => tiers.find((tr) => tr.maxDays == null || days <= tr.maxDays) ?? tiers[tiers.length - 1]
 const RO_MONTHS = ['Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Noi', 'Dec']
-const monthLabel = (code?: string | null) => {
+export const monthLabel = (code?: string | null) => {
   const m = code ? /^(\d{4})-(\d{2})$/.exec(code) : null
   return m ? `${RO_MONTHS[Number(m[2]) - 1]} ${m[1]}` : code
 }

@@ -168,6 +168,25 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
   // Same "Încasări" toggle as the avizier: the period's receipts per row, off by default, shown
   // just before the Restanțe [RON] column.
   const [showIncasari, setShowIncasari] = React.useState(false)
+  // Fund filter: empty = all funds. The catalog (every fund + its avizier super-group) comes from the
+  // receivables payload itself and is kept across refetches so the chips don't vanish while loading.
+  const [selectedFunds, setSelectedFunds] = React.useState<string[]>([])
+  const [fundCatalog, setFundCatalog] = React.useState<{ code: string; name: string; superGroup: { key: string; label: string; sortOrder: number } }[]>([])
+  const fundGroups = React.useMemo(() => {
+    const m = new Map<string, { key: string; label: string; sortOrder: number; funds: typeof fundCatalog }>()
+    for (const f of fundCatalog) {
+      const g = m.get(f.superGroup.key) ?? { ...f.superGroup, funds: [] }
+      g.funds.push(f)
+      m.set(f.superGroup.key, g)
+    }
+    return [...m.values()].sort((a, b) => a.sortOrder - b.sortOrder)
+  }, [fundCatalog])
+  const toggleFund = (code: string) => setSelectedFunds((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]))
+  // A group chip selects exactly its funds when not all of them are selected, else clears them.
+  const toggleFundGroup = (codes: string[]) => setSelectedFunds((prev) => {
+    const allIn = codes.every((c) => prev.includes(c))
+    return allIn ? prev.filter((c) => !codes.includes(c)) : [...new Set([...prev, ...codes])]
+  })
   // A month that isn't CLOSED yet (PREPARED/OPEN) is still a draft: what it shows is owed ("Datorat"),
   // not yet arrears ("Restanțe") — the column names say which.
   const shownPeriod = shared?.periods?.find((p) => p.code === (data?.periodCode ?? selectedCode))
@@ -253,9 +272,10 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
     const params = new URLSearchParams()
     if (selectedCode) params.set('period', selectedCode)
     if (mode === 'unit') params.set('groupBy', 'unit')
+    if (selectedFunds.length) params.set('funds', selectedFunds.join(','))
     const q = params.toString() ? `?${params.toString()}` : ''
     api.get<any>(`/communities/${communityId}/finance/receivables${q}`)
-      .then((d) => { if (alive) { setData(d); setLoading(false) } })
+      .then((d: any) => { if (alive) { setData(d); if (Array.isArray(d?.funds)) setFundCatalog(d.funds); setLoading(false) } })
       .catch(() => { if (alive) { setData(null); setLoading(false) } })
     setUnitRows([])
     if (mode === 'be') {
@@ -265,7 +285,7 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
         .catch(() => { if (alive) setUnitRows([]) })
     }
     return () => { alive = false }
-  }, [api, communityId, selectedCode, shared, mode])
+  }, [api, communityId, selectedCode, shared, mode, selectedFunds])
   const unitsByBe = React.useMemo(() => {
     const m = new Map<string, any[]>()
     for (const u of unitRows) if (u.beCode) m.set(u.beCode, [...(m.get(u.beCode) ?? []), u])
@@ -433,15 +453,52 @@ export function DebtorsPanel({ communityId, onPick }: { communityId: string; onP
   )
   const paretoLinePoints = paretoBars.map((b) => `${b.cx},${b.cy}`).join(' ')
 
-  if (loading) return <div className="empty">{t('common.loading', 'Loading…')}</div>
+  const chipStyle = (on: boolean, partial = false): React.CSSProperties => ({
+    borderRadius: 999,
+    background: on ? 'var(--muted-bg, #eef2ff)' : undefined,
+    fontWeight: on || partial ? 600 : 400,
+    border: on ? '1px solid var(--accent, #0071e3)' : partial ? '1px dashed var(--accent, #0071e3)' : undefined,
+  })
+  const fundFilter = fundGroups.length ? (
+    <div className="card" style={{ padding: '8px 12px' }} title={t('debtors.fundsHint', 'Show arrears only for the selected funds; click a group to select all its funds')}>
+      <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="muted" style={{ fontSize: 12, marginRight: 4 }}>{t('debtors.funds', 'Funds')}:</span>
+        <button type="button" className="btn ghost small" style={chipStyle(!selectedFunds.length)} aria-pressed={!selectedFunds.length}
+          onClick={() => setSelectedFunds([])}>
+          {t('debtors.fundsAll', 'All funds')}
+        </button>
+        {fundGroups.map((g) => {
+          const codes = g.funds.map((f) => f.code)
+          const n = codes.filter((c) => selectedFunds.includes(c)).length
+          return (
+            <span key={g.key} className="row" style={{ gap: 4, alignItems: 'center', flexWrap: 'wrap', paddingLeft: 8, borderLeft: '1px solid var(--border, #ddd)' }}>
+              <button type="button" className="btn ghost small" style={chipStyle(n === codes.length, n > 0 && n < codes.length)}
+                aria-pressed={n === codes.length} onClick={() => toggleFundGroup(codes)}>
+                {g.label}
+              </button>
+              {codes.length > 1 ? g.funds.map((f) => (
+                <button key={f.code} type="button" className="btn ghost small" style={{ ...chipStyle(selectedFunds.includes(f.code)), fontSize: 11 }}
+                  aria-pressed={selectedFunds.includes(f.code)} onClick={() => toggleFund(f.code)}>
+                  {selectedFunds.includes(f.code) ? '☑ ' : '☐ '}{f.name}
+                </button>
+              )) : null}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
+
+  if (loading) return <div className="stack" style={{ gap: 12 }}>{fundFilter}<div className="empty">{t('common.loading', 'Loading…')}</div></div>
   if (!data || !data.periodCode) return <div className="empty">{t('debtors.none', 'No statements yet — close a period to see debtors.')}</div>
 
   return (
     <div className="stack" style={{ gap: 12 }}>
+      {fundFilter}
       <div className="card ops-card">
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div className="stack" style={{ gap: 2 }}>
-            <div className="muted">{t('debtors.total', 'Total outstanding (all funds)')} · {data.periodCode}</div>
+            <div className="muted">{selectedFunds.length ? t('debtors.totalSelected', 'Total arrears (selected funds)') : t('debtors.total', 'Total outstanding (all funds)')} · {data.periodCode}</div>
             <strong style={{ fontSize: 22 }}>{money(data.totalDebt)}</strong>
           </div>
           <div className="stack" style={{ gap: 2, alignItems: 'flex-end' }}>

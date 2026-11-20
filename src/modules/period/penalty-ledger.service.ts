@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { rateForDate, originAnchorDate } from './penalty-rate'
+import { PenaltyReconciliationService, penaltyAccrualWindow, slicePenaltyInWindow, type AgingSlice, type ReconciledAging } from './penalty-reconciliation.service'
 
 type TxOrClient = PrismaClient | Prisma.TransactionClient
 const DAY = 24 * 60 * 60 * 1000
@@ -19,7 +20,7 @@ type PenalFund = { id: string; code: string; rate: number; alloc: any; targetId:
  */
 @Injectable()
 export class PenaltyLedgerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly reconciliation: PenaltyReconciliationService) {}
 
   private countDays(from: Date, to: Date): number {
     if (from > to) return 0
@@ -221,27 +222,27 @@ export class PenaltyLedgerService {
   }
 
   /**
+   * Penalty accrual window: prefer the afisare-to-afisare span (prev.afisareDate+1 .. this.afisareDate)
+   * when afisare/posting dates are stamped; otherwise fall back to the calendar period bounds so every
+   * other community is unaffected. pEnd is the same asOf date PenaltyReconciliationService ages to.
+   */
+  private async accrualWindow(
+    tx: TxOrClient, communityId: string, period: { seq: number; startDate: Date; endDate: Date; afisareDate?: Date | null; penaltyAsOfDate?: Date | null },
+  ): Promise<{ pStart: Date; pEnd: Date }> {
+    const { start, end } = await penaltyAccrualWindow(tx, communityId, period)
+    return { pStart: start, pEnd: end }
+  }
+
+  /**
    * Advance every open bucket to this period: apply the period's payment FIFO (before accrual),
-   * accrue exact days on the remainder (per-bucket cap), record a PenaltyBucketPeriod row, and post
-   * the per-source penalty charges (reusing the community_charge / be_ledger shape + unit split).
+   * accrue exact days on the remainder (per-bucket cap) and record a PenaltyBucketPeriod row.
+   * Bucket bookkeeping only — the penalty actually billed is posted by `postFromReconciliation()`,
+   * so the avizier, the risk report and Restanțe all age the same FIFO slices (see that method).
    */
   async advance(tx: TxOrClient, communityId: string, periodId: string, opts: { commit: boolean }) {
-    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true, startDate: true, endDate: true, afisareDate: true } })
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true, startDate: true, endDate: true, afisareDate: true, penaltyAsOfDate: true } })
     if (!period) return
-    // Penalty accrual window: prefer the afisare-to-afisare span (prev.afisareDate+1 .. this.afisareDate)
-    // when afisare/posting dates are stamped; otherwise fall back to the calendar period bounds so every
-    // other community is unaffected.
-    const afis = (period as any).afisareDate as Date | null | undefined
-    const pEnd = afis ? new Date(afis) : new Date(period.endDate)
-    let pStart = new Date(period.startDate)
-    if (afis) {
-      const prev = await tx.period.findFirst({
-        where: { communityId, seq: { lt: period.seq } },
-        orderBy: { seq: 'desc' },
-        select: { afisareDate: true },
-      })
-      if (prev?.afisareDate) pStart = new Date(new Date(prev.afisareDate).getTime() + DAY)
-    }
+    const { pStart, pEnd } = await this.accrualWindow(tx, communityId, period)
     const funds = await this.penalFunds(tx, communityId)
     if (!funds.length) return
     const fundById = new Map(funds.map((f) => [f.id, f]))
@@ -277,9 +278,6 @@ export class PenaltyLedgerService {
       groups.set(k, g)
     }
 
-    // per (BE, source fund): { posted this period, outstanding after } → drives the posted charge
-    const perBeFund = new Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number; postedByUnit: Map<string, number> }>()
-
     for (const g of groups.values()) {
       // A group's payment pool is per-unit (see streamPaymentsByUnit) — except a group made
       // entirely of legacy null-unit buckets (a BE never migrated to per-unit tracking), where
@@ -287,9 +285,6 @@ export class PenaltyLedgerService {
       const hasLegacyBucket = (g.buckets as any[]).some((b) => !b.unitId)
       const payByUnit = await this.streamPaymentsByUnit(tx, communityId, periodId, g.beId, g.fundId, hasLegacyBucket)
       const ordered = (g.buckets as any[]).slice().sort((a, b) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime())
-      let groupPosted = 0
-      let groupOutstanding = 0
-      const groupPostedByUnit = new Map<string, number>() // per-unit buckets attribute posted straight to their unit
       for (const b of ordered) {
         const payKey = (b as any).unitId ?? ''
         let remainingPay = payByUnit.get(payKey) ?? 0
@@ -326,12 +321,88 @@ export class PenaltyLedgerService {
         if (opts.commit && principalRemaining <= 0.0001) {
           await tx.penaltyBucket.update({ where: { id: b.id }, data: { status: 'SETTLED' } })
         }
-        groupPosted += posted
-        groupOutstanding += Math.max(0, principalRemaining)
-        if (posted > 0 && (b as any).unitId) groupPostedByUnit.set((b as any).unitId, (groupPostedByUnit.get((b as any).unitId) ?? 0) + posted)
       }
-      if (groupPosted > 0.0001) {
-        perBeFund.set(`${g.fundId}::${g.beId}`, { beId: g.beId, f: g.f, posted: groupPosted, outstanding: groupOutstanding, postedByUnit: groupPostedByUnit })
+    }
+  }
+
+  /**
+   * Penalty accrued inside [pStart, pEnd] by a set of aging slices aged to pEnd: each slice's
+   * cumulative penalty at pEnd minus its cumulative penalty at pStart−1, both capped at the slice's
+   * principal — the exact formula `PenaltyReconciliationService` uses for `penaltyProjected`.
+   */
+  private windowPenalty(slices: AgingSlice[], pStart: Date): number {
+    return slices.reduce((t, s) => t + slicePenaltyInWindow(s, pStart), 0)
+  }
+
+  /**
+   * Post this period's penalty charges from the SAME FIFO aging the risk report and Restanțe show
+   * (`PenaltyReconciliationService`): every (unit, penalty-source fund) restanță — the avizier's
+   * own `dueStart − payments` — is walked oldest month first against the unit's real charge
+   * history, and the period's penalty is what those slices accrue inside the afisare window.
+   * Replaces the bucket-based posting, whose per-unit vs legacy-unit payment pools could pay a
+   * newer month before an older one (2026-10: owners who had paid June in full were still charged
+   * June penalty) and could bill a unit's penalty to a former owner's billing entity.
+   *
+   * Reads `be_statement`, so the caller must have computed statements (with this period's payments
+   * and corrections) first, and recompute them after. A multi-unit BE whose per-unit split isn't
+   * trusted is aged at BE grain (`reconcileBeFund`) and split by unit weight, as the avizier does.
+   */
+  async postFromReconciliation(tx: TxOrClient, communityId: string, periodId: string, opts: { commit: boolean }) {
+    const period = await tx.period.findUnique({ where: { id: periodId }, select: { seq: true, startDate: true, endDate: true, afisareDate: true, penaltyAsOfDate: true } })
+    if (!period) return
+    const { pStart } = await this.accrualWindow(tx, communityId, period)
+    const penalRefType = `PENALTY_${opts.commit ? 'CLOSE_FINAL' : 'CLOSE_PREP'}`
+
+    // Re-post from scratch: a BE that owed penalty on an earlier prepare but no longer does must not
+    // keep its old charge (postPenaltyCharges only upserts what it is given).
+    const prior = await tx.beLedgerEntry.findMany({ where: { communityId, periodId, refType: penalRefType, refId: periodId }, select: { id: true } })
+    if (prior.length) {
+      await tx.beLedgerEntryDetail.deleteMany({ where: { ledgerEntryId: { in: prior.map((x) => x.id) } } })
+      await tx.beLedgerEntry.deleteMany({ where: { id: { in: prior.map((x) => x.id) } } })
+    }
+    await tx.communityCharge.deleteMany({ where: { communityId, periodId, sourceType: 'FUND', sourceKey: { startsWith: 'penalty:' } } })
+
+    const funds = (await this.penalFunds(tx, communityId)).filter((f) => f.targetId)
+    const perBeFund = new Map<string, { beId: string; f: PenalFund; posted: number; outstanding: number; postedByUnit: Map<string, number> }>()
+    for (const f of funds) {
+      const beRows: Array<{ beId: string }> = await (tx as any).$queryRawUnsafe(
+        `select billing_entity_id as "beId" from be_statement
+          where community_id = $1 and period_id = $2 and fund_id = $3 and abs(due_start - payments) > 0.005`,
+        communityId, periodId, f.id,
+      )
+      for (const { beId } of beRows) {
+        const members = await tx.billingEntityMember.findMany({
+          where: { billingEntityId: beId, startSeq: { lte: period.seq }, OR: [{ endSeq: null }, { endSeq: { gte: period.seq } }] },
+          select: { unitId: true },
+        })
+        let posted = 0
+        let outstanding = 0
+        let postedByUnit = new Map<string, number>()
+        let beGrain = members.length === 0
+        if (!beGrain) {
+          const rs: ReconciledAging[] = []
+          for (const m of members) {
+            const r = await this.reconciliation.reconcileUnitFund(tx, communityId, m.unitId, f.id, periodId)
+            if (r) rs.push(r)
+          }
+          if (members.length > 1 && rs.some((r) => !r.anchorTrusted)) beGrain = true
+          else {
+            for (const r of rs) {
+              const amt = this.windowPenalty(r.slices, pStart)
+              if (amt < 0.005) continue // sub-cent tail: no 0.00 line on the avizier
+              postedByUnit.set(r.unitId, amt)
+              posted += amt
+              outstanding += Math.max(0, r.liveTotal)
+            }
+          }
+        }
+        if (beGrain) {
+          const r = await this.reconciliation.reconcileBeFund(tx, communityId, beId, f.id, periodId)
+          posted = r ? this.windowPenalty(r.slices, pStart) : 0
+          outstanding = r ? Math.max(0, r.liveTotal) : 0
+          postedByUnit = new Map() // split by unit weight in postPenaltyCharges
+        }
+        if (posted >= 0.005) perBeFund.set(`${f.id}::${beId}`, { beId, f, posted, outstanding, postedByUnit })
       }
     }
 

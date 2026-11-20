@@ -161,10 +161,29 @@ penalty ≤ principal), `seedPenaltyAccrued` (penalty carried at cutover; accrua
 (`dueDate + graceDays + 1`).
 
 Flow: `ensureBuckets()` (create/update for the period's charges) → `advance()` (accrue over
-the period's day window, post penalty `CommunityCharge`s, write PROVISIONAL
-`PenaltyBucketPeriod`) → `commitPeriod()` at approve (→ COMMITTED) / `revertPeriod()` at
-reopen. `seedFromOpenings()` migrates legacy arrears into buckets with a COMMITTED cutover
-row.
+the period's day window, write PROVISIONAL `PenaltyBucketPeriod` — bookkeeping only) →
+`commitPeriod()` at approve (→ COMMITTED) / `revertPeriod()` at reopen. `seedFromOpenings()`
+migrates legacy arrears into buckets with a COMMITTED cutover row.
+
+**The billed penalty does not come from the buckets.** `prepare()` computes statements once
+(payments + corrections in), then `postFromReconciliation()` posts the penalty `CommunityCharge`s
+from `PenaltyReconciliationService`'s FIFO slices — the same ones the risk report
+(`riskExposureDetail`) and Restanțe show: each (unit, penalty-source fund) restanță
+(`dueStart − payments`) walked oldest month first against the unit's real charge history,
+billed to the unit's current owner. A period's penalty per slice = cumulative penalty at the
+afișare date − cumulative penalty the day before the window (`slicePenaltyInWindow`, window from
+`penaltyAccrualWindow`). The avizier drilldown (`explainPenalty`) explains the same slices. Day
+count: window = (prev afișare, this afișare]; a debt is penal from `dueDate + graceDays + 1`.
+Bucket-based posting was dropped 2026-10: its per-unit vs legacy null-unit payment pools could
+pay a newer month before an older one, and billed a unit's penalty to a former owner's BE.
+
+**Declared snapshots ("Fișă calcul penalizări").** When the association's own sheet allocates a
+unit's restanță to specific months (payments booked against named months, not FIFO), import it with
+`src/scripts/import-kralik-penalty-sheets.ts`: `penalty_bucket` rows with `status='SNAPSHOT'` and
+`origin_key='fisa:<asOfPeriodCode>:<YYYY-MM|opening>'`. `reconcileUnitFund` uses the latest snapshot
+at or before the asOf period instead of the charge history up to it (later charges are appended and
+walked FIFO as usual), so the risk report, Restanțe and the posted penalty all follow the sheet. The
+bucket engine ignores SNAPSHOT rows (it reads `status='OPEN'` only).
 
 ## 8. Charge overrides
 

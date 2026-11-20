@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useI18n } from '../../i18n/useI18n'
 import { beLabel, shortUnit } from './beLabel'
 import { usePeriodOptional } from '../../contexts/PeriodContext'
-import { SliceTable, tierForDays, toneColor, type TierMeta } from './RiskPanel'
+import { SliceTable, tierForDays, toneColor, fmtDate as fmtRiskDate, monthLabel as riskMonthLabel, type TierMeta } from './RiskPanel'
 
 const money = (n: number | null | undefined) =>
   n == null ? '' : Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -161,6 +161,35 @@ export function AvizierPanel({
   const toggleFund = (k: string) => setCollapsedFunds((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const [soldDetail, setSoldDetail] = React.useState<{ be: string; riskRow?: any; data: any } | null>(null)
   const [fullscreen, setFullscreen] = React.useState(false)
+  // Fullscreen = "fit to page": the whole table, at whatever zoom level, is scaled (CSS zoom) to fill
+  // the available area exactly — every row and column visible, no scrolling. The cells use a larger
+  // base font and tight padding in this mode (.avz-fit in styles/index.css) so the scale that fits
+  // leaves the text as large as the screen allows. fitScale = min(width ratio, height ratio), capped
+  // so a narrow (collapsed) table does not balloon.
+  const fitMode = fullscreen
+  const fitBoxRef = React.useRef<HTMLDivElement | null>(null)
+  const fitTableRef = React.useRef<HTMLTableElement | null>(null)
+  const [fitScale, setFitScale] = React.useState(1)
+  const fitScaleRef = React.useRef(1)
+  React.useLayoutEffect(() => {
+    if (!fitMode) { fitScaleRef.current = 1; setFitScale(1); return }
+    const measure = () => {
+      const box = fitBoxRef.current, table = fitTableRef.current
+      if (!box || !table) return
+      const r = table.getBoundingClientRect()
+      const cur = fitScaleRef.current || 1
+      const natW = r.width / cur, natH = r.height / cur
+      if (!natW || !natH) return
+      const next = Math.min(1.6, (box.clientWidth - 2) / natW, (box.clientHeight - 2) / natH)
+      if (Math.abs(next - cur) > 0.004) { fitScaleRef.current = next; setFitScale(next) }
+    }
+    measure()
+    const ro = new ResizeObserver(() => measure())
+    if (fitBoxRef.current) ro.observe(fitBoxRef.current)
+    if (fitTableRef.current) ro.observe(fitTableRef.current)
+    window.addEventListener('resize', measure)
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure) }
+  })
   const [showInfo, setShowInfo] = React.useState(true) // #7 INFO columns (CPI / persoane / consum apă)
   const [showIncasari, setShowIncasari] = React.useState(false) // per-fund/De-plată Încasări column (prior period's receipts) — off by default
   const [hideRestante, setHideRestante] = React.useState(false) // per-fund/De-plată Restanțe columns — shown by default, hidden on request (e.g. a notice that only needs to show current dues)
@@ -250,11 +279,8 @@ export function AvizierPanel({
   }
 
   const [penDetail, setPenDetail] = React.useState<{ be: string; scope: 'month' | 'total'; fund?: string; data: any } | null>(null)
-  const [penExpanded, setPenExpanded] = React.useState<Set<number>>(new Set())
-  const togglePenBucket = (i: number) => setPenExpanded((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })
   const openPenalty = (beCode: string, scope: 'month' | 'total', fund?: string) => {
     if (RO) return
-    setPenExpanded(new Set())
     setPenDetail({ be: beCode, scope, fund, data: null })
     const fq = fund ? `&fund=${encodeURIComponent(fund)}` : ''
     api.get<any>(`/communities/${communityId}/finance/avizier/explain-penalty?period=${encodeURIComponent(data?.period?.code || period)}&be=${encodeURIComponent(beCode)}${fq}`)
@@ -489,10 +515,9 @@ export function AvizierPanel({
 
   // Print always renders the fully-expanded Proprietar view — regardless of whatever view the
   // admin happens to be looking at on screen — since a printed notice needs every unit's full
-  // detail, not a collapsed summary or a Unitatea/Asociație breakdown. The 4 printed pages (see
-  // printPages below) compute their own column layout per zoom level independently of the live
-  // zoom/collapse state, so only groupBy/associationView (which decide what `rows` even IS) need
-  // forcing here. Snapshot them so they can be restored once the print dialog closes (afterprint),
+  // detail, not a Unitatea/Asociație breakdown. Its columns are exactly the on-screen ones (current
+  // zoom level and collapse state, see printPages below), so only groupBy/associationView (which
+  // decide what `rows` even IS) need forcing here. Snapshot them so they can be restored once the print dialog closes (afterprint),
   // so clicking Printează doesn't permanently change what the admin was looking at.
   const printRestoreRef = React.useRef<null | { associationView: boolean; groupBy: typeof groupBy }>(null)
   const [printPending, setPrintPending] = React.useState(false)
@@ -585,24 +610,6 @@ export function AvizierPanel({
     return { cols: cols2, sgRuns: sgRuns2, groupRuns: groupRuns2 }
   }
   const { cols, sgRuns, groupRuns } = buildCols(collapsedBands, collapsedFunds, expanded)
-  // Mirrors applyZoom's own set-computation (kept separate, rather than calling applyZoom itself,
-  // so print never touches interactive state) — the "De plată" band is always forced open here
-  // (print always wants the grand total fully spelled out, on every page), unlike applyZoom which
-  // preserves whatever collapse state that band already had.
-  const zoomSetsForLevel = (level: number) => {
-    const clamped = Math.max(0, Math.min(3, level))
-    const nextBands = new Set<string>()
-    const nextFunds = new Set<string>()
-    const nextExpanded = new Set<string>()
-    if (clamped === 0) {
-      for (const g of groups) if (g.superGroup) nextBands.add(g.superGroup.key)
-    } else if (clamped === 1) {
-      for (const g of groups) nextFunds.add(g.key)
-    } else if (clamped === 3) {
-      for (const g of groups) if (g.categories.length > 1) nextExpanded.add(g.key)
-    }
-    return { collapsedBands: nextBands, collapsedFunds: nextFunds, expanded: nextExpanded }
-  }
   // #8 configurator: which INFO columns the community enabled, and how many are visible now.
   const infoCfg = (data?.config?.info ?? { cpi: true, residents: true, consumption: true }) as { cpi: boolean; residents: boolean; consumption: boolean }
   const infoVis = { cpi: showInfo && infoCfg.cpi !== false, residents: showInfo && infoCfg.residents !== false, consumption: showInfo && infoCfg.consumption !== false }
@@ -717,8 +724,8 @@ export function AvizierPanel({
     }
   }
 
-  // Print renders 4 fully static pages (one per zoom level) independently of whatever the
-  // interactive table is currently showing on screen — "the whole table, with every unit",
+  // Print renders one fully static page with the on-screen columns (current zoom/collapse state) —
+  // "the whole table, with every unit",
   // regardless of any active filter or per-row collapse, so it always uses every row from the
   // (already print-forced, see handlePrint) entity-view data, every multi-unit BE force-expanded.
   const printRenderRows: Array<{ row: any; indent: boolean }> = []
@@ -746,8 +753,8 @@ export function AvizierPanel({
       default: return t('avizier.total', 'Total') // fundTotal | bandTotal | finalTotal
     }
   }
-  // One page per zoom level (0 = most collapsed .. 3 = fully expanded), each sized to fit the
-  // entire table on a single A3-landscape sheet at the largest legible font. The print table uses
+  // One page at the current zoom level, sized to fit the entire table on a single A3-landscape
+  // sheet at the largest legible font. The print table uses
   // `table-layout:fixed` with an explicit `<colgroup>` (below) instead of the browser's normal
   // content-driven auto layout: auto layout has no single column that can "give" — nowrap numeric
   // cells refuse to shrink, so once a page has enough columns to exceed the physical page width,
@@ -788,8 +795,10 @@ export function AvizierPanel({
   const dataRows = printRenderRows.length
   const heightDrivenFont = (usableHeightPx * REF_FONT) / (pxOverheadAtRef + pxPerDataRowAtRef * dataRows)
   const infoColsCount = (infoVis.cpi ? 1 : 0) + (infoVis.residents ? 1 : 0) + (infoVis.consumption ? 1 : 0)
-  const printPages = [0, 1, 2, 3].map((level) => {
-    const sets = zoomSetsForLevel(level)
+  // Print = one page, exactly the columns on screen: the current zoom level and every band/fund/
+  // category collapsed or expanded by hand (the live state, not a synthetic per-level one).
+  const printPages = [zoomLevel].map((level) => {
+    const sets = { collapsedBands, collapsedFunds, expanded }
     const { cols: pCols, sgRuns: pSgRuns, groupRuns: pGroupRuns } = buildCols(sets.collapsedBands, sets.collapsedFunds, sets.expanded)
     const dataColWidthPx = (usableWidthPx - IDENTITY_COL_PX - infoColsCount * INFO_COL_PX) / pCols.length
     const widthDrivenFont = dataColWidthPx / PX_PER_FONT_UNIT_FOR_NUMBERS
@@ -797,7 +806,7 @@ export function AvizierPanel({
     // legitimately needs the smallest font on a table this wide (that's the fundamental trade-off
     // of showing every fund's every category on one A3 sheet), and forcing a floor here previously
     // caused those columns to visually overflow instead of just being smaller.
-    const fontSize = Math.max(4.5, Math.min(15, Math.min(heightDrivenFont, widthDrivenFont)))
+    const fontSize = Math.max(4.5, Math.min(22, Math.min(heightDrivenFont, widthDrivenFont)))
     const colWidthPct = {
       identity: (IDENTITY_COL_PX / usableWidthPx) * 100,
       info: (INFO_COL_PX / usableWidthPx) * 100,
@@ -979,12 +988,14 @@ export function AvizierPanel({
         // budget is exactly what left a visible gap above the signatures before this fix.
         // While another month loads the previous table stays mounted (dimmed), so the scroll position
         // and every expand/collapse/sort setting carry over to the new month.
-        <div className="card" style={{
-          overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0,
+        <div className="card" ref={fitBoxRef} style={{
+          overflowX: fitMode ? 'hidden' : 'auto', overflowY: fitMode ? 'hidden' : 'auto', flex: 1, minHeight: 0,
           maxHeight: fullscreen ? undefined : '70vh', padding: 0, minWidth: 0,
           opacity: loading ? 0.55 : 1, transition: 'opacity 120ms',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          {/* Fit mode (fullscreen): CSS zoom shrinks/grows the whole table to the card — see fitScale. */}
+          <div style={fitMode ? { zoom: fitScale } : undefined}>
+          <table ref={fitTableRef} className={fitMode ? 'avz-table avz-fit' : 'avz-table'} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 16 }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 5 }}>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={leadColspan} />
@@ -1004,7 +1015,7 @@ export function AvizierPanel({
                     </th>
                   )
                 })}
-                <th style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
+                <th className="avz-trailing" style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
               </tr>
               <tr style={{ background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)' }} colSpan={leadColspan} />
@@ -1020,7 +1031,7 @@ export function AvizierPanel({
                     {run.kind === 'fund' ? `${collapsedFunds.has(run.key) ? '+' : '−'} ${run.label}` : ''}
                   </th>
                 ))}
-                <th style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
+                <th className="avz-trailing" style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX }} />
               </tr>
               <tr style={{ textAlign: 'right', background: 'var(--muted-bg, #f4f4f5)' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', left: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: STICKY_IDENTITY_PX, maxWidth: STICKY_IDENTITY_PX }}>
@@ -1089,7 +1100,7 @@ export function AvizierPanel({
                   // Fund-boundary separator: cloned onto whichever element the branch above returned,
                   // rather than threading a border prop through every branch individually.
                 }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
-                <th style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>
+                <th className="avz-trailing" style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 2, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>
                   {groupBy === 'entity' ? t('avizier.entityOwner', 'Proprietar') : groupBy === 'unit' ? t('avizier.entityUnit', 'Unitatea') : t('avizier.entityGroup', 'Grup Unități')}
                 </th>
               </tr>
@@ -1265,7 +1276,7 @@ export function AvizierPanel({
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: rowBg } : {}),
                     }}>{money(r.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
-                  <td style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', right: 0, zIndex: 1,
+                  <td className="avz-trailing" style={{ textAlign: 'left', padding: indent ? '4px 10px 4px 26px' : '6px 10px', position: 'sticky', right: 0, zIndex: 1,
                       background: indent ? rowBg : (hov ? 'var(--hover-bg, #eef4ff)' : zebraBg),
                       width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, overflow: 'hidden', textOverflow: 'ellipsis', ...DOTTED_SEPARATOR }}
                     title={`${l.primary}${secondary ? ' · ' + secondary : ''}`}>
@@ -1312,11 +1323,12 @@ export function AvizierPanel({
                       ...(i === cols.length - 1 ? { position: 'sticky' as const, right: TRAILING_UNIT_PX, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)' } : {}),
                     }}>{money(totals.totalDue)}</td>
                   }).map((el, i) => (fundBoundaryIdx.has(i) ? React.cloneElement(el, { style: { ...(el as React.ReactElement<any>).props.style, ...colSepStyle(i) } }) : el))}
-                  <td style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>{t('avizier.totalRow', 'TOTAL')}</td>
+                  <td className="avz-trailing" style={{ textAlign: 'left', padding: '8px 10px', position: 'sticky', right: 0, zIndex: 1, background: 'var(--muted-bg, #f4f4f5)', width: TRAILING_UNIT_PX, maxWidth: TRAILING_UNIT_PX, ...DOTTED_SEPARATOR }}>{t('avizier.totalRow', 'TOTAL')}</td>
                 </tr>
               ) : null}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -1370,7 +1382,7 @@ export function AvizierPanel({
                 <div style={{ fontSize: '1.8em', fontWeight: 700 }}>{t('avizier.title', 'Avizier')}</div>
                 <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.list', 'Listă de întreținere')} · {periodLabel(data?.period?.code || period)}</div>
               </div>
-              <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.zoom', 'Zoom')} {page.level + 1}/{printPages.length}</div>
+              <div style={{ fontSize: '1.1em', color: '#555' }}>{t('avizier.zoom', 'Zoom')} {page.level + 1}/4</div>
             </div>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 'inherit', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
               {/* table-layout:fixed uses ONLY these widths (ignoring cell content) to size every
@@ -1906,54 +1918,54 @@ export function AvizierPanel({
                 <div className="muted" style={{ fontSize: 12 }}>
                   {t('avizier.penIntro', 'Fiecare sumă neachitată acumulează penalizări zilnic, din ziua de după scadență + perioada de grație, plafonat la valoarea datoriei.')}
                 </div>
-                {(penDetail.data.buckets || []).map((b: any, i: number) => (
-                  <div key={i} className="card soft">
-                    <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                      <strong>{b.label}</strong>
-                      <span className="row" style={{ gap: 6, alignItems: 'center' }}>
-                        {b.capReached ? <span className="badge secondary" title={t('avizier.penCapHint', 'Penalizarea a atins valoarea datoriei (plafon legal)')}>{t('avizier.penCap', 'plafonat')}</span> : null}
-                        <span className="badge secondary">{b.ratePerDayPct}%/{t('avizier.perDay', 'zi')}</span>
-                        <button type="button" onClick={() => togglePenBucket(i)} title={t('avizier.expand', 'Detaliază')}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--link, #2563eb)', font: 'inherit', fontSize: 12 }}>
-                          {penExpanded.has(i) ? '▾ ' : '▸ '}{t('avizier.penDetails', 'Detalii')}
-                        </button>
-                      </span>
-                    </div>
-                    <div className="muted" style={{ fontSize: 12, margin: '4px 0' }}>
-                      {!b.uncapped && <>{t('avizier.penPrincipal', 'Datorie')}: {money(b.principalOriginal)}{' · '}</>}
-                      {t('avizier.penRemaining', 'rămas')}: {money(b.principalRemaining)}
-                      {' → '}{t('avizier.penTarget', 'în fondul')} {b.targetFund}
-                      {' · '}{t('avizier.penTotalDays', 'Total zile')}: <strong>{b.totalDays}</strong>
-                      {' · '}{t('avizier.penToDate', 'acumulat')}: <strong>{money(b.penaltyToDate)}</strong>
-                    </div>
-                    {penExpanded.has(i) && (
+                {(() => {
+                  // Same layout as "Detalii restanță" (SliceTable): one row per overdue month, oldest first.
+                  const rows = (penDetail.data.buckets || []).slice().sort((a: any, b: any) => new Date(a.firstPenalDay).getTime() - new Date(b.firstPenalDay).getTime())
+                  const th = { padding: '4px 8px' } as React.CSSProperties
+                  const td = { padding: '4px 8px' } as React.CSSProperties
+                  const sum = (k: string) => rows.reduce((s: number, b: any) => s + (Number(b[k]) || 0), 0)
+                  return (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                       <thead>
-                        <tr style={{ textAlign: 'right', color: 'var(--muted,#666)' }}>
-                          <th style={{ textAlign: 'left', padding: '3px 6px' }}>{t('avizier.penPeriod', 'Perioadă')}</th>
-                          <th style={{ padding: '3px 6px' }}>{t('avizier.penRem', 'Sold restant')}</th>
-                          <th style={{ padding: '3px 6px' }} title={t('avizier.penDaysHint', 'Zile penalizate în această lună')}>{t('avizier.penDays', 'Zile')}</th>
-                          <th style={{ padding: '3px 6px' }} title={t('avizier.penTotalDaysHint', 'Total zile de întârziere până la finalul lunii')}>{t('avizier.penTotalDays', 'Total zile')}</th>
-                          <th style={{ padding: '3px 6px' }}>{t('avizier.penAdded', 'Penaliz. lună')}</th>
-                          <th style={{ padding: '3px 6px' }}>{t('avizier.penCum', 'Cumulat')}</th>
+                        <tr style={{ textAlign: 'right', borderBottom: '1px solid var(--border,#ddd)' }}>
+                          <th style={{ ...th, textAlign: 'left' }}>{t('riskDetail.colOrigin', 'Lună origine')}</th>
+                          <th style={th}>{t('riskDetail.colDue', 'Scadență')}</th>
+                          <th style={th} title={t('avizier.penDaysTotalHint', 'Zile penalizate de la prima zi de penalizare până la afișare')}>{t('avizier.penDaysTotal', 'Zile [Total]')}</th>
+                          <th style={th} title={t('avizier.penDaysCurrentHint', 'Zile penalizate în perioada lunii curente')}>{t('avizier.penDaysCurrent', 'Zile [Curente]')}</th>
+                          <th style={th}>{t('riskDetail.colPrincipal', 'Restanță')}</th>
+                          <th style={th}>{t('riskDetail.colRate', 'Procent/zi')}</th>
+                          <th style={th}>{t('avizier.penPenTotal', 'Penalizări [Total]')}</th>
+                          <th style={th}>{t('avizier.penPenCurrent', 'Penalizări [Curente]')}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(b.history || []).map((h: any, j: number) => (
-                          <tr key={j} style={{ textAlign: 'right', borderTop: '1px solid var(--border,#eee)', fontWeight: h.current ? 700 : 400, background: h.current ? 'var(--muted-bg,#f4f4f5)' : undefined }}>
-                            <td style={{ textAlign: 'left', padding: '3px 6px' }}>{h.periodCode}</td>
-                            <td style={{ padding: '3px 6px' }}>{money(h.principalRemaining)}</td>
-                            <td style={{ padding: '3px 6px' }}>{h.days}</td>
-                            <td style={{ padding: '3px 6px', color: 'var(--muted,#666)' }}>{h.daysToDate}</td>
-                            <td style={{ padding: '3px 6px' }}>{money(h.penaltyPosted)}</td>
-                            <td style={{ padding: '3px 6px' }}>{money(h.penaltyAccrued)}</td>
+                        {rows.map((b: any, i: number) => (
+                          <tr key={i} style={{ borderTop: '1px solid var(--border,#eee)', textAlign: 'right' }}>
+                            <td style={{ ...td, textAlign: 'left' }}>
+                              {riskMonthLabel(b.originPeriodCode) ?? t('penledger.carriedOver', 'Restanță reportată')}
+                              {b.capReached ? <span className="badge secondary" style={{ marginLeft: 6 }} title={t('avizier.penCapHint', 'Penalizarea a atins valoarea datoriei (plafon legal)')}>{t('avizier.penCap', 'plafonat')}</span> : null}
+                            </td>
+                            <td style={td}>{fmtRiskDate(b.dueDate)}</td>
+                            <td style={td}>{b.penalDaysTotal ?? b.totalDays}</td>
+                            <td style={td}>{b.penalDaysCurrent ?? b.history?.find((h: any) => h.current)?.days ?? 0}</td>
+                            <td style={td}>{money(b.principalRemaining)}</td>
+                            <td style={td}>{b.ratePerDayPct}%</td>
+                            <td style={{ ...td, color: 'var(--danger,#b45309)' }}>{money(b.penaltyToDate)}</td>
+                            <td style={{ ...td, color: 'var(--danger,#b45309)', fontWeight: 600 }}>{money(b.penaltyThisPeriod)}</td>
                           </tr>
                         ))}
+                        <tr style={{ borderTop: '2px solid var(--border,#ccc)', textAlign: 'right', fontWeight: 700 }}>
+                          <td style={{ ...td, textAlign: 'left' }}>{t('riskDetail.total', 'Total')}</td>
+                          <td /><td /><td />
+                          <td style={td}>{money(sum('principalRemaining'))}</td>
+                          <td />
+                          <td style={{ ...td, color: 'var(--danger,#b45309)' }}>{money(penDetail.data.grandTotal)}</td>
+                          <td style={{ ...td, color: 'var(--danger,#b45309)' }}>{money(penDetail.data.monthTotal)}</td>
+                        </tr>
                       </tbody>
                     </table>
-                    )}
-                  </div>
-                ))}
+                  )
+                })()}
               </div>
             )}
           </div>

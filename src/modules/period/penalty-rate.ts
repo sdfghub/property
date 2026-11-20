@@ -1,4 +1,5 @@
-export type PenaltyRateHistoryEntry = { from: string; ratePerDayPct: number }
+/** `note` documents why the era exists (association decision, source document); display-only. */
+export type PenaltyRateHistoryEntry = { from: string; ratePerDayPct: number; note?: string }
 
 /**
  * Resolves the penalty rate (%/day) in force on `date`, from a fund's `allocation.penaltyRateHistory`

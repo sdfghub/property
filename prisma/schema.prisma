@@ -254,6 +254,7 @@ model Community {
   tickets                    Ticket[]
   announcements              Announcement[]
   inventoryAssets            InventoryAsset[]
+  serviceItems               ServiceItem[]
   VendorPayment              VendorPayment[]
   CashAccount                CashAccount[]
   CashTx                     CashTx[]
@@ -277,7 +278,11 @@ model Period {
   startDate   DateTime     @map("start_date")
   endDate     DateTime     @map("end_date")
   dueDate     DateTime?    @map("due_date")
-  afisareDate DateTime?    @map("afisare_date") // posting/display date; penalty accrual window is prev.afisareDate+1 .. afisareDate (falls back to start/endDate)
+  afisareDate DateTime?    @map("afisare_date") // posting/display date; penalties run up to the day before it unless penaltyAsOfDate says otherwise (falls back to start/endDate)
+  /// Last day penalties are computed for. Null = the day before afisareDate (penalties "la zi": posted
+  /// on the 19th → computed through the 18th). This period's window ends here and the next one starts
+  /// the day after. Periods closed under the older through-afișare rule carry it = afisareDate.
+  penaltyAsOfDate DateTime? @map("penalty_as_of_date")
   seq         Int          @map("seq")
   timezone    String       @default("Europe/Bucharest") @map("timezone")
   status      PeriodStatus @default(OPEN)
@@ -336,6 +341,8 @@ model Unit {
   CommunityChargeLine CommunityChargeLine[]
   BeOpeningBalance     BeOpeningBalance[]
   tenants             UnitTenant[]
+  equipment           UnitEquipment[]
+  reportedTickets     Ticket[]
 
   @@unique([code, communityId])
   @@index([communityId])
@@ -1713,6 +1720,7 @@ model User {
   notificationPreferences NotificationPreference[]
   inventoryAssetsCreated  InventoryAsset[]
   inventoryRulesCreated   InventoryMaintenanceRule[]
+  serviceAssessments      ServiceAssessment[]
 
   @@map("user")
 }
@@ -1929,6 +1937,19 @@ model Ticket {
   createdById           String         @map("created_by_id")
   assigneeId            String?        @map("assignee_id")
   sourceInventoryRuleId String?        @map("source_inventory_rule_id")
+  /// INCIDENT tickets: the catalogue service affected, and the action reported on it
+  /// (NOT_FUNCTIONAL / PARTIAL — see INCIDENT_SERVICE_ACTIONS in ticketing.service.ts).
+  serviceItemId         String?        @map("service_item_id")
+  serviceStatus         ServiceOperationalStatus? @map("service_status")
+  /// Scope inside the service: an equipment (ServiceItem.equipmentDefs[].name) and optionally one
+  /// variant of it — the affected units are the ones whose UnitEquipment matches.
+  equipmentName         String?        @map("equipment_name")
+  equipmentVariant      String?        @map("equipment_variant")
+  /// Who reported it: the unit, and the reporter's contact as entered (prefilled from the unit).
+  reporterUnitId        String?        @map("reporter_unit_id")
+  reporterName          String?        @map("reporter_name")
+  reporterPhone         String?        @map("reporter_phone")
+  reporterEmail         String?        @map("reporter_email")
   createdAt             DateTime       @default(now()) @map("created_at")
   updatedAt             DateTime       @updatedAt @map("updated_at")
 
@@ -1936,6 +1957,8 @@ model Ticket {
   createdBy           User                      @relation("TicketCreatedBy", fields: [createdById], references: [id])
   assignee            User?                     @relation("TicketAssignee", fields: [assigneeId], references: [id])
   sourceInventoryRule InventoryMaintenanceRule? @relation(fields: [sourceInventoryRuleId], references: [id])
+  serviceItem         ServiceItem?              @relation(fields: [serviceItemId], references: [id])
+  reporterUnit        Unit?                     @relation(fields: [reporterUnitId], references: [id])
   tags                TicketTagMap[]
   events              TicketEvent[]
 
@@ -1943,6 +1966,7 @@ model Ticket {
   @@index([createdById])
   @@index([assigneeId])
   @@index([sourceInventoryRuleId])
+  @@index([serviceItemId, status])
   @@map("ticket")
 }
 
@@ -2128,4 +2152,293 @@ model InventoryRuleTagMap {
 
   @@unique([ruleId, tag])
   @@map("inventory_rule_tag")
+}
+
+// Service catalog & condition assessment (Catalog servicii și evaluare). The quality level
+// (0–5, null = N/A / not yet assessed) is kept separate from the work status and the priority,
+// so a service can be at level 0 today while already contracted for remediation.
+enum ServiceWorkStatus {
+  NOT_STARTED
+  IN_DESIGN
+  CONTRACTED
+  IN_EXECUTION
+  OPERATIONAL
+}
+
+/// Service class by how critical the function is (definitions in services.service.ts SERVICE_TIERS).
+enum ServiceTier {
+  VITAL
+  ESSENTIAL
+  SUPPLEMENTARY
+}
+
+/// Operational state shown on the services dashboard (independent of the 0–5 level).
+enum ServiceOperationalStatus {
+  NOT_FUNCTIONAL
+  PARTIAL_HIGH_RISK
+  PARTIAL
+  FUNCTIONAL
+  UNAVAILABLE
+  STOPPED
+}
+
+enum ServicePriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model ServiceItem {
+  id          String             @id @default(cuid())
+  communityId String             @map("community_id")
+  domain      String
+  name        String
+  /// English display names (the Romanian `domain`/`name` stay the identity, unique per community).
+  domainEn    String?            @map("domain_en")
+  nameEn      String?            @map("name_en")
+  tier        ServiceTier?
+  sortOrder   Int                @default(0) @map("sort_order")
+  /// Per-service meaning of each level: { "0": "...", ..., "5": "..." }
+  levelDefs   Json?              @map("level_defs")
+  levelDefsEn Json?              @map("level_defs_en")
+  level       Int?
+  comment     String?
+  actions     String?
+  workStatus  ServiceWorkStatus? @map("work_status")
+  priority    ServicePriority?
+  status      ServiceOperationalStatus?
+  /// Who provides the service when it is not the association (e.g. MUNICIPALITY = primăria).
+  providedBy  String?            @map("provided_by")
+  /// Equipment kinds this service has inside the units: [{ "name": "Interfon (interior)",
+  /// "variants": ["Audio", "Video"] }]. Each unit's own piece is a UnitEquipment row.
+  equipmentDefs Json?            @map("equipment_defs")
+  assessedAt  DateTime?          @map("assessed_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  community   Community           @relation(fields: [communityId], references: [id])
+  assessments ServiceAssessment[]
+  tickets     Ticket[]
+  equipment   UnitEquipment[]
+
+  @@unique([communityId, domain, name])
+  @@index([communityId])
+  @@map("service_item")
+}
+
+/// One piece of a service's equipment inside a unit (e.g. Interfon → "Interfon (interior)", Video).
+model UnitEquipment {
+  id            String   @id @default(cuid())
+  communityId   String   @map("community_id")
+  unitId        String   @map("unit_id")
+  serviceItemId String   @map("service_item_id")
+  name          String
+  variant       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  unit        Unit        @relation(fields: [unitId], references: [id])
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, serviceItemId, name])
+  @@index([serviceItemId])
+  @@map("unit_equipment")
+}
+
+/// One row per saved evaluation — the history behind ServiceItem's current values.
+model ServiceAssessment {
+  id            String             @id @default(cuid())
+  serviceItemId String             @map("service_item_id")
+  level         Int?
+  comment       String?
+  actions       String?
+  workStatus    ServiceWorkStatus? @map("work_status")
+  priority      ServicePriority?
+  status        ServiceOperationalStatus?
+  assessedById  String?            @map("assessed_by_id")
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+  assessedBy  User?       @relation(fields: [assessedById], references: [id])
+
+  @@index([serviceItemId, createdAt])
+  @@map("service_assessment")
+}
+
+// --------- Budget vs Forecast vs Actual (docs/budget.md) ---------
+// Three managerial dimensions (model de bugetare §7): OPERATIONAL = FM-OPE (RUN), TACTIC = FM-TAC
+// (MAINTAIN: preventive + reactive maintenance), STRATEGIC = FM-STR (TRANSFORM: programmes and
+// projects). The managerial dimension says WHY a cost exists; `fundCode` says which legal fund pays
+// for it — two independent fields on the same line. Fund/community are plain codes/ids (no Prisma
+// back-relations) so the budget stays a read-side layer over the ledger.
+enum BudgetDimension {
+  OPERATIONAL
+  TACTIC
+  STRATEGIC
+}
+
+enum BudgetMaintenanceKind {
+  PREVENTIVE
+  REACTIVE
+}
+
+enum BudgetEntryKind {
+  ESTIMATE
+  COMMITMENT
+  PAYMENT
+}
+
+model BudgetVersion {
+  id            String   @id @default(cuid())
+  communityId   String   @map("community_id")
+  code          String
+  name          String
+  fiscalYear    Int      @map("fiscal_year")
+  status        String   @default("DRAFT")
+  referenceDate DateTime? @map("reference_date")
+  notes         String?
+  /// Funds the budget plans on, as the workbook names them: [{ code, label, dimension, appFund }].
+  /// appFund=false = a fund the budget assumes but the association has not set up yet.
+  fundPlan      Json?    @map("fund_plan")
+  /// EUR/RON per year { "YYYY": { rate, basis } } — used by the RON/EUR switch.
+  fxRates     Json?    @map("fx_rates")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  lines BudgetLine[]
+
+  @@unique([communityId, code])
+  @@map("budget_version")
+}
+
+model BudgetProgram {
+  id          String  @id @default(cuid())
+  communityId String  @map("community_id")
+  code        String
+  name        String
+  objective   String?
+  dimension   BudgetDimension?
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  projects BudgetProject[]
+
+  @@unique([communityId, code])
+  @@map("budget_program")
+}
+
+model BudgetProject {
+  id          String  @id @default(cuid())
+  communityId String  @map("community_id")
+  programId   String? @map("program_id")
+  code        String
+  name        String
+  sortOrder   Int     @default(0) @map("sort_order")
+  scope       String?
+  /// Fund that finances the project (Fund.code or a planned fund of the version's fundPlan).
+  fundCode      String?  @map("fund_code")
+  voteYear      Int?     @map("vote_year")
+  durationYears Int?     @map("duration_years")
+  /// Approved project budget (whole life, all years).
+  budgetAmount  Decimal? @map("budget_amount") @db.Decimal(18, 4)
+  budgetEur     Decimal? @map("budget_eur") @db.Decimal(18, 4)
+  /// Budget tranche per year { "YYYY": amount } — the annual views sum only the year's tranche.
+  yearPlan      Json?    @map("year_plan")
+  /// [{ code: BudgetServiceDef.code, weight }] — weights sum to 1.
+  serviceSplit  Json?    @map("service_split")
+  source        Json?
+
+  program BudgetProgram? @relation(fields: [programId], references: [id])
+  lines   BudgetLine[]
+
+  @@unique([communityId, code])
+  @@map("budget_project")
+}
+
+model BudgetLine {
+  id              String                 @id @default(cuid())
+  versionId       String                 @map("version_id")
+  communityId     String                 @map("community_id")
+  code            String
+  dimension       BudgetDimension
+  maintenanceKind BudgetMaintenanceKind? @map("maintenance_kind")
+  /// Primary service (BudgetServiceDef.code).
+  serviceCode     String?                @map("service_code")
+  /// [{ code: BudgetServiceDef.code, weight }] — how the line splits over services (weights sum to 1).
+  serviceSplit    Json?                  @map("service_split")
+  /// Grouping inside a dimension/project, e.g. "1. Acoperis" or an expense family.
+  area            String?
+  name            String
+  projectId       String?                @map("project_id")
+  /// Cost type (BUDGET_COST_TYPE_META): CONSUMPTION, SUBSCRIPTION, REPAIR, … (null for strategic evidence lines).
+  costType        String?                @map("cost_type")
+  /// Planned source fund (Fund.code). Null = source still to be confirmed.
+  fundCode        String?                @map("fund_code")
+  vendorName      String?                @map("vendor_name")
+  documentRef     String?                @map("document_ref")
+  quantity        Decimal?               @db.Decimal(18, 4)
+  unitOfMeasure   String?                @map("unit_of_measure")
+  unitRate        Decimal?               @map("unit_rate") @db.Decimal(18, 4)
+  /// Approved budget (Budget curent).
+  budgetAmount    Decimal                @default(0) @map("budget_amount") @db.Decimal(18, 4)
+  /// Best current estimate of the full cost (may exceed the budget, or exist with no budget).
+  estimateAmount  Decimal?               @map("estimate_amount") @db.Decimal(18, 4)
+  /// Monthly budget phasing { "YYYY-MM": amount } — OPERATIONAL/TACTIC lines.
+  phasing         Json?
+  /// Budget per year { "YYYY": amount } from Portofoliu (multi-year view).
+  yearPlan        Json?                  @map("year_plan")
+  /// How the budget was computed: { method, formula, inputs[] } — shown verbatim in the UI.
+  basis           Json?
+  /// Where actuals are read live from: { type: 'EXPENSE_TYPES', fundCode, codes[] } | null (entries).
+  actualSource    Json?                  @map("actual_source")
+  status          String                 @default("PROPOSED")
+  assumption      String?
+  sortOrder       Int                    @default(0) @map("sort_order")
+
+  version BudgetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  project BudgetProject? @relation(fields: [projectId], references: [id])
+  entries BudgetEntry[]
+
+  @@unique([versionId, code])
+  @@index([communityId])
+  @@map("budget_line")
+}
+
+/// Service catalogue the budget is reported on: Categorie → Domeniu → Serviciu (budget workbook,
+/// sheet "Structura buget"). `serviceItemId` links the evaluated service (level 0–5), if any.
+model BudgetServiceDef {
+  id            String  @id @default(cuid())
+  communityId   String  @map("community_id")
+  code          String
+  name          String
+  category      String
+  domain        String
+  /// Reference code in the model's catalogue S01–S12.
+  specCode      String? @map("spec_code")
+  serviceItemId String? @map("service_item_id")
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  @@unique([communityId, code])
+  @@map("budget_service_def")
+}
+
+model BudgetEntry {
+  id          String          @id @default(cuid())
+  lineId      String          @map("line_id")
+  kind        BudgetEntryKind
+  date        DateTime?
+  amount      Decimal         @db.Decimal(18, 4)
+  fundCode    String?         @map("fund_code")
+  documentRef String?         @map("document_ref")
+  description String?
+  note        String?
+  /// ESTIMATE only: whether it is part of the approved baseline.
+  inBaseline  Boolean?        @map("in_baseline")
+  source      String?
+  sourceRow   Int?            @map("source_row")
+
+  line BudgetLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+
+  @@index([lineId])
+  @@map("budget_entry")
 }

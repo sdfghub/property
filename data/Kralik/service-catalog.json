@@ -1,0 +1,733 @@
+{
+  "source": "Kralik - Catalog Servicii si Evaluare.docx (versiune de lucru, 7 octombrie 2026)",
+  "assessedAt": "2026-10-07",
+  "items": [
+    {
+      "domain": "Clădire",
+      "name": "Estetică",
+      "level": 1,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Aesthetics",
+      "domainEn": "Building",
+      "tier": "SUPPLEMENTARY"
+    },
+    {
+      "domain": "Clădire",
+      "name": "Funcționalitate",
+      "level": 2,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Functionality",
+      "domainEn": "Building",
+      "tier": "ESSENTIAL"
+    },
+    {
+      "domain": "Clădire",
+      "name": "Siguranță",
+      "level": 0,
+      "comment": "Imobilul este în reabilitare. Există o problemă structurală la subsol care necesită acțiuni urgente de punere în siguranță.",
+      "actions": "Soluție tehnică și punere în siguranță imediată; apoi remediere/reabilitare definitivă.",
+      "workStatus": null,
+      "priority": "CRITICAL",
+      "levelDefs": {
+        "0": "Critic / nesigur",
+        "1": "Degradări majore",
+        "2": "Stabilizat, dar degradat",
+        "3": "Sigur și funcțional",
+        "4": "Stare bună",
+        "5": "Reabilitat + mentenanță preventivă"
+      },
+      "nameEn": "Structural safety",
+      "domainEn": "Building",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "Critical / unsafe",
+        "1": "Major deterioration",
+        "2": "Stabilised but deteriorated",
+        "3": "Safe and functional",
+        "4": "Good condition",
+        "5": "Rehabilitated + preventive maintenance"
+      }
+    },
+    {
+      "domain": "Apă",
+      "name": "Apă rece",
+      "level": 3,
+      "comment": "Alimentarea cu apă rece este funcțională și există contorizare.",
+      "actions": "Evaluarea stării infrastructurii comune și identificarea eventualelor pierderi sau tronsoane care necesită intervenție.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Nefuncțional",
+        "1": "Probleme majore",
+        "2": "Probleme recurente",
+        "3": "Funcțional",
+        "4": "Infrastructură bună",
+        "5": "Modernizat + monitorizat"
+      },
+      "nameEn": "Cold water",
+      "domainEn": "Water",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "Not functional",
+        "1": "Major problems",
+        "2": "Recurring problems",
+        "3": "Functional",
+        "4": "Good infrastructure",
+        "5": "Modernised + monitored"
+      }
+    },
+    {
+      "domain": "Apă",
+      "domainEn": "Water",
+      "name": "Apă caldă",
+      "nameEn": "Hot water",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Apă",
+      "name": "Canalizare",
+      "level": 2,
+      "comment": "Sistemul este funcțional, dar căminele și conductele din subsol par deteriorate; infrastructura este veche, clădirea fiind din 1913.",
+      "actions": "Inspecție tehnică a căminelor și conductelor; decizie privind păstrarea, reabilitarea sau înlocuirea.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Nefuncțional",
+        "1": "Deficiențe majore",
+        "2": "Degradat / probleme",
+        "3": "Funcțional",
+        "4": "Stare bună + întreținut",
+        "5": "Modernizat + mentenanță preventivă"
+      },
+      "nameEn": "Sewerage",
+      "domainEn": "Water",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "Not functional",
+        "1": "Major deficiencies",
+        "2": "Deteriorated / problems",
+        "3": "Functional",
+        "4": "Good condition + maintained",
+        "5": "Modernised + preventive maintenance"
+      }
+    },
+    {
+      "domain": "Apă",
+      "name": "Ape pluviale",
+      "level": 0,
+      "comment": "Colectarea apelor pluviale este momentan nefuncțională din cauza șantierului. Căminele și conductele din subsol par deteriorate.",
+      "actions": "Urgent: soluție provizorie pentru colectare și evacuare în perioada toamnă–iarnă. Ulterior, evaluarea și proiectarea soluției definitive.",
+      "workStatus": null,
+      "priority": "CRITICAL",
+      "levelDefs": {
+        "0": "Inexistent / nefuncțional",
+        "1": "Grav deficitar",
+        "2": "Parțial funcțional",
+        "3": "Funcțional",
+        "4": "Complet + întreținut",
+        "5": "Modernizat + gestionat preventiv"
+      },
+      "nameEn": "Rainwater drainage",
+      "domainEn": "Water",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent / not functional",
+        "1": "Severely deficient",
+        "2": "Partially functional",
+        "3": "Functional",
+        "4": "Complete + maintained",
+        "5": "Modernised + preventively managed"
+      }
+    },
+    {
+      "domain": "Energie",
+      "domainEn": "Energy",
+      "name": "Energie termică",
+      "nameEn": "Thermal energy",
+      "tier": "VITAL",
+      "level": 2,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Energie",
+      "domainEn": "Energy",
+      "name": "Energie electrică",
+      "nameEn": "Electricity",
+      "tier": "VITAL",
+      "level": 2,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Iluminat",
+      "name": "Iluminat spații comune",
+      "level": 0,
+      "comment": "Iluminatul pe infrastructura nouă nu este încă funcțional. Sistemul nou este contractat.",
+      "actions": "Finalizarea infrastructurii și a iluminatului. Senzori de mișcare/prezență: Hol Intrare, Casa Scării 1 și 2. Senzori crepusculari: Curte Interioară și Poartă Intrare.",
+      "workStatus": "CONTRACTED",
+      "priority": null,
+      "levelDefs": {
+        "0": "Nefuncțional",
+        "1": "Minimal / deficitar",
+        "2": "Parțial",
+        "3": "Toate zonele iluminate",
+        "4": "Complet + automatizat",
+        "5": "Automatizat + eficient energetic + optimizat"
+      },
+      "nameEn": "Common-area lighting",
+      "domainEn": "Lighting",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Not functional",
+        "1": "Minimal / deficient",
+        "2": "Partial",
+        "3": "All areas lit",
+        "4": "Complete + automated",
+        "5": "Automated + energy-efficient + optimised"
+      }
+    },
+    {
+      "domain": "Iluminat",
+      "name": "Iluminat public",
+      "providedBy": "MUNICIPALITY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Street lighting",
+      "domainEn": "Lighting",
+      "tier": "ESSENTIAL"
+    },
+    {
+      "domain": "Încălzire, Răcire & Ventilație",
+      "name": "Încălzire",
+      "level": 2,
+      "comment": "Există infrastructura comună de alimentare cu gaz, dar nu există încă un plan unitar pentru amplasarea/traseele coșurilor centralelor termice. Trebuie gestionate și coșurile/hornurile pentru sobe de teracotă și încălzire cu lemne/peleți.",
+      "actions": "Plan și regulament pentru coșuri/hornuri; verificarea infrastructurii existente. Firele de control pentru electrovalvele de gaz se încearcă a fi integrate în proiectul electric.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Fără infrastructură adecvată",
+        "1": "Deficiențe majore",
+        "2": "Infrastructură parțială",
+        "3": "Gaz + evacuări funcționale",
+        "4": "Plan/regulament coșuri",
+        "5": "Sistem complet gestionat și verificat"
+      },
+      "nameEn": "Heating",
+      "domainEn": "Heating, Cooling & Ventilation",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "No adequate infrastructure",
+        "1": "Major deficiencies",
+        "2": "Partial infrastructure",
+        "3": "Gas + working flues",
+        "4": "Chimney plan/regulations",
+        "5": "Complete system, managed and inspected"
+      }
+    },
+    {
+      "domain": "Încălzire, Răcire & Ventilație",
+      "name": "Răcire",
+      "level": 1,
+      "comment": "Nu există momentan un plan comun pentru colectarea și evacuarea condensului aparatelor de aer condiționat (AC). Regulile privind amplasarea și accesul pentru mentenanță trebuie completate.",
+      "actions": "Regulament pentru amplasarea AC, acces la mentenanță și soluție tehnică pentru colectarea/evacuarea condensului.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Fără infrastructură/reguli",
+        "1": "Soluții individuale necoordonate",
+        "2": "Reguli parțiale",
+        "3": "Regulament AC",
+        "4": "Regulament + acces mentenanță + condens",
+        "5": "Sistem complet implementat și respectat"
+      },
+      "nameEn": "Cooling",
+      "domainEn": "Heating, Cooling & Ventilation",
+      "tier": "SUPPLEMENTARY",
+      "levelDefsEn": {
+        "0": "No infrastructure/rules",
+        "1": "Uncoordinated individual solutions",
+        "2": "Partial rules",
+        "3": "AC regulations",
+        "4": "Regulations + maintenance access + condensate",
+        "5": "Complete system, implemented and enforced"
+      }
+    },
+    {
+      "domain": "Încălzire, Răcire & Ventilație",
+      "name": "Ventilație",
+      "level": null,
+      "comment": "Serviciul trebuie să acopere ventilarea Subsolului și a Caselor Scării, precum și infrastructura pentru ventilarea Spațiilor cu Altă Destinație (SAD).",
+      "actions": "Evaluarea situației actuale și definirea soluției țintă.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistentă",
+        "1": "Grav insuficientă",
+        "2": "Parțială",
+        "3": "Subsol + Casele Scării",
+        "4": "Nivel 3 + infrastructură SAD",
+        "5": "Completă + întreținută"
+      },
+      "nameEn": "Ventilation",
+      "domainEn": "Heating, Cooling & Ventilation",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Severely insufficient",
+        "2": "Partial",
+        "3": "Basement + stairwells",
+        "4": "Level 3 + smoke-exhaust infrastructure",
+        "5": "Complete + maintained"
+      }
+    },
+    {
+      "domain": "Comunicații",
+      "domainEn": "Communications",
+      "name": "Internet",
+      "nameEn": "Internet",
+      "tier": "SUPPLEMENTARY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Mobilitate",
+      "domainEn": "Mobility",
+      "name": "Lift",
+      "nameEn": "Lift",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Mobilitate",
+      "domainEn": "Mobility",
+      "name": "Accesibilitate",
+      "nameEn": "Accessibility",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Securitate & Acces",
+      "name": "Interfon",
+      "level": 2,
+      "comment": "Sistem video modern. Accesul funcționează momentan prin cartele și chei, dar funcția completă de interfon/acces din apartamente nu este disponibilă. Sistemul este parțial pe infrastructura nouă FTP (Foiled Twisted Pair – cablu torsadat ecranat).",
+      "actions": "Finalizarea infrastructurii și punerea în funcțiune integrală.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Majoritar nefuncțional",
+        "2": "Funcționalitate parțială",
+        "3": "Complet funcțional",
+        "4": "Video + infrastructură modernă",
+        "5": "Integrat cu accesul + administrare centralizată"
+      },
+      "nameEn": "Intercom",
+      "domainEn": "Security & Access",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Mostly not functional",
+        "2": "Partially functional",
+        "3": "Fully functional",
+        "4": "Video + modern infrastructure",
+        "5": "Integrated with access + central management"
+      }
+    },
+    {
+      "domain": "Securitate & Acces",
+      "name": "Acces controlat",
+      "level": 0,
+      "comment": "Nu există control al accesului în spațiile comune cu acces restricționat: Subsol, Pod și Camere Tehnice. Este prevăzut în contractul de electrice.",
+      "actions": "Implementarea sistemului și definirea drepturilor de acces.",
+      "workStatus": "CONTRACTED",
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Doar chei / improvizat",
+        "2": "Parțial",
+        "3": "Toate spațiile sensibile controlate",
+        "4": "Centralizat",
+        "5": "Integrat + drepturi + trasabilitate"
+      },
+      "nameEn": "Access control",
+      "domainEn": "Security & Access",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Keys only / improvised",
+        "2": "Partial",
+        "3": "All sensitive areas controlled",
+        "4": "Centralised",
+        "5": "Integrated + permissions + traceability"
+      }
+    },
+    {
+      "domain": "Securitate & Acces",
+      "name": "Supraveghere video",
+      "level": 2,
+      "comment": "Există camere și sistem de supraveghere, dar sistemul țintă pe infrastructura nouă nu este finalizat; funcționalitățile sunt încă incomplete.",
+      "actions": "Finalizarea sistemului prevăzut în proiectul electric; verificarea acoperirii, înregistrării și notificărilor.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Acoperire minimă",
+        "2": "Acoperire parțială",
+        "3": "Zonele relevante acoperite",
+        "4": "Sistem complet și fiabil",
+        "5": "Sistem optimizat + evenimente/notificări"
+      },
+      "nameEn": "Video surveillance",
+      "domainEn": "Security & Access",
+      "tier": "SUPPLEMENTARY",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Minimal coverage",
+        "2": "Partial coverage",
+        "3": "Relevant areas covered",
+        "4": "Complete and reliable system",
+        "5": "Optimised system + events/notifications"
+      }
+    },
+    {
+      "domain": "Securitate & Acces",
+      "name": "Ordine și liniște",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Order and quiet",
+      "domainEn": "Security & Access",
+      "tier": "ESSENTIAL"
+    },
+    {
+      "domain": "Securitate & Acces",
+      "name": "Ordinea și liniștea publică",
+      "providedBy": "MUNICIPALITY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Public order and quiet",
+      "domainEn": "Security & Access",
+      "tier": "ESSENTIAL"
+    },
+    {
+      "domain": "Siguranță",
+      "name": "Protecția și stingerea incendiilor",
+      "level": 2,
+      "comment": "Prevenirea și Stingerea Incendiilor (PSI) include plan de evacuare, căi și semnalizare, precum și sistem de stingere, minimum stingătoare. Infrastructura pentru detecția fumului și gazului este prevăzută în contractul de electrice. Se planifică firele de control pentru electrovalvele de gaz.",
+      "actions": "Inventar al situației PSI actuale; completarea nivelului de bază; implementarea detecției fum/incendiu, detecției gaz și automatizărilor de închidere a gazului.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Elemente izolate",
+        "2": "Protecție de bază incompletă",
+        "3": "Stingere + evacuare + semnalizare",
+        "4": "Nivel 3 + detecție fum/incendiu și alarmare",
+        "5": "Nivel 4 + detecție gaz + automatizări/electrovalve"
+      },
+      "previousNames": [
+        "PSI"
+      ],
+      "nameEn": "Fire prevention and fire fighting",
+      "domainEn": "Safety",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Isolated elements",
+        "2": "Incomplete basic protection",
+        "3": "Extinguishing + evacuation + signage",
+        "4": "Level 3 + smoke/fire detection and alarm",
+        "5": "Level 4 + gas detection + automation/solenoid valves"
+      }
+    },
+    {
+      "domain": "Siguranță",
+      "name": "Protecție la trăsnet",
+      "level": 0,
+      "comment": "Nu există în prezent paratrăsnet funcțional. Sistemul este prevăzut în contractul de electrice.",
+      "actions": "Implementare, verificare, documentare și includere în mentenanța periodică.",
+      "workStatus": "CONTRACTED",
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Incomplet",
+        "2": "Necesită remediere",
+        "3": "Funcțional",
+        "4": "Verificat + documentat",
+        "5": "Complet + mentenanță preventivă"
+      },
+      "nameEn": "Lightning protection",
+      "domainEn": "Safety",
+      "tier": "VITAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Incomplete",
+        "2": "Needs repair",
+        "3": "Functional",
+        "4": "Inspected + documented",
+        "5": "Complete + preventive maintenance"
+      }
+    },
+    {
+      "domain": "Siguranță",
+      "domainEn": "Safety",
+      "name": "Prevenire inundații",
+      "nameEn": "Flood prevention",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "name": "Curățenie",
+      "level": 2,
+      "comment": "Curățenia spațiilor comune este sub nivelul dorit. Standardul, frecvența, zonele incluse și criteriile de verificare au fost stabilite. Furnizorul a fost schimbat începând cu 1 octombrie. Menținerea standardului este îngreunată de șantier și de nerespectarea regulilor de conviețuire.",
+      "actions": "Monitorizarea noului furnizor față de standardul stabilit și urmărirea respectării Regulamentului de Ordine Interioară (ROI).",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Foarte deficitar",
+        "2": "Neregulat / sub standard",
+        "3": "Standard de bază",
+        "4": "Standard bun",
+        "5": "Standard foarte bun + control calitate"
+      },
+      "nameEn": "Cleaning",
+      "domainEn": "Hygiene & Care",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Very deficient",
+        "2": "Irregular / below standard",
+        "3": "Basic standard",
+        "4": "Good standard",
+        "5": "Very good standard + quality control"
+      }
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "name": "Salubritate",
+      "level": 2,
+      "comment": "Frecvența colectării este cunoscută, dar există probleme recurente cu colectarea și abandonarea deșeurilor în spațiile comune. Pubelele nu sunt spălate periodic. Se analizează mutarea zonei de colectare la subsol.",
+      "actions": "Amenajarea zonei definitive de colectare; igienizarea periodică a pubelelor; reducerea depozitării necorespunzătoare prin implementarea ROI.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Grav deficitar",
+        "2": "Probleme recurente",
+        "3": "Funcțional",
+        "4": "Bine organizat",
+        "5": "Optimizat + igienizare + colectare selectivă"
+      },
+      "nameEn": "Waste collection",
+      "domainEn": "Hygiene & Care",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Severely deficient",
+        "2": "Recurring problems",
+        "3": "Functional",
+        "4": "Well organised",
+        "5": "Optimised + sanitation + separate collection"
+      }
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "domainEn": "Hygiene & Care",
+      "name": "Dezinsecție, dezinfecție și deratizare",
+      "nameEn": "Pest control and disinfection",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "domainEn": "Hygiene & Care",
+      "name": "Spații verzi",
+      "nameEn": "Green spaces",
+      "tier": "SUPPLEMENTARY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "name": "Întreținerea domeniului public",
+      "providedBy": "MUNICIPALITY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Public-space upkeep",
+      "domainEn": "Hygiene & Care",
+      "tier": "SUPPLEMENTARY"
+    },
+    {
+      "domain": "Igienă & Îngrijire",
+      "name": "Deszăpezire și combatere polei",
+      "providedBy": "MUNICIPALITY",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Snow and ice clearing",
+      "domainEn": "Hygiene & Care",
+      "tier": "ESSENTIAL"
+    },
+    {
+      "domain": "Administrativ",
+      "name": "Administrare",
+      "level": null,
+      "comment": "Include contabilitate, liste de plată, încasări și plăți, managementul contractelor, facturilor și cheltuielilor, relația cu furnizorii, documente și evidențe, comunicarea cu proprietarii și implementarea ROI.",
+      "actions": "Definirea indicatorilor măsurabili pentru calitatea administrării și evaluarea periodică.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistentă",
+        "1": "Reactivă / deficitară",
+        "2": "Procese de bază incomplete",
+        "3": "Funcțională",
+        "4": "Procese clare + comunicare + ROI",
+        "5": "Proactivă + transparentă + digitalizată + indicatori"
+      },
+      "nameEn": "Management",
+      "domainEn": "Administration",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Reactive / deficient",
+        "2": "Incomplete basic processes",
+        "3": "Functional",
+        "4": "Clear processes + communication + ROI",
+        "5": "Proactive + transparent + digital + indicators"
+      }
+    },
+    {
+      "domain": "Administrativ",
+      "name": "Financiar",
+      "level": null,
+      "comment": "Include bugetare, urmărirea execuției bugetului, Forecast vs. Actual (estimat față de realizat), analiza abaterilor, proiecții, flux de numerar și necesar de finanțare.",
+      "actions": "Buget consolidat și raportare periodică Buget / Actual / Forecast, cu analiza abaterilor.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistent",
+        "1": "Doar încasări/plăți",
+        "2": "Bugete parțiale",
+        "3": "Buget + execuție",
+        "4": "Nivel 3 + Forecast + abateri",
+        "5": "Nivel 4 + flux numerar + scenarii + necesar finanțare"
+      },
+      "nameEn": "Finance",
+      "domainEn": "Administration",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent",
+        "1": "Receipts/payments only",
+        "2": "Partial budgets",
+        "3": "Budget + execution",
+        "4": "Level 3 + forecast + variances",
+        "5": "Level 4 + cash flow + scenarios + funding needs"
+      }
+    },
+    {
+      "domain": "Administrativ",
+      "name": "Bancar",
+      "level": null,
+      "comment": "Conturi bancare, operațiuni și comisioane bancare.",
+      "actions": "Evaluarea costurilor, structurii conturilor și eficienței serviciilor bancare utilizate.",
+      "workStatus": null,
+      "priority": null,
+      "levelDefs": {
+        "0": "Inexistente / inadecvate",
+        "1": "Probleme majore",
+        "2": "Funcționale, dar ineficiente",
+        "3": "Adecvate",
+        "4": "Optimizate",
+        "5": "Eficiente + automatizate + cost competitiv"
+      },
+      "nameEn": "Banking",
+      "domainEn": "Administration",
+      "tier": "ESSENTIAL",
+      "levelDefsEn": {
+        "0": "Non-existent / inadequate",
+        "1": "Major problems",
+        "2": "Functional but inefficient",
+        "3": "Adequate",
+        "4": "Optimised",
+        "5": "Efficient + automated + competitive cost"
+      }
+    },
+    {
+      "domain": "Administrativ",
+      "domainEn": "Administration",
+      "name": "Juridic",
+      "nameEn": "Legal",
+      "tier": "ESSENTIAL",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null
+    },
+    {
+      "domain": "Administrativ",
+      "name": "Managementul riscului",
+      "level": null,
+      "comment": null,
+      "actions": null,
+      "workStatus": null,
+      "priority": null,
+      "nameEn": "Risk management",
+      "domainEn": "Administration",
+      "tier": "ESSENTIAL"
+    }
+  ]
+}

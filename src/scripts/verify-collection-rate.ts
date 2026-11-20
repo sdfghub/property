@@ -18,7 +18,7 @@ const money = (n: any) => (n === null || n === undefined ? 'null' : Number(n).to
 
 async function main() {
   const prisma = new PrismaService()
-  const finance = new FinanceService(prisma as any)
+  const finance = new FinanceService(prisma as any, new PenaltyReconciliationService(prisma as any))
   const reports = new ReportsService(prisma as any, new PenaltyReconciliationService(prisma as any), finance)
 
   const periods: any[] = await (prisma as any).$queryRawUnsafe(

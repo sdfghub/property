@@ -1,0 +1,15 @@
+{
+  "_note": "Fișă calcul penalizări (HomeFile) — repartizarea pe luni a restanței la Cheltuieli comune (EXPENSES) la data restanțelor din august 2026, pentru 3 unități. Sursă: folderul '2026-08 - Kralik - Cheltuieli Lunare' — 'Fisă penalizări apartament (1).pdf' (Ap 5(I-A)), '(2).pdf' (Ap 11), 'Fisă penalizări apartament 11A.pdf'. Ap 11: fișa detaliază doar Noi 2021 + Mai–Iul 2026 (638.62) dar totalul ei e 2445.95 — diferența nedetaliată (1807.33) e trecută ca restanță reportată ('opening'); Iul 2026 = 207.06 (fișa arată 211.12 = 207.06 cheltuieli + 4.06 penalitatea din iulie, care la noi stă pe fondul PENALIZARI). Scadențele se iau din perioadele aplicației (fișa HomeFile pornește calculul cu o zi mai devreme).",
+  "asOfPeriodCode": "2026-08",
+  "fundCode": "EXPENSES",
+  "units": [
+    { "unitCode": "400191-C1-U20-AP 5 (I-A)", "label": "Ap 5(I-A) Olaru", "sheetTotal": 389.26,
+      "months": { "2026-02": 250.00, "2026-07": 139.26 } },
+    { "unitCode": "400191-C1-U14-AP 11A", "label": "Ap 11A Macri", "sheetTotal": 1737.62,
+      "months": { "2025-04": 93.98, "2025-05": 145.91, "2025-06": 118.71, "2025-07": 111.00, "2025-08": 91.13, "2025-09": 112.10,
+                  "2025-10": 120.92, "2025-11": 154.92, "2025-12": 123.07, "2026-01": 129.79, "2026-02": 47.44, "2026-03": 17.73,
+                  "2026-04": 49.67, "2026-05": 59.58, "2026-06": 306.67, "2026-07": 55.00 } },
+    { "unitCode": "400191-C1-U32-AP 11", "label": "Ap 11 Macri", "sheetTotal": 2445.95,
+      "months": { "opening": 1807.33, "2021-11": 84.17, "2026-05": 131.81, "2026-06": 211.52, "2026-07": 207.06 } }
+  ]
+}

@@ -35,6 +35,61 @@ export type ReconciledAging = {
 }
 
 /**
+ * A period's penalty boundary (the last day penalties are computed for): its explicit penaltyAsOfDate,
+ * else the day before its afișare date — penalties run "la zi", up to the day before the list is posted
+ * (afișare 19.11 → computed through 18.11). Null when neither date is set (calendar bounds apply).
+ * Periods closed under the earlier rule (through the afișare day) carry penaltyAsOfDate = afisareDate,
+ * stamped by src/scripts/backfill-penalty-as-of.ts, so their history does not move.
+ */
+export const penaltyBoundary = (p: { afisareDate?: Date | null; penaltyAsOfDate?: Date | null } | null | undefined): Date | null =>
+  p?.penaltyAsOfDate ?? (p?.afisareDate ? new Date(new Date(p.afisareDate).getTime() - DAY) : null)
+
+/** The date a period's penalties are aged to: its penalty boundary, else its calendar end. */
+export const penaltyAsOf = (p: { afisareDate?: Date | null; penaltyAsOfDate?: Date | null; endDate: Date }): Date =>
+  new Date(penaltyBoundary(p) ?? p.endDate)
+
+/**
+ * Penalty accrual window of a period: prev.boundary+1 .. this.boundary when afișare / penalty dates are
+ * stamped (boundary = penaltyAsOfDate ?? afisareDate − 1 day), else the calendar bounds. `end` is the same asOf
+ * date the slices below are aged to.
+ */
+export async function penaltyAccrualWindow(
+  db: TxOrClient, communityId: string, period: { seq: number; startDate: Date; endDate: Date; afisareDate?: Date | null; penaltyAsOfDate?: Date | null },
+): Promise<{ start: Date; end: Date }> {
+  const own = 'penaltyAsOfDate' in period ? period
+    : { ...period, ...(await (db as any).period.findFirst({ where: { communityId, seq: period.seq }, select: { penaltyAsOfDate: true } })) }
+  const bound = penaltyBoundary(own)
+  const end = bound ? new Date(bound) : new Date(period.endDate)
+  let start = new Date(period.startDate)
+  if (bound) {
+    const prev = await (db as any).period.findFirst({
+      where: { communityId, seq: { lt: period.seq } },
+      orderBy: { seq: 'desc' },
+      select: { afisareDate: true, penaltyAsOfDate: true },
+    })
+    const prevBound = penaltyBoundary(prev)
+    if (prevBound) start = new Date(new Date(prevBound).getTime() + DAY)
+  }
+  return { start, end }
+}
+
+/**
+ * Penalty a slice accrues inside the window starting at `windowStart`: its cumulative penalty as of
+ * the asOf date it was aged to (`penaltyProjected`'s formula) minus its cumulative penalty the day
+ * before the window, both capped at the slice's principal. The single definition of "this period's
+ * penalty" — posted on the avizier by PenaltyLedgerService and explained by FinanceService.
+ */
+export function slicePenaltyInWindow(s: AgingSlice, windowStart: Date): number {
+  if (!(s.principal > 0) || !(s.ratePerDayPct > 0)) return 0
+  const r = s.ratePerDayPct / 100
+  const dayBefore = new Date(windowStart.getTime() - DAY)
+  const first = new Date(s.firstPenalDay)
+  const ageBefore = first > dayBefore ? 0 : Math.floor((dayBefore.getTime() - first.getTime()) / DAY) + 1
+  const ageNow = Math.max(0, s.ageDays)
+  return Math.min(s.principal * r * ageNow, s.principal) - Math.min(s.principal * r * ageBefore, s.principal)
+}
+
+/**
  * Formalizes, for ANY fund (penalty-configured or not) and any unit, the reconstruction
  * methodology already coded one-off in `src/scripts/import-historical-penalty-buckets.ts`: take
  * the unit's CURRENT restanță for the analyzed period — `dueStart − payments`, the avizier's own
@@ -165,14 +220,14 @@ export class PenaltyReconciliationService {
     const [be, fund, period, community] = await Promise.all([
       (tx as any).billingEntity.findUnique({ where: { id: beId }, select: { code: true } }),
       (tx as any).fund.findUnique({ where: { id: fundId }, select: { code: true, allocation: true } }),
-      (tx as any).period.findUnique({ where: { id: asOfPeriodId }, select: { seq: true, dueDate: true, afisareDate: true, endDate: true } }),
+      (tx as any).period.findUnique({ where: { id: asOfPeriodId }, select: { seq: true, dueDate: true, afisareDate: true, penaltyAsOfDate: true, endDate: true } }),
       (tx as any).community.findUnique({ where: { id: communityId }, select: { penaltyGraceDays: true } }),
     ])
     if (!be || !fund || !period) return null
     const alloc = (fund.allocation as any) || {}
     const hasRateSchedule = alloc.penaltyPerDayPct != null
     const graceDays = Number(community?.penaltyGraceDays ?? 30)
-    const asOf = period.afisareDate ? new Date(period.afisareDate) : new Date(period.endDate)
+    const asOf = penaltyAsOf(period)
 
     const beStmt = await (tx as any).beStatement.findUnique({
       where: { communityId_periodId_billingEntityId_fundId: { communityId, periodId: asOfPeriodId, billingEntityId: beId, fundId } },
@@ -285,6 +340,34 @@ export class PenaltyReconciliationService {
   }
 
   /**
+   * Latest declared aging snapshot for (unit, fund) as of a period at or before `asOfSeq`: the imported
+   * "Fișă calcul penalizări" rows (penalty_bucket status 'SNAPSHOT', origin_key
+   * 'fisa:<asOfPeriodCode>:<originPeriodCode|opening>'), as months for reconcileUnitFund's walk.
+   */
+  private async agingSnapshot(
+    tx: TxOrClient, communityId: string, unitId: string, fundId: string, asOfSeq: number,
+  ): Promise<{ seq: number; months: Array<{ periodId: string; code: string | null; due: Date; amt: number; key: string }> } | null> {
+    const rows: any[] = await (tx as any).$queryRawUnsafe(
+      `select pb.origin_key as "originKey", pb.due_date as due, pb.principal_original::float8 as amt, sp.seq::int as seq
+         from penalty_bucket pb
+         join period sp on sp.community_id = pb.community_id and sp.code = split_part(pb.origin_key, ':', 2)
+        where pb.community_id = $1 and pb.unit_id = $2 and pb.fund_id = $3
+          and pb.status = 'SNAPSHOT' and pb.origin_key like 'fisa:%' and sp.seq <= $4`,
+      communityId, unitId, fundId, asOfSeq,
+    )
+    if (!rows.length) return null
+    const seq = Math.max(...rows.map((r) => Number(r.seq)))
+    const months = rows
+      .filter((r) => Number(r.seq) === seq && Number(r.amt) > 0.005)
+      .map((r) => {
+        const origin = String(r.originKey).split(':')[2]
+        return { periodId: '', code: origin === 'opening' ? null : origin, due: r.due ? new Date(r.due) : PRE_TRACKING_DUE_DATE, amt: Number(r.amt), key: String(r.originKey) }
+      })
+      .sort((a, b) => a.due.getTime() - b.due.getTime())
+    return { seq, months }
+  }
+
+  /**
    * Reconstruct one (unit, fund)'s full aging breakdown as of `asOfPeriodId`, anchored to the
    * unit's current live restanță. Pure read — no writes.
    *
@@ -320,14 +403,14 @@ export class PenaltyReconciliationService {
     const [unit, fund, period, community] = await Promise.all([
       (tx as any).unit.findUnique({ where: { id: unitId }, select: { code: true } }),
       (tx as any).fund.findUnique({ where: { id: fundId }, select: { code: true, allocation: true } }),
-      (tx as any).period.findUnique({ where: { id: asOfPeriodId }, select: { seq: true, dueDate: true, afisareDate: true, endDate: true } }),
+      (tx as any).period.findUnique({ where: { id: asOfPeriodId }, select: { seq: true, dueDate: true, afisareDate: true, penaltyAsOfDate: true, endDate: true } }),
       (tx as any).community.findUnique({ where: { id: communityId }, select: { penaltyGraceDays: true } }),
     ])
     if (!unit || !fund || !period) return null
     const alloc = (fund.allocation as any) || {}
     const hasRateSchedule = alloc.penaltyPerDayPct != null
     const graceDays = Number(community?.penaltyGraceDays ?? 30)
-    const asOf = period.afisareDate ? new Date(period.afisareDate) : new Date(period.endDate)
+    const asOf = penaltyAsOf(period)
 
     const { liveTotal, anchorTrusted } = await this.resolveLiveTotal(tx, communityId, unitId, fundId, asOfPeriodId, period.seq)
 
@@ -366,7 +449,7 @@ export class PenaltyReconciliationService {
     // This unit's REAL, complete monthly CHARGE history on this fund — every tracked month,
     // oldest → newest, strictly before the asOf period (its own fresh charge isn't restanță yet).
     const rows: any[] = await (tx as any).$queryRawUnsafe(
-      `select pr.id as "periodId", pr.code, pr.due_date as due, sum(led.amount)::float8 as amt
+      `select pr.id as "periodId", pr.code, pr.seq::int as seq, pr.due_date as due, sum(led.amount)::float8 as amt
          from be_ledger_entry_detail led join period pr on pr.id = led.period_id
         where led.community_id = $1 and led.unit_id = $2 and led.fund_id = $3
           and led.kind = 'CHARGE' and pr.seq < $4
@@ -374,13 +457,26 @@ export class PenaltyReconciliationService {
         order by pr.seq asc`,
       communityId, unitId, fundId, period.seq,
     )
-    const months = rows
-      .map((r) => ({ periodId: r.periodId as string, code: r.code as string, due: new Date(r.due), amt: Math.max(0, Number(r.amt)) }))
+    type Month = { periodId: string; code: string | null; due: Date; amt: number; key?: string }
+    let months: Month[] = rows
+      .map((r) => ({ periodId: r.periodId as string, code: r.code as string, due: new Date(r.due), amt: Math.max(0, Number(r.amt)), seq: Number(r.seq) }))
       .filter((m) => m.amt > 0.005)
+    // A declared aging snapshot (an imported "Fișă calcul penalizări": status SNAPSHOT buckets keyed
+    // 'fisa:<asOfPeriodCode>:<originPeriodCode|opening>') states which months the unit's restanță
+    // belonged to as of that period — the association's own allocation, which a pure FIFO walk can't
+    // reproduce when payments were booked against specific months. It replaces the charge history up
+    // to and including its as-of period; later months' charges are appended and walked as usual.
+    const snapshot = await this.agingSnapshot(tx, communityId, unitId, fundId, period.seq)
+    if (snapshot) {
+      months = [
+        ...snapshot.months,
+        ...(months as Array<Month & { seq: number }>).filter((m) => m.seq > snapshot.seq),
+      ]
+    }
     const totalCharges = round2(months.reduce((s, m) => s + m.amt, 0))
 
-    const mkSlice = (m: { periodId: string; code: string; due: Date }, principal: number): AgingSlice => ({
-      originKey: trackedPeriodIds.has(m.periodId) ? `period:${m.periodId}` : `hist:${unitId}:${m.code}`,
+    const mkSlice = (m: Month, principal: number): AgingSlice => ({
+      originKey: m.key ?? (trackedPeriodIds.has(m.periodId) ? `period:${m.periodId}` : `hist:${unitId}:${m.code}`),
       originPeriodCode: m.code, dueDate: m.due, firstPenalDay: new Date(m.due.getTime() + (graceDays + 1) * DAY),
       principal: round2(principal), ageDays: 0, ratePerDayPct: 0, penaltyProjected: 0,
     })

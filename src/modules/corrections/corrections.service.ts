@@ -245,11 +245,15 @@ export class CorrectionsService {
         billingEntityId = await requireBe(body.billingEntityId)
         fundCode = await requireFund(body.fundCode)
         break
-      case 'PENALTY_WRITEOFF':
+      case 'PENALTY_WRITEOFF': {
         if (amount == null || amount === 0) throw new BadRequestException('Amount is required')
         billingEntityId = await requireBe(body.billingEntityId)
         fundCode = await requireFund('PENALIZARI')
+        // Optional unit within a multi-unit BE — a unit-less leg would break its per-unit split.
+        const unitId = body.unitId ? await requireUnitOfBe(body.unitId, billingEntityId) : null
+        if (unitId) payload = { unitId }
         break
+      }
       case 'PAYMENT_REATTRIB': {
         if (amount == null || amount === 0) throw new BadRequestException('Amount is required')
         billingEntityId = await requireBe(body.billingEntityId)

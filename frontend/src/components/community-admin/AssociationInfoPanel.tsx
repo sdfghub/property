@@ -42,7 +42,7 @@ type FundAllocation = {
   // PenaltyLedgerService#advance / penalty-rate.ts's rateForDate) — each entry's rate applies from
   // its own `from` date up to (not including) the next entry's, the last one open-ended. When
   // present this is the source of truth; `penaltyPerDayPct` above is just its current/fallback rate.
-  penaltyRateHistory?: Array<{ from: string; ratePerDayPct: number }> | null
+  penaltyRateHistory?: Array<{ from: string; ratePerDayPct: number; note?: string }> | null
   altName?: string | null
   shortName?: string | null
   abbrev?: string | null
@@ -199,7 +199,7 @@ function FundConfigDetail({ f, funds, currency, t }: { f: FundRow; funds: FundRo
     .map((entry, i, arr) => {
       const next = arr[i + 1]
       const until = next ? new Date(new Date(next.from).getTime() - 24 * 60 * 60 * 1000) : null
-      return { from: entry.from, rate: entry.ratePerDayPct, until }
+      return { from: entry.from, rate: entry.ratePerDayPct, until, note: entry.note }
     })
   return (
     <div className="stack" style={{ gap: 3, padding: '2px 16px 12px 16px', fontSize: 12.5 }}>
@@ -239,6 +239,7 @@ function FundConfigDetail({ f, funds, currency, t }: { f: FundRow; funds: FundRo
                   : `${t('assocInfo.fundPenaltyHistoryFrom', 'de la')} ${fmtRateDate(r.from)}${i === rateHistory.length - 1 ? ` (${t('assocInfo.fundPenaltyHistoryCurrent', 'curent')})` : ''}`
                 }
                 {': '}<strong>{fmtPct(r.rate)}</strong>{t('assocInfo.fundPenaltyHistoryPerDay', '/zi')}
+                {r.note && <div className="muted" style={{ fontSize: 11.5, fontStyle: 'italic' }}>{r.note}</div>}
               </li>
             ))}
           </ul>

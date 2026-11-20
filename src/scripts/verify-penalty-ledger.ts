@@ -1,10 +1,11 @@
 import { PrismaService } from '../modules/user/prisma.service'
 import { PenaltyLedgerService } from '../modules/period/penalty-ledger.service'
+import { PenaltyReconciliationService } from '../modules/period/penalty-reconciliation.service'
 
 async function main() {
   const prisma = new PrismaService()
   await prisma.$connect()
-  const svc = new PenaltyLedgerService(prisma as any)
+  const svc = new PenaltyLedgerService(prisma as any, new PenaltyReconciliationService(prisma as any))
   const COMM = 'Kralik'
 
   const period = await prisma.period.findFirst({ where: { communityId: COMM, code: '2026-03' } })

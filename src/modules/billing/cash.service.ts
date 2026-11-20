@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { anchorOffset, checkpointsOf, fxRatesOf, rateAt } from './cash-balance.util'
 import { PrismaService } from '../user/prisma.service'
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
@@ -28,7 +29,7 @@ export class CashService {
     const communityId = await this.ensureCommunityId(communityRef)
     const accounts = await this.prisma.cashAccount.findMany({
       where: { communityId, status: 'ACTIVE' },
-      select: { id: true, code: true, name: true, type: true, currency: true },
+      select: { id: true, code: true, name: true, type: true, currency: true, notes: true },
     })
     const sums = await (this.prisma as any).cashTx.groupBy({
       by: ['accountId', 'direction'],
@@ -41,7 +42,15 @@ export class CashService {
       const amt = Number(s._sum.amount || 0)
       byAccount.set(s.accountId, cur + (s.direction === 'IN' ? amt : -amt))
     }
-    const withBalance = accounts.map((a) => ({ ...a, balance: round2(byAccount.get(a.id) ?? 0) }))
+    // Anchor on the statement balances (notes.balanceCheckpoints) — see cash-balance.util.ts.
+    const anchored = accounts.filter((a) => checkpointsOf(a.notes).length)
+    const anchorMoves = anchored.length
+      ? await this.prisma.cashTx.findMany({ where: { communityId, status: 'POSTED', accountId: { in: anchored.map((a) => a.id) } }, select: { accountId: true, ts: true, amount: true, direction: true } })
+      : []
+    const offsetOf = new Map(anchored.map((a) => [a.id, anchorOffset(checkpointsOf(a.notes), anchorMoves
+      .filter((m) => m.accountId === a.id)
+      .map((m) => ({ ts: m.ts, signed: m.direction === 'IN' ? Number(m.amount) : -Number(m.amount) })))]))
+    const withBalance = accounts.map(({ notes, ...a }) => ({ ...a, balance: round2((byAccount.get(a.id) ?? 0) + (offsetOf.get(a.id) ?? 0)) }))
 
     // Non-RON accounts get a best-effort RON conversion for the combined-total card: the average
     // `meta.fxRateEstimate` recorded on that account's own transactions (set during reconciliation
@@ -58,6 +67,13 @@ export class CashService {
         .map((r) => Number(r.meta?.fxRateEstimate))
         .filter((n) => Number.isFinite(n) && n > 0)
       if (rates.length) rateByAccount.set(id, rates.reduce((s, n) => s + n, 0) / rates.length)
+    }
+    // A recorded rate (notes.fxRates: statement / bank rate with its date) wins over the estimate.
+    const fxOf = new Map(accounts.map((a) => [a.id, fxRatesOf(a.notes)]))
+    const today = new Date().toISOString().slice(0, 10)
+    for (const id of nonRonIds) {
+      const r = rateAt(fxOf.get(id) ?? [], today)
+      if (r) rateByAccount.set(id, r.rate)
     }
     // Per-account last activity date — RON bank, EUR bank, and petty cash each keep their own
     // register, so they don't necessarily update on the same day.

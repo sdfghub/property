@@ -18,6 +18,17 @@
   --text-strong: #1d1d1f;
   --success: #248a3d;
   --danger: #d70015;
+  /* Budget purposes (Run / Maintain / Transform) — the Vicusia service-level scale. */
+  --purpose-run: #3f9c4a;
+  --purpose-maintain: #f2a900;
+  --purpose-transform: #b3261e;
+  /* Service status (services dashboard): red / orange / yellow / green / grey / black. */
+  --svc-red: #b3261e;
+  --svc-orange: #e8590c;
+  --svc-yellow: #f2a900;
+  --svc-green: #3f9c4a;
+  --svc-grey: #a1a1a6;
+  --svc-black: #1d1d1f;
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.06);
   --card-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
   --hero-bg: #ffffff;
@@ -930,7 +941,7 @@ select option {
 }
 
 /* AvizierPanel portals a hidden `.avizier-print-root` (React `createPortal`, straight to
-   `document.body`) containing 4 fully static pages (one per zoom level) purpose-built for paper —
+   `document.body`) containing one fully static page (the on-screen zoom level) purpose-built for paper —
    see AvizierPanel.tsx's `printPages`. Printing must show ONLY that content, not the app chrome
    around it (sidebar/header/toolbar) or the on-screen interactive table.
 
@@ -946,12 +957,152 @@ select option {
    so the print root is the only thing left in the document AND stays in normal flow — letting
    `page-break-after`/`break-after` on its own children (one per zoom level) actually paginate. */
 @media print {
-  body > *:not(.avizier-print-root) {
+  body > *:not(.avizier-print-root):not(.services-print-root) {
     display: none !important;
   }
   /* The print root's own default is `display:none` (kept invisible outside of print) — override
      it here rather than in a screen rule, so nothing else has to know it exists. */
-  .avizier-print-root {
+  .avizier-print-root,
+  .services-print-root {
     display: block !important;
   }
 }
+
+/* ServicesReport — paper-first service catalog report (A4 portrait). Shown on screen inside the
+   Services tab and portalled into `.services-print-root` for printing (same mechanism as the
+   avizier print root above). Fixed light palette: it is a document, not app chrome. */
+.svr {
+  --svr-ink: #1d1d1f;
+  --svr-dim: #6e6e73;
+  --svr-line: #e5e5ea;
+  --svr-soft: #f5f5f7;
+  --svr-l0: #b3261e;
+  --svr-l1: #e8590c;
+  --svr-l2: #f2a900;
+  --svr-l3: #9bb53a;
+  --svr-l4: #3f9c4a;
+  --svr-l5: #1e6f3a;
+  --svr-lna: #a1a1a6;
+  color: var(--svr-ink);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.svr-page {
+  background: #fff;
+  max-width: 210mm;
+  margin: 0 auto 24px;
+  padding: 16mm 15mm;
+  box-shadow: var(--card-shadow-sm);
+  border-radius: 6px;
+}
+.svr h1 { font-size: 22px; margin: 4px 0 6px; letter-spacing: -0.01em; }
+.svr h2 { font-size: 15px; margin: 14px 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--svr-ink); }
+.svr h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--svr-dim); margin: 18px 0 8px; }
+.svr h4 { font-size: 14px; margin: 0; }
+.svr-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--svr-dim); font-weight: 600; }
+.svr-meta { color: var(--svr-dim); font-size: 11.5px; }
+.svr-lead { margin: 8px 0 0; color: #3a3a3c; max-width: 160mm; }
+.svr-dim { color: var(--svr-lna); }
+
+.svr-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+.svr-kpi { border: 1px solid var(--svr-line); border-radius: 8px; padding: 6px 12px; }
+.svr-kpi-label { font-size: 10.5px; color: var(--svr-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.svr-kpi-value { font-size: 20px; font-weight: 700; margin-top: 2px; }
+.svr-kpi-value small { font-size: 13px; font-weight: 500; color: var(--svr-dim); }
+.svr-kpi-alert .svr-kpi-value { color: var(--svr-l0); }
+
+.svr-dist { margin-top: 12px; }
+.svr-dist-bar { display: flex; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; }
+.svr-dist-bar span { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 11px; min-width: 18px; }
+.svr-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 10.5px; color: var(--svr-dim); }
+.svr-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+.svr .svr-l0 { background: var(--svr-l0); }
+.svr .svr-l1 { background: var(--svr-l1); }
+.svr .svr-l2 { background: var(--svr-l2); }
+.svr .svr-l3 { background: var(--svr-l3); }
+.svr .svr-l4 { background: var(--svr-l4); }
+.svr .svr-l5 { background: var(--svr-l5); }
+.svr .svr-lna { background: var(--svr-lna); }
+
+.svr-table { width: 100%; border-collapse: collapse; }
+.svr-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--svr-dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--svr-line); }
+.svr-table td { padding: 2px 8px; border-bottom: 1px solid var(--svr-line); vertical-align: middle; }
+.svr-table tr { break-inside: avoid; }
+.svr-domain-row td { background: var(--svr-soft); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #3a3a3c; padding: 3px 8px; }
+.svr-name { font-weight: 600; }
+.svr-level-cell { display: inline-flex; align-items: center; gap: 8px; }
+
+.svr-meter { display: inline-flex; gap: 2px; }
+.svr-meter i { width: 9px; height: 9px; border-radius: 2px; background: var(--svr-line); }
+
+.svr-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 9px 1px 2px; font-size: 11px; color: #fff; white-space: nowrap; }
+.svr-badge b { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.25); font-size: 11px; }
+.svr-badge:not(:has(span)) { padding: 2px 3px; }
+.svr .svr-badge.svr-l2, .svr .svr-badge.svr-l3 { color: #1d1d1f; }
+
+.svr-prio { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--svr-line); }
+.svr-prio-critical { color: var(--svr-l0); border-color: var(--svr-l0); background: #fdecea; }
+.svr-prio-high { color: #a14600; border-color: var(--svr-l1); background: #fff1e6; }
+.svr-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--svr-soft); border: 1px solid var(--svr-line); }
+
+.svr-card { border: 1px solid var(--svr-line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; break-inside: avoid; }
+/* Domain heading + its first card travel together, so a heading never ends a page alone. */
+.svr-keep { break-inside: avoid; }
+.svr-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.svr-card-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.svr-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+.svr-card-body p { margin: 2px 0 0; white-space: pre-line; }
+.svr-field { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--svr-dim); font-weight: 600; }
+
+.svr-ladder { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 10px; }
+.svr-step { border: 1px solid var(--svr-line); border-radius: 5px; padding: 5px 6px; font-size: 10px; line-height: 1.3; color: var(--svr-dim); background: #fff; }
+.svr-step b { display: block; font-size: 11px; color: var(--svr-ink); margin-bottom: 2px; }
+.svr .svr-step.svr-current { color: #fff; border-color: transparent; }
+.svr .svr-step.svr-current b { color: #fff; }
+.svr .svr-step.svr-current.svr-l2, .svr .svr-step.svr-current.svr-l3,
+.svr .svr-step.svr-current.svr-l2 b, .svr .svr-step.svr-current.svr-l3 b { color: #1d1d1f; }
+
+.svr-scale td:first-child { width: 44px; }
+.svr-scale td:nth-child(2) { width: 170px; }
+.svr-note { margin-top: 16px; padding: 10px 12px; border-left: 3px solid var(--svr-ink); background: var(--svr-soft); font-size: 11.5px; }
+
+@media (max-width: 700px) {
+  .svr-page { padding: 16px; }
+  .svr-kpis { grid-template-columns: repeat(2, 1fr); }
+  .svr-card-body { grid-template-columns: 1fr; }
+  .svr-ladder { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Named page: the app-wide @page above is A3 landscape (avizier); the report prints on A4. */
+@page svr { size: A4 portrait; margin: 10mm 12mm; }
+.services-print-root { page: svr; }
+@media print {
+  html, body { background: #fff !important; }
+  .svr-page { box-shadow: none; border-radius: 0; margin: 0; padding: 0; max-width: none; }
+  .svr-break { break-before: page; }
+}
+
+/* Avizier "fit to page" (fullscreen): the whole table is scaled with CSS `zoom` (AvizierPanel's
+   fitScale) so every row and column is visible at once, no scrolling. Here the cells get a larger
+   base font and tight padding, so the zoom that fits them leaves the text as large as possible;
+   sticky columns/headers and the repeated trailing identity column only matter when scrolling, so
+   they are switched off. Inline px sizes in the table are overridden in em of the base font. */
+.avz-fit { font-size: 19px !important; width: auto !important; margin: 0 auto; }
+.avz-fit th, .avz-fit td {
+  padding: 0.16em 0.32em !important;
+  position: static !important;
+  width: auto !important; max-width: none !important;
+  line-height: 1.25;
+}
+.avz-fit thead { position: static !important; }
+.avz-fit th { font-size: 0.82em !important; }
+.avz-fit [style*="font-size: 12px"], .avz-fit [style*="font-size: 13px"] { font-size: 0.78em !important; }
+.avz-fit .avz-trailing { display: none !important; }
+/* Avizier cells: drill-down buttons take the table's font (browser default for <button> is 13.33px,
+   smaller than the surrounding figures). */
+.avz-table td button { font-size: inherit; font-family: inherit; }
+.avz-fit td [style*="font-size"] { font-size: inherit !important; }

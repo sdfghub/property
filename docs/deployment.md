@@ -21,6 +21,10 @@ The stack is defined in [`deploy/docker-compose.yml`](../deploy/docker-compose.y
 | `api` | `deploy/Dockerfile` | Runs `prisma db push --skip-generate --accept-data-loss` then `node dist/server.js` on `:3000`. |
 | `web` | `deploy/web.Dockerfile` (Caddy) | Publishes `80:80` and `443:443`. `:80` is the origin Cloudflare talks to (SSL mode **Flexible**); `:443` is reserved for a future Full(strict) upgrade. |
 
+**Website and app share the domain**: Caddy serves the public website (`site/`, built by
+`node site/build.mjs`) for every path that exists there, including `/`. All other paths fall through
+to the SPA, whose login is linked as `/app`. Preview both with `bash scripts/preview-site.sh`.
+
 **Schema migrations**: there is no SQL migrations folder. The `api` container runs
 `prisma db push` on every start, so a deploy syncs the DB automatically — no separate
 migration step.

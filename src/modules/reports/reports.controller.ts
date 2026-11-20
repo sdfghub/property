@@ -3,11 +3,19 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
 import { Scopes } from '../../common/decorators/scopes.decorator'
 import { ReportsService } from './reports.service'
+import { CashHistoryService } from './cash-history.service'
 
 @Controller('communities/:communityId/reports')
 @UseGuards(JwtAuthGuard, ScopesGuard)
 export class ReportsController {
-  constructor(private readonly reports: ReportsService) {}
+  constructor(private readonly reports: ReportsService, private readonly cash: CashHistoryService) {}
+
+  /** Istoric încasări / plăți pe perioade (CashTx grouped by register cycle) — see CashHistoryService. */
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('cash-history')
+  cashHistory(@Param('communityId') c: string) {
+    return this.cash.cashHistory(c)
+  }
 
   /**
    * Collection rate ("grad de colectare") cumulative up to `period`, optionally restricted to a

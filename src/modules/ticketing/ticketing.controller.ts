@@ -2,6 +2,7 @@ import { Feature } from '../../common/decorators/feature.decorator'
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { ScopesGuard } from '../../common/guards/scopes.guard'
+import { Scopes } from '../../common/decorators/scopes.decorator'
 import { TicketingService } from './ticketing.service'
 
 @Controller('communities/:communityId/tickets')
@@ -14,6 +15,13 @@ export class TicketingController {
   list(@Param('communityId') communityId: string, @Query('type') type: string | undefined, @Req() req: any) {
     const userId: string = req.user?.id ?? req.user?.sub
     return this.svc.listTickets(communityId, userId, req.user?.roles ?? [], { type })
+  }
+
+  /** Units with the owner/contact details that prefill an incident's reporter. */
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('reporters')
+  reporters(@Param('communityId') communityId: string) {
+    return this.svc.listReporters(communityId)
   }
 
   @Get(':ticketId')
