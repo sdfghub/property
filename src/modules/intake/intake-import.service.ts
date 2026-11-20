@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../user/prisma.service'
 import { IntakePromptService, type IntakeCatalogue } from './intake-prompt.service'
 import { parseImportPayload, type ImportPayload, type IntakeRecordInput } from './intake-contract'
-import { checkInvoice, normalizeVendorName, phase2Blocker, type Blocker } from './intake-blockers'
+import { bankLineKey, checkBankLine, checkInvoice, normalizeVendorName, phase2Blocker, type BankRefs, type Blocker } from './intake-blockers'
 
 export type CheckedRecord = {
   index: number
@@ -20,6 +20,8 @@ export type CheckedRecord = {
 
 // Turns an agent payload into IntakeBatch + IntakeRecord rows and computes the blockers. The check
 // logic itself is in intake-blockers.ts so `intake:validate` and the review endpoints share it.
+const r2 = (n: number) => Math.round(n * 100) / 100
+
 @Injectable()
 export class IntakeImportService {
   constructor(private readonly prisma: PrismaService, private readonly prompt: IntakePromptService) {}
@@ -36,7 +38,8 @@ export class IntakeImportService {
     if (payload.community && payload.community !== catalogue.community.code) {
       throw new BadRequestException({ message: `Payload is for community ${payload.community}, not ${catalogue.community.code}`, issues: [] })
     }
-    const records = this.checkRecords(payload.records.map((r, i) => ({ id: `#${i}`, index: i, input: r, review: null })), catalogue)
+    const bankRefs = await this.loadBankRefs(catalogue.community.id, payload.records)
+    const records = this.checkRecords(payload.records.map((r, i) => ({ id: `#${i}`, index: i, input: r, review: null })), catalogue, bankRefs)
     return { payload, catalogue, records }
   }
 
@@ -92,6 +95,7 @@ export class IntakeImportService {
         })
       }
     }
+    await this.refreshStats(batch.id) // adds the statement-vs-book balance check
     return batch
   }
 
@@ -112,7 +116,8 @@ export class IntakeImportService {
       review: (r.review as any) ?? null,
       ownTemplates: [...(((r.appliedRefs as any)?.attemptedTemplates as string[]) ?? []), ...(((r.appliedRefs as any)?.stagedTemplates as string[]) ?? [])],
     }))
-    const checked = this.checkRecords(inputs, catalogue)
+    const bankRefs = await this.loadBankRefs(batch.communityId, inputs.map((i) => i.input))
+    const checked = this.checkRecords(inputs, catalogue, bankRefs)
     for (const c of checked) {
       const row = batch.records.find((r) => r.index === c.index)!
       if (onlyRecordId && row.id !== onlyRecordId) continue
@@ -134,23 +139,25 @@ export class IntakeImportService {
   }
 
   async refreshStats(batchId: string) {
-    const rows = await this.prisma.intakeRecord.findMany({ where: { batchId }, select: { status: true, kind: true } })
+    const rows = await this.prisma.intakeRecord.findMany({ where: { batchId }, select: { status: true, kind: true, extracted: true, resolved: true } })
+    const batchRow = await this.prisma.intakeBatch.findUnique({ where: { id: batchId }, select: { communityId: true } })
+    const balanceCheck = batchRow ? await this.balanceCheck(batchRow.communityId, rows) : []
     const byStatus: Record<string, number> = {}
     const byKind: Record<string, number> = {}
     for (const r of rows) {
       byStatus[r.status] = (byStatus[r.status] ?? 0) + 1
       byKind[r.kind] = (byKind[r.kind] ?? 0) + 1
     }
-    const invoices = rows.filter((r) => r.kind === 'INVOICE')
+    const applicable = rows.filter((r) => r.kind === 'INVOICE' || r.kind === 'BANK_LINE')
     const anyApplied = rows.some((r) => r.status === 'APPLIED')
     const anyFailed = rows.some((r) => r.status === 'FAILED')
-    const done = invoices.length > 0 && invoices.every((r) => r.status === 'APPLIED' || r.status === 'SKIPPED')
-    // APPLIED when every invoice is applied/skipped; FAILED only when nothing at all got through; else REVIEW
+    const done = applicable.length > 0 && applicable.every((r) => r.status === 'APPLIED' || r.status === 'SKIPPED')
+    // APPLIED when every invoice and bank line is applied/skipped; FAILED only when nothing at all got through; else REVIEW
     const status = done && anyApplied ? 'APPLIED' : anyFailed && !anyApplied ? 'FAILED' : 'REVIEW'
     const current = await this.prisma.intakeBatch.findUnique({ where: { id: batchId }, select: { status: true } })
     await this.prisma.intakeBatch.update({
       where: { id: batchId },
-      data: { stats: { records: rows.length, byStatus, byKind }, ...(current?.status === 'APPLYING' ? {} : { status }) },
+      data: { stats: { records: rows.length, byStatus, byKind, balanceCheck }, ...(current?.status === 'APPLYING' ? {} : { status }) },
     })
   }
 
@@ -160,14 +167,17 @@ export class IntakeImportService {
   toInput(r: { kind: string; sourceFile: string | null; sourceSha256: string | null; confidence: number | null; rationale: string | null; extracted: any; proposal: any }, warnings?: unknown): IntakeRecordInput {
     const base = { sourceFile: r.sourceFile, sourceSha256: r.sourceSha256, confidence: r.confidence ?? 0, rationale: r.rationale, warnings: Array.isArray(warnings) ? warnings.map(String) : ([] as string[]) }
     if (r.kind === 'INVOICE') return { kind: 'INVOICE', ...base, invoice: r.extracted, mapping: r.proposal } as any
-    if (r.kind === 'BANK_LINE') return { kind: 'BANK_LINE', ...base, bankLine: r.extracted, mapping: null } as any
+    if (r.kind === 'BANK_LINE') return { kind: 'BANK_LINE', ...base, bankLine: r.extracted, mapping: r.proposal && (r.proposal as any).target ? r.proposal : null } as any
     return { kind: 'OTHER', ...base, note: r.extracted?.note ?? null } as any
   }
 
-  checkRecords(rows: Array<{ id: string; index: number; input: IntakeRecordInput; review: any | null; ownTemplates?: string[] }>, catalogue: IntakeCatalogue): CheckedRecord[] {
+  checkRecords(rows: Array<{ id: string; index: number; input: IntakeRecordInput; review: any | null; ownTemplates?: string[] }>, catalogue: IntakeCatalogue, bankRefs: BankRefs = { payments: new Set(), vendorPayments: new Set(), cashTx: new Set() }): CheckedRecord[] {
+    const bankSiblings = rows.filter((r) => r.input.kind === 'BANK_LINE').map((r) => ({ id: r.id, lineKey: bankLineKey((r.input as any).bankLine?.reference, (r.input as any).bankLine?.amount) }))
     // siblings for in-batch duplicate detection use the *effective* mapping's vendor
     const siblings = rows.map((row) => {
-      if (row.input.kind !== 'INVOICE') return { id: row.id, number: null, vendorKey: '', sha256: row.input.sourceSha256 }
+      // only invoices take part in the sha256 match: the bank lines of a statement legitimately share the
+      // file (and hash) of the commission invoice derived from that same statement
+      if (row.input.kind !== 'INVOICE') return { id: row.id, number: null, vendorKey: '', sha256: null }
       const mapping = row.review?.mapping ?? row.input.mapping
       const invoice = { ...row.input.invoice, ...(row.review?.invoice ?? {}) }
       const vendorKey = mapping?.vendor?.vendorId ?? normalizeVendorName(mapping?.vendor?.name ?? invoice.vendorName)
@@ -186,10 +196,74 @@ export class IntakeImportService {
         return { ...base, kind: 'INVOICE', extracted: r.invoice, proposal: r.mapping, blockers, resolved: res.resolved, status: blockers.length ? 'NEEDS_REVIEW' : 'PROPOSED' }
       }
       if (r.kind === 'BANK_LINE') {
-        return { ...base, kind: 'BANK_LINE', extracted: r.bankLine, proposal: {}, blockers: [phase2Blocker('BANK_LINE')], resolved: null, status: 'NEEDS_REVIEW' }
+        // review = { mapping?: full BankLineMapping, overrides?: string[] }
+        const mapping = row.review?.mapping ?? r.mapping ?? null
+        const res = checkBankLine({ bankLine: r.bankLine, mapping, confidence: r.confidence, selfId: row.id, siblings: bankSiblings, existing: bankRefs }, catalogue)
+        const warnings: Blocker[] = (r.warnings ?? []).map((w) => ({ code: 'LOW_CONFIDENCE', message: `agent: ${w}`, overridable: true }))
+        const blockers = [...res.blockers, ...(res.blockers.some((b) => b.code === 'LOW_CONFIDENCE') ? [] : warnings.slice(0, 1))]
+        return { ...base, kind: 'BANK_LINE', extracted: r.bankLine, proposal: r.mapping ?? {}, blockers, resolved: res.resolved, status: blockers.length ? 'NEEDS_REVIEW' : 'PROPOSED' }
       }
       return { ...base, kind: 'OTHER', extracted: { note: r.note }, proposal: {}, blockers: [phase2Blocker('OTHER')], resolved: null, status: 'NEEDS_REVIEW' }
     })
+  }
+
+  /** Bank references already in the books, so a statement line imported twice (or after a register import) is refused. */
+  /**
+   * Statement vs. cash book: for each bank account the batch's lines resolve to, the statement's opening
+   * (first line's balanceAfter − amount) and closing (last line's balanceAfter) against Σ cash_tx of that
+   * account before / through those dates. A difference means movements the book lacks (or has twice) —
+   * typically a missing opening balance at the migration cutover (docs/cutover.md). Informational only.
+   */
+  private async balanceCheck(communityId: string, rows: Array<{ kind: string; extracted: any; resolved: any }>) {
+    type Line = { date: string; amount: number; balanceAfter: number }
+    const byAccount = new Map<string, { accountCode: string; lines: Line[] }>()
+    for (const r of rows) {
+      if (r.kind !== 'BANK_LINE') continue
+      const l = r.extracted ?? {}
+      const accountId = r.resolved?.accountId
+      if (!accountId || l.balanceAfter == null || l.date == null) continue
+      const g = byAccount.get(accountId) ?? { accountCode: r.resolved?.accountCode ?? '?', lines: [] as Line[] }
+      g.lines.push({ date: String(l.date), amount: Number(l.amount) || 0, balanceAfter: Number(l.balanceAfter) })
+      byAccount.set(accountId, g)
+    }
+    const out: Array<{ accountCode: string; from: string; to: string; statementOpening: number; appOpening: number; statementClosing: number; appClosing: number; lines: number }> = []
+    for (const [accountId, g] of byAccount) {
+      const sorted = [...g.lines].sort((a, b) => a.date.localeCompare(b.date))
+      const first = sorted[0], last = sorted[sorted.length - 1]
+      const from = new Date(`${first.date}T00:00:00Z`), toExcl = new Date(`${last.date}T00:00:00Z`); toExcl.setUTCDate(toExcl.getUTCDate() + 1)
+      const sum = async (before: Date) => {
+        const g2 = await this.prisma.cashTx.groupBy({ by: ['direction'], where: { communityId, accountId, status: 'POSTED', ts: { lt: before } }, _sum: { amount: true } })
+        return r2(g2.reduce((s, x) => s + (x.direction === 'IN' ? 1 : -1) * Number(x._sum.amount ?? 0), 0))
+      }
+      out.push({
+        accountCode: g.accountCode, from: first.date, to: last.date, lines: g.lines.length,
+        statementOpening: r2(first.balanceAfter - first.amount), appOpening: await sum(from),
+        statementClosing: r2(last.balanceAfter), appClosing: await sum(toExcl),
+      })
+    }
+    return out
+  }
+
+  async loadBankRefs(communityId: string, records: IntakeRecordInput[]): Promise<BankRefs> {
+    const lines = records.filter((r) => r.kind === 'BANK_LINE').map((r: any) => r.bankLine ?? {})
+    const refs = [...new Set(lines.map((l) => (l.reference ? String(l.reference).trim() : '')).filter(Boolean))]
+    const keys = [...new Set(lines.map((l) => bankLineKey(l.reference, l.amount)).filter(Boolean))] as string[]
+    const out: BankRefs = { payments: new Set(), vendorPayments: new Set(), cashTx: new Set() }
+    if (!refs.length) return out
+    const bankIds = keys.map((k) => `bank:${k}`)
+    const [pays, vpays, txs] = await Promise.all([
+      // register-imported receipts carry the bare reference in providerRef — key them with their own amount
+      this.prisma.payment.findMany({ where: { communityId, OR: [{ providerRef: { in: refs } }, { refId: { in: bankIds } }] }, select: { providerRef: true, refId: true, amount: true } }),
+      this.prisma.vendorPayment.findMany({ where: { communityId, refId: { in: bankIds } }, select: { refId: true } }),
+      this.prisma.cashTx.findMany({ where: { communityId, refType: 'BANK_STATEMENT', refId: { in: keys } }, select: { refId: true } }),
+    ])
+    for (const p of pays) {
+      if (p.refId?.startsWith('bank:')) out.payments.add(p.refId.slice(5))
+      else if (p.providerRef) { const k = bankLineKey(p.providerRef, Number(p.amount)); if (k) out.payments.add(k) }
+    }
+    for (const v of vpays) if (v.refId?.startsWith('bank:')) out.vendorPayments.add(v.refId.slice(5))
+    for (const t of txs) if (t.refId) out.cashTx.add(t.refId)
+    return out
   }
 
   private stats(records: CheckedRecord[]) {

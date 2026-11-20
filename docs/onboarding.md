@@ -15,6 +15,11 @@ per-owner grid owners see. Currently operating one real association (Kralik) at
 Backend: NestJS + Prisma + Postgres. Frontend: Vite + React SPA. There's also an Expo
 mobile client (secondary) and a legacy AWS/CDK path (unused).
 
+**Reading order after this page:** [system-overview.md](./system-overview.md) (the map) →
+[flows.md](./flows.md) (the journeys) → [principles.md](./principles.md) (the rules and why) →
+[architecture.md](./architecture.md) (the money model in depth). Keep [glossary.md](./glossary.md)
+open while reading the Romanian documents.
+
 ## 1. Repo layout
 
 ⚠️ **The repo root *is* the backend project.** The web client lives inside it.
@@ -102,7 +107,10 @@ state and how to verify it: [data-reseed.md](./data-reseed.md).
 | reshuffles, credit transfers, write-offs | `src/modules/corrections/` | [corrections.md](./corrections.md) |
 | the avizier grid | `src/modules/finance/` + `frontend/src/components/community-admin/AvizierPanel.tsx` | [architecture.md](./architecture.md) |
 | funds & fund ledger | `src/modules/fund/` | [architecture.md](./architecture.md) |
-| auth, roles, invites | `src/modules/auth/`, `src/modules/invite/` | — |
+| auth, roles, invites | `src/modules/auth/`, `src/modules/invite/` | [system-overview.md](./system-overview.md#request-lifecycle) |
+| a whole feature end to end | — | [flows.md](./flows.md), [api-map.md](./api-map.md) |
+| AI intake / bank statements | `src/modules/intake/` | [intake.md](./intake.md) |
+| migration openings (cash, payables) | `src/modules/billing/{cash,vendor-invoice}.service.ts` | [cutover.md](./cutover.md) |
 | codes/labels shown in the UI | `src/common/enums-meta.ts` → `GET /metadata` | [frontend-conventions.md](./frontend-conventions.md) |
 | UI strings (EN/RO) | `frontend/src/i18n/lang.ts` | [frontend-conventions.md](./frontend-conventions.md) |
 | the collection-rate report | `src/modules/reports/` | [reports/collection-rate.md](./reports/collection-rate.md) |

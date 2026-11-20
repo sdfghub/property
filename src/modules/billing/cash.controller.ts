@@ -39,4 +39,16 @@ export class CashController {
   createTx(@Param('communityId') communityId: string, @Body() body: any) {
     return this.cash.createTx(communityId, body)
   }
+
+  /** Migration cutover: opening balance of an account (per fund), replaced on every call. */
+  @Post('cash-accounts/:accountId/opening')
+  setOpening(@Param('communityId') communityId: string, @Param('accountId') accountId: string, @Body() body: any) {
+    return this.cash.setOpening(communityId, accountId, body)
+  }
+
+  @Scopes({ role: ['COMMUNITY_ADMIN', 'CENSOR', 'EXECUTIVE_COMITEE_MEMBER'], scopeType: 'COMMUNITY', scopeParam: 'communityId' })
+  @Get('cash-accounts/openings')
+  listOpenings(@Param('communityId') communityId: string) {
+    return this.cash.listOpenings(communityId)
+  }
 }

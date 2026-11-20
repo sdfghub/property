@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from '../user/prisma.service'
 import { IntakeImportService } from './intake-import.service'
 import { IntakePromptService } from './intake-prompt.service'
-import { InvoiceMappingSchema, InvoiceBlockSchema } from './intake-contract'
+import { InvoiceMappingSchema, InvoiceBlockSchema, BankLineMappingSchema } from './intake-contract'
 import { remainingBlockers, type Blocker } from './intake-blockers'
 import { INTAKE_BLOCKER_META, metaKeys } from '../../common/enums-meta'
 
@@ -51,10 +51,15 @@ export class IntakeService {
   async review(communityRef: string, batchId: string, recordId: string, input: ReviewInput) {
     const { record } = await this.loadRecord(communityRef, batchId, recordId)
     if (record.status === 'APPLIED') throw new ConflictException('Record is already applied')
-    if (record.kind !== 'INVOICE' && (input.invoice || input.mapping)) throw new BadRequestException('Only invoice records can be edited in this version')
+    if (record.kind === 'OTHER' && (input.invoice || input.mapping)) throw new BadRequestException('Other documents cannot be edited')
+    if (record.kind === 'BANK_LINE' && input.invoice) throw new BadRequestException('Bank lines have no invoice header')
     const prev: any = record.review ?? {}
     const next: any = { ...prev }
-    if (input.mapping !== undefined) {
+    if (input.mapping !== undefined && record.kind === 'BANK_LINE') {
+      const parsed = BankLineMappingSchema.safeParse(input.mapping)
+      if (!parsed.success) throw new BadRequestException({ message: 'Invalid bank-line mapping', issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) })
+      next.mapping = parsed.data
+    } else if (input.mapping !== undefined) {
       const parsed = InvoiceMappingSchema.safeParse(input.mapping)
       if (!parsed.success) throw new BadRequestException({ message: 'Invalid mapping', issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) })
       next.mapping = parsed.data
@@ -78,7 +83,7 @@ export class IntakeService {
   async approve(communityRef: string, batchId: string, recordId: string, overrides?: string[]) {
     const { record } = await this.loadRecord(communityRef, batchId, recordId)
     if (record.status === 'APPLIED') throw new ConflictException('Record is already applied')
-    if (record.kind !== 'INVOICE') throw new BadRequestException('Only invoice records can be approved in this version')
+    if (record.kind === 'OTHER') throw new BadRequestException('Other documents can only be skipped')
     if (overrides) await this.review(communityRef, batchId, recordId, { overrides })
     else await this.importer.recheckBatch(batchId, record.id)
     const fresh = await this.prisma.intakeRecord.findUniqueOrThrow({ where: { id: record.id } })
@@ -86,7 +91,9 @@ export class IntakeService {
     if (left.length) {
       throw new ConflictException({ message: 'Record still has blockers', blockers: left })
     }
-    await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: 'APPROVED' } })
+    // a bank line the agent says to IGNORE is "approved" by skipping it — nothing to apply
+    const effTarget = fresh.kind === 'BANK_LINE' ? (((fresh.review as any)?.mapping ?? fresh.proposal) as any)?.target : null
+    await this.prisma.intakeRecord.update({ where: { id: record.id }, data: { status: effTarget === 'IGNORE' ? 'SKIPPED' : 'APPROVED' } })
     await this.importer.refreshStats(batchId)
     return this.getRecord(batchId, record.id)
   }
@@ -154,7 +161,12 @@ export class IntakeService {
       proposal: r.proposal,
       review,
       /** what apply would use: header + mapping after the admin's edits */
-      effective: r.kind === 'INVOICE' ? { invoice: { ...(r.extracted ?? {}), ...(review?.invoice ?? {}) }, mapping: review?.mapping ?? r.proposal } : null,
+      effective:
+        r.kind === 'INVOICE'
+          ? { invoice: { ...(r.extracted ?? {}), ...(review?.invoice ?? {}) }, mapping: review?.mapping ?? r.proposal }
+          : r.kind === 'BANK_LINE'
+            ? { bankLine: r.extracted ?? {}, mapping: review?.mapping ?? (r.proposal && (r.proposal as any).target ? r.proposal : null) }
+            : null,
       resolved: r.resolved,
       blockers: r.blockers ?? [],
       remaining: remainingBlockers((r.blockers as Blocker[]) ?? [], review?.overrides ?? []),

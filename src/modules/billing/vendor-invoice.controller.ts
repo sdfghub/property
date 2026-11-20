@@ -65,6 +65,19 @@ export class VendorInvoiceController {
     return this.svc.createVendorPayment(communityId, invoiceId, body)
   }
 
+  /** Migration cutover: the invoice was paid before the books started — close it without cash. */
+  @Post(':id/settle-at-cutover')
+  settleAtCutover(@Param('communityId') communityId: string, @Param('id') invoiceId: string, @Body() body: any) {
+    return this.svc.settleAtCutover(communityId, invoiceId, body ?? {})
+  }
+
+  /** Migration cutover: a payment for an invoice from before the books — creates the virtual OPENING
+   *  invoice (amount = the payment) and settles it in one go. */
+  @Post('opening-payments')
+  payOpening(@Param('communityId') communityId: string, @Body() body: any) {
+    return this.svc.payOpening(communityId, body ?? {})
+  }
+
   @Patch(':id/payments/:paymentId')
   updatePayment(
     @Param('communityId') communityId: string,
